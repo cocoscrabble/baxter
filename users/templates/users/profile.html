@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block title %}Profile - Baxter{% endblock %}
+
+{% block content %}
+<h1>Profile</h1>
+<p>Role: {{ user.get_role_display }}</p>
+<form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Update Profile</button>
+</form>
+{% endblock %}
