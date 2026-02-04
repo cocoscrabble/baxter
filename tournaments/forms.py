@@ -2,7 +2,23 @@ from django import forms
 
 from users.models import User
 
-from .models import Tournament
+from .models import Division, Tournament
+
+
+def clean_multiline_text(text):
+    """Parse multiline text into a list of unique, non-empty lines."""
+    if not text.strip():
+        return []
+
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_lines = []
+    for line in lines:
+        if line not in seen:
+            seen.add(line)
+            unique_lines.append(line)
+    return unique_lines
 
 
 class TournamentForm(forms.ModelForm):
@@ -13,6 +29,13 @@ class TournamentForm(forms.ModelForm):
         required=False,
         widget=forms.Textarea(attrs={"rows": 3}),
         help_text="Enter usernames, one per line.",
+    )
+
+    division_names = forms.CharField(
+        label="Divisions",
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3}),
+        help_text="Enter division names, one per line.",
     )
 
     class Meta:
@@ -31,13 +54,13 @@ class TournamentForm(forms.ModelForm):
             ).values_list("username", flat=True)
             self.fields["editor_usernames"].initial = "\n".join(editor_names)
 
+            # Populate division_names for existing tournament
+            divisions = self.instance.divisions.values_list("name", flat=True)
+            self.fields["division_names"].initial = "\n".join(divisions)
+
     def clean_editor_usernames(self):
         """Validate that all usernames exist."""
-        usernames_text = self.cleaned_data.get("editor_usernames", "")
-        if not usernames_text.strip():
-            return []
-
-        usernames = [u.strip() for u in usernames_text.split("\n") if u.strip()]
+        usernames = clean_multiline_text(self.cleaned_data.get("editor_usernames", ""))
         valid_users = []
         invalid_usernames = []
 
@@ -55,6 +78,10 @@ class TournamentForm(forms.ModelForm):
 
         return valid_users
 
+    def clean_division_names(self):
+        """Parse division names."""
+        return clean_multiline_text(self.cleaned_data.get("division_names", ""))
+
     def save(self, commit=True):
         tournament = super().save(commit=commit)
         if commit:
@@ -64,4 +91,19 @@ class TournamentForm(forms.ModelForm):
             all_editors = set(editor_users)
             all_editors.add(tournament.owner)
             tournament.editors.set(all_editors)
+
+            # Handle divisions
+            division_names = self.cleaned_data.get("division_names", [])
+            existing_divisions = {d.name: d for d in tournament.divisions.all()}
+
+            # Add new divisions
+            for name in division_names:
+                if name not in existing_divisions:
+                    Division.objects.create(tournament=tournament, name=name)
+
+            # Remove divisions not in the list
+            for name, division in existing_divisions.items():
+                if name not in division_names:
+                    division.delete()
+
         return tournament

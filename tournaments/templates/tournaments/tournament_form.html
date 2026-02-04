@@ -32,6 +32,12 @@
         {% if form.editor_usernames.help_text %}<small>{{ form.editor_usernames.help_text }}</small>{% endif %}
         {{ form.editor_usernames.errors }}
     </p>
+    <p>
+        {{ form.division_names.label_tag }}
+        {{ form.division_names }}
+        {% if form.division_names.help_text %}<small>{{ form.division_names.help_text }}</small>{% endif %}
+        {{ form.division_names.errors }}
+    </p>
     <button type="submit">{% if tournament %}Save{% else %}Create{% endif %}</button>
 </form>
 

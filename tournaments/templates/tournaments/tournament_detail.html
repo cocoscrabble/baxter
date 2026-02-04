@@ -23,6 +23,15 @@
             None
         {% endfor %}
     </dd>
+
+    <dt>Divisions</dt>
+    <dd>
+        {% for division in tournament.divisions.all %}
+            {{ division.name }}{% if not forloop.last %}, {% endif %}
+        {% empty %}
+            None
+        {% endfor %}
+    </dd>
 </dl>
 
 {% if can_edit %}

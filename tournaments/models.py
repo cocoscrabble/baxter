@@ -30,3 +30,21 @@ class Tournament(models.Model):
     def can_edit(self, user):
         """Check if user can edit this tournament."""
         return user == self.owner or self.editors.filter(pk=user.pk).exists()
+
+
+class Division(models.Model):
+    """A division within a tournament."""
+
+    name = models.CharField(max_length=100)
+    tournament = models.ForeignKey(
+        Tournament,
+        on_delete=models.CASCADE,
+        related_name="divisions",
+    )
+
+    class Meta:
+        ordering = ["name"]
+        unique_together = ["tournament", "name"]
+
+    def __str__(self):
+        return self.name
