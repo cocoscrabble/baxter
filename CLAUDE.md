@@ -42,5 +42,7 @@ Settings are managed via environment variables using python-decouple. Required v
 
 Standard Django project structure:
 - `baxter/` - Main Django project package (settings, urls, wsgi/asgi)
+- `tournaments/` - Tournament management app
+- `users/` - User authentication and management app
 - `manage.py` - Django CLI entry point
 - Database: SQLite (development), configurable for production via DATABASE_URL
