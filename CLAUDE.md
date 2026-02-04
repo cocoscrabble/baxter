@@ -46,3 +46,10 @@ Standard Django project structure:
 - `users/` - User authentication and management app
 - `manage.py` - Django CLI entry point
 - Database: SQLite (development), configurable for production via DATABASE_URL
+
+## Code Standards
+
+Follow web development best practices:
+- Use Django's static files system for CSS/JS (not inline styles)
+- Keep templates DRY with inheritance and includes
+- Follow Django conventions for project structure
