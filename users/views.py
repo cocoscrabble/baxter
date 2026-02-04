@@ -1,9 +1,9 @@
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import redirect, render
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.urls import reverse_lazy
-from django.views.generic import CreateView
+from django.views.generic import CreateView, UpdateView
 
 from .forms import CustomUserCreationForm, ProfileForm
+from .models import User
 
 
 class RegisterView(CreateView):
@@ -14,14 +14,13 @@ class RegisterView(CreateView):
     success_url = reverse_lazy("login")
 
 
-@login_required
-def profile_view(request):
+class ProfileView(LoginRequiredMixin, UpdateView):
     """View for user profile."""
-    if request.method == "POST":
-        form = ProfileForm(request.POST, instance=request.user)
-        if form.is_valid():
-            form.save()
-            return redirect("profile")
-    else:
-        form = ProfileForm(instance=request.user)
-    return render(request, "users/profile.html", {"form": form})
+
+    model = User
+    form_class = ProfileForm
+    template_name = "users/profile.html"
+    success_url = reverse_lazy("profile")
+
+    def get_object(self):
+        return self.request.user

@@ -53,3 +53,5 @@ Follow web development best practices:
 - Use Django's static files system for CSS/JS (not inline styles)
 - Keep templates DRY with inheritance and includes
 - Follow Django conventions for project structure
+- Use class-based views (ListView, DetailView, CreateView, UpdateView, DeleteView)
+- Use mixins for reusable view logic (e.g., permission checks)

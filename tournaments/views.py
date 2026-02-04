@@ -1,78 +1,78 @@
-from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied
-from django.shortcuts import get_object_or_404, redirect, render
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.urls import reverse_lazy
+from django.views.generic import (
+    CreateView,
+    DeleteView,
+    DetailView,
+    ListView,
+    UpdateView,
+)
 
 from .forms import TournamentForm
 from .models import Tournament
 
 
-def tournament_list(request):
-    """List all tournaments."""
-    tournaments = Tournament.objects.all()
-    return render(request, "tournaments/tournament_list.html", {"tournaments": tournaments})
+class TournamentListView(ListView):
+    model = Tournament
+    template_name = "tournaments/tournament_list.html"
+    context_object_name = "tournaments"
 
 
-def tournament_detail(request, pk):
-    """View a single tournament."""
-    tournament = get_object_or_404(Tournament, pk=pk)
-    can_edit = request.user.is_authenticated and tournament.can_edit(request.user)
-    return render(
-        request,
-        "tournaments/tournament_detail.html",
-        {"tournament": tournament, "can_edit": can_edit},
-    )
+class TournamentDetailView(DetailView):
+    model = Tournament
+    template_name = "tournaments/tournament_detail.html"
+    context_object_name = "tournament"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        context["can_edit"] = (
+            user.is_authenticated and self.object.can_edit(user)
+        )
+        return context
 
 
-@login_required
-def tournament_create(request):
-    """Create a new tournament."""
-    if request.method == "POST":
-        form = TournamentForm(request.POST)
-        if form.is_valid():
-            tournament = form.save(commit=False)
-            tournament.owner = request.user
-            tournament.save()
-            # Now save editors (including owner)
-            form.save()
-            return redirect("tournament_detail", pk=tournament.pk)
-    else:
-        form = TournamentForm()
-    return render(request, "tournaments/tournament_form.html", {"form": form})
+class TournamentCreateView(LoginRequiredMixin, CreateView):
+    model = Tournament
+    form_class = TournamentForm
+    template_name = "tournaments/tournament_form.html"
+
+    def form_valid(self, form):
+        form.instance.owner = self.request.user
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return self.object.get_absolute_url()
 
 
-@login_required
-def tournament_edit(request, pk):
-    """Edit an existing tournament."""
-    tournament = get_object_or_404(Tournament, pk=pk)
-    if not tournament.can_edit(request.user):
-        raise PermissionDenied
+class CanEditTournamentMixin(UserPassesTestMixin):
+    """Mixin that checks if user can edit the tournament."""
 
-    if request.method == "POST":
-        form = TournamentForm(request.POST, instance=tournament)
-        if form.is_valid():
-            form.save()
-            return redirect("tournament_detail", pk=tournament.pk)
-    else:
-        form = TournamentForm(instance=tournament)
-    return render(
-        request,
-        "tournaments/tournament_form.html",
-        {"form": form, "tournament": tournament},
-    )
+    def test_func(self):
+        tournament = self.get_object()
+        return tournament.can_edit(self.request.user)
 
 
-@login_required
-def tournament_delete(request, pk):
-    """Delete a tournament."""
-    tournament = get_object_or_404(Tournament, pk=pk)
-    if request.user != tournament.owner:
-        raise PermissionDenied
+class TournamentUpdateView(LoginRequiredMixin, CanEditTournamentMixin, UpdateView):
+    model = Tournament
+    form_class = TournamentForm
+    template_name = "tournaments/tournament_form.html"
+    context_object_name = "tournament"
 
-    if request.method == "POST":
-        tournament.delete()
-        return redirect("tournament_list")
-    return render(
-        request,
-        "tournaments/tournament_confirm_delete.html",
-        {"tournament": tournament},
-    )
+    def get_success_url(self):
+        return self.object.get_absolute_url()
+
+
+class IsOwnerMixin(UserPassesTestMixin):
+    """Mixin that checks if user is the tournament owner."""
+
+    def test_func(self):
+        tournament = self.get_object()
+        return self.request.user == tournament.owner
+
+
+class TournamentDeleteView(LoginRequiredMixin, IsOwnerMixin, DeleteView):
+    model = Tournament
+    template_name = "tournaments/tournament_confirm_delete.html"
+    context_object_name = "tournament"
+    success_url = reverse_lazy("tournament_list")

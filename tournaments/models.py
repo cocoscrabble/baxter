@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.urls import reverse
 
 
 class Tournament(models.Model):
@@ -26,6 +27,9 @@ class Tournament(models.Model):
 
     def __str__(self):
         return self.name
+
+    def get_absolute_url(self):
+        return reverse("tournament_detail", kwargs={"pk": self.pk})
 
     def can_edit(self, user):
         """Check if user can edit this tournament."""

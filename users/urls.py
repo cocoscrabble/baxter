@@ -1,7 +1,7 @@
 from django.contrib.auth.views import LoginView, LogoutView
 from django.urls import path
 
-from .views import RegisterView, profile_view
+from .views import ProfileView, RegisterView
 
 urlpatterns = [
     path("register/", RegisterView.as_view(), name="register"),
@@ -15,5 +15,5 @@ urlpatterns = [
         LogoutView.as_view(template_name="users/logout.html"),
         name="logout",
     ),
-    path("profile/", profile_view, name="profile"),
+    path("profile/", ProfileView.as_view(), name="profile"),
 ]
