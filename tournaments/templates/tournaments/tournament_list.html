@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}Tournaments - Baxter{% endblock %}
+
+{% block content %}
+<h1>Tournaments</h1>
+
+{% if user.is_authenticated %}
+<p><a href="{% url 'tournament_create' %}">Create Tournament</a></p>
+{% endif %}
+
+{% if tournaments %}
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Location</th>
+            <th>Date</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for tournament in tournaments %}
+        <tr>
+            <td><a href="{% url 'tournament_detail' tournament.pk %}">{{ tournament.name }}</a></td>
+            <td>{{ tournament.location }}</td>
+            <td>{{ tournament.start_date }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No tournaments yet.</p>
+{% endif %}
+{% endblock %}

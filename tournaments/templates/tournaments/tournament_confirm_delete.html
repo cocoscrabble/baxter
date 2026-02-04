@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}Delete Tournament - Baxter{% endblock %}
+
+{% block content %}
+<h1>Delete Tournament</h1>
+
+<p>Are you sure you want to delete "{{ tournament.name }}"?</p>
+
+<form method="post">
+    {% csrf_token %}
+    <button type="submit">Delete</button>
+    <a href="{% url 'tournament_detail' tournament.pk %}">Cancel</a>
+</form>
+{% endblock %}

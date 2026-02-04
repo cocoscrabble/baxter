@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}{{ tournament.name }} - Baxter{% endblock %}
+
+{% block content %}
+<h1>{{ tournament.name }}</h1>
+
+<dl>
+    <dt>Location</dt>
+    <dd>{{ tournament.location }}</dd>
+
+    <dt>Date</dt>
+    <dd>{{ tournament.start_date }}</dd>
+
+    <dt>Owner</dt>
+    <dd>{{ tournament.owner.username }}</dd>
+
+    <dt>Editors</dt>
+    <dd>
+        {% for editor in tournament.editors.all %}
+            {{ editor.username }}{% if not forloop.last %}, {% endif %}
+        {% empty %}
+            None
+        {% endfor %}
+    </dd>
+</dl>
+
+{% if can_edit %}
+<p>
+    <a href="{% url 'tournament_edit' tournament.pk %}">Edit</a>
+    {% if user == tournament.owner %}
+    | <a href="{% url 'tournament_delete' tournament.pk %}">Delete</a>
+    {% endif %}
+</p>
+{% endif %}
+
+<p><a href="{% url 'tournament_list' %}">Back to tournaments</a></p>
+{% endblock %}

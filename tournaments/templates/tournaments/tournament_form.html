@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}{% if tournament %}Edit{% else %}Create{% endif %} Tournament - Baxter{% endblock %}
+
+{% block content %}
+<h1>{% if tournament %}Edit{% else %}Create{% endif %} Tournament</h1>
+
+<form method="post">
+    {% csrf_token %}
+    <p>
+        {{ form.name.label_tag }}
+        {{ form.name }}
+        {{ form.name.errors }}
+    </p>
+    <p>
+        {{ form.location.label_tag }}
+        {{ form.location }}
+        {{ form.location.errors }}
+    </p>
+    <p>
+        {{ form.start_date.label_tag }}
+        {{ form.start_date }}
+        {{ form.start_date.errors }}
+    </p>
+    <p>
+        <label>Owner:</label>
+        <span>{% if tournament %}{{ tournament.owner.username }}{% else %}{{ user.username }}{% endif %}</span>
+    </p>
+    <p>
+        {{ form.editor_usernames.label_tag }}
+        {{ form.editor_usernames }}
+        {% if form.editor_usernames.help_text %}<small>{{ form.editor_usernames.help_text }}</small>{% endif %}
+        {{ form.editor_usernames.errors }}
+    </p>
+    <button type="submit">{% if tournament %}Save{% else %}Create{% endif %}</button>
+</form>
+
+<p>
+    {% if tournament %}
+    <a href="{% url 'tournament_detail' tournament.pk %}">Cancel</a>
+    {% else %}
+    <a href="{% url 'tournament_list' %}">Cancel</a>
+    {% endif %}
+</p>
+{% endblock %}
