@@ -52,3 +52,17 @@ class Division(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class Player(models.Model):
+    """A tournament player."""
+
+    name = models.CharField(max_length=200)
+    player_number = models.CharField(max_length=8)
+    rating = models.IntegerField()
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
