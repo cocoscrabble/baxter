@@ -66,3 +66,7 @@ htmlcov/
 
 # uv
 .uv/
+
+# quick experiments and temp files
+tmp/
+t.py

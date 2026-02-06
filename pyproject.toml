@@ -12,4 +12,5 @@ dependencies = [
 [dependency-groups]
 dev = [
     "django-debug-toolbar>=6.2.0",
+    "pandas>=3.0.0",
 ]
