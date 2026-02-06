@@ -89,3 +89,33 @@ class Entrant(models.Model):
 
     def __str__(self):
         return f"{self.number}: {self.player.name}"
+
+
+class ResultSlip(models.Model):
+    """A game result slip."""
+
+    division = models.ForeignKey(
+        Division,
+        on_delete=models.CASCADE,
+        related_name="result_slips",
+    )
+    round = models.IntegerField()
+    winner = models.ForeignKey(
+        Entrant,
+        on_delete=models.CASCADE,
+        related_name="wins",
+    )
+    winner_score = models.IntegerField()
+    loser = models.ForeignKey(
+        Entrant,
+        on_delete=models.CASCADE,
+        related_name="losses",
+    )
+    loser_score = models.IntegerField()
+    winner_started = models.BooleanField()
+
+    class Meta:
+        ordering = ["round"]
+
+    def __str__(self):
+        return f"R{self.round}: {self.winner.player.name} {self.winner_score}-{self.loser_score} {self.loser.player.name}"
