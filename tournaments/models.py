@@ -66,3 +66,26 @@ class Player(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class Entrant(models.Model):
+    """A player entered in a division."""
+
+    division = models.ForeignKey(
+        Division,
+        on_delete=models.CASCADE,
+        related_name="entrants",
+    )
+    player = models.ForeignKey(
+        Player,
+        on_delete=models.CASCADE,
+        related_name="entries",
+    )
+    number = models.IntegerField()
+
+    class Meta:
+        ordering = ["number"]
+        unique_together = ["division", "number"]
+
+    def __str__(self):
+        return f"{self.number}: {self.player.name}"
