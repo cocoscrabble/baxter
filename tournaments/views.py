@@ -1,5 +1,6 @@
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.urls import reverse_lazy
+from django.shortcuts import get_object_or_404
+from django.urls import reverse, reverse_lazy
 from django.views.generic import (
     CreateView,
     DeleteView,
@@ -8,8 +9,8 @@ from django.views.generic import (
     UpdateView,
 )
 
-from .forms import TournamentForm
-from .models import Tournament
+from .forms import ResultSlipForm, TournamentForm
+from .models import Division, Tournament
 
 
 class TournamentListView(ListView):
@@ -53,6 +54,17 @@ class CanEditTournamentMixin(UserPassesTestMixin):
         return tournament.can_edit(self.request.user)
 
 
+class CanEditDivisionMixin(UserPassesTestMixin):
+    """Mixin that checks if user can edit the division's tournament."""
+
+    def test_func(self):
+        division = self.get_division()
+        return division.tournament.can_edit(self.request.user)
+
+    def get_division(self):
+        return get_object_or_404(Division, pk=self.kwargs["pk"])
+
+
 class TournamentUpdateView(LoginRequiredMixin, CanEditTournamentMixin, UpdateView):
     model = Tournament
     form_class = TournamentForm
@@ -76,3 +88,43 @@ class TournamentDeleteView(LoginRequiredMixin, IsOwnerMixin, DeleteView):
     template_name = "tournaments/tournament_confirm_delete.html"
     context_object_name = "tournament"
     success_url = reverse_lazy("tournament_list")
+
+
+class DivisionDetailView(DetailView):
+    model = Division
+    template_name = "tournaments/division_detail.html"
+    context_object_name = "division"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        context["can_edit"] = (
+            user.is_authenticated and self.object.tournament.can_edit(user)
+        )
+        return context
+
+
+class ResultSlipCreateView(CreateView):
+    model = Division
+    form_class = ResultSlipForm
+    template_name = "tournaments/resultslip_form.html"
+
+    def get_division(self):
+        return get_object_or_404(Division, pk=self.kwargs["pk"])
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["division"] = self.get_division()
+        return kwargs
+
+    def form_valid(self, form):
+        form.instance.division = self.get_division()
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("division_detail", kwargs={"pk": self.kwargs["pk"]})
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["division"] = self.get_division()
+        return context

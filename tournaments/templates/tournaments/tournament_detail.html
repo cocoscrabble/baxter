@@ -27,7 +27,7 @@
     <dt>Divisions</dt>
     <dd>
         {% for division in tournament.divisions.all %}
-            {{ division.name }}{% if not forloop.last %}, {% endif %}
+            <a href="{% url 'division_detail' division.pk %}">{{ division.name }}</a>{% if not forloop.last %}, {% endif %}
         {% empty %}
             None
         {% endfor %}

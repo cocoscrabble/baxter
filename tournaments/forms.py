@@ -2,7 +2,7 @@ from django import forms
 
 from users.models import User
 
-from .models import Division, Tournament
+from .models import Division, Entrant, ResultSlip, Tournament
 
 
 def clean_multiline_text(text):
@@ -107,3 +107,34 @@ class TournamentForm(forms.ModelForm):
                     division.delete()
 
         return tournament
+
+
+class ResultSlipForm(forms.ModelForm):
+    """Form for entering game results."""
+
+    class Meta:
+        model = ResultSlip
+        fields = ["round", "winner", "winner_score", "loser", "loser_score", "winner_started"]
+
+    def __init__(self, *args, division=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if division:
+            entrants = Entrant.objects.filter(division=division)
+            self.fields["winner"].queryset = entrants
+            self.fields["loser"].queryset = entrants
+            self.fields["winner"].label_from_instance = lambda e: e.player.name
+            self.fields["loser"].label_from_instance = lambda e: e.player.name
+        elif self.instance.pk:
+            entrants = Entrant.objects.filter(division=self.instance.division)
+            self.fields["winner"].queryset = entrants
+            self.fields["loser"].queryset = entrants
+            self.fields["winner"].label_from_instance = lambda e: e.player.name
+            self.fields["loser"].label_from_instance = lambda e: e.player.name
+
+    def clean(self):
+        cleaned_data = super().clean()
+        winner = cleaned_data.get("winner")
+        loser = cleaned_data.get("loser")
+        if winner and loser and winner == loser:
+            raise forms.ValidationError("Winner and loser must be different players.")
+        return cleaned_data

@@ -1,6 +1,8 @@
 from django.urls import path
 
 from .views import (
+    DivisionDetailView,
+    ResultSlipCreateView,
     TournamentCreateView,
     TournamentDeleteView,
     TournamentDetailView,
@@ -14,4 +16,6 @@ urlpatterns = [
     path("create/", TournamentCreateView.as_view(), name="tournament_create"),
     path("<int:pk>/edit/", TournamentUpdateView.as_view(), name="tournament_edit"),
     path("<int:pk>/delete/", TournamentDeleteView.as_view(), name="tournament_delete"),
+    path("division/<int:pk>/", DivisionDetailView.as_view(), name="division_detail"),
+    path("division/<int:pk>/add-result/", ResultSlipCreateView.as_view(), name="resultslip_create"),
 ]
