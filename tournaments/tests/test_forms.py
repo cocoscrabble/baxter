@@ -1,0 +1,311 @@
+from datetime import date
+
+from django.test import TestCase
+
+from tournaments.forms import (
+    ResultSlipForm,
+    TournamentForm,
+    clean_multiline_text,
+)
+from tournaments.models import Division, Entrant, Player, Tournament
+from users.models import User
+
+
+class CleanMultilineTextTests(TestCase):
+    def test_empty_string(self):
+        self.assertEqual(clean_multiline_text(""), [])
+
+    def test_whitespace_only(self):
+        self.assertEqual(clean_multiline_text("   \n   \n   "), [])
+
+    def test_single_line(self):
+        self.assertEqual(clean_multiline_text("hello"), ["hello"])
+
+    def test_multiple_lines(self):
+        self.assertEqual(
+            clean_multiline_text("one\ntwo\nthree"), ["one", "two", "three"]
+        )
+
+    def test_strips_whitespace(self):
+        self.assertEqual(clean_multiline_text("  one  \n  two  "), ["one", "two"])
+
+    def test_removes_empty_lines(self):
+        self.assertEqual(
+            clean_multiline_text("one\n\ntwo\n\n\nthree"), ["one", "two", "three"]
+        )
+
+    def test_removes_duplicates_preserving_order(self):
+        self.assertEqual(
+            clean_multiline_text("apple\nbanana\napple\ncherry\nbanana"),
+            ["apple", "banana", "cherry"],
+        )
+
+
+class TournamentFormTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username="owner", password="testpass123")
+        self.editor1 = User.objects.create_user(
+            username="editor1", password="testpass123"
+        )
+        self.editor2 = User.objects.create_user(
+            username="editor2", password="testpass123"
+        )
+
+    def test_valid_form(self):
+        form = TournamentForm(
+            data={
+                "name": "Test Tournament",
+                "location": "Test Location",
+                "start_date": "2026-03-15",
+                "editor_usernames": "",
+                "division_names": "",
+            }
+        )
+        self.assertTrue(form.is_valid())
+
+    def test_valid_form_with_editors(self):
+        form = TournamentForm(
+            data={
+                "name": "Test Tournament",
+                "location": "Test Location",
+                "start_date": "2026-03-15",
+                "editor_usernames": "editor1\neditor2",
+                "division_names": "",
+            }
+        )
+        self.assertTrue(form.is_valid())
+        self.assertEqual(len(form.cleaned_data["editor_usernames"]), 2)
+
+    def test_invalid_editor_username(self):
+        form = TournamentForm(
+            data={
+                "name": "Test Tournament",
+                "location": "Test Location",
+                "start_date": "2026-03-15",
+                "editor_usernames": "editor1\nnonexistent",
+                "division_names": "",
+            }
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("editor_usernames", form.errors)
+        self.assertIn("nonexistent", form.errors["editor_usernames"][0])
+
+    def test_multiple_invalid_editor_usernames(self):
+        form = TournamentForm(
+            data={
+                "name": "Test Tournament",
+                "location": "Test Location",
+                "start_date": "2026-03-15",
+                "editor_usernames": "fake1\nfake2",
+                "division_names": "",
+            }
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("fake1", form.errors["editor_usernames"][0])
+        self.assertIn("fake2", form.errors["editor_usernames"][0])
+
+    def test_valid_form_with_divisions(self):
+        form = TournamentForm(
+            data={
+                "name": "Test Tournament",
+                "location": "Test Location",
+                "start_date": "2026-03-15",
+                "editor_usernames": "",
+                "division_names": "Open\nNovice",
+            }
+        )
+        self.assertTrue(form.is_valid())
+        self.assertEqual(form.cleaned_data["division_names"], ["Open", "Novice"])
+
+    def test_division_names_deduped(self):
+        form = TournamentForm(
+            data={
+                "name": "Test Tournament",
+                "location": "Test Location",
+                "start_date": "2026-03-15",
+                "editor_usernames": "",
+                "division_names": "Open\nNovice\nOpen",
+            }
+        )
+        self.assertTrue(form.is_valid())
+        self.assertEqual(form.cleaned_data["division_names"], ["Open", "Novice"])
+
+    def test_save_creates_divisions(self):
+        form = TournamentForm(
+            data={
+                "name": "Test Tournament",
+                "location": "Test Location",
+                "start_date": "2026-03-15",
+                "editor_usernames": "",
+                "division_names": "Open\nNovice",
+            }
+        )
+        self.assertTrue(form.is_valid())
+        tournament = form.save(commit=False)
+        tournament.owner = self.owner
+        tournament.save()
+        form.save()
+        self.assertEqual(tournament.divisions.count(), 2)
+        self.assertTrue(tournament.divisions.filter(name="Open").exists())
+        self.assertTrue(tournament.divisions.filter(name="Novice").exists())
+
+    def test_save_adds_owner_as_editor(self):
+        form = TournamentForm(
+            data={
+                "name": "Test Tournament",
+                "location": "Test Location",
+                "start_date": "2026-03-15",
+                "editor_usernames": "editor1",
+                "division_names": "",
+            }
+        )
+        self.assertTrue(form.is_valid())
+        tournament = form.save(commit=False)
+        tournament.owner = self.owner
+        tournament.save()
+        form.save()
+        self.assertIn(self.owner, tournament.editors.all())
+        self.assertIn(self.editor1, tournament.editors.all())
+
+    def test_save_removes_divisions(self):
+        tournament = Tournament.objects.create(
+            name="Test Tournament",
+            location="Test Location",
+            start_date=date(2026, 3, 15),
+            owner=self.owner,
+        )
+        Division.objects.create(name="Open", tournament=tournament)
+        Division.objects.create(name="Novice", tournament=tournament)
+
+        form = TournamentForm(
+            data={
+                "name": "Test Tournament",
+                "location": "Test Location",
+                "start_date": "2026-03-15",
+                "editor_usernames": "",
+                "division_names": "Open",
+            },
+            instance=tournament,
+        )
+        self.assertTrue(form.is_valid())
+        form.save()
+        self.assertEqual(tournament.divisions.count(), 1)
+        self.assertTrue(tournament.divisions.filter(name="Open").exists())
+        self.assertFalse(tournament.divisions.filter(name="Novice").exists())
+
+    def test_edit_form_populates_divisions(self):
+        tournament = Tournament.objects.create(
+            name="Test Tournament",
+            location="Test Location",
+            start_date=date(2026, 3, 15),
+            owner=self.owner,
+        )
+        Division.objects.create(name="Open", tournament=tournament)
+        Division.objects.create(name="Novice", tournament=tournament)
+
+        form = TournamentForm(instance=tournament)
+        # Divisions are ordered by name
+        self.assertIn("Novice", form.fields["division_names"].initial)
+        self.assertIn("Open", form.fields["division_names"].initial)
+
+    def test_edit_form_populates_editors(self):
+        tournament = Tournament.objects.create(
+            name="Test Tournament",
+            location="Test Location",
+            start_date=date(2026, 3, 15),
+            owner=self.owner,
+        )
+        tournament.editors.add(self.owner, self.editor1)
+
+        form = TournamentForm(instance=tournament)
+        # Owner should be excluded from the list
+        self.assertIn("editor1", form.fields["editor_usernames"].initial)
+        self.assertNotIn("owner", form.fields["editor_usernames"].initial)
+
+
+class ResultSlipFormTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username="owner", password="testpass123")
+        self.tournament = Tournament.objects.create(
+            name="Test Tournament",
+            location="Test Location",
+            start_date=date(2026, 3, 15),
+            owner=self.owner,
+        )
+        self.division = Division.objects.create(name="Open", tournament=self.tournament)
+        self.division2 = Division.objects.create(
+            name="Novice", tournament=self.tournament
+        )
+        self.player1 = Player.objects.create(
+            name="Alice", player_number="001", rating=1600
+        )
+        self.player2 = Player.objects.create(
+            name="Bob", player_number="002", rating=1500
+        )
+        self.player3 = Player.objects.create(
+            name="Charlie", player_number="003", rating=1400
+        )
+        self.entrant1 = Entrant.objects.create(
+            division=self.division, player=self.player1, number=1
+        )
+        self.entrant2 = Entrant.objects.create(
+            division=self.division, player=self.player2, number=2
+        )
+        self.entrant3 = Entrant.objects.create(
+            division=self.division2, player=self.player3, number=1
+        )
+
+    def test_valid_form(self):
+        form = ResultSlipForm(
+            data={
+                "round": 1,
+                "winner": self.entrant1.pk,
+                "winner_score": 450,
+                "loser": self.entrant2.pk,
+                "loser_score": 380,
+                "winner_started": True,
+            },
+            division=self.division,
+        )
+        self.assertTrue(form.is_valid())
+
+    def test_winner_and_loser_cannot_be_same(self):
+        form = ResultSlipForm(
+            data={
+                "round": 1,
+                "winner": self.entrant1.pk,
+                "winner_score": 450,
+                "loser": self.entrant1.pk,
+                "loser_score": 380,
+                "winner_started": True,
+            },
+            division=self.division,
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("Winner and loser must be different", str(form.errors))
+
+    def test_queryset_filtered_by_division(self):
+        form = ResultSlipForm(division=self.division)
+        winner_queryset = form.fields["winner"].queryset
+        loser_queryset = form.fields["loser"].queryset
+        # Should include entrants from division 1
+        self.assertIn(self.entrant1, winner_queryset)
+        self.assertIn(self.entrant2, winner_queryset)
+        # Should not include entrants from division 2
+        self.assertNotIn(self.entrant3, winner_queryset)
+        self.assertNotIn(self.entrant3, loser_queryset)
+
+    def test_entrant_from_wrong_division_invalid(self):
+        form = ResultSlipForm(
+            data={
+                "round": 1,
+                "winner": self.entrant1.pk,
+                "winner_score": 450,
+                "loser": self.entrant3.pk,  # Wrong division
+                "loser_score": 380,
+                "winner_started": True,
+            },
+            division=self.division,
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("loser", form.errors)
