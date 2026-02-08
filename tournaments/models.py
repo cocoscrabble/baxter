@@ -117,5 +117,13 @@ class ResultSlip(models.Model):
     class Meta:
         ordering = ["round"]
 
+    @property
+    def winner_name(self):
+        return self.winner.player.name
+
+    @property
+    def loser_name(self):
+        return self.loser.player.name
+
     def __str__(self):
-        return f"R{self.round}: {self.winner.player.name} {self.winner_score}-{self.loser_score} {self.loser.player.name}"
+        return f"R{self.round}: {self.winner_name} {self.winner_score}-{self.loser_score} {self.loser_name}"
