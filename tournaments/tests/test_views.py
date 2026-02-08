@@ -33,13 +33,14 @@ class TournamentListViewTests(TestCase):
 
 
 class TournamentDetailViewTests(TestCase):
-    def setUp(self):
-        self.owner = User.objects.create_user(username="owner", password="testpass123")
-        self.tournament = Tournament.objects.create(
+    @classmethod
+    def setUpTestData(cls):
+        cls.owner = User.objects.create_user(username="owner", password="testpass123")
+        cls.tournament = Tournament.objects.create(
             name="Test Tournament",
             location="Test Location",
             start_date=date(2026, 3, 15),
-            owner=self.owner,
+            owner=cls.owner,
         )
 
     def test_get_tournament_detail(self):
@@ -75,8 +76,9 @@ class TournamentDetailViewTests(TestCase):
 
 
 class TournamentCreateViewTests(TestCase):
-    def setUp(self):
-        self.user = User.objects.create_user(username="testuser", password="testpass123")
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(username="testuser", password="testpass123")
 
     def test_requires_login(self):
         response = self.client.get(reverse("tournament_create"))
@@ -232,15 +234,16 @@ class TournamentDeleteViewTests(TestCase):
 
 
 class DivisionDetailViewTests(TestCase):
-    def setUp(self):
-        self.owner = User.objects.create_user(username="owner", password="testpass123")
-        self.tournament = Tournament.objects.create(
+    @classmethod
+    def setUpTestData(cls):
+        cls.owner = User.objects.create_user(username="owner", password="testpass123")
+        cls.tournament = Tournament.objects.create(
             name="Test Tournament",
             location="Test Location",
             start_date=date(2026, 3, 15),
-            owner=self.owner,
+            owner=cls.owner,
         )
-        self.division = Division.objects.create(name="Open", tournament=self.tournament)
+        cls.division = Division.objects.create(name="Open", tournament=cls.tournament)
 
     def test_get_division_detail(self):
         response = self.client.get(
@@ -289,22 +292,23 @@ class DivisionDetailViewTests(TestCase):
 
 
 class ResultSlipCreateViewTests(TestCase):
-    def setUp(self):
-        self.owner = User.objects.create_user(username="owner", password="testpass123")
-        self.tournament = Tournament.objects.create(
+    @classmethod
+    def setUpTestData(cls):
+        cls.owner = User.objects.create_user(username="owner", password="testpass123")
+        cls.tournament = Tournament.objects.create(
             name="Test Tournament",
             location="Test Location",
             start_date=date(2026, 3, 15),
-            owner=self.owner,
+            owner=cls.owner,
         )
-        self.division = Division.objects.create(name="Open", tournament=self.tournament)
-        self.player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
-        self.player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
-        self.entrant1 = Entrant.objects.create(
-            division=self.division, player=self.player1, number=1
+        cls.division = Division.objects.create(name="Open", tournament=cls.tournament)
+        cls.player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
+        cls.player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
+        cls.entrant1 = Entrant.objects.create(
+            division=cls.division, player=cls.player1, number=1
         )
-        self.entrant2 = Entrant.objects.create(
-            division=self.division, player=self.player2, number=2
+        cls.entrant2 = Entrant.objects.create(
+            division=cls.division, player=cls.player2, number=2
         )
 
     def test_get_create_page(self):

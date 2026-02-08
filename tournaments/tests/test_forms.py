@@ -42,12 +42,13 @@ class CleanMultilineTextTests(TestCase):
 
 
 class TournamentFormTests(TestCase):
-    def setUp(self):
-        self.owner = User.objects.create_user(username="owner", password="testpass123")
-        self.editor1 = User.objects.create_user(
+    @classmethod
+    def setUpTestData(cls):
+        cls.owner = User.objects.create_user(username="owner", password="testpass123")
+        cls.editor1 = User.objects.create_user(
             username="editor1", password="testpass123"
         )
-        self.editor2 = User.objects.create_user(
+        cls.editor2 = User.objects.create_user(
             username="editor2", password="testpass123"
         )
 
@@ -224,35 +225,36 @@ class TournamentFormTests(TestCase):
 
 
 class ResultSlipFormTests(TestCase):
-    def setUp(self):
-        self.owner = User.objects.create_user(username="owner", password="testpass123")
-        self.tournament = Tournament.objects.create(
+    @classmethod
+    def setUpTestData(cls):
+        cls.owner = User.objects.create_user(username="owner", password="testpass123")
+        cls.tournament = Tournament.objects.create(
             name="Test Tournament",
             location="Test Location",
             start_date=date(2026, 3, 15),
-            owner=self.owner,
+            owner=cls.owner,
         )
-        self.division = Division.objects.create(name="Open", tournament=self.tournament)
-        self.division2 = Division.objects.create(
-            name="Novice", tournament=self.tournament
+        cls.division = Division.objects.create(name="Open", tournament=cls.tournament)
+        cls.division2 = Division.objects.create(
+            name="Novice", tournament=cls.tournament
         )
-        self.player1 = Player.objects.create(
+        cls.player1 = Player.objects.create(
             name="Alice", player_number="001", rating=1600
         )
-        self.player2 = Player.objects.create(
+        cls.player2 = Player.objects.create(
             name="Bob", player_number="002", rating=1500
         )
-        self.player3 = Player.objects.create(
+        cls.player3 = Player.objects.create(
             name="Charlie", player_number="003", rating=1400
         )
-        self.entrant1 = Entrant.objects.create(
-            division=self.division, player=self.player1, number=1
+        cls.entrant1 = Entrant.objects.create(
+            division=cls.division, player=cls.player1, number=1
         )
-        self.entrant2 = Entrant.objects.create(
-            division=self.division, player=self.player2, number=2
+        cls.entrant2 = Entrant.objects.create(
+            division=cls.division, player=cls.player2, number=2
         )
-        self.entrant3 = Entrant.objects.create(
-            division=self.division2, player=self.player3, number=1
+        cls.entrant3 = Entrant.objects.create(
+            division=cls.division2, player=cls.player3, number=1
         )
 
     def test_valid_form(self):

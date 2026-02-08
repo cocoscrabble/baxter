@@ -8,15 +8,16 @@ from users.models import User
 
 
 class TournamentModelTests(TestCase):
-    def setUp(self):
-        self.owner = User.objects.create_user(username="owner", password="testpass123")
-        self.editor = User.objects.create_user(username="editor", password="testpass123")
-        self.other_user = User.objects.create_user(username="other", password="testpass123")
-        self.tournament = Tournament.objects.create(
+    @classmethod
+    def setUpTestData(cls):
+        cls.owner = User.objects.create_user(username="owner", password="testpass123")
+        cls.editor = User.objects.create_user(username="editor", password="testpass123")
+        cls.other_user = User.objects.create_user(username="other", password="testpass123")
+        cls.tournament = Tournament.objects.create(
             name="Test Tournament",
             location="Test Location",
             start_date=date(2026, 3, 15),
-            owner=self.owner,
+            owner=cls.owner,
         )
 
     def test_str_returns_name(self):
@@ -49,13 +50,14 @@ class TournamentModelTests(TestCase):
 
 
 class DivisionModelTests(TestCase):
-    def setUp(self):
-        self.owner = User.objects.create_user(username="owner", password="testpass123")
-        self.tournament = Tournament.objects.create(
+    @classmethod
+    def setUpTestData(cls):
+        cls.owner = User.objects.create_user(username="owner", password="testpass123")
+        cls.tournament = Tournament.objects.create(
             name="Test Tournament",
             location="Test Location",
             start_date=date(2026, 3, 15),
-            owner=self.owner,
+            owner=cls.owner,
         )
 
     def test_str_returns_name(self):
@@ -104,16 +106,17 @@ class PlayerModelTests(TestCase):
 
 
 class EntrantModelTests(TestCase):
-    def setUp(self):
-        self.owner = User.objects.create_user(username="owner", password="testpass123")
-        self.tournament = Tournament.objects.create(
+    @classmethod
+    def setUpTestData(cls):
+        cls.owner = User.objects.create_user(username="owner", password="testpass123")
+        cls.tournament = Tournament.objects.create(
             name="Test Tournament",
             location="Test Location",
             start_date=date(2026, 3, 15),
-            owner=self.owner,
+            owner=cls.owner,
         )
-        self.division = Division.objects.create(name="Open", tournament=self.tournament)
-        self.player = Player.objects.create(
+        cls.division = Division.objects.create(name="Open", tournament=cls.tournament)
+        cls.player = Player.objects.create(
             name="John Doe",
             player_number="12345",
             rating=1500,
@@ -150,22 +153,23 @@ class EntrantModelTests(TestCase):
 
 
 class ResultSlipModelTests(TestCase):
-    def setUp(self):
-        self.owner = User.objects.create_user(username="owner", password="testpass123")
-        self.tournament = Tournament.objects.create(
+    @classmethod
+    def setUpTestData(cls):
+        cls.owner = User.objects.create_user(username="owner", password="testpass123")
+        cls.tournament = Tournament.objects.create(
             name="Test Tournament",
             location="Test Location",
             start_date=date(2026, 3, 15),
-            owner=self.owner,
+            owner=cls.owner,
         )
-        self.division = Division.objects.create(name="Open", tournament=self.tournament)
-        self.player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
-        self.player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
-        self.entrant1 = Entrant.objects.create(
-            division=self.division, player=self.player1, number=1
+        cls.division = Division.objects.create(name="Open", tournament=cls.tournament)
+        cls.player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
+        cls.player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
+        cls.entrant1 = Entrant.objects.create(
+            division=cls.division, player=cls.player1, number=1
         )
-        self.entrant2 = Entrant.objects.create(
-            division=self.division, player=self.player2, number=2
+        cls.entrant2 = Entrant.objects.create(
+            division=cls.division, player=cls.player2, number=2
         )
 
     def test_str_returns_formatted_result(self):

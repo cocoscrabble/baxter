@@ -38,8 +38,9 @@ class RegisterViewTests(TestCase):
 
 
 class LoginViewTests(TestCase):
-    def setUp(self):
-        self.user = User.objects.create_user(
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(
             username="testuser",
             email="test@example.com",
             password="testpass123",
@@ -74,8 +75,9 @@ class LoginViewTests(TestCase):
 
 
 class LogoutViewTests(TestCase):
-    def setUp(self):
-        self.user = User.objects.create_user(
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(
             username="testuser",
             password="testpass123",
         )
