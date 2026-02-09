@@ -58,7 +58,10 @@
 <p>No results yet.</p>
 {% endif %}
 
-<p><a href="{% url 'resultslip_create' division.pk %}">Add Result</a></p>
+<p>
+    <a href="{% url 'division_standings' division.pk %}">Standings</a>
+    | <a href="{% url 'resultslip_create' division.pk %}">Add Result</a>
+</p>
 
 <p><a href="{% url 'tournament_detail' division.tournament.pk %}">Back to tournament</a></p>
 {% endblock %}

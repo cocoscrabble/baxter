@@ -53,6 +53,11 @@ class Division(models.Model):
     def __str__(self):
         return self.name
 
+    def max_round(self):
+        return self.result_slips.aggregate(
+            max_round=models.Max("round")
+        )["max_round"] or 0
+
 
 class Player(models.Model):
     """A tournament player."""

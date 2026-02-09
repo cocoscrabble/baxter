@@ -139,6 +139,14 @@ class PairingData:
     entrants: QuerySet
     repeats: Repeats
 
+    @classmethod
+    def for_division(cls, division):
+        return cls(
+            result_slips=division.result_slips.all(),
+            entrants=division.entrants.all(),
+            repeats=Repeats(),
+        )
+
 
 @dataclass
 class Pairing:

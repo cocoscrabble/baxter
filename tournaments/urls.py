@@ -2,6 +2,7 @@ from django.urls import path
 
 from .views import (
     DivisionDetailView,
+    DivisionStandingsView,
     ResultSlipCreateView,
     TournamentCreateView,
     TournamentDeleteView,
@@ -18,4 +19,6 @@ urlpatterns = [
     path("<int:pk>/delete/", TournamentDeleteView.as_view(), name="tournament_delete"),
     path("division/<int:pk>/", DivisionDetailView.as_view(), name="division_detail"),
     path("division/<int:pk>/add-result/", ResultSlipCreateView.as_view(), name="resultslip_create"),
+    path("division/<int:pk>/standings/", DivisionStandingsView.as_view(), name="division_standings"),
+    path("division/<int:pk>/standings/<int:round>/", DivisionStandingsView.as_view(), name="division_standings_round"),
 ]

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Standings - {{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
+
+{% block content %}
+<h1>Standings: {{ division.name }}</h1>
+<p>Tournament: <a href="{% url 'tournament_detail' division.tournament.pk %}">{{ division.tournament.name }}</a></p>
+<p>Rounds:
+    {% for r in rounds %}
+        {% if r == round %}<strong>{{ r }}</strong>{% else %}<a href="{% url 'division_standings_round' division.pk r %}">{{ r }}</a>{% endif %}
+        {% if not forloop.last %} | {% endif %}
+    {% endfor %}
+</p>
+<p>After round {{ round }}</p>
+
+{% if standings %}
+<table>
+    <thead>
+        <tr>
+            <th>Rank</th>
+            <th>Player</th>
+            <th>Wins</th>
+            <th>Losses</th>
+            <th>Ties</th>
+            <th>Spread</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for player in standings %}
+        <tr>
+            <td>{{ forloop.counter }}</td>
+            <td>{{ player.name }}</td>
+            <td>{{ player.wins }}</td>
+            <td>{{ player.losses }}</td>
+            <td>{{ player.ties }}</td>
+            <td>{{ player.spread }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No results yet.</p>
+{% endif %}
+
+<p><a href="{% url 'division_detail' division.pk %}">Back to division</a></p>
+{% endblock %}

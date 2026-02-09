@@ -11,6 +11,7 @@ from django.views.generic import (
 
 from .forms import ResultSlipForm, TournamentForm
 from .models import Division, Tournament
+from .pairing.base import PairingData, standings_after_round
 
 
 class TournamentListView(ListView):
@@ -101,6 +102,23 @@ class DivisionDetailView(DetailView):
         context["can_edit"] = (
             user.is_authenticated and self.object.tournament.can_edit(user)
         )
+        return context
+
+
+class DivisionStandingsView(DetailView):
+    model = Division
+    template_name = "tournaments/division_standings.html"
+    context_object_name = "division"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        division = self.object
+        pd = PairingData.for_division(division)
+        max_round = division.max_round()
+        current_round = self.kwargs.get("round", max_round)
+        context["standings"] = standings_after_round(current_round, pd)
+        context["round"] = current_round
+        context["rounds"] = range(1, max_round + 1)
         return context
 
 
