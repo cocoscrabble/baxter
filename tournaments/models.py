@@ -59,6 +59,20 @@ class Division(models.Model):
         )["max_round"] or 0
 
 
+class DivisionSettings(models.Model):
+    """Settings for a division."""
+
+    division = models.OneToOneField(
+        Division,
+        on_delete=models.CASCADE,
+        related_name="settings",
+    )
+    round_pairings = models.JSONField(default=list)
+
+    def __str__(self):
+        return f"Settings for {self.division}"
+
+
 class Player(models.Model):
     """A tournament player."""
 
