@@ -3,7 +3,7 @@ from datetime import date
 from django.db import IntegrityError
 from django.test import TestCase
 
-from tournaments.models import Division, Entrant, Player, ResultSlip, Tournament
+from tournaments.models import Division, DivisionSettings, Entrant, Player, ResultSlip, Tournament
 from users.models import User
 
 
@@ -86,6 +86,28 @@ class DivisionModelTests(TestCase):
         divisions = list(self.tournament.divisions.all())
         self.assertEqual(divisions[0].name, "Alpha")
         self.assertEqual(divisions[1].name, "Zeta")
+
+    def test_max_round_with_no_results(self):
+        division = Division.objects.create(name="Empty", tournament=self.tournament)
+        self.assertEqual(division.max_round(), 0)
+
+    def test_max_round_with_results(self):
+        division = Division.objects.create(name="WithResults", tournament=self.tournament)
+        player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
+        player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
+        entrant1 = Entrant.objects.create(division=division, player=player1, number=1)
+        entrant2 = Entrant.objects.create(division=division, player=player2, number=2)
+        for r in [1, 3, 2]:
+            ResultSlip.objects.create(
+                division=division,
+                round=r,
+                winner=entrant1,
+                winner_score=400,
+                loser=entrant2,
+                loser_score=350,
+                winner_started=True,
+            )
+        self.assertEqual(division.max_round(), 3)
 
 
 class PlayerModelTests(TestCase):
@@ -206,3 +228,69 @@ class ResultSlipModelTests(TestCase):
         slips = list(self.division.result_slips.all())
         self.assertEqual(slips[0].round, 1)
         self.assertEqual(slips[1].round, 3)
+
+    def test_winner_and_loser_name(self):
+        slip = ResultSlip.objects.create(
+            division=self.division,
+            round=1,
+            winner=self.entrant1,
+            winner_score=450,
+            loser=self.entrant2,
+            loser_score=380,
+            winner_started=True,
+        )
+        self.assertEqual(slip.winner_name, "Alice")
+        self.assertEqual(slip.loser_name, "Bob")
+
+    def test_created_at_set_on_create(self):
+        slip = ResultSlip.objects.create(
+            division=self.division,
+            round=1,
+            winner=self.entrant1,
+            winner_score=450,
+            loser=self.entrant2,
+            loser_score=380,
+            winner_started=True,
+        )
+        self.assertIsNotNone(slip.created_at)
+
+
+class DivisionSettingsModelTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.owner = User.objects.create_user(username="owner", password="testpass123")
+        cls.tournament = Tournament.objects.create(
+            name="Test Tournament",
+            location="Test Location",
+            start_date=date(2026, 3, 15),
+            owner=cls.owner,
+        )
+        cls.division = Division.objects.create(name="Open", tournament=cls.tournament)
+
+    def test_str(self):
+        settings = DivisionSettings.objects.create(division=self.division)
+        self.assertEqual(str(settings), "Settings for Open")
+
+    def test_round_pairings_defaults_to_empty_list(self):
+        settings = DivisionSettings.objects.create(division=self.division)
+        self.assertEqual(settings.round_pairings, [])
+
+    def test_round_pairings_stores_json(self):
+        data = [
+            {"round": 1, "pairing": "Swiss", "start_round": 0},
+            {"round": 2, "pairing": "KotH", "start_round": 1},
+        ]
+        settings = DivisionSettings.objects.create(
+            division=self.division, round_pairings=data
+        )
+        settings.refresh_from_db()
+        self.assertEqual(settings.round_pairings, data)
+
+    def test_one_to_one_relationship(self):
+        DivisionSettings.objects.create(division=self.division)
+        with self.assertRaises(IntegrityError):
+            DivisionSettings.objects.create(division=self.division)
+
+    def test_reverse_access_from_division(self):
+        settings = DivisionSettings.objects.create(division=self.division)
+        self.assertEqual(self.division.settings, settings)

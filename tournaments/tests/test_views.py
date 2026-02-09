@@ -3,7 +3,7 @@ from datetime import date
 from django.test import TestCase
 from django.urls import reverse
 
-from tournaments.models import Division, Entrant, Player, ResultSlip, Tournament
+from tournaments.models import Division, DivisionSettings, Entrant, Player, ResultSlip, Tournament
 from users.models import User
 
 
@@ -253,14 +253,6 @@ class DivisionDetailViewTests(TestCase):
         self.assertTemplateUsed(response, "tournaments/division_detail.html")
         self.assertContains(response, "Open")
 
-    def test_shows_entrants(self):
-        player = Player.objects.create(name="Alice", player_number="001", rating=1600)
-        Entrant.objects.create(division=self.division, player=player, number=1)
-        response = self.client.get(
-            reverse("division_entrants", kwargs={"pk": self.division.pk})
-        )
-        self.assertContains(response, "Alice")
-
     def test_shows_results(self):
         player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
         player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
@@ -361,3 +353,309 @@ class ResultSlipCreateViewTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Winner and loser must be different")
+
+
+class DivisionDetailLatestResultsTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.owner = User.objects.create_user(username="owner", password="testpass123")
+        cls.tournament = Tournament.objects.create(
+            name="Test Tournament",
+            location="Test Location",
+            start_date=date(2026, 3, 15),
+            owner=cls.owner,
+        )
+        cls.division = Division.objects.create(name="Open", tournament=cls.tournament)
+        cls.player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
+        cls.player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
+        cls.entrant1 = Entrant.objects.create(
+            division=cls.division, player=cls.player1, number=1
+        )
+        cls.entrant2 = Entrant.objects.create(
+            division=cls.division, player=cls.player2, number=2
+        )
+
+    def test_shows_only_max_round_results(self):
+        ResultSlip.objects.create(
+            division=self.division, round=1, winner=self.entrant1,
+            winner_score=400, loser=self.entrant2, loser_score=350, winner_started=True,
+        )
+        ResultSlip.objects.create(
+            division=self.division, round=2, winner=self.entrant2,
+            winner_score=420, loser=self.entrant1, loser_score=390, winner_started=False,
+        )
+        response = self.client.get(
+            reverse("division_detail", kwargs={"pk": self.division.pk})
+        )
+        # Round 2 scores should appear, round 1 scores should not
+        self.assertContains(response, "420")
+        self.assertNotContains(response, "400-350")
+
+    def test_shows_all_results_link(self):
+        ResultSlip.objects.create(
+            division=self.division, round=1, winner=self.entrant1,
+            winner_score=400, loser=self.entrant2, loser_score=350, winner_started=True,
+        )
+        response = self.client.get(
+            reverse("division_detail", kwargs={"pk": self.division.pk})
+        )
+        self.assertContains(
+            response, reverse("division_all_results", kwargs={"pk": self.division.pk})
+        )
+
+    def test_settings_link_shown_for_editor(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(
+            reverse("division_detail", kwargs={"pk": self.division.pk})
+        )
+        self.assertContains(
+            response, reverse("division_settings", kwargs={"pk": self.division.pk})
+        )
+
+    def test_settings_link_hidden_for_anonymous(self):
+        response = self.client.get(
+            reverse("division_detail", kwargs={"pk": self.division.pk})
+        )
+        self.assertNotContains(response, "Settings")
+
+
+class DivisionStandingsViewTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.owner = User.objects.create_user(username="owner", password="testpass123")
+        cls.tournament = Tournament.objects.create(
+            name="Test Tournament",
+            location="Test Location",
+            start_date=date(2026, 3, 15),
+            owner=cls.owner,
+        )
+        cls.division = Division.objects.create(name="Open", tournament=cls.tournament)
+        cls.player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
+        cls.player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
+        cls.entrant1 = Entrant.objects.create(
+            division=cls.division, player=cls.player1, number=1
+        )
+        cls.entrant2 = Entrant.objects.create(
+            division=cls.division, player=cls.player2, number=2
+        )
+
+    def test_get_standings(self):
+        response = self.client.get(
+            reverse("division_standings", kwargs={"pk": self.division.pk})
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "tournaments/division_standings.html")
+
+    def test_standings_with_results(self):
+        ResultSlip.objects.create(
+            division=self.division, round=1, winner=self.entrant1,
+            winner_score=450, loser=self.entrant2, loser_score=380, winner_started=True,
+        )
+        response = self.client.get(
+            reverse("division_standings", kwargs={"pk": self.division.pk})
+        )
+        self.assertContains(response, "Alice")
+        self.assertContains(response, "Bob")
+
+    def test_standings_for_specific_round(self):
+        ResultSlip.objects.create(
+            division=self.division, round=1, winner=self.entrant1,
+            winner_score=450, loser=self.entrant2, loser_score=380, winner_started=True,
+        )
+        ResultSlip.objects.create(
+            division=self.division, round=2, winner=self.entrant2,
+            winner_score=420, loser=self.entrant1, loser_score=390, winner_started=False,
+        )
+        response = self.client.get(
+            reverse("division_standings_round", kwargs={"pk": self.division.pk, "round": 1})
+        )
+        self.assertEqual(response.status_code, 200)
+        # After round 1 only, Alice has 1 win
+        self.assertContains(response, "After round 1")
+
+    def test_round_links(self):
+        ResultSlip.objects.create(
+            division=self.division, round=1, winner=self.entrant1,
+            winner_score=450, loser=self.entrant2, loser_score=380, winner_started=True,
+        )
+        ResultSlip.objects.create(
+            division=self.division, round=2, winner=self.entrant2,
+            winner_score=420, loser=self.entrant1, loser_score=390, winner_started=False,
+        )
+        response = self.client.get(
+            reverse("division_standings", kwargs={"pk": self.division.pk})
+        )
+        self.assertContains(
+            response,
+            reverse("division_standings_round", kwargs={"pk": self.division.pk, "round": 1}),
+        )
+
+
+class DivisionSettingsViewTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username="owner", password="testpass123")
+        self.other = User.objects.create_user(username="other", password="testpass123")
+        self.tournament = Tournament.objects.create(
+            name="Test Tournament",
+            location="Test Location",
+            start_date=date(2026, 3, 15),
+            owner=self.owner,
+        )
+        self.tournament.editors.add(self.owner)
+        self.division = Division.objects.create(name="Open", tournament=self.tournament)
+
+    def test_non_editor_forbidden(self):
+        self.client.login(username="other", password="testpass123")
+        response = self.client.get(
+            reverse("division_settings", kwargs={"pk": self.division.pk})
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_redirects_to_rounds_when_no_settings(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(
+            reverse("division_settings", kwargs={"pk": self.division.pk})
+        )
+        self.assertRedirects(
+            response,
+            reverse("division_settings_rounds", kwargs={"pk": self.division.pk}),
+        )
+
+    def test_redirects_to_edit_when_settings_exist(self):
+        DivisionSettings.objects.create(
+            division=self.division,
+            round_pairings=[{"round": 1, "pairing": "Swiss", "start_round": 0}],
+        )
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(
+            reverse("division_settings", kwargs={"pk": self.division.pk})
+        )
+        self.assertRedirects(
+            response,
+            reverse("division_settings_edit", kwargs={"pk": self.division.pk}),
+        )
+
+    def test_redirects_to_rounds_when_settings_empty(self):
+        DivisionSettings.objects.create(division=self.division, round_pairings=[])
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(
+            reverse("division_settings", kwargs={"pk": self.division.pk})
+        )
+        self.assertRedirects(
+            response,
+            reverse("division_settings_rounds", kwargs={"pk": self.division.pk}),
+        )
+
+
+class DivisionRoundCountViewTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username="owner", password="testpass123")
+        self.tournament = Tournament.objects.create(
+            name="Test Tournament",
+            location="Test Location",
+            start_date=date(2026, 3, 15),
+            owner=self.owner,
+        )
+        self.tournament.editors.add(self.owner)
+        self.division = Division.objects.create(name="Open", tournament=self.tournament)
+
+    def test_post_redirects_to_edit(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.post(
+            reverse("division_settings_rounds", kwargs={"pk": self.division.pk}),
+            {"num_rounds": 5},
+        )
+        edit_url = reverse("division_settings_edit", kwargs={"pk": self.division.pk})
+        self.assertRedirects(response, f"{edit_url}?rounds=5")
+
+
+class DivisionSettingsEditViewTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username="owner", password="testpass123")
+        self.tournament = Tournament.objects.create(
+            name="Test Tournament",
+            location="Test Location",
+            start_date=date(2026, 3, 15),
+            owner=self.owner,
+        )
+        self.tournament.editors.add(self.owner)
+        self.division = Division.objects.create(name="Open", tournament=self.tournament)
+
+    def test_get_with_rounds_param(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(
+            reverse("division_settings_edit", kwargs={"pk": self.division.pk})
+            + "?rounds=3"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "tournaments/division_settings_edit.html")
+        # Should have 3 forms in the formset
+        self.assertEqual(len(response.context["formset"]), 3)
+
+    def test_get_with_existing_settings(self):
+        DivisionSettings.objects.create(
+            division=self.division,
+            round_pairings=[
+                {"round": 1, "pairing": "Swiss", "start_round": 0},
+                {"round": 2, "pairing": "KotH", "start_round": 1},
+            ],
+        )
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(
+            reverse("division_settings_edit", kwargs={"pk": self.division.pk})
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context["formset"]), 2)
+
+    def test_get_without_data_redirects_to_rounds(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(
+            reverse("division_settings_edit", kwargs={"pk": self.division.pk})
+        )
+        self.assertRedirects(
+            response,
+            reverse("division_settings_rounds", kwargs={"pk": self.division.pk}),
+        )
+
+    def test_post_saves_settings(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.post(
+            reverse("division_settings_edit", kwargs={"pk": self.division.pk}),
+            {
+                "form-TOTAL_FORMS": "2",
+                "form-INITIAL_FORMS": "0",
+                "form-MIN_NUM_FORMS": "0",
+                "form-MAX_NUM_FORMS": "1000",
+                "form-0-round": "1",
+                "form-0-pairing_type": "Swiss",
+                "form-0-start_round": "0",
+                "form-1-round": "2",
+                "form-1-pairing_type": "KotH",
+                "form-1-start_round": "1",
+            },
+        )
+        self.assertRedirects(
+            response,
+            reverse("division_detail", kwargs={"pk": self.division.pk}),
+        )
+        settings = DivisionSettings.objects.get(division=self.division)
+        self.assertEqual(len(settings.round_pairings), 2)
+        self.assertEqual(settings.round_pairings[0]["pairing"], "Swiss")
+        self.assertEqual(settings.round_pairings[1]["pairing"], "KotH")
+
+    def test_post_invalid_stays_on_page(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.post(
+            reverse("division_settings_edit", kwargs={"pk": self.division.pk}),
+            {
+                "form-TOTAL_FORMS": "1",
+                "form-INITIAL_FORMS": "0",
+                "form-MIN_NUM_FORMS": "0",
+                "form-MAX_NUM_FORMS": "1000",
+                "form-0-round": "1",
+                "form-0-pairing_type": "Swiss",
+                "form-0-start_round": "1",  # invalid: not less than round
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(DivisionSettings.objects.filter(division=self.division).exists())

@@ -4,6 +4,9 @@ from django.test import TestCase
 
 from tournaments.forms import (
     ResultSlipForm,
+    RoundCountForm,
+    RoundPairingForm,
+    RoundPairingFormSet,
     TournamentForm,
     clean_multiline_text,
 )
@@ -311,3 +314,112 @@ class ResultSlipFormTests(TestCase):
         )
         self.assertFalse(form.is_valid())
         self.assertIn("loser", form.errors)
+
+
+class RoundCountFormTests(TestCase):
+    def test_valid(self):
+        form = RoundCountForm(data={"num_rounds": 5})
+        self.assertTrue(form.is_valid())
+        self.assertEqual(form.cleaned_data["num_rounds"], 5)
+
+    def test_minimum_is_one(self):
+        form = RoundCountForm(data={"num_rounds": 0})
+        self.assertFalse(form.is_valid())
+
+    def test_required(self):
+        form = RoundCountForm(data={})
+        self.assertFalse(form.is_valid())
+
+
+class RoundPairingFormTests(TestCase):
+    def test_valid(self):
+        form = RoundPairingForm(data={
+            "round": 3,
+            "pairing_type": "Swiss",
+            "start_round": 2,
+        })
+        self.assertTrue(form.is_valid())
+
+    def test_start_round_can_be_zero(self):
+        form = RoundPairingForm(data={
+            "round": 1,
+            "pairing_type": "KotH",
+            "start_round": 0,
+        })
+        self.assertTrue(form.is_valid())
+
+    def test_start_round_must_be_less_than_round(self):
+        form = RoundPairingForm(data={
+            "round": 3,
+            "pairing_type": "Swiss",
+            "start_round": 3,
+        })
+        self.assertFalse(form.is_valid())
+        self.assertIn("Based on round must be less than 3", str(form.errors))
+
+    def test_start_round_cannot_exceed_round(self):
+        form = RoundPairingForm(data={
+            "round": 2,
+            "pairing_type": "Swiss",
+            "start_round": 5,
+        })
+        self.assertFalse(form.is_valid())
+
+    def test_start_round_cannot_be_negative(self):
+        form = RoundPairingForm(data={
+            "round": 1,
+            "pairing_type": "Swiss",
+            "start_round": -1,
+        })
+        self.assertFalse(form.is_valid())
+
+    def test_pairing_type_must_be_valid_strategy(self):
+        form = RoundPairingForm(data={
+            "round": 1,
+            "pairing_type": "InvalidType",
+            "start_round": 0,
+        })
+        self.assertFalse(form.is_valid())
+        self.assertIn("pairing_type", form.errors)
+
+    def test_pairing_type_choices_include_all_strategies(self):
+        form = RoundPairingForm()
+        choices = [c[0] for c in form.fields["pairing_type"].choices]
+        for name in ["KotH", "QotH", "Swiss", "RoundRobin"]:
+            self.assertIn(name, choices)
+
+
+class RoundPairingFormSetTests(TestCase):
+    def _management_data(self, total):
+        return {
+            "form-TOTAL_FORMS": str(total),
+            "form-INITIAL_FORMS": "0",
+            "form-MIN_NUM_FORMS": "0",
+            "form-MAX_NUM_FORMS": "1000",
+        }
+
+    def test_valid_formset(self):
+        data = self._management_data(2)
+        data.update({
+            "form-0-round": "1",
+            "form-0-pairing_type": "Swiss",
+            "form-0-start_round": "0",
+            "form-1-round": "2",
+            "form-1-pairing_type": "KotH",
+            "form-1-start_round": "1",
+        })
+        formset = RoundPairingFormSet(data)
+        self.assertTrue(formset.is_valid())
+
+    def test_invalid_form_in_formset(self):
+        data = self._management_data(2)
+        data.update({
+            "form-0-round": "1",
+            "form-0-pairing_type": "Swiss",
+            "form-0-start_round": "0",
+            "form-1-round": "2",
+            "form-1-pairing_type": "KotH",
+            "form-1-start_round": "2",
+        })
+        formset = RoundPairingFormSet(data)
+        self.assertFalse(formset.is_valid())
