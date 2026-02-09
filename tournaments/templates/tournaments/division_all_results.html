@@ -1,22 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}{{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
+{% block title %}All Results - {{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
 
 {% block content %}
-<h1>{{ division.name }}</h1>
+<h1>All Results: {{ division.name }}</h1>
 <p>Tournament: <a href="{% url 'tournament_detail' division.tournament.pk %}">{{ division.tournament.name }}</a></p>
+<p><a href="{% url 'division_detail' division.pk %}">Back to division</a></p>
 
-<p>
-    <a href="{% url 'division_entrants' division.pk %}">Entrants</a>
-    | <a href="{% url 'division_standings' division.pk %}">Standings</a>
-    | <a href="{% url 'resultslip_create' division.pk %}">Add Result</a>
-    {% if can_edit %}| <a href="{% url 'division_settings' division.pk %}">Settings</a>{% endif %}
-    | <a href="{% url 'tournament_detail' division.tournament.pk %}">Back to tournament</a>
-</p>
-
-<h2>Round {{ max_round }} Results</h2>
-{% if latest_results %}
-<p><a href="{% url 'division_all_results' division.pk %}">All results</a></p>
+{% if division.result_slips.all %}
 <table>
     <thead>
         <tr>
@@ -28,7 +19,7 @@
         </tr>
     </thead>
     <tbody>
-        {% for slip in latest_results %}
+        {% for slip in division.result_slips.all %}
         <tr>
             <td>{{ slip.round }}</td>
             <td>{{ slip.winner.player.name }}</td>
@@ -42,5 +33,4 @@
 {% else %}
 <p>No results yet.</p>
 {% endif %}
-
 {% endblock %}

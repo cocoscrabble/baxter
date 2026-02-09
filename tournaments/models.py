@@ -132,6 +132,7 @@ class ResultSlip(models.Model):
     )
     loser_score = models.IntegerField()
     winner_started = models.BooleanField()
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
 
     class Meta:
         ordering = ["round"]

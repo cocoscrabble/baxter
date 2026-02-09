@@ -104,7 +104,24 @@ class DivisionDetailView(DetailView):
         context["can_edit"] = (
             user.is_authenticated and self.object.tournament.can_edit(user)
         )
+        division = self.object
+        max_round = division.max_round()
+        context["max_round"] = max_round
+        if max_round:
+            context["latest_results"] = (
+                division.result_slips
+                .filter(round=max_round)
+                .order_by("-created_at")
+            )
+        else:
+            context["latest_results"] = division.result_slips.none()
         return context
+
+
+class DivisionAllResultsView(DetailView):
+    model = Division
+    template_name = "tournaments/division_all_results.html"
+    context_object_name = "division"
 
 
 class DivisionEntrantsView(DetailView):
