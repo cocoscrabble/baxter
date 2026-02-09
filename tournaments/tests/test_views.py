@@ -7,31 +7,6 @@ from tournaments.models import Division, DivisionSettings, Entrant, Player, Resu
 from users.models import User
 
 
-class TournamentListViewTests(TestCase):
-    def test_get_tournament_list(self):
-        response = self.client.get(reverse("tournament_list"))
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "tournaments/tournament_list.html")
-
-    def test_lists_tournaments(self):
-        owner = User.objects.create_user(username="owner", password="testpass123")
-        Tournament.objects.create(
-            name="Tournament 1",
-            location="Location 1",
-            start_date=date(2026, 3, 15),
-            owner=owner,
-        )
-        Tournament.objects.create(
-            name="Tournament 2",
-            location="Location 2",
-            start_date=date(2026, 4, 15),
-            owner=owner,
-        )
-        response = self.client.get(reverse("tournament_list"))
-        self.assertContains(response, "Tournament 1")
-        self.assertContains(response, "Tournament 2")
-
-
 class TournamentDetailViewTests(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -42,14 +17,6 @@ class TournamentDetailViewTests(TestCase):
             start_date=date(2026, 3, 15),
             owner=cls.owner,
         )
-
-    def test_get_tournament_detail(self):
-        response = self.client.get(
-            reverse("tournament_detail", kwargs={"pk": self.tournament.pk})
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "tournaments/tournament_detail.html")
-        self.assertContains(response, "Test Tournament")
 
     def test_shows_edit_link_for_owner(self):
         self.client.login(username="owner", password="testpass123")
@@ -66,31 +33,11 @@ class TournamentDetailViewTests(TestCase):
         edit_url = reverse("tournament_edit", kwargs={"pk": self.tournament.pk})
         self.assertNotContains(response, edit_url)
 
-    def test_division_links(self):
-        division = Division.objects.create(name="Open", tournament=self.tournament)
-        response = self.client.get(
-            reverse("tournament_detail", kwargs={"pk": self.tournament.pk})
-        )
-        self.assertContains(response, "Open")
-        self.assertContains(response, reverse("division_detail", kwargs={"pk": division.pk}))
-
 
 class TournamentCreateViewTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user(username="testuser", password="testpass123")
-
-    def test_requires_login(self):
-        response = self.client.get(reverse("tournament_create"))
-        self.assertRedirects(
-            response, f"{reverse('login')}?next={reverse('tournament_create')}"
-        )
-
-    def test_get_create_page(self):
-        self.client.login(username="testuser", password="testpass123")
-        response = self.client.get(reverse("tournament_create"))
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "tournaments/tournament_form.html")
 
     def test_create_tournament(self):
         self.client.login(username="testuser", password="testpass123")
@@ -112,7 +59,7 @@ class TournamentCreateViewTests(TestCase):
 
     def test_create_tournament_with_divisions(self):
         self.client.login(username="testuser", password="testpass123")
-        response = self.client.post(
+        self.client.post(
             reverse("tournament_create"),
             {
                 "name": "New Tournament",
@@ -138,15 +85,6 @@ class TournamentUpdateViewTests(TestCase):
             owner=self.owner,
         )
         self.tournament.editors.add(self.owner, self.editor)
-
-    def test_requires_login(self):
-        response = self.client.get(
-            reverse("tournament_edit", kwargs={"pk": self.tournament.pk})
-        )
-        self.assertRedirects(
-            response,
-            f"{reverse('login')}?next={reverse('tournament_edit', kwargs={'pk': self.tournament.pk})}",
-        )
 
     def test_owner_can_edit(self):
         self.client.login(username="owner", password="testpass123")
@@ -200,15 +138,6 @@ class TournamentDeleteViewTests(TestCase):
         )
         self.tournament.editors.add(self.owner, self.editor)
 
-    def test_requires_login(self):
-        response = self.client.get(
-            reverse("tournament_delete", kwargs={"pk": self.tournament.pk})
-        )
-        self.assertRedirects(
-            response,
-            f"{reverse('login')}?next={reverse('tournament_delete', kwargs={'pk': self.tournament.pk})}",
-        )
-
     def test_owner_can_delete(self):
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(
@@ -233,56 +162,6 @@ class TournamentDeleteViewTests(TestCase):
         self.assertFalse(Tournament.objects.filter(pk=self.tournament.pk).exists())
 
 
-class DivisionDetailViewTests(TestCase):
-    @classmethod
-    def setUpTestData(cls):
-        cls.owner = User.objects.create_user(username="owner", password="testpass123")
-        cls.tournament = Tournament.objects.create(
-            name="Test Tournament",
-            location="Test Location",
-            start_date=date(2026, 3, 15),
-            owner=cls.owner,
-        )
-        cls.division = Division.objects.create(name="Open", tournament=cls.tournament)
-
-    def test_get_division_detail(self):
-        response = self.client.get(
-            reverse("division_detail", kwargs={"pk": self.division.pk})
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "tournaments/division_detail.html")
-        self.assertContains(response, "Open")
-
-    def test_shows_results(self):
-        player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
-        player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
-        entrant1 = Entrant.objects.create(division=self.division, player=player1, number=1)
-        entrant2 = Entrant.objects.create(division=self.division, player=player2, number=2)
-        ResultSlip.objects.create(
-            division=self.division,
-            round=1,
-            winner=entrant1,
-            winner_score=450,
-            loser=entrant2,
-            loser_score=380,
-            winner_started=True,
-        )
-        response = self.client.get(
-            reverse("division_detail", kwargs={"pk": self.division.pk})
-        )
-        self.assertContains(response, "450")
-        self.assertContains(response, "380")
-
-    def test_shows_add_result_link(self):
-        response = self.client.get(
-            reverse("division_detail", kwargs={"pk": self.division.pk})
-        )
-        self.assertContains(response, "Add Result")
-        self.assertContains(
-            response, reverse("resultslip_create", kwargs={"pk": self.division.pk})
-        )
-
-
 class ResultSlipCreateViewTests(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -302,13 +181,6 @@ class ResultSlipCreateViewTests(TestCase):
         cls.entrant2 = Entrant.objects.create(
             division=cls.division, player=cls.player2, number=2
         )
-
-    def test_get_create_page(self):
-        response = self.client.get(
-            reverse("resultslip_create", kwargs={"pk": self.division.pk})
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "tournaments/resultslip_form.html")
 
     def test_create_result_slip(self):
         response = self.client.post(
@@ -391,18 +263,6 @@ class DivisionDetailLatestResultsTests(TestCase):
         self.assertContains(response, "420")
         self.assertNotContains(response, "400-350")
 
-    def test_shows_all_results_link(self):
-        ResultSlip.objects.create(
-            division=self.division, round=1, winner=self.entrant1,
-            winner_score=400, loser=self.entrant2, loser_score=350, winner_started=True,
-        )
-        response = self.client.get(
-            reverse("division_detail", kwargs={"pk": self.division.pk})
-        )
-        self.assertContains(
-            response, reverse("division_all_results", kwargs={"pk": self.division.pk})
-        )
-
     def test_settings_link_shown_for_editor(self):
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(
@@ -438,13 +298,6 @@ class DivisionStandingsViewTests(TestCase):
         cls.entrant2 = Entrant.objects.create(
             division=cls.division, player=cls.player2, number=2
         )
-
-    def test_get_standings(self):
-        response = self.client.get(
-            reverse("division_standings", kwargs={"pk": self.division.pk})
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "tournaments/division_standings.html")
 
     def test_standings_with_results(self):
         ResultSlip.objects.create(

@@ -55,3 +55,4 @@ Follow web development best practices:
 - Follow Django conventions for project structure
 - Use class-based views (ListView, DetailView, CreateView, UpdateView, DeleteView)
 - Use mixins for reusable view logic (e.g., permission checks)
+- Do not add tests that are just testing django functionality
