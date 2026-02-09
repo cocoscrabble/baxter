@@ -344,84 +344,6 @@ class DivisionStandingsViewTests(TestCase):
         )
 
 
-class DivisionSettingsViewTests(TestCase):
-    def setUp(self):
-        self.owner = User.objects.create_user(username="owner", password="testpass123")
-        self.other = User.objects.create_user(username="other", password="testpass123")
-        self.tournament = Tournament.objects.create(
-            name="Test Tournament",
-            location="Test Location",
-            start_date=date(2026, 3, 15),
-            owner=self.owner,
-        )
-        self.tournament.editors.add(self.owner)
-        self.division = Division.objects.create(name="Open", tournament=self.tournament)
-
-    def test_non_editor_forbidden(self):
-        self.client.login(username="other", password="testpass123")
-        response = self.client.get(
-            reverse("division_settings", kwargs={"pk": self.division.pk})
-        )
-        self.assertEqual(response.status_code, 403)
-
-    def test_redirects_to_rounds_when_no_settings(self):
-        self.client.login(username="owner", password="testpass123")
-        response = self.client.get(
-            reverse("division_settings", kwargs={"pk": self.division.pk})
-        )
-        self.assertRedirects(
-            response,
-            reverse("division_settings_rounds", kwargs={"pk": self.division.pk}),
-        )
-
-    def test_redirects_to_edit_when_settings_exist(self):
-        DivisionSettings.objects.create(
-            division=self.division,
-            round_pairings=[{"round": 1, "pairing": "Swiss", "start_round": 0}],
-        )
-        self.client.login(username="owner", password="testpass123")
-        response = self.client.get(
-            reverse("division_settings", kwargs={"pk": self.division.pk})
-        )
-        self.assertRedirects(
-            response,
-            reverse("division_settings_edit", kwargs={"pk": self.division.pk}),
-        )
-
-    def test_redirects_to_rounds_when_settings_empty(self):
-        DivisionSettings.objects.create(division=self.division, round_pairings=[])
-        self.client.login(username="owner", password="testpass123")
-        response = self.client.get(
-            reverse("division_settings", kwargs={"pk": self.division.pk})
-        )
-        self.assertRedirects(
-            response,
-            reverse("division_settings_rounds", kwargs={"pk": self.division.pk}),
-        )
-
-
-class DivisionRoundCountViewTests(TestCase):
-    def setUp(self):
-        self.owner = User.objects.create_user(username="owner", password="testpass123")
-        self.tournament = Tournament.objects.create(
-            name="Test Tournament",
-            location="Test Location",
-            start_date=date(2026, 3, 15),
-            owner=self.owner,
-        )
-        self.tournament.editors.add(self.owner)
-        self.division = Division.objects.create(name="Open", tournament=self.tournament)
-
-    def test_post_redirects_to_edit(self):
-        self.client.login(username="owner", password="testpass123")
-        response = self.client.post(
-            reverse("division_settings_rounds", kwargs={"pk": self.division.pk}),
-            {"num_rounds": 5},
-        )
-        edit_url = reverse("division_settings_edit", kwargs={"pk": self.division.pk})
-        self.assertRedirects(response, f"{edit_url}?rounds=5")
-
-
 class DivisionSettingsEditViewTests(TestCase):
     def setUp(self):
         self.owner = User.objects.create_user(username="owner", password="testpass123")
@@ -437,7 +359,7 @@ class DivisionSettingsEditViewTests(TestCase):
     def test_get_with_rounds_param(self):
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(
-            reverse("division_settings_edit", kwargs={"pk": self.division.pk})
+            reverse("division_settings", kwargs={"pk": self.division.pk})
             + "?rounds=3"
         )
         self.assertEqual(response.status_code, 200)
@@ -455,25 +377,32 @@ class DivisionSettingsEditViewTests(TestCase):
         )
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(
-            reverse("division_settings_edit", kwargs={"pk": self.division.pk})
+            reverse("division_settings", kwargs={"pk": self.division.pk})
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.context["formset"]), 2)
 
-    def test_get_without_data_redirects_to_rounds(self):
+    def test_get_without_data_shows_empty_formset(self):
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(
-            reverse("division_settings_edit", kwargs={"pk": self.division.pk})
+            reverse("division_settings", kwargs={"pk": self.division.pk})
         )
-        self.assertRedirects(
-            response,
-            reverse("division_settings_rounds", kwargs={"pk": self.division.pk}),
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context["formset"]), 0)
+        self.assertEqual(response.context["round_count_form"].initial["num_rounds"], 0)
+
+    def test_non_editor_forbidden(self):
+        other = User.objects.create_user(username="other", password="testpass123")
+        self.client.login(username="other", password="testpass123")
+        response = self.client.get(
+            reverse("division_settings", kwargs={"pk": self.division.pk})
         )
+        self.assertEqual(response.status_code, 403)
 
     def test_post_saves_settings(self):
         self.client.login(username="owner", password="testpass123")
         response = self.client.post(
-            reverse("division_settings_edit", kwargs={"pk": self.division.pk}),
+            reverse("division_settings", kwargs={"pk": self.division.pk}),
             {
                 "form-TOTAL_FORMS": "2",
                 "form-INITIAL_FORMS": "0",
@@ -496,10 +425,66 @@ class DivisionSettingsEditViewTests(TestCase):
         self.assertEqual(settings.round_pairings[0]["pairing"], "Swiss")
         self.assertEqual(settings.round_pairings[1]["pairing"], "KotH")
 
+    def test_increase_rounds_preserves_existing(self):
+        DivisionSettings.objects.create(
+            division=self.division,
+            round_pairings=[
+                {"round": 1, "pairing": "Swiss", "start_round": 0},
+                {"round": 2, "pairing": "KotH", "start_round": 1},
+            ],
+        )
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(
+            reverse("division_settings", kwargs={"pk": self.division.pk})
+            + "?rounds=4"
+        )
+        formset = response.context["formset"]
+        self.assertEqual(len(formset), 4)
+        # Existing rounds preserved
+        self.assertEqual(formset[0].initial["pairing_type"], "Swiss")
+        self.assertEqual(formset[1].initial["pairing_type"], "KotH")
+        # New rounds have defaults
+        self.assertEqual(formset[2].initial["round"], 3)
+        self.assertEqual(formset[2].initial["pairing_type"], "")
+        self.assertEqual(formset[3].initial["round"], 4)
+
+    def test_decrease_rounds_truncates(self):
+        DivisionSettings.objects.create(
+            division=self.division,
+            round_pairings=[
+                {"round": 1, "pairing": "Swiss", "start_round": 0},
+                {"round": 2, "pairing": "KotH", "start_round": 1},
+                {"round": 3, "pairing": "Swiss", "start_round": 2},
+            ],
+        )
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(
+            reverse("division_settings", kwargs={"pk": self.division.pk})
+            + "?rounds=1"
+        )
+        formset = response.context["formset"]
+        self.assertEqual(len(formset), 1)
+        self.assertEqual(formset[0].initial["pairing_type"], "Swiss")
+
+    def test_round_count_form_in_context(self):
+        DivisionSettings.objects.create(
+            division=self.division,
+            round_pairings=[
+                {"round": 1, "pairing": "Swiss", "start_round": 0},
+                {"round": 2, "pairing": "KotH", "start_round": 1},
+            ],
+        )
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(
+            reverse("division_settings", kwargs={"pk": self.division.pk})
+        )
+        round_count_form = response.context["round_count_form"]
+        self.assertEqual(round_count_form.initial["num_rounds"], 2)
+
     def test_post_invalid_stays_on_page(self):
         self.client.login(username="owner", password="testpass123")
         response = self.client.post(
-            reverse("division_settings_edit", kwargs={"pk": self.division.pk}),
+            reverse("division_settings", kwargs={"pk": self.division.pk}),
             {
                 "form-TOTAL_FORMS": "1",
                 "form-INITIAL_FORMS": "0",

@@ -5,9 +5,7 @@ from .views import (
     DivisionDetailView,
     DivisionEntrantsView,
     DivisionPairingsView,
-    DivisionRoundCountView,
     DivisionSettingsEditView,
-    DivisionSettingsView,
     DivisionStandingsView,
     ResultSlipCreateView,
     TournamentCreateView,
@@ -30,7 +28,5 @@ urlpatterns = [
     path("division/<int:pk>/standings/", DivisionStandingsView.as_view(), name="division_standings"),
     path("division/<int:pk>/standings/<int:round>/", DivisionStandingsView.as_view(), name="division_standings_round"),
     path("division/<int:pk>/pairings/", DivisionPairingsView.as_view(), name="division_pairings"),
-    path("division/<int:pk>/settings/", DivisionSettingsView.as_view(), name="division_settings"),
-    path("division/<int:pk>/settings/rounds/", DivisionRoundCountView.as_view(), name="division_settings_rounds"),
-    path("division/<int:pk>/settings/edit/", DivisionSettingsEditView.as_view(), name="division_settings_edit"),
+    path("division/<int:pk>/settings/", DivisionSettingsEditView.as_view(), name="division_settings"),
 ]

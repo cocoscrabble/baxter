@@ -7,6 +7,11 @@
 <p>Tournament: <a href="{% url 'tournament_detail' division.tournament.pk %}">{{ division.tournament.name }}</a></p>
 <p><a href="{% url 'division_detail' division.pk %}">Back to division</a></p>
 
+<form method="get">
+    {{ round_count_form.num_rounds.label_tag }} {{ round_count_form.num_rounds }}
+    <button type="submit">Change</button>
+</form>
+
 <form method="post">
     {% csrf_token %}
     {{ formset.management_form }}

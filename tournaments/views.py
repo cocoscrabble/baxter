@@ -6,7 +6,6 @@ from django.views.generic import (
     CreateView,
     DeleteView,
     DetailView,
-    FormView,
     ListView,
     UpdateView,
 )
@@ -175,51 +174,13 @@ class DivisionPairingsView(DetailView):
         return context
 
 
-class DivisionSettingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
-    def get_division(self):
-        return get_object_or_404(Division, pk=self.kwargs["pk"])
-
-    def get(self, request, pk):
-        division = self.get_division()
-        try:
-            if division.settings.round_pairings:
-                return redirect("division_settings_edit", pk=pk)
-        except DivisionSettings.DoesNotExist:
-            pass
-        return redirect("division_settings_rounds", pk=pk)
-
-
-class DivisionRoundCountView(LoginRequiredMixin, CanEditDivisionMixin, FormView):
-    template_name = "tournaments/division_settings_rounds.html"
-    form_class = RoundCountForm
-
-    def get_division(self):
-        return get_object_or_404(Division, pk=self.kwargs["pk"])
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["division"] = self.get_division()
-        return context
-
-    def form_valid(self, form):
-        num_rounds = form.cleaned_data["num_rounds"]
-        url = reverse("division_settings_edit", kwargs={"pk": self.kwargs["pk"]})
-        return redirect(f"{url}?rounds={num_rounds}")
-
-
 class DivisionSettingsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
     template_name = "tournaments/division_settings_edit.html"
 
     def get_division(self):
         return get_object_or_404(Division, pk=self.kwargs["pk"])
 
-    def get_initial_data(self, division):
-        num_rounds = self.request.GET.get("rounds")
-        if num_rounds:
-            return [
-                {"round": i, "pairing_type": "", "start_round": i - 1}
-                for i in range(1, int(num_rounds) + 1)
-            ]
+    def _existing_initial(self, division):
         try:
             if division.settings.round_pairings:
                 return [
@@ -232,17 +193,30 @@ class DivisionSettingsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
                 ]
         except DivisionSettings.DoesNotExist:
             pass
-        return None
+        return []
+
+    def _resize_initial(self, existing, num_rounds):
+        result = (existing or [])[:num_rounds]
+        for i in range(len(result) + 1, num_rounds + 1):
+            result.append({"round": i, "pairing_type": "", "start_round": i - 1})
+        return result
+
+    def get_initial_data(self, division):
+        existing = self._existing_initial(division)
+        num_rounds = self.request.GET.get("num_rounds") or self.request.GET.get("rounds")
+        if num_rounds:
+            return self._resize_initial(existing, int(num_rounds))
+        return existing
 
     def get(self, request, pk):
         division = self.get_division()
         initial = self.get_initial_data(division)
-        if initial is None:
-            return redirect("division_settings_rounds", pk=pk)
         formset = RoundPairingFormSet(initial=initial)
+        round_count_form = RoundCountForm(initial={"num_rounds": len(initial)})
         return render(request, self.template_name, {
             "division": division,
             "formset": formset,
+            "round_count_form": round_count_form,
         })
 
     def post(self, request, pk):
