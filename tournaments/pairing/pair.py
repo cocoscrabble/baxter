@@ -83,7 +83,7 @@ def pair(result_slips, config, entrants):
     pd = PairingData(result_slips, entrants, repeats)
     rr_starts = defaultdict(lambda: 0)
     status = round_status(result_slips, entrants)
-    round_pairings = [RoundPairing.from_dict(x) for x in config.round_pairing]
+    round_pairings = [RoundPairing.from_dict(x) for x in config.round_pairings]
     for rp in round_pairings:
         if status[rp.round] == RoundStatus.Finished:
             # Add the played games to the repeats table

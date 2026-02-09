@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Pairings - {{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
+
+{% block content %}
+<h1>Pairings: {{ division.name }}</h1>
+<p>Tournament: <a href="{% url 'tournament_detail' division.tournament.pk %}">{{ division.tournament.name }}</a></p>
+<p><a href="{% url 'division_detail' division.pk %}">Back to division</a></p>
+
+{% if pairings_message %}
+<p>{{ pairings_message }}</p>
+{% elif pairings %}
+{% for round_num, round_pairings in pairings %}
+<h2>Round {{ round_num }}</h2>
+<table>
+    <thead>
+        <tr>
+            <th>First</th>
+            <th>Second</th>
+            <th>Repeats</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for pairing in round_pairings %}
+        <tr>
+            <td>{{ pairing.first.name }}</td>
+            <td>{{ pairing.second.name }}</td>
+            <td>{{ pairing.repeats }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endfor %}
+{% endif %}
+
+{% endblock %}

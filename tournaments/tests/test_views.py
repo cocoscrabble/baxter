@@ -512,3 +512,99 @@ class DivisionSettingsEditViewTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertFalse(DivisionSettings.objects.filter(division=self.division).exists())
+
+
+class DivisionPairingsViewTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.owner = User.objects.create_user(username="owner", password="testpass123")
+        cls.tournament = Tournament.objects.create(
+            name="Test Tournament",
+            location="Test Location",
+            start_date=date(2026, 3, 15),
+            owner=cls.owner,
+        )
+        cls.division = Division.objects.create(name="Open", tournament=cls.tournament)
+        cls.player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
+        cls.player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
+        cls.entrant1 = Entrant.objects.create(
+            division=cls.division, player=cls.player1, number=1
+        )
+        cls.entrant2 = Entrant.objects.create(
+            division=cls.division, player=cls.player2, number=2
+        )
+
+    def test_no_settings_shows_not_configured(self):
+        response = self.client.get(
+            reverse("division_pairings", kwargs={"pk": self.division.pk})
+        )
+        self.assertContains(response, "Division settings have not been configured")
+
+    def test_empty_settings_shows_no_pairings_configured(self):
+        DivisionSettings.objects.create(division=self.division, round_pairings=[])
+        response = self.client.get(
+            reverse("division_pairings", kwargs={"pk": self.division.pk})
+        )
+        self.assertContains(response, "No round pairings configured")
+
+    def test_all_rounds_finished_shows_no_upcoming(self):
+        DivisionSettings.objects.create(
+            division=self.division,
+            round_pairings=[{"round": 1, "pairing": "KotH", "start_round": 0}],
+        )
+        ResultSlip.objects.create(
+            division=self.division, round=1, winner=self.entrant1,
+            winner_score=450, loser=self.entrant2, loser_score=380, winner_started=True,
+        )
+        response = self.client.get(
+            reverse("division_pairings", kwargs={"pk": self.division.pk})
+        )
+        self.assertContains(response, "No upcoming pairings available")
+
+    def test_with_settings_shows_pairings(self):
+        DivisionSettings.objects.create(
+            division=self.division,
+            round_pairings=[{"round": 1, "pairing": "KotH", "start_round": 0}],
+        )
+        response = self.client.get(
+            reverse("division_pairings", kwargs={"pk": self.division.pk})
+        )
+        pairings = response.context["pairings"]
+        self.assertEqual(len(pairings), 1)
+        round_num, round_pairings = pairings[0]
+        self.assertEqual(round_num, 1)
+        self.assertEqual(len(round_pairings), 1)
+        names = {round_pairings[0].first.name, round_pairings[0].second.name}
+        self.assertEqual(names, {"Alice", "Bob"})
+        self.assertContains(response, "Round 1")
+        self.assertContains(response, "Alice")
+        self.assertContains(response, "Bob")
+
+    def test_finished_rounds_not_shown(self):
+        DivisionSettings.objects.create(
+            division=self.division,
+            round_pairings=[
+                {"round": 1, "pairing": "KotH", "start_round": 0},
+                {"round": 2, "pairing": "KotH", "start_round": 1},
+            ],
+        )
+        ResultSlip.objects.create(
+            division=self.division, round=1, winner=self.entrant1,
+            winner_score=450, loser=self.entrant2, loser_score=380, winner_started=True,
+        )
+        response = self.client.get(
+            reverse("division_pairings", kwargs={"pk": self.division.pk})
+        )
+        pairings = response.context["pairings"]
+        # Round 1 is finished, only round 2 should appear
+        self.assertEqual(len(pairings), 1)
+        self.assertEqual(pairings[0][0], 2)
+
+    def test_pairings_link_on_division_detail(self):
+        response = self.client.get(
+            reverse("division_detail", kwargs={"pk": self.division.pk})
+        )
+        self.assertContains(
+            response,
+            reverse("division_pairings", kwargs={"pk": self.division.pk}),
+        )

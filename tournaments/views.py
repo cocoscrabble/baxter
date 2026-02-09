@@ -14,6 +14,7 @@ from django.views.generic import (
 from .forms import ResultSlipForm, RoundCountForm, RoundPairingFormSet, TournamentForm
 from .models import Division, DivisionSettings, Tournament
 from .pairing.base import PairingData, standings_after_round
+from .pairing.pair import pair
 
 
 class TournamentListView(ListView):
@@ -144,6 +145,33 @@ class DivisionStandingsView(DetailView):
         context["standings"] = standings_after_round(current_round, pd)
         context["round"] = current_round
         context["rounds"] = range(1, max_round + 1)
+        return context
+
+
+class DivisionPairingsView(DetailView):
+    model = Division
+    template_name = "tournaments/division_pairings.html"
+    context_object_name = "division"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        division = self.object
+        try:
+            settings = division.settings
+            if not settings.round_pairings:
+                context["pairings_message"] = "No round pairings configured."
+            else:
+                pairings = pair(
+                    division.result_slips.all(),
+                    settings,
+                    division.entrants.all(),
+                )
+                if pairings:
+                    context["pairings"] = pairings
+                else:
+                    context["pairings_message"] = "No upcoming pairings available."
+        except DivisionSettings.DoesNotExist:
+            context["pairings_message"] = "Division settings have not been configured."
         return context
 
 

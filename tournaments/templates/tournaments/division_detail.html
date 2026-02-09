@@ -9,6 +9,7 @@
 <p>
     <a href="{% url 'division_entrants' division.pk %}">Entrants</a>
     | <a href="{% url 'division_standings' division.pk %}">Standings</a>
+    | <a href="{% url 'division_pairings' division.pk %}">Pairings</a>
     | <a href="{% url 'resultslip_create' division.pk %}">Add Result</a>
     {% if can_edit %}| <a href="{% url 'division_settings' division.pk %}">Settings</a>{% endif %}
     | <a href="{% url 'tournament_detail' division.tournament.pk %}">Back to tournament</a>
