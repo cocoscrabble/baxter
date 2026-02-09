@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - {{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
+
+{% block content %}
+<h1>Settings: {{ division.name }}</h1>
+<p>Tournament: <a href="{% url 'tournament_detail' division.tournament.pk %}">{{ division.tournament.name }}</a></p>
+
+<form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Continue</button>
+</form>
+
+<p><a href="{% url 'division_detail' division.pk %}">Back to division</a></p>
+{% endblock %}

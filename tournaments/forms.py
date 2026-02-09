@@ -2,6 +2,8 @@ from django import forms
 
 from users.models import User
 
+from django.forms import formset_factory
+
 from .models import Division, Entrant, ResultSlip, Tournament
 
 
@@ -138,3 +140,27 @@ class ResultSlipForm(forms.ModelForm):
         if winner and loser and winner == loser:
             raise forms.ValidationError("Winner and loser must be different players.")
         return cleaned_data
+
+
+class RoundCountForm(forms.Form):
+    num_rounds = forms.IntegerField(min_value=1, label="Number of rounds")
+
+
+class RoundPairingForm(forms.Form):
+    round = forms.IntegerField(widget=forms.HiddenInput)
+    pairing_type = forms.CharField(max_length=100, label="Pairing type")
+    start_round = forms.IntegerField(min_value=0, label="Based on round")
+
+    def clean(self):
+        cleaned_data = super().clean()
+        round_num = cleaned_data.get("round")
+        start_round = cleaned_data.get("start_round")
+        if round_num is not None and start_round is not None:
+            if start_round >= round_num:
+                raise forms.ValidationError(
+                    f"Based on round must be less than {round_num}."
+                )
+        return cleaned_data
+
+
+RoundPairingFormSet = formset_factory(RoundPairingForm, extra=0)

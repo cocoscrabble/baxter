@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Round Pairings - {{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
+
+{% block content %}
+<h1>Round Pairings: {{ division.name }}</h1>
+<p>Tournament: <a href="{% url 'tournament_detail' division.tournament.pk %}">{{ division.tournament.name }}</a></p>
+
+<form method="post">
+    {% csrf_token %}
+    {{ formset.management_form }}
+    <table>
+        <thead>
+            <tr>
+                <th>Round</th>
+                <th>Pairing Type</th>
+                <th>Based on Round</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for form in formset %}
+            <tr>
+                <td>{{ form.round }}{{ form.round.value }}</td>
+                <td>{{ form.pairing_type }}{% if form.pairing_type.errors %}<br>{{ form.pairing_type.errors }}{% endif %}</td>
+                <td>{{ form.start_round }}{% if form.start_round.errors %}<br>{{ form.start_round.errors }}{% endif %}</td>
+                <td>{% if form.non_field_errors %}{{ form.non_field_errors }}{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <button type="submit">Save</button>
+</form>
+
+<p><a href="{% url 'division_detail' division.pk %}">Back to division</a></p>
+{% endblock %}

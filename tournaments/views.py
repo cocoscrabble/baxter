@@ -1,16 +1,18 @@
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
+from django.views import View
 from django.views.generic import (
     CreateView,
     DeleteView,
     DetailView,
+    FormView,
     ListView,
     UpdateView,
 )
 
-from .forms import ResultSlipForm, TournamentForm
-from .models import Division, Tournament
+from .forms import ResultSlipForm, RoundCountForm, RoundPairingFormSet, TournamentForm
+from .models import Division, DivisionSettings, Tournament
 from .pairing.base import PairingData, standings_after_round
 
 
@@ -120,6 +122,98 @@ class DivisionStandingsView(DetailView):
         context["round"] = current_round
         context["rounds"] = range(1, max_round + 1)
         return context
+
+
+class DivisionSettingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    def get_division(self):
+        return get_object_or_404(Division, pk=self.kwargs["pk"])
+
+    def get(self, request, pk):
+        division = self.get_division()
+        try:
+            if division.settings.round_pairings:
+                return redirect("division_settings_edit", pk=pk)
+        except DivisionSettings.DoesNotExist:
+            pass
+        return redirect("division_settings_rounds", pk=pk)
+
+
+class DivisionRoundCountView(LoginRequiredMixin, CanEditDivisionMixin, FormView):
+    template_name = "tournaments/division_settings_rounds.html"
+    form_class = RoundCountForm
+
+    def get_division(self):
+        return get_object_or_404(Division, pk=self.kwargs["pk"])
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["division"] = self.get_division()
+        return context
+
+    def form_valid(self, form):
+        num_rounds = form.cleaned_data["num_rounds"]
+        url = reverse("division_settings_edit", kwargs={"pk": self.kwargs["pk"]})
+        return redirect(f"{url}?rounds={num_rounds}")
+
+
+class DivisionSettingsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    template_name = "tournaments/division_settings_edit.html"
+
+    def get_division(self):
+        return get_object_or_404(Division, pk=self.kwargs["pk"])
+
+    def get_initial_data(self, division):
+        num_rounds = self.request.GET.get("rounds")
+        if num_rounds:
+            return [
+                {"round": i, "pairing_type": "", "start_round": i - 1}
+                for i in range(1, int(num_rounds) + 1)
+            ]
+        try:
+            if division.settings.round_pairings:
+                return [
+                    {
+                        "round": rp["round"],
+                        "pairing_type": rp["pairing"],
+                        "start_round": rp["start_round"],
+                    }
+                    for rp in division.settings.round_pairings
+                ]
+        except DivisionSettings.DoesNotExist:
+            pass
+        return None
+
+    def get(self, request, pk):
+        division = self.get_division()
+        initial = self.get_initial_data(division)
+        if initial is None:
+            return redirect("division_settings_rounds", pk=pk)
+        formset = RoundPairingFormSet(initial=initial)
+        return render(request, self.template_name, {
+            "division": division,
+            "formset": formset,
+        })
+
+    def post(self, request, pk):
+        division = self.get_division()
+        formset = RoundPairingFormSet(request.POST)
+        if formset.is_valid():
+            round_pairings = [
+                {
+                    "round": form.cleaned_data["round"],
+                    "pairing": form.cleaned_data["pairing_type"],
+                    "start_round": form.cleaned_data["start_round"],
+                }
+                for form in formset
+            ]
+            settings, _ = DivisionSettings.objects.get_or_create(division=division)
+            settings.round_pairings = round_pairings
+            settings.save()
+            return redirect("division_detail", pk=pk)
+        return render(request, self.template_name, {
+            "division": division,
+            "formset": formset,
+        })
 
 
 class ResultSlipCreateView(CreateView):

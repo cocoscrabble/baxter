@@ -61,6 +61,7 @@
 <p>
     <a href="{% url 'division_standings' division.pk %}">Standings</a>
     | <a href="{% url 'resultslip_create' division.pk %}">Add Result</a>
+    {% if can_edit %}| <a href="{% url 'division_settings' division.pk %}">Settings</a>{% endif %}
 </p>
 
 <p><a href="{% url 'tournament_detail' division.tournament.pk %}">Back to tournament</a></p>
