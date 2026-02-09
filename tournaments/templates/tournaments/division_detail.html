@@ -7,35 +7,12 @@
 <p>Tournament: <a href="{% url 'tournament_detail' division.tournament.pk %}">{{ division.tournament.name }}</a></p>
 
 <p>
-    <a href="{% url 'division_standings' division.pk %}">Standings</a>
+    <a href="{% url 'division_entrants' division.pk %}">Entrants</a>
+    | <a href="{% url 'division_standings' division.pk %}">Standings</a>
     | <a href="{% url 'resultslip_create' division.pk %}">Add Result</a>
     {% if can_edit %}| <a href="{% url 'division_settings' division.pk %}">Settings</a>{% endif %}
     | <a href="{% url 'tournament_detail' division.tournament.pk %}">Back to tournament</a>
 </p>
-
-<h2>Entrants</h2>
-{% if division.entrants.all %}
-<table>
-    <thead>
-        <tr>
-            <th>#</th>
-            <th>Player</th>
-            <th>Rating</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for entrant in division.entrants.all %}
-        <tr>
-            <td>{{ entrant.number }}</td>
-            <td>{{ entrant.player.name }}</td>
-            <td>{{ entrant.player.rating }}</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
-{% else %}
-<p>No entrants yet.</p>
-{% endif %}
 
 <h2>Results</h2>
 {% if division.result_slips.all %}

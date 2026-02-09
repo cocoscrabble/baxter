@@ -257,7 +257,7 @@ class DivisionDetailViewTests(TestCase):
         player = Player.objects.create(name="Alice", player_number="001", rating=1600)
         Entrant.objects.create(division=self.division, player=player, number=1)
         response = self.client.get(
-            reverse("division_detail", kwargs={"pk": self.division.pk})
+            reverse("division_entrants", kwargs={"pk": self.division.pk})
         )
         self.assertContains(response, "Alice")
 

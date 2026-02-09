@@ -107,6 +107,12 @@ class DivisionDetailView(DetailView):
         return context
 
 
+class DivisionEntrantsView(DetailView):
+    model = Division
+    template_name = "tournaments/division_entrants.html"
+    context_object_name = "division"
+
+
 class DivisionStandingsView(DetailView):
     model = Division
     template_name = "tournaments/division_standings.html"

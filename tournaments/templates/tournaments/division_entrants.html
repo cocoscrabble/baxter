@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Entrants - {{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
+
+{% block content %}
+<h1>Entrants: {{ division.name }}</h1>
+<p>Tournament: <a href="{% url 'tournament_detail' division.tournament.pk %}">{{ division.tournament.name }}</a></p>
+<p><a href="{% url 'division_detail' division.pk %}">Back to division</a></p>
+
+{% if division.entrants.all %}
+<table>
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Player</th>
+            <th>Rating</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for entrant in division.entrants.all %}
+        <tr>
+            <td>{{ entrant.number }}</td>
+            <td>{{ entrant.player.name }}</td>
+            <td>{{ entrant.player.rating }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No entrants yet.</p>
+{% endif %}
+{% endblock %}
