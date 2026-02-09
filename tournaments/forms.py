@@ -5,6 +5,7 @@ from users.models import User
 from django.forms import formset_factory
 
 from .models import Division, Entrant, ResultSlip, Tournament
+from .pairing.pair import STRATEGY_TYPES
 
 
 def clean_multiline_text(text):
@@ -148,7 +149,10 @@ class RoundCountForm(forms.Form):
 
 class RoundPairingForm(forms.Form):
     round = forms.IntegerField(widget=forms.HiddenInput)
-    pairing_type = forms.CharField(max_length=100, label="Pairing type")
+    pairing_type = forms.ChoiceField(
+        choices=[(s, s) for s in STRATEGY_TYPES],
+        label="Pairing type",
+    )
     start_round = forms.IntegerField(min_value=0, label="Based on round")
 
     def clean(self):

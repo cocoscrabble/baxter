@@ -7,6 +7,8 @@ requires-python = ">=3.14"
 dependencies = [
     "dataclasses-json>=0.6.7",
     "django>=6.0.2",
+    "more-itertools>=10.8.0",
+    "networkx>=3.6.1",
     "python-decouple>=3.8",
 ]
 
