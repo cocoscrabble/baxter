@@ -5,6 +5,7 @@
 {% block content %}
 <h1>Round Pairings: {{ division.name }}</h1>
 <p>Tournament: <a href="{% url 'tournament_detail' division.tournament.pk %}">{{ division.tournament.name }}</a></p>
+<p><a href="{% url 'division_detail' division.pk %}">Back to division</a></p>
 
 <form method="post">
     {% csrf_token %}
@@ -31,6 +32,4 @@
     </table>
     <button type="submit">Save</button>
 </form>
-
-<p><a href="{% url 'division_detail' division.pk %}">Back to division</a></p>
 {% endblock %}

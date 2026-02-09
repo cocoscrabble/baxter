@@ -6,6 +6,13 @@
 <h1>{{ division.name }}</h1>
 <p>Tournament: <a href="{% url 'tournament_detail' division.tournament.pk %}">{{ division.tournament.name }}</a></p>
 
+<p>
+    <a href="{% url 'division_standings' division.pk %}">Standings</a>
+    | <a href="{% url 'resultslip_create' division.pk %}">Add Result</a>
+    {% if can_edit %}| <a href="{% url 'division_settings' division.pk %}">Settings</a>{% endif %}
+    | <a href="{% url 'tournament_detail' division.tournament.pk %}">Back to tournament</a>
+</p>
+
 <h2>Entrants</h2>
 {% if division.entrants.all %}
 <table>
@@ -58,11 +65,4 @@
 <p>No results yet.</p>
 {% endif %}
 
-<p>
-    <a href="{% url 'division_standings' division.pk %}">Standings</a>
-    | <a href="{% url 'resultslip_create' division.pk %}">Add Result</a>
-    {% if can_edit %}| <a href="{% url 'division_settings' division.pk %}">Settings</a>{% endif %}
-</p>
-
-<p><a href="{% url 'tournament_detail' division.tournament.pk %}">Back to tournament</a></p>
 {% endblock %}

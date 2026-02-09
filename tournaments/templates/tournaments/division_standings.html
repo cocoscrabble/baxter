@@ -5,6 +5,7 @@
 {% block content %}
 <h1>Standings: {{ division.name }}</h1>
 <p>Tournament: <a href="{% url 'tournament_detail' division.tournament.pk %}">{{ division.tournament.name }}</a></p>
+<p><a href="{% url 'division_detail' division.pk %}">Back to division</a></p>
 <p>Rounds:
     {% for r in rounds %}
         {% if r == round %}<strong>{{ r }}</strong>{% else %}<a href="{% url 'division_standings_round' division.pk r %}">{{ r }}</a>{% endif %}
@@ -42,5 +43,4 @@
 <p>No results yet.</p>
 {% endif %}
 
-<p><a href="{% url 'division_detail' division.pk %}">Back to division</a></p>
 {% endblock %}
