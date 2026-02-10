@@ -56,3 +56,4 @@ Follow web development best practices:
 - Use class-based views (ListView, DetailView, CreateView, UpdateView, DeleteView)
 - Use mixins for reusable view logic (e.g., permission checks)
 - Do not add tests that are just testing django functionality
+- `round` is used as a variable/parameter name throughout the pairing code (it refers to a tournament round). Do not rename it to avoid shadowing the builtin.

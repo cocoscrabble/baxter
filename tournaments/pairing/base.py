@@ -9,6 +9,12 @@ from tournaments.models import ResultSlip
 
 
 class DefaultDict(defaultdict):
+    """A defaultdict that passes the missing key to the factory.
+
+    e.g. DefaultDict(Player) will call Player(key) for missing keys,
+    so players["Alice"] creates Player("Alice").
+    """
+
     def __missing__(self, key):
         ret = self.default_factory(key)
         self[key] = ret
@@ -120,7 +126,7 @@ class Results:
 
 class Repeats:
     def __init__(self):
-        self.matches = defaultdict(lambda: 0)
+        self.matches = defaultdict(int)
 
     def add(self, p1: Player, p2: Player) -> int:
         key = tuple(sorted([p1.name, p2.name]))
@@ -134,9 +140,9 @@ class Repeats:
 
 class Starts:
     def __init__(self, fixed_starts=None):
-        self.starts = defaultdict(lambda: 0)
+        self.starts = defaultdict(int)
         self.h2h = {}
-        self.recent_starts = defaultdict(lambda: 0)
+        self.recent_starts = defaultdict(int)
         self.fixed_starts = fixed_starts or {}
 
     def _record(self, name1, name2, round, p1_starts) -> None:
@@ -183,7 +189,7 @@ class Starts:
 
 class Byes:
     def __init__(self):
-        self.byes = defaultdict(lambda: 0)
+        self.byes = defaultdict(int)
 
     def add(self, name) -> None:
         self.byes[name] += 1
@@ -198,7 +204,7 @@ class Byes:
             self.add(pairing.first.name)
 
     def reset(self) -> None:
-        self.byes = defaultdict(lambda: 0)
+        self.byes = defaultdict(int)
 
 
 @dataclass

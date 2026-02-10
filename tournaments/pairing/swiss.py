@@ -119,7 +119,6 @@ def pair_candidates(bracket: list[list[candidate]]) -> list[pair]:
     edges = []
     names = {}
     inames = {}
-    i = 0
     for i, player_candidates in enumerate(bracket):
         name = player_candidates[0].name2
         names[name] = i

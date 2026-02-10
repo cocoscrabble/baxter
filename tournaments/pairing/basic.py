@@ -82,7 +82,6 @@ def pair_round_robin(pd: PairingData, rp: RoundPairing) -> Pairings:
 def pair_charlottesville(pd: PairingData, rp: RoundPairing) -> Pairings:
     """Charlottesville pairing."""
     seeding = standings_after_round(pd, 0)
-    pos = rp.round
     g1 = []
     g2 = []
     for i in range(len(pd.entrants)):

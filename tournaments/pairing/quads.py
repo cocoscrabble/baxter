@@ -49,36 +49,33 @@ def get_last_quad_position(standings) -> int:
         raise ValueError("uneven field for quads!")
 
 
-def maybe_add_hex(quads, standings, max) -> None:
-  # we have a leftover hex, add it to the quads
-  n = len(standings)
-  if max < n:
-      quads.append(standings[max: n])
+def maybe_add_hex(quads, standings, last_quad) -> None:
+    # we have a leftover hex, add it to the quads
+    n = len(standings)
+    if last_quad < n:
+        quads.append(standings[last_quad: n])
 
 
 def pair_clustered_quads(pd: PairingData, rp: RoundPairing) -> Pairings:
     quads = []
     pos = rp.round - rp.start_round
     standings = standings_after_round(pd, rp.start_round)
-    max = get_last_quad_position(standings)
-    for i in range(0, max, 4):
+    last_quad = get_last_quad_position(standings)
+    for i in range(0, last_quad, 4):
         quads.append(standings[i: i + 4])
-    maybe_add_hex(quads, standings, max)
+    maybe_add_hex(quads, standings, last_quad)
     return pair_groups_at_position(quads, pos)
 
 
 def pair_distributed_quads(pd: PairingData, rp: RoundPairing) -> Pairings:
-    quads = []
     pos = rp.round - rp.start_round
     standings = standings_after_round(pd, rp.start_round)
-    max = get_last_quad_position(standings)
-    stride = max / 4
-    for i in range(stride):
-        quads[i] = []
-    for i in range(max):
-        quad = i % stride
-        quads[quad].append(standings[i])
-    maybe_add_hex(quads, standings, max)
+    last_quad = get_last_quad_position(standings)
+    stride = last_quad // 4
+    quads = [[] for _ in range(stride)]
+    for i in range(last_quad):
+        quads[i % stride].append(standings[i])
+    maybe_add_hex(quads, standings, last_quad)
     return pair_groups_at_position(quads, pos)
 
 
@@ -87,27 +84,24 @@ def pair_evans_quads(pd: PairingData, rp: RoundPairing) -> Pairings:
     # so that the sum of opponent seeds ends up roughly equal.
     # e.g. for 12 people you would make quads from
     # 1 2 3 6 5 4 7 8 9 12 11 10
-    quads = []
     pos = rp.round - rp.start_round
     standings = standings_after_round(pd, rp.start_round)
-    max = get_last_quad_position(standings)
-    stride = max / 4
-    for i in range(stride):
-        quads[i] = []
+    last_quad = get_last_quad_position(standings)
+    stride = last_quad // 4
 
     # Generate new standings snake-style
     new_standings = []
     flip = False
-    for i in range(0, max, stride):
-        slice = standings[i: i + stride]
-        if (flip):
-            slice.reverse()
+    for i in range(0, last_quad, stride):
+        chunk = standings[i: i + stride]
+        if flip:
+            chunk.reverse()
         flip = not flip
-        new_standings = new_standings.extend(slice)
+        new_standings.extend(chunk)
 
     # Make quads from the new standings
-    for i in range(max):
-        quad = i % stride
-        quads[quad].append(new_standings[i])
-    maybe_add_hex(quads, standings, max)
+    quads = [[] for _ in range(stride)]
+    for i in range(last_quad):
+        quads[i % stride].append(new_standings[i])
+    maybe_add_hex(quads, standings, last_quad)
     return pair_groups_at_position(quads, pos)

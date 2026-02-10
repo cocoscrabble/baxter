@@ -72,15 +72,14 @@ def pair(pd: PairingData, config) -> list[tuple[int, list[DisplayPairing]]]:
     return ret
 
 
-_STRATEGIES = [
-    (RP.KotH, pair_koth),
-    (RP.QotH, pair_qoth),
-    (RP.Swiss, pair_swiss),
-    (RP.RoundRobin, pair_round_robin),
-    (RP.Quads_Clustered, pair_clustered_quads),
-    (RP.Quads_Distributed, pair_distributed_quads),
-    (RP.Quads_Evans, pair_evans_quads),
-    (RP.Charlottesville, pair_charlottesville),
-]
-STRATEGIES = {k: v for (k, v) in _STRATEGIES}
+STRATEGIES = {
+    RP.KotH: pair_koth,
+    RP.QotH: pair_qoth,
+    RP.Swiss: pair_swiss,
+    RP.RoundRobin: pair_round_robin,
+    RP.Quads_Clustered: pair_clustered_quads,
+    RP.Quads_Distributed: pair_distributed_quads,
+    RP.Quads_Evans: pair_evans_quads,
+    RP.Charlottesville: pair_charlottesville,
+}
 STRATEGY_TYPES = list(STRATEGIES.keys())
