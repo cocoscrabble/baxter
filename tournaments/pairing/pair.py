@@ -2,7 +2,7 @@ from tournaments.pairing.base import (
     RP,
     RoundStatus,
     RoundPairing,
-    Pairing,
+    DisplayPairing,
     Starts,
     round_status,
 )
@@ -68,9 +68,9 @@ def pair(pd, config):
                 for p1, p2 in pair_round(rp, pd):
                     reps = pd.repeats.add(p1.name, p2.name)
                     if starts.add(p1.name, p2.name, rp.round):
-                        pairings.append(Pairing(p1, p2, reps))
+                        pairings.append(DisplayPairing(p1, p2, reps))
                     else:
-                        pairings.append(Pairing(p2, p1, reps))
+                        pairings.append(DisplayPairing(p2, p1, reps))
                 ret.append((rp.round, pairings))
     return ret
 

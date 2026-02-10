@@ -220,7 +220,11 @@ class PairingData:
 class Pairing:
     first: Player
     second: Player
-    repeats: int
+
+
+@dataclass
+class DisplayPairing(Pairing):
+    repeats: int = 0
 
 
 def results_after_round(result_slips, round):
