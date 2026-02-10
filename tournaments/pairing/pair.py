@@ -5,8 +5,6 @@ from tournaments.pairing.base import (
     RP,
     RoundStatus,
     RoundPairing,
-    Repeats,
-    PairingData,
     Pairing,
     round_status,
 )
@@ -55,12 +53,11 @@ def _p1_starts(s1, s2):
         return s1 < s2
 
 
-def pair(result_slips, config, entrants):
+def pair(pd, config):
     """Pair a whole tournament round by round."""
 
     def p1_starts(p1, p2, rp):
         """Figure out who starts."""
-        repeats = pd.repeats.get(p1.name, p2.name)
         if p1.is_bye:
             # Always assign 'bye' the first otherwise the player playing the bye
             # is assigned an extra first and thereby slightly penalised.
@@ -79,15 +76,13 @@ def pair(result_slips, config, entrants):
             return _p1_starts(p1.starts, p2.starts)
 
     ret = []
-    repeats = Repeats()
-    pd = PairingData(result_slips, entrants, repeats)
     rr_starts = defaultdict(lambda: 0)
-    status = round_status(result_slips, entrants)
+    status = round_status(pd.result_slips, pd.entrants)
     round_pairings = [RoundPairing.from_dict(x) for x in config.round_pairings]
     for rp in round_pairings:
         if status[rp.round] == RoundStatus.Finished:
             # Add the played games to the repeats table
-            for name1, name2 in extract_pairings(result_slips, rp.round):
+            for name1, name2 in extract_pairings(pd.result_slips, rp.round):
                 pd.repeats.add(name1, name2)
         else:
             if can_pair(rp, status):

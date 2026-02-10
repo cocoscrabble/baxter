@@ -160,11 +160,8 @@ class DivisionPairingsView(DetailView):
             if not settings.round_pairings:
                 context["pairings_message"] = "No round pairings configured."
             else:
-                pairings = pair(
-                    division.result_slips.all(),
-                    settings,
-                    division.entrants.all(),
-                )
+                pd = PairingData.for_division(division)
+                pairings = pair(pd, settings)
                 if pairings:
                     context["pairings"] = pairings
                 else:
