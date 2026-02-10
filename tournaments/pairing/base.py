@@ -122,13 +122,13 @@ class Repeats:
     def __init__(self):
         self.matches = defaultdict(lambda: 0)
 
-    def add(self, name1, name2) -> int:
-        key = tuple(sorted([name1, name2]))
+    def add(self, p1: Player, p2: Player) -> int:
+        key = tuple(sorted([p1.name, p2.name]))
         self.matches[key] += 1
         return self.matches[key]
 
-    def get(self, name1, name2) -> int:
-        key = tuple(sorted([name1, name2]))
+    def get(self, p1: Player, p2: Player) -> int:
+        key = tuple(sorted([p1.name, p2.name]))
         return self.matches[key]
 
 
@@ -151,15 +151,16 @@ class Starts:
             self.h2h[(name1, name2)] = False
             self.h2h[(name2, name1)] = True
 
-    def register(self, starter, other, round) -> None:
+    def register(self, starter: Player, other: Player, round: int) -> None:
         """Record a known start from a finished round."""
-        self._record(starter, other, round, True)
+        self._record(starter.name, other.name, round, True)
 
-    def add(self, name1, name2, round) -> bool:
+    def add(self, p1: Player, p2: Player, round: int) -> bool:
         """Decide who starts and record the result. Returns True if p1 starts."""
-        if name1.lower() == "bye":
+        name1, name2 = p1.name, p2.name
+        if p1.is_bye:
             p1_starts = True
-        elif name2.lower() == "bye":
+        elif p2.is_bye:
             p1_starts = False
         elif self.fixed_starts.get((round, name1)):
             p1_starts = True
@@ -202,8 +203,14 @@ class Byes:
 
 @dataclass
 class PairingData:
+    """The raw data that gets passed to each of the pairing algorithms."""
+
+    # Populated from the database
     result_slips: QuerySet
     entrants: QuerySet
+
+    # We have a `repeats` field here because some pairings (e.g. swiss) depend on it as an input.
+    # It is populated in pairings.pair() before pair_round() is called.
     repeats: Repeats
 
     @classmethod
@@ -227,45 +234,57 @@ class DisplayPairing(Pairing):
 
 
 class Pairings:
+    pairings: list[tuple[Player, Player]]
+
     def __init__(self):
-        self.pairings: list[tuple[Player, Player]] = []
+        self.pairings = []
 
     def add(self, player1: Player, player2: Player) -> None:
         self.pairings.append((player1, player2))
+
+    def add_result_slip(self, r: ResultSlip) -> None:
+        winner = Player(r.winner_name)
+        loser = Player(r.loser_name)
+        if r.winner_started:
+            self.add(winner, loser)
+        else:
+            self.add(loser, winner)
 
     def __iter__(self):
         return iter(self.pairings)
 
     def __len__(self) -> int:
         return len(self.pairings)
-Standings = list[Player]
 
 
-def results_after_round(result_slips, round) -> Results:
+def results_after_round(pd: PairingData, round: int) -> Results:
     res = Results()
-    for r in result_slips:
+    for r in pd.result_slips:
         if r.round <= round:
             res.add_result(r)
     return res
 
 
-def seedings(entrants) -> Standings:
-    entrants = list(entrants)
+Standings = list[Player]
+
+
+def seedings(pd: PairingData) -> Standings:
+    entrants = list(pd.entrants)
     entrants.sort(key=lambda x: -x.player.rating)
     return [Player(e.player.name) for e in entrants]
 
 
-def standings_after_round(round: int, pd: PairingData) -> Standings:
+def standings_after_round(pd: PairingData, round: int) -> Standings:
     if round == 0:
-        return seedings(pd.entrants)
+        return seedings(pd)
     else:
-        return results_after_round(pd.result_slips, round).standings()
+        return results_after_round(pd, round).standings()
 
 
-def round_status(result_slips, entrants) -> dict[int, RoundStatus]:
+def round_status(pd: PairingData) -> dict[int, RoundStatus]:
     counts = defaultdict(lambda: RoundStatus.Empty)
-    n_games = len(entrants) / 2
-    for x in result_slips.values("round").annotate(Count("round")):
+    n_games = len(pd.entrants) / 2
+    for x in pd.result_slips.values("round").annotate(Count("round")):
         round, count = x["round"], x["round__count"]
         if count == 0:
             counts[round] = RoundStatus.Empty

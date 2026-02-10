@@ -1,9 +1,10 @@
 from tournaments.pairing.base import (
     RP,
-    RoundStatus,
-    RoundPairing,
     DisplayPairing,
+    PairingData,
     Pairings,
+    RoundPairing,
+    RoundStatus,
     Starts,
     round_status,
 )
@@ -32,43 +33,40 @@ def can_pair(rp, status) -> bool:
         return rp.start_round == 0 or status[rp.start_round] == RoundStatus.Finished
 
 
-def pair_round(rp, pairing_data) -> Pairings:
+def pair_round(pd: PairingData, rp) -> Pairings:
     strategy = STRATEGIES.get(rp.pairing)
     if strategy:
-        return strategy(rp, pairing_data)
+        return strategy(pd, rp)
     else:
         return Pairings()
 
 
-def extract_pairings(result_slips, round) -> list[tuple[str, str]]:
-    """Return (starter, other) for each result in a round."""
-    res = result_slips.filter(round=round)
-    ret = []
+def extract_pairings(pd: PairingData, round: int) -> Pairings:
+    """Return pairings with starter first for each result in a round."""
+    res = pd.result_slips.filter(round=round)
+    pairings = Pairings()
     for r in res:
-        if r.winner_started:
-            ret.append((r.winner_name, r.loser_name))
-        else:
-            ret.append((r.loser_name, r.winner_name))
-    return ret
+        pairings.add_result_slip(r)
+    return pairings
 
 
-def pair(pd, config) -> list[tuple[int, list[DisplayPairing]]]:
+def pair(pd: PairingData, config) -> list[tuple[int, list[DisplayPairing]]]:
     """Pair a whole tournament round by round."""
     ret = []
     starts = Starts()
-    status = round_status(pd.result_slips, pd.entrants)
+    status = round_status(pd)
     round_pairings = [RoundPairing.from_dict(x) for x in config.round_pairings]
     for rp in round_pairings:
         if status[rp.round] == RoundStatus.Finished:
-            for starter, other in extract_pairings(pd.result_slips, rp.round):
-                pd.repeats.add(starter, other)
-                starts.register(starter, other, rp.round)
+            for first, second in extract_pairings(pd, rp.round):
+                pd.repeats.add(first, second)
+                starts.register(first, second, rp.round)
         else:
             if can_pair(rp, status):
                 pairings = []
-                for p1, p2 in pair_round(rp, pd):
-                    reps = pd.repeats.add(p1.name, p2.name)
-                    if starts.add(p1.name, p2.name, rp.round):
+                for p1, p2 in pair_round(pd, rp):
+                    reps = pd.repeats.add(p1, p2)
+                    if starts.add(p1, p2, rp.round):
                         pairings.append(DisplayPairing(p1, p2, reps))
                     else:
                         pairings.append(DisplayPairing(p2, p1, reps))

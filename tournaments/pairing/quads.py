@@ -56,10 +56,10 @@ def maybe_add_hex(quads, standings, max) -> None:
       quads.append(standings[max: n])
 
 
-def pair_clustered_quads(rp: RoundPairing, pd: PairingData) -> Pairings:
+def pair_clustered_quads(pd: PairingData, rp: RoundPairing) -> Pairings:
     quads = []
     pos = rp.round - rp.start_round
-    standings = standings_after_round(rp.start_round, pd)
+    standings = standings_after_round(pd, rp.start_round)
     max = get_last_quad_position(standings)
     for i in range(0, max, 4):
         quads.append(standings[i: i + 4])
@@ -67,10 +67,10 @@ def pair_clustered_quads(rp: RoundPairing, pd: PairingData) -> Pairings:
     return pair_groups_at_position(quads, pos)
 
 
-def pair_distributed_quads(rp: RoundPairing, pd: PairingData) -> Pairings:
+def pair_distributed_quads(pd: PairingData, rp: RoundPairing) -> Pairings:
     quads = []
     pos = rp.round - rp.start_round
-    standings = standings_after_round(rp.start_round, pd)
+    standings = standings_after_round(pd, rp.start_round)
     max = get_last_quad_position(standings)
     stride = max / 4
     for i in range(stride):
@@ -82,14 +82,14 @@ def pair_distributed_quads(rp: RoundPairing, pd: PairingData) -> Pairings:
     return pair_groups_at_position(quads, pos)
 
 
-def pair_evans_quads(rp: RoundPairing, pd: PairingData) -> Pairings:
+def pair_evans_quads(pd: PairingData, rp: RoundPairing) -> Pairings:
     # Like distributed quads but flip every other subgroup first,
     # so that the sum of opponent seeds ends up roughly equal.
     # e.g. for 12 people you would make quads from
     # 1 2 3 6 5 4 7 8 9 12 11 10
     quads = []
     pos = rp.round - rp.start_round
-    standings = standings_after_round(rp.start_round, pd)
+    standings = standings_after_round(pd, rp.start_round)
     max = get_last_quad_position(standings)
     stride = max / 4
     for i in range(stride):

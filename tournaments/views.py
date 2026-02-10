@@ -141,7 +141,7 @@ class DivisionStandingsView(DetailView):
         pd = PairingData.for_division(division)
         max_round = division.max_round()
         current_round = self.kwargs.get("round", max_round)
-        context["standings"] = standings_after_round(current_round, pd)
+        context["standings"] = standings_after_round(pd, current_round)
         context["round"] = current_round
         context["rounds"] = range(1, max_round + 1)
         return context

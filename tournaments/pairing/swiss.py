@@ -97,7 +97,7 @@ def pair_swiss_top(groups, repeats, nrep) -> list[list[candidate]]:
         for j in range(len(top)):
             if i == j:
                 continue
-            reps = repeats.get(top[i].name, top[j].name)
+            reps = repeats.get(top[i], top[j])
             if reps < nrep:
                 c = candidate(reps, abs(i - j), top[j].name, top[i].name)
                 candidates[i].append(c)
@@ -142,11 +142,11 @@ def pair_candidates(bracket: list[list[candidate]]) -> list[pair]:
     return pairings
 
 
-def pair_swiss(rp: RoundPairing, pd: PairingData) -> Pairings:
+def pair_swiss(pd: PairingData, rp: RoundPairing) -> Pairings:
     if rp.start_round < 1:
-        seeding = standings_after_round(0, pd)
+        seeding = standings_after_round(pd, 0)
         return pair_swiss_initial(seeding)
-    players = standings_after_round(rp.start_round, pd)
+    players = standings_after_round(pd, rp.start_round)
     names = {p.name: p for p in players}
     groups = Groups.from_standings(players)
     nrep = 1

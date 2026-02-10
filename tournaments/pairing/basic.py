@@ -6,9 +6,9 @@ from tournaments.pairing.base import Pairings, RoundPairing, PairingData, standi
 # -----------------------------------------------------
 # King of the Hill
 
-def pair_koth(rp: RoundPairing, pd: PairingData) -> Pairings:
+def pair_koth(pd: PairingData, rp: RoundPairing) -> Pairings:
     """King of the hill pairing."""
-    standings = standings_after_round(rp.start_round, pd)
+    standings = standings_after_round(pd, rp.start_round)
     pairings = Pairings()
     for p1, p2 in more_itertools.chunked(standings, 2):
         pairings.add(p1, p2)
@@ -18,9 +18,9 @@ def pair_koth(rp: RoundPairing, pd: PairingData) -> Pairings:
 # -----------------------------------------------------
 # Queen of the Hill
 
-def pair_qoth(rp: RoundPairing, pd: PairingData) -> Pairings:
+def pair_qoth(pd: PairingData, rp: RoundPairing) -> Pairings:
     """Queen of the hill pairing."""
-    standings = standings_after_round(rp.start_round, pd)
+    standings = standings_after_round(pd, rp.start_round)
     pairings = Pairings()
     n = len(standings)
     if n % 4 == 2:
@@ -56,11 +56,11 @@ def _pair_rr(n, r) -> list[list[int]]:
     return [h1, h2]
 
 
-def pair_round_robin(rp: RoundPairing, pd: PairingData) -> Pairings:
+def pair_round_robin(pd: PairingData, rp: RoundPairing) -> Pairings:
     """Round robin pairing."""
     # See https://github.com/domino14/liwords/ for strategy
 
-    standings = standings_after_round(rp.start_round - 1, pd)
+    standings = standings_after_round(pd, rp.start_round - 1)
     # Pair for game #pos in the round robin
     n = len(standings)
     pairings = Pairings()
@@ -79,9 +79,9 @@ def pair_round_robin(rp: RoundPairing, pd: PairingData) -> Pairings:
 # Group 2: 2, 3, 6, 7, 10, 11, 14, 15, 18
 # For the first 9 rounds, you play a round robin against all the people in the *other* group.
 
-def pair_charlottesville(rp: RoundPairing, pd: PairingData) -> Pairings:
+def pair_charlottesville(pd: PairingData, rp: RoundPairing) -> Pairings:
     """Charlottesville pairing."""
-    seeding = standings_after_round(0, pd)
+    seeding = standings_after_round(pd, 0)
     pos = rp.round
     g1 = []
     g2 = []
