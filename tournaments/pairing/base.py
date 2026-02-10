@@ -1,6 +1,6 @@
 from collections import defaultdict
 from dataclasses import dataclass, field
-from enum import Enum, auto
+from enum import Enum, StrEnum
 
 from dataclasses_json import dataclass_json
 from django.db.models import Count
@@ -23,19 +23,19 @@ class RoundPairing:
     pairing: str
 
 
-class RP(Enum):
-    KotH = auto()
-    QotH = auto()
-    Swiss = auto()
-    RoundRobin = auto()
-    Quads_Clustered = auto()
-    Quads_Distributed = auto()
-    Quads_Evans = auto()
-    Charlottesville = auto()
+class RP(StrEnum):
+    KotH = "KotH"
+    QotH = "QotH"
+    Swiss = "Swiss"
+    RoundRobin = "RoundRobin"
+    Quads_Clustered = "Quads_Clustered"
+    Quads_Distributed = "Quads_Distributed"
+    Quads_Evans = "Quads_Evans"
+    Charlottesville = "Charlottesville"
 
     @staticmethod
     def is_round_robin(name) -> bool:
-        return name in (RP.RoundRobin.name, RP.Charlottesville.name)
+        return name in (RP.RoundRobin, RP.Charlottesville)
 
 
 class RoundStatus(Enum):

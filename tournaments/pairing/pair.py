@@ -82,5 +82,5 @@ _STRATEGIES = [
     (RP.Quads_Evans, pair_evans_quads),
     (RP.Charlottesville, pair_charlottesville),
 ]
-STRATEGIES = {k.name: v for (k, v) in _STRATEGIES}
+STRATEGIES = {k: v for (k, v) in _STRATEGIES}
 STRATEGY_TYPES = list(STRATEGIES.keys())

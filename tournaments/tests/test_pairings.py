@@ -102,27 +102,27 @@ class StartsTests(TestCase):
 
 class CanPairTests(TestCase):
     def test_finished_round_cannot_pair(self):
-        rp = RoundPairing(round=1, start_round=0, pairing=RP.KotH.name)
+        rp = RoundPairing(round=1, start_round=0, pairing=RP.KotH)
         status = {1: RoundStatus.Finished}
         self.assertFalse(can_pair(rp, status))
 
     def test_start_round_zero_can_pair(self):
-        rp = RoundPairing(round=1, start_round=0, pairing=RP.KotH.name)
+        rp = RoundPairing(round=1, start_round=0, pairing=RP.KotH)
         status = {1: RoundStatus.Empty}
         self.assertTrue(can_pair(rp, status))
 
     def test_start_round_finished_can_pair(self):
-        rp = RoundPairing(round=2, start_round=1, pairing=RP.KotH.name)
+        rp = RoundPairing(round=2, start_round=1, pairing=RP.KotH)
         status = {1: RoundStatus.Finished, 2: RoundStatus.Empty}
         self.assertTrue(can_pair(rp, status))
 
     def test_start_round_not_finished_cannot_pair(self):
-        rp = RoundPairing(round=2, start_round=1, pairing=RP.KotH.name)
+        rp = RoundPairing(round=2, start_round=1, pairing=RP.KotH)
         status = {1: RoundStatus.Partial, 2: RoundStatus.Empty}
         self.assertFalse(can_pair(rp, status))
 
     def test_round_robin_ignores_start_round(self):
-        rp = RoundPairing(round=2, start_round=1, pairing=RP.RoundRobin.name)
+        rp = RoundPairing(round=2, start_round=1, pairing=RP.RoundRobin)
         status = {1: RoundStatus.Empty, 2: RoundStatus.Empty}
         self.assertTrue(can_pair(rp, status))
 
@@ -215,7 +215,7 @@ class PairTests(PairingDBTestBase):
         """Create KotH config where each round depends on the previous."""
         rp = []
         for i in range(1, num_rounds + 1):
-            rp.append({"round": i, "pairing": RP.KotH.name, "start_round": i - 1})
+            rp.append({"round": i, "pairing": RP.KotH, "start_round": i - 1})
         return DivisionSettings.objects.create(division=self.division, round_pairings=rp)
 
     def _pd(self):
