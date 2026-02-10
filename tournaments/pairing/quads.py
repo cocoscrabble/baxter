@@ -1,4 +1,4 @@
-from tournaments.pairing.base import RoundPairing, PairingData, standings_after_round
+from tournaments.pairing.base import Pairings, RoundPairing, PairingData, standings_after_round
 
 # -------------------
 # Quads
@@ -22,14 +22,14 @@ Pairings6 = [
   [[0, 3], [1, 4], [2, 5]]
 ]
 
-def group_position_pairs(group, pos):
+def group_position_pairs(group, pos) -> list[list[int]]:
     if (len(group) == 4):
         return Pairings4[pos - 1]
     else:
         return Pairings6[pos - 1]
 
 
-def pair_groups_at_position(groups, pos):
+def pair_groups_at_position(groups, pos) -> Pairings:
     pairings = []
     for group in groups:
         p = group_position_pairs(group, pos)
@@ -38,7 +38,7 @@ def pair_groups_at_position(groups, pos):
     return pairings
 
 
-def get_last_quad_position(standings):
+def get_last_quad_position(standings) -> int:
     n = len(standings)
     leftover = n % 4
     if leftover == 0:
@@ -49,14 +49,14 @@ def get_last_quad_position(standings):
         raise ValueError("uneven field for quads!")
 
 
-def maybe_add_hex(quads, standings, max):
+def maybe_add_hex(quads, standings, max) -> None:
   # we have a leftover hex, add it to the quads
   n = len(standings)
   if max < n:
       quads.append(standings[max: n])
 
 
-def pair_clustered_quads(rp: RoundPairing, pd: PairingData):
+def pair_clustered_quads(rp: RoundPairing, pd: PairingData) -> Pairings:
     quads = []
     pos = rp.round - rp.start_round
     standings = standings_after_round(rp.start_round, pd)
@@ -67,7 +67,7 @@ def pair_clustered_quads(rp: RoundPairing, pd: PairingData):
     return pair_groups_at_position(quads, pos)
 
 
-def pair_distributed_quads(rp: RoundPairing, pd: PairingData):
+def pair_distributed_quads(rp: RoundPairing, pd: PairingData) -> Pairings:
     quads = []
     pos = rp.round - rp.start_round
     standings = standings_after_round(rp.start_round, pd)
@@ -82,7 +82,7 @@ def pair_distributed_quads(rp: RoundPairing, pd: PairingData):
     return pair_groups_at_position(quads, pos)
 
 
-def pair_evans_quads(rp: RoundPairing, pd: PairingData):
+def pair_evans_quads(rp: RoundPairing, pd: PairingData) -> Pairings:
     # Like distributed quads but flip every other subgroup first,
     # so that the sum of opponent seeds ends up roughly equal.
     # e.g. for 12 people you would make quads from

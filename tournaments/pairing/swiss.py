@@ -1,11 +1,9 @@
-from collections import deque, defaultdict
+from collections import deque
 from dataclasses import dataclass
 import itertools
 
-from typing import List, Tuple
-
 import networkx as nx
-from tournaments.pairing.base import standings_after_round
+from tournaments.pairing.base import Pairings, PairingData, RoundPairing, standings_after_round
 
 
 class Groups:
@@ -16,7 +14,7 @@ class Groups:
         return repr(self.groups)
 
     @classmethod
-    def from_standings(cls, standings):
+    def from_standings(cls, standings) -> "Groups":
         max_wins = max(p.wins for p in standings)
         ret = Groups(max_wins)
         for p in standings:
@@ -29,31 +27,31 @@ class Groups:
         return ret 
 
     @property
-    def length(self):
+    def length(self) -> int:
         return len(self.groups)
 
     @property
-    def top(self):
+    def top(self) -> deque:
         return self.groups[0]
 
     @property
-    def bottom(self):
+    def bottom(self) -> deque:
         return self.groups[-1]
 
-    def compact(self):
+    def compact(self) -> None:
         self.groups = deque(filter(None, self.groups))
 
-    def balance(self):
+    def balance(self) -> None:
         for curr, next in itertools.pairwise(self.groups):
             if len(curr) % 2 != 0:
                 fst = next.popleft()
                 curr.append(fst)
 
-    def promote(self, i, j):
+    def promote(self, i, j) -> None:
         fst = self.groups[j].popleft()
         self.groups[i].append(fst)
 
-    def promote2(self, i):
+    def promote2(self, i) -> None:
         j = i + 1
         self.promote(i, j)
         if not self.groups[j]:
@@ -61,7 +59,7 @@ class Groups:
         else:
             self.promote(i, j)
 
-    def merge_bottom(self):
+    def merge_bottom(self) -> None:
         if len(self.groups) == 1:
             # only one group, bailing out!
             return
@@ -84,7 +82,7 @@ class pair:
     repeats: int
 
 
-def pair_swiss_initial(standings):
+def pair_swiss_initial(standings) -> Pairings:
     pairings = []
     half = len(standings) // 2
     for i in range(half):
@@ -92,7 +90,7 @@ def pair_swiss_initial(standings):
     return pairings
 
 
-def pair_swiss_top(groups, repeats, nrep):
+def pair_swiss_top(groups, repeats, nrep) -> list[list[candidate]]:
     top = groups.top
     candidates = [[] for _ in range(len(top))]
     for i in range(len(top)):
@@ -108,7 +106,7 @@ def pair_swiss_top(groups, repeats, nrep):
     return candidates
 
 
-def blossom(edges):
+def blossom(edges) -> list[tuple]:
     # The nx implementation of blossom does not like negative weights.
     m = min(x[2] for x in edges) if edges else 0
     edges = [[v1, v2, w - m] for v1, v2, w in edges]
@@ -117,7 +115,7 @@ def blossom(edges):
     return list(sorted(nx.max_weight_matching(g, maxcardinality=True)))
 
 
-def pair_candidates(bracket: list[list[candidate]]) -> list[tuple[str, str]]:
+def pair_candidates(bracket: list[list[candidate]]) -> list[pair]:
     edges = []
     names = {}
     inames = {}
@@ -144,7 +142,7 @@ def pair_candidates(bracket: list[list[candidate]]) -> list[tuple[str, str]]:
     return pairings
 
 
-def pair_swiss(rp, pd):
+def pair_swiss(rp: RoundPairing, pd: PairingData) -> Pairings:
     if rp.start_round < 1:
         seeding = standings_after_round(0, pd)
         return pair_swiss_initial(seeding)

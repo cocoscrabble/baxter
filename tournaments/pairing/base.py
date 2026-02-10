@@ -1,7 +1,6 @@
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Dict, List
 
 from dataclasses_json import dataclass_json
 from django.db.models import Count
@@ -35,7 +34,7 @@ class RP(Enum):
     Charlottesville = auto()
 
     @staticmethod
-    def is_round_robin(name):
+    def is_round_robin(name) -> bool:
         return name in (RP.RoundRobin.name, RP.Charlottesville.name)
 
 
@@ -52,12 +51,12 @@ class Player:
     wins: int = 0
     losses: int = 0
     ties: int = 0
-    score: int = 0
+    score: float = 0
     spread: int = 0
     starts: int = 0
 
     @property
-    def is_bye(self):
+    def is_bye(self) -> bool:
         return self.name.lower() == "bye"
 
 
@@ -69,11 +68,11 @@ class Result:
     start: bool
 
     @property
-    def spread(self):
+    def spread(self) -> int:
         return self.score - self.opp_score
 
     @classmethod
-    def from_result_slip(cls, result_slip, winner):
+    def from_result_slip(cls, result_slip, winner) -> "Result":
         if winner:
             name = result_slip.winner_name
             score = result_slip.winner_score
@@ -89,12 +88,12 @@ class Result:
 
 @dataclass
 class Results:
-    players: Dict[str, Player] = field(default_factory=lambda: DefaultDict(Player))
-    rounds: Dict[int, List[ResultSlip]] = field(
+    players: dict[str, Player] = field(default_factory=lambda: DefaultDict(Player))
+    rounds: dict[int, list[ResultSlip]] = field(
         default_factory=lambda: defaultdict(list)
     )
 
-    def update_player(self, result):
+    def update_player(self, result) -> None:
         p = self.players[result.name]
         p.spread += result.spread
         if result.spread > 0:
@@ -106,14 +105,14 @@ class Results:
         p.score = p.wins + 0.5 * p.ties
         p.starts += result.start
 
-    def add_result(self, result_slip):
+    def add_result(self, result_slip) -> None:
         winner = Result.from_result_slip(result_slip, True)
         loser = Result.from_result_slip(result_slip, False)
         self.update_player(winner)
         self.update_player(loser)
         self.rounds[result_slip.round].append(result_slip)
 
-    def standings(self):
+    def standings(self) -> Standings:
         standings = list(self.players.values())
         standings.sort(key=lambda x: -x.score)
         return standings
@@ -123,12 +122,12 @@ class Repeats:
     def __init__(self):
         self.matches = defaultdict(lambda: 0)
 
-    def add(self, name1, name2):
+    def add(self, name1, name2) -> int:
         key = tuple(sorted([name1, name2]))
         self.matches[key] += 1
         return self.matches[key]
 
-    def get(self, name1, name2):
+    def get(self, name1, name2) -> int:
         key = tuple(sorted([name1, name2]))
         return self.matches[key]
 
@@ -140,7 +139,7 @@ class Starts:
         self.recent_starts = defaultdict(lambda: 0)
         self.fixed_starts = fixed_starts or {}
 
-    def _record(self, name1, name2, round, p1_starts):
+    def _record(self, name1, name2, round, p1_starts) -> None:
         if p1_starts:
             self.starts[name1] += 1
             self.recent_starts[name1] = round
@@ -152,11 +151,11 @@ class Starts:
             self.h2h[(name1, name2)] = False
             self.h2h[(name2, name1)] = True
 
-    def register(self, starter, other, round):
+    def register(self, starter, other, round) -> None:
         """Record a known start from a finished round."""
         self._record(starter, other, round, True)
 
-    def add(self, name1, name2, round):
+    def add(self, name1, name2, round) -> bool:
         """Decide who starts and record the result. Returns True if p1 starts."""
         if name1.lower() == "bye":
             p1_starts = True
@@ -185,19 +184,19 @@ class Byes:
     def __init__(self):
         self.byes = defaultdict(lambda: 0)
 
-    def add(self, name):
+    def add(self, name) -> None:
         self.byes[name] += 1
 
-    def get(self, name):
+    def get(self, name) -> int:
         return self.byes[name]
 
-    def update(self, pairing):
+    def update(self, pairing) -> None:
         if pairing.first.is_bye:
             self.add(pairing.second.name)
         if pairing.second.is_bye:
             self.add(pairing.first.name)
 
-    def reset(self):
+    def reset(self) -> None:
         self.byes = defaultdict(lambda: 0)
 
 
@@ -208,7 +207,7 @@ class PairingData:
     repeats: Repeats
 
     @classmethod
-    def for_division(cls, division):
+    def for_division(cls, division) -> "PairingData":
         return cls(
             result_slips=division.result_slips.all(),
             entrants=division.entrants.all(),
@@ -227,7 +226,11 @@ class DisplayPairing(Pairing):
     repeats: int = 0
 
 
-def results_after_round(result_slips, round):
+Pairings = list[tuple[Player, Player]]
+Standings = list[Player]
+
+
+def results_after_round(result_slips, round) -> Results:
     res = Results()
     for r in result_slips:
         if r.round <= round:
@@ -235,20 +238,20 @@ def results_after_round(result_slips, round):
     return res
 
 
-def seedings(entrants):
+def seedings(entrants) -> Standings:
     entrants = list(entrants)
     entrants.sort(key=lambda x: -x.player.rating)
     return [Player(e.player.name) for e in entrants]
 
 
-def standings_after_round(round: int, pd: PairingData):
+def standings_after_round(round: int, pd: PairingData) -> Standings:
     if round == 0:
         return seedings(pd.entrants)
     else:
         return results_after_round(pd.result_slips, round).standings()
 
 
-def round_status(result_slips, entrants):
+def round_status(result_slips, entrants) -> dict[int, RoundStatus]:
     counts = defaultdict(lambda: RoundStatus.Empty)
     n_games = len(entrants) / 2
     for x in result_slips.values("round").annotate(Count("round")):

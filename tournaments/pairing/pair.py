@@ -3,6 +3,7 @@ from tournaments.pairing.base import (
     RoundStatus,
     RoundPairing,
     DisplayPairing,
+    Pairings,
     Starts,
     round_status,
 )
@@ -20,7 +21,7 @@ from tournaments.pairing.quads import (
 from tournaments.pairing.swiss import pair_swiss
 
 
-def can_pair(rp, status):
+def can_pair(rp, status) -> bool:
     stat = status[rp.round]
     if stat == RoundStatus.Finished:
         return False
@@ -31,7 +32,7 @@ def can_pair(rp, status):
         return rp.start_round == 0 or status[rp.start_round] == RoundStatus.Finished
 
 
-def pair_round(rp, pairing_data):
+def pair_round(rp, pairing_data) -> Pairings:
     strategy = STRATEGIES.get(rp.pairing)
     if strategy:
         return strategy(rp, pairing_data)
@@ -39,8 +40,8 @@ def pair_round(rp, pairing_data):
         return []
 
 
-def extract_pairings(result_slips, round):
-    """Return (starter, other, winner, loser) for each result in a round."""
+def extract_pairings(result_slips, round) -> list[tuple[str, str]]:
+    """Return (starter, other) for each result in a round."""
     res = result_slips.filter(round=round)
     ret = []
     for r in res:
@@ -51,7 +52,7 @@ def extract_pairings(result_slips, round):
     return ret
 
 
-def pair(pd, config):
+def pair(pd, config) -> list[tuple[int, list[DisplayPairing]]]:
     """Pair a whole tournament round by round."""
     ret = []
     starts = Starts()

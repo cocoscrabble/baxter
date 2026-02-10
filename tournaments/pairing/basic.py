@@ -1,12 +1,12 @@
 import more_itertools
 
-from tournaments.pairing.base import RoundPairing, PairingData, standings_after_round
+from tournaments.pairing.base import Pairings, RoundPairing, PairingData, standings_after_round
 
 
 # -----------------------------------------------------
 # King of the Hill
 
-def pair_koth(rp: RoundPairing, pd: PairingData):
+def pair_koth(rp: RoundPairing, pd: PairingData) -> Pairings:
     """King of the hill pairing."""
     standings = standings_after_round(rp.start_round, pd)
     return list(more_itertools.chunked(standings, 2))
@@ -15,7 +15,7 @@ def pair_koth(rp: RoundPairing, pd: PairingData):
 # -----------------------------------------------------
 # Queen of the Hill
 
-def pair_qoth(rp: RoundPairing, pd: PairingData):
+def pair_qoth(rp: RoundPairing, pd: PairingData) -> Pairings:
     """Queen of the hill pairing."""
     standings = standings_after_round(rp.start_round, pd)
     pairings = []
@@ -40,7 +40,7 @@ def pair_qoth(rp: RoundPairing, pd: PairingData):
 # -----------------------------------------------------
 # Round Robin
 
-def _pair_rr(n, r):
+def _pair_rr(n, r) -> list[list[int]]:
     # Pair n players at round r
     init = [i + 1 for i in range(n - 1)]
     h = n // 2
@@ -53,7 +53,7 @@ def _pair_rr(n, r):
     return [h1, h2]
 
 
-def pair_round_robin(rp: RoundPairing, pd: PairingData):
+def pair_round_robin(rp: RoundPairing, pd: PairingData) -> Pairings:
     """Round robin pairing."""
     # See https://github.com/domino14/liwords/ for strategy
 
@@ -76,7 +76,7 @@ def pair_round_robin(rp: RoundPairing, pd: PairingData):
 # Group 2: 2, 3, 6, 7, 10, 11, 14, 15, 18
 # For the first 9 rounds, you play a round robin against all the people in the *other* group.
 
-def pair_charlottesville(rp: RoundPairing, pd: PairingData):
+def pair_charlottesville(rp: RoundPairing, pd: PairingData) -> Pairings:
     """Charlottesville pairing."""
     seeding = standings_after_round(0, pd)
     pos = rp.round
