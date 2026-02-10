@@ -37,7 +37,7 @@ def pair_round(rp, pairing_data) -> Pairings:
     if strategy:
         return strategy(rp, pairing_data)
     else:
-        return []
+        return Pairings()
 
 
 def extract_pairings(result_slips, round) -> list[tuple[str, str]]:

@@ -9,7 +9,10 @@ from tournaments.pairing.base import Pairings, RoundPairing, PairingData, standi
 def pair_koth(rp: RoundPairing, pd: PairingData) -> Pairings:
     """King of the hill pairing."""
     standings = standings_after_round(rp.start_round, pd)
-    return list(more_itertools.chunked(standings, 2))
+    pairings = Pairings()
+    for p1, p2 in more_itertools.chunked(standings, 2):
+        pairings.add(p1, p2)
+    return pairings
 
 
 # -----------------------------------------------------
@@ -18,22 +21,22 @@ def pair_koth(rp: RoundPairing, pd: PairingData) -> Pairings:
 def pair_qoth(rp: RoundPairing, pd: PairingData) -> Pairings:
     """Queen of the hill pairing."""
     standings = standings_after_round(rp.start_round, pd)
-    pairings = []
+    pairings = Pairings()
     n = len(standings)
     if n % 4 == 2:
         last = n - 6
         for i in range(0, last, 4):
-            pairings.append((standings[i + 0], standings[i + 2]))
-            pairings.append((standings[i + 1], standings[i + 3]))
+            pairings.add(standings[i + 0], standings[i + 2])
+            pairings.add(standings[i + 1], standings[i + 3])
         # Pair the last six players 1-4,2-5,3-6 if we don't have a
         # multiple of 4
-        pairings.append((standings[last + 0], standings[last + 3]))
-        pairings.append((standings[last + 1], standings[last + 4]))
-        pairings.append((standings[last + 2], standings[last + 5]))
+        pairings.add(standings[last + 0], standings[last + 3])
+        pairings.add(standings[last + 1], standings[last + 4])
+        pairings.add(standings[last + 2], standings[last + 5])
     else:
       for i in range(0, n, 4):
-          pairings.append((standings[i + 0], standings[i + 2]))
-          pairings.append((standings[i + 1], standings[i + 3]))
+          pairings.add(standings[i + 0], standings[i + 2])
+          pairings.add(standings[i + 1], standings[i + 3])
     return pairings
 
 
@@ -60,11 +63,11 @@ def pair_round_robin(rp: RoundPairing, pd: PairingData) -> Pairings:
     standings = standings_after_round(rp.start_round - 1, pd)
     # Pair for game #pos in the round robin
     n = len(standings)
-    pairings = []
+    pairings = Pairings()
     pos = rp.round - rp.start_round
     h1, h2 = _pair_rr(n, pos)
     for i in range(n // 2):
-        pairings.append((standings[h1[i]], standings[h2[i]]))
+        pairings.add(standings[h1[i]], standings[h2[i]])
     return pairings
 
 
@@ -94,9 +97,9 @@ def pair_charlottesville(rp: RoundPairing, pd: PairingData) -> Pairings:
     r1 = g2[:pos]
     r2 = g2[pos:]
     rotated = r2 + r1
-    pairings = []
+    pairings = Pairings()
     for i, g in enumerate(g1):
         p1 = g
         p2 = rotated[i]
-        pairings.append((seeding[p1], seeding[p2]))
+        pairings.add(seeding[p1], seeding[p2])
     return pairings

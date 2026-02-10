@@ -30,11 +30,11 @@ def group_position_pairs(group, pos) -> list[list[int]]:
 
 
 def pair_groups_at_position(groups, pos) -> Pairings:
-    pairings = []
+    pairings = Pairings()
     for group in groups:
         p = group_position_pairs(group, pos)
         for a, b in p:
-            pairings.append((group[a], group[b]))
+            pairings.add(group[a], group[b])
     return pairings
 
 

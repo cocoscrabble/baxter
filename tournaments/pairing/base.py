@@ -226,7 +226,18 @@ class DisplayPairing(Pairing):
     repeats: int = 0
 
 
-Pairings = list[tuple[Player, Player]]
+class Pairings:
+    def __init__(self):
+        self.pairings: list[tuple[Player, Player]] = []
+
+    def add(self, player1: Player, player2: Player) -> None:
+        self.pairings.append((player1, player2))
+
+    def __iter__(self):
+        return iter(self.pairings)
+
+    def __len__(self) -> int:
+        return len(self.pairings)
 Standings = list[Player]
 
 

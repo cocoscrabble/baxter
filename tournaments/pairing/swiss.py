@@ -83,10 +83,10 @@ class pair:
 
 
 def pair_swiss_initial(standings) -> Pairings:
-    pairings = []
+    pairings = Pairings()
     half = len(standings) // 2
     for i in range(half):
-        pairings.append((standings[i], standings[i + half]))
+        pairings.add(standings[i], standings[i + half])
     return pairings
 
 
@@ -181,9 +181,8 @@ def pair_swiss(rp: RoundPairing, pd: PairingData) -> Pairings:
             paired.append(pairs)
             if groups.length == 0:
                 break
-    out = []
+    out = Pairings()
     for group in paired:
         for p in group:
-            out.append(p)
-    out = [(names[p.name1], names[p.name2]) for p in out]
+            out.add(names[p.name1], names[p.name2])
     return out
