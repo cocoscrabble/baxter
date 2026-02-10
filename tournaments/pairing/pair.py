@@ -66,10 +66,8 @@ def pair(pd: PairingData, config) -> list[tuple[int, list[DisplayPairing]]]:
                 pairings = []
                 for p1, p2 in pair_round(pd, rp):
                     reps = pd.repeats.add(p1, p2)
-                    if starts.add(p1, p2, rp.round):
-                        pairings.append(DisplayPairing(p1, p2, reps))
-                    else:
-                        pairings.append(DisplayPairing(p2, p1, reps))
+                    first, second = starts.add(p1, p2, rp.round)
+                    pairings.append(DisplayPairing(first, second, reps))
                 ret.append((rp.round, pairings))
     return ret
 

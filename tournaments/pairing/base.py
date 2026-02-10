@@ -155,8 +155,8 @@ class Starts:
         """Record a known start from a finished round."""
         self._record(starter.name, other.name, round, True)
 
-    def add(self, p1: Player, p2: Player, round: int) -> bool:
-        """Decide who starts and record the result. Returns True if p1 starts."""
+    def add(self, p1: Player, p2: Player, round: int) -> tuple[Player, Player]:
+        """Decide who starts and record the result. Returns (first, second)."""
         name1, name2 = p1.name, p2.name
         if p1.is_bye:
             p1_starts = True
@@ -178,7 +178,7 @@ class Starts:
             else:
                 p1_starts = starts1 < starts2
         self._record(name1, name2, round, p1_starts)
-        return p1_starts
+        return (p1, p2) if p1_starts else (p2, p1)
 
 
 class Byes:

@@ -68,32 +68,33 @@ class StartsTests(TestCase):
     def test_add_fewer_starts_goes_first(self):
         self.starts.register(self.alice, self.bob, 1)
         # Alice has 1 start, Bob has 0 — Bob should start
-        result = self.starts.add(self.alice, self.bob, 2)
-        self.assertFalse(result)
+        first, second = self.starts.add(self.alice, self.bob, 2)
+        self.assertEqual(first.name, "Bob")
+        self.assertEqual(second.name, "Alice")
 
     def test_add_equal_starts_alternates_h2h(self):
         # Alice started against Bob in round 1
         self.starts.register(self.alice, self.bob, 1)
         # Bob started against Alice in round 2 (equal starts now)
         self.starts.register(self.bob, self.alice, 2)
-        # Next meeting: Alice started last time (h2h), so Bob should start
-        result = self.starts.add(self.alice, self.bob, 3)
         # h2h[(Alice, Bob)] was set to False in round 2 (Bob started)
         # so not h2h[(Alice,Bob)] = True → Alice starts
-        self.assertTrue(result)
+        first, second = self.starts.add(self.alice, self.bob, 3)
+        self.assertEqual(first.name, "Alice")
+        self.assertEqual(second.name, "Bob")
 
-    def test_add_bye_first_returns_true(self):
-        result = self.starts.add(self.bye, self.alice, 1)
-        self.assertTrue(result)
+    def test_add_bye_first(self):
+        first, second = self.starts.add(self.bye, self.alice, 1)
+        self.assertEqual(first.name, "Bye")
 
-    def test_add_bye_second_returns_false(self):
-        result = self.starts.add(self.alice, self.bye, 1)
-        self.assertFalse(result)
+    def test_add_bye_second(self):
+        first, second = self.starts.add(self.alice, self.bye, 1)
+        self.assertEqual(first.name, "Bye")
 
     def test_fixed_starts(self):
         starts = Starts(fixed_starts={(1, "Bob"): True})
-        result = starts.add(self.alice, self.bob, 1)
-        self.assertFalse(result)  # Bob is fixed to start, so p1 (Alice) does not
+        first, second = starts.add(self.alice, self.bob, 1)
+        self.assertEqual(first.name, "Bob")
 
 
 # ── can_pair ─────────────────────────────────────────────
