@@ -133,6 +133,74 @@ class Repeats:
         return self.matches[key]
 
 
+class Starts:
+    def __init__(self, fixed_starts=None):
+        self.starts = defaultdict(lambda: 0)
+        self.h2h = {}
+        self.recent_starts = defaultdict(lambda: 0)
+        self.fixed_starts = fixed_starts or {}
+
+    def _record(self, name1, name2, round, p1_starts):
+        if p1_starts:
+            self.starts[name1] += 1
+            self.recent_starts[name1] = round
+            self.h2h[(name1, name2)] = True
+            self.h2h[(name2, name1)] = False
+        else:
+            self.starts[name2] += 1
+            self.recent_starts[name2] = round
+            self.h2h[(name1, name2)] = False
+            self.h2h[(name2, name1)] = True
+
+    def register(self, starter, other, round):
+        """Record a known start from a finished round."""
+        self._record(starter, other, round, True)
+
+    def add(self, name1, name2, round):
+        """Decide who starts and record the result. Returns True if p1 starts."""
+        if name1.lower() == "bye":
+            p1_starts = True
+        elif name2.lower() == "bye":
+            p1_starts = False
+        elif self.fixed_starts.get((round, name1)):
+            p1_starts = True
+        elif self.fixed_starts.get((round, name2)):
+            p1_starts = False
+        else:
+            starts1 = self.starts[name1]
+            starts2 = self.starts[name2]
+            if starts1 == starts2:
+                # Whoever went first most recently should go second now.
+                if (name1, name2) not in self.h2h:
+                    p1_starts = self.recent_starts[name1] <= self.recent_starts[name2]
+                else:
+                    p1_starts = not self.h2h[(name1, name2)]
+            else:
+                p1_starts = starts1 < starts2
+        self._record(name1, name2, round, p1_starts)
+        return p1_starts
+
+
+class Byes:
+    def __init__(self):
+        self.byes = defaultdict(lambda: 0)
+
+    def add(self, name):
+        self.byes[name] += 1
+
+    def get(self, name):
+        return self.byes[name]
+
+    def update(self, pairing):
+        if pairing.first.is_bye:
+            self.add(pairing.second.name)
+        if pairing.second.is_bye:
+            self.add(pairing.first.name)
+
+    def reset(self):
+        self.byes = defaultdict(lambda: 0)
+
+
 @dataclass
 class PairingData:
     result_slips: QuerySet
