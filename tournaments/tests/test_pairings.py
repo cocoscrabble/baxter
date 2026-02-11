@@ -11,6 +11,7 @@ from tournaments.models import (
     Tournament,
 )
 from tournaments.pairing.base import (
+    Pairing,
     PairingData,
     Player,
     RP,
@@ -35,19 +36,19 @@ class RepeatsTests(TestCase):
         self.carol = Player("Carol")
 
     def test_get_unknown_pair_returns_zero(self):
-        self.assertEqual(self.repeats.get(self.alice, self.bob), 0)
+        self.assertEqual(self.repeats.get(Pairing(self.alice, self.bob)), 0)
 
     def test_add_returns_count(self):
-        self.assertEqual(self.repeats.add(self.alice, self.bob), 1)
-        self.assertEqual(self.repeats.add(self.alice, self.bob), 2)
+        self.assertEqual(self.repeats.add(Pairing(self.alice, self.bob)), 1)
+        self.assertEqual(self.repeats.add(Pairing(self.alice, self.bob)), 2)
 
     def test_order_independent(self):
-        self.repeats.add(self.alice, self.bob)
-        self.assertEqual(self.repeats.get(self.bob, self.alice), 1)
+        self.repeats.add(Pairing(self.alice, self.bob))
+        self.assertEqual(self.repeats.get(Pairing(self.bob, self.alice)), 1)
 
     def test_distinct_pairs_tracked_separately(self):
-        self.repeats.add(self.alice, self.bob)
-        self.assertEqual(self.repeats.get(self.alice, self.carol), 0)
+        self.repeats.add(Pairing(self.alice, self.bob))
+        self.assertEqual(self.repeats.get(Pairing(self.alice, self.carol)), 0)
 
 
 # ── Starts ───────────────────────────────────────────────
@@ -61,40 +62,40 @@ class StartsTests(TestCase):
         self.bye = Player("Bye")
 
     def test_register_records_starter(self):
-        self.starts.register(self.alice, self.bob, 1)
+        self.starts.register(Pairing(self.alice, self.bob), 1)
         self.assertEqual(self.starts.starts["Alice"], 1)
         self.assertEqual(self.starts.starts["Bob"], 0)
 
     def test_add_fewer_starts_goes_first(self):
-        self.starts.register(self.alice, self.bob, 1)
+        self.starts.register(Pairing(self.alice, self.bob), 1)
         # Alice has 1 start, Bob has 0 — Bob should start
-        first, second = self.starts.add(self.alice, self.bob, 2)
-        self.assertEqual(first.name, "Bob")
-        self.assertEqual(second.name, "Alice")
+        p = self.starts.add(Pairing(self.alice, self.bob), 2)
+        self.assertEqual(p.first.name, "Bob")
+        self.assertEqual(p.second.name, "Alice")
 
     def test_add_equal_starts_alternates_h2h(self):
         # Alice started against Bob in round 1
-        self.starts.register(self.alice, self.bob, 1)
+        self.starts.register(Pairing(self.alice, self.bob), 1)
         # Bob started against Alice in round 2 (equal starts now)
-        self.starts.register(self.bob, self.alice, 2)
+        self.starts.register(Pairing(self.bob, self.alice), 2)
         # h2h[(Alice, Bob)] was set to False in round 2 (Bob started)
         # so not h2h[(Alice,Bob)] = True → Alice starts
-        first, second = self.starts.add(self.alice, self.bob, 3)
-        self.assertEqual(first.name, "Alice")
-        self.assertEqual(second.name, "Bob")
+        p = self.starts.add(Pairing(self.alice, self.bob), 3)
+        self.assertEqual(p.first.name, "Alice")
+        self.assertEqual(p.second.name, "Bob")
 
     def test_add_bye_first(self):
-        first, second = self.starts.add(self.bye, self.alice, 1)
-        self.assertEqual(first.name, "Bye")
+        p = self.starts.add(Pairing(self.bye, self.alice), 1)
+        self.assertEqual(p.first.name, "Bye")
 
     def test_add_bye_second(self):
-        first, second = self.starts.add(self.alice, self.bye, 1)
-        self.assertEqual(first.name, "Bye")
+        p = self.starts.add(Pairing(self.alice, self.bye), 1)
+        self.assertEqual(p.first.name, "Bye")
 
     def test_fixed_starts(self):
         starts = Starts(fixed_starts={(1, "Bob"): True})
-        first, second = starts.add(self.alice, self.bob, 1)
-        self.assertEqual(first.name, "Bob")
+        p = starts.add(Pairing(self.alice, self.bob), 1)
+        self.assertEqual(p.first.name, "Bob")
 
 
 # ── can_pair ─────────────────────────────────────────────
@@ -190,17 +191,17 @@ class ExtractPairingsTests(PairingDBTestBase):
         pd = PairingData.for_division(self.division)
         pairings = extract_pairings(pd, 1)
         self.assertEqual(len(pairings), 1)
-        first, second = list(pairings)[0]
-        self.assertEqual(first.name, "Alice")  # winner started
-        self.assertEqual(second.name, "Bob")
+        p = list(pairings)[0]
+        self.assertEqual(p.first.name, "Alice")  # winner started
+        self.assertEqual(p.second.name, "Bob")
 
     def test_loser_started(self):
         self.add_result(1, 0, 1, 450, 380, winner_started=False)
         pd = PairingData.for_division(self.division)
         pairings = extract_pairings(pd, 1)
-        first, second = list(pairings)[0]
-        self.assertEqual(first.name, "Bob")  # loser started
-        self.assertEqual(second.name, "Alice")
+        p = list(pairings)[0]
+        self.assertEqual(p.first.name, "Bob")  # loser started
+        self.assertEqual(p.second.name, "Alice")
 
     def test_filters_by_round(self):
         self.add_result(1, 0, 1, 450, 380)

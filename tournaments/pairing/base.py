@@ -66,6 +66,17 @@ class Player:
         return self.name.lower() == "bye"
 
 
+@dataclass(frozen=True)
+class Pairing:
+    first: Player
+    second: Player
+
+
+@dataclass(frozen=True)
+class DisplayPairing(Pairing):
+    repeats: int = 0
+
+
 @dataclass
 class Result:
     name: str
@@ -128,13 +139,16 @@ class Repeats:
     def __init__(self):
         self.matches = defaultdict(int)
 
-    def add(self, p1: Player, p2: Player) -> int:
-        key = tuple(sorted([p1.name, p2.name]))
+    def _key(self, p: Pairing) -> tuple:
+        return tuple(sorted([p.first.name, p.second.name]))
+
+    def add(self, p: Pairing) -> int:
+        key = self._key(p)
         self.matches[key] += 1
         return self.matches[key]
 
-    def get(self, p1: Player, p2: Player) -> int:
-        key = tuple(sorted([p1.name, p2.name]))
+    def get(self, p: Pairing) -> int:
+        key = self._key(p)
         return self.matches[key]
 
 
@@ -157,16 +171,16 @@ class Starts:
             self.h2h[(name1, name2)] = False
             self.h2h[(name2, name1)] = True
 
-    def register(self, starter: Player, other: Player, round: int) -> None:
+    def register(self, p: Pairing, round: int) -> None:
         """Record a known start from a finished round."""
-        self._record(starter.name, other.name, round, True)
+        self._record(p.first.name, p.second.name, round, True)
 
-    def add(self, p1: Player, p2: Player, round: int) -> tuple[Player, Player]:
-        """Decide who starts and record the result. Returns (first, second)."""
-        name1, name2 = p1.name, p2.name
-        if p1.is_bye:
+    def add(self, p: Pairing, round: int) -> Pairing:
+        """Decide who starts and record the result. Returns Pairing(first, second)."""
+        name1, name2 = p.first.name, p.second.name
+        if p.first.is_bye:
             p1_starts = True
-        elif p2.is_bye:
+        elif p.second.is_bye:
             p1_starts = False
         elif self.fixed_starts.get((round, name1)):
             p1_starts = True
@@ -184,7 +198,7 @@ class Starts:
             else:
                 p1_starts = starts1 < starts2
         self._record(name1, name2, round, p1_starts)
-        return (p1, p2) if p1_starts else (p2, p1)
+        return p if p1_starts else Pairing(p.second, p.first)
 
 
 class Byes:
@@ -228,25 +242,14 @@ class PairingData:
         )
 
 
-@dataclass
-class Pairing:
-    first: Player
-    second: Player
-
-
-@dataclass
-class DisplayPairing(Pairing):
-    repeats: int = 0
-
-
 class Pairings:
-    pairings: list[tuple[Player, Player]]
+    pairings: list[Pairing]
 
     def __init__(self):
         self.pairings = []
 
     def add(self, player1: Player, player2: Player) -> None:
-        self.pairings.append((player1, player2))
+        self.pairings.append(Pairing(player1, player2))
 
     def add_result_slip(self, r: ResultSlip) -> None:
         winner = Player(r.winner_name)

@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import itertools
 
 import networkx as nx
-from tournaments.pairing.base import Pairings, PairingData, RoundPairing, standings_after_round
+from tournaments.pairing.base import Pairing, Pairings, PairingData, RoundPairing, standings_after_round
 
 
 class Groups:
@@ -97,7 +97,7 @@ def pair_swiss_top(groups, repeats, nrep) -> list[list[candidate]]:
         for j in range(len(top)):
             if i == j:
                 continue
-            reps = repeats.get(top[i], top[j])
+            reps = repeats.get(Pairing(top[i], top[j]))
             if reps < nrep:
                 c = candidate(reps, abs(i - j), top[j].name, top[i].name)
                 candidates[i].append(c)
