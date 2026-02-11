@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from tournaments.pairing.base import (
     RP,
     DisplayPairing,
@@ -6,7 +8,6 @@ from tournaments.pairing.base import (
     RoundPairing,
     RoundStatus,
     Starts,
-    round_status,
 )
 from tournaments.pairing.basic import (
     pair_koth,
@@ -41,12 +42,26 @@ def pair_round(pd: PairingData, rp) -> Pairings:
         return Pairings()
 
 
+def round_status(pd: PairingData) -> dict[int, RoundStatus]:
+    counts = defaultdict(lambda: RoundStatus.Empty)
+    n_games = len(pd.entrants) // 2
+    round_counts = defaultdict(int)
+    for slip in pd.result_slips:
+        round_counts[slip.round] += 1
+    for round, count in round_counts.items():
+        if count == n_games:
+            counts[round] = RoundStatus.Finished
+        elif count > 0:
+            counts[round] = RoundStatus.Partial
+    return counts
+
+
 def extract_pairings(pd: PairingData, round: int) -> Pairings:
     """Return pairings with starter first for each result in a round."""
-    res = pd.result_slips.filter(round=round)
     pairings = Pairings()
-    for r in res:
-        pairings.add_result_slip(r)
+    for r in pd.result_slips:
+        if r.round == round:
+            pairings.add_result_slip(r)
     return pairings
 
 

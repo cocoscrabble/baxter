@@ -3,9 +3,83 @@ from dataclasses import dataclass, field
 from enum import Enum, StrEnum
 
 from dataclasses_json import dataclass_json
-from django.db.models import Count
-from django.db.models.query import QuerySet
-from tournaments.models import ResultSlip
+
+# ---------------------------------------------------------------------------
+# Snapshot of db objects
+# ---------------------------------------------------------------------------
+
+# These classes duplicate the structure of some of the tournament db models.
+# The idea is to disconnect the pairings code from the rest of the application.
+# We call some accessors and methods on the Model classes in the classmethod
+# constructors, relying on duck typing so that we do not need access to the
+# django class definitions for type annotations.
+
+
+@dataclass
+class PlayerData:
+    name: str
+    rating: int
+
+    @classmethod
+    def from_db(cls, player) -> "PlayerData":
+        return cls(name=player.name, rating=player.rating)
+
+
+@dataclass
+class EntrantData:
+    player: PlayerData
+
+
+@dataclass
+class ResultSlipData:
+    round: int
+    winner_name: str
+    loser_name: str
+    winner_score: int
+    loser_score: int
+    winner_started: bool
+
+    @classmethod
+    def from_db(cls, r) -> "ResultSlipData":
+        return cls(
+            round=r.round,
+            winner_name=r.winner_name,
+            loser_name=r.loser_name,
+            winner_score=r.winner_score,
+            loser_score=r.loser_score,
+            winner_started=r.winner_started,
+        )
+
+    @property
+    def first_name(self) -> str:
+        """Name of the player who went first."""
+        return self.winner_name if self.winner_started else self.loser_name
+
+    @property
+    def second_name(self) -> str:
+        """Name of the player who went second."""
+        return self.loser_name if self.winner_started else self.winner_name
+
+
+@dataclass
+class PairingData:
+    """The raw data that gets passed to each of the pairing algorithms."""
+
+    # Populated from db data in for_division
+    result_slips: list[ResultSlipData]
+    entrants: list[EntrantData]
+
+    # We have a `repeats` field here because some pairings (e.g. swiss) depend on it as an input.
+    # It is populated in pairings.pair() before pair_round() is called.
+    repeats: Repeats
+
+    @classmethod
+    def for_division(cls, division) -> "PairingData":
+        entrants = [
+            EntrantData(PlayerData.from_db(e.player)) for e in division.entrants.all()
+        ]
+        slips = [ResultSlipData.from_db(r) for r in division.result_slips.all()]
+        return cls(result_slips=slips, entrants=entrants, repeats=Repeats())
 
 
 class DefaultDict(defaultdict):
@@ -106,7 +180,7 @@ class Result:
 @dataclass
 class Results:
     players: dict[str, Player] = field(default_factory=lambda: DefaultDict(Player))
-    rounds: dict[int, list[ResultSlip]] = field(
+    rounds: dict[int, list[ResultSlipData]] = field(
         default_factory=lambda: defaultdict(list)
     )
 
@@ -221,27 +295,6 @@ class Byes:
         self.byes = defaultdict(int)
 
 
-@dataclass
-class PairingData:
-    """The raw data that gets passed to each of the pairing algorithms."""
-
-    # Populated from the database
-    result_slips: QuerySet
-    entrants: QuerySet
-
-    # We have a `repeats` field here because some pairings (e.g. swiss) depend on it as an input.
-    # It is populated in pairings.pair() before pair_round() is called.
-    repeats: Repeats
-
-    @classmethod
-    def for_division(cls, division) -> "PairingData":
-        return cls(
-            result_slips=division.result_slips.all(),
-            entrants=division.entrants.all(),
-            repeats=Repeats(),
-        )
-
-
 class Pairings:
     pairings: list[Pairing]
 
@@ -251,7 +304,7 @@ class Pairings:
     def add(self, player1: Player, player2: Player) -> None:
         self.pairings.append(Pairing(player1, player2))
 
-    def add_result_slip(self, r: ResultSlip) -> None:
+    def add_result_slip(self, r: ResultSlipData) -> None:
         winner = Player(r.winner_name)
         loser = Player(r.loser_name)
         if r.winner_started:
@@ -288,17 +341,3 @@ def standings_after_round(pd: PairingData, round: int) -> Standings:
         return seedings(pd)
     else:
         return results_after_round(pd, round).standings()
-
-
-def round_status(pd: PairingData) -> dict[int, RoundStatus]:
-    counts = defaultdict(lambda: RoundStatus.Empty)
-    n_games = len(pd.entrants) / 2
-    for x in pd.result_slips.values("round").annotate(Count("round")):
-        round, count = x["round"], x["round__count"]
-        if count == 0:
-            counts[round] = RoundStatus.Empty
-        elif count == n_games:
-            counts[round] = RoundStatus.Finished
-        else:
-            counts[round] = RoundStatus.Partial
-    return counts
