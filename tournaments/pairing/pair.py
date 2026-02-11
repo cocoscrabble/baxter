@@ -58,16 +58,16 @@ def pair(pd: PairingData, config) -> list[tuple[int, list[DisplayPairing]]]:
     round_pairings = [RoundPairing.from_dict(x) for x in config.round_pairings]
     for rp in round_pairings:
         if status[rp.round] == RoundStatus.Finished:
-            for first, second in extract_pairings(pd, rp.round):
-                pd.repeats.add(first, second)
-                starts.register(first, second, rp.round)
+            for p in extract_pairings(pd, rp.round):
+                pd.repeats.add(p)
+                starts.register(p, rp.round)
         else:
             if can_pair(rp, status):
                 pairings = []
-                for p1, p2 in pair_round(pd, rp):
-                    reps = pd.repeats.add(p1, p2)
-                    first, second = starts.add(p1, p2, rp.round)
-                    pairings.append(DisplayPairing(first, second, reps))
+                for p in pair_round(pd, rp):
+                    reps = pd.repeats.add(p)
+                    result = starts.add(p, rp.round)
+                    pairings.append(DisplayPairing(result.first, result.second, reps))
                 ret.append((rp.round, pairings))
     return ret
 
