@@ -7,54 +7,20 @@ results. Useful for testing pairing strategies without needing DB-backed data.
 
 import csv
 import random
-from dataclasses import dataclass
 
 from tournaments.pairing.base import (
     DisplayPairing,
+    EntrantData,
     Pairing,
     PairingData,
     Player,
+    PlayerData,
     Repeats,
+    ResultSlipData,
     RoundPairing,
     Starts,
 )
 from tournaments.pairing.pair import pair_round
-
-
-# ---------------------------------------------------------------------------
-# Mock data classes (satisfy the interface used by pairing code)
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class SimPlayer:
-    name: str
-    rating: int
-
-
-@dataclass
-class SimEntrant:
-    player: SimPlayer
-
-
-@dataclass
-class SimResultSlip:
-    round: int
-    winner_name: str
-    loser_name: str
-    winner_score: int
-    loser_score: int
-    winner_started: bool
-
-    @property
-    def first_name(self) -> str:
-        """Name of the player who went first."""
-        return self.winner_name if self.winner_started else self.loser_name
-
-    @property
-    def second_name(self) -> str:
-        """Name of the player who went second."""
-        return self.loser_name if self.winner_started else self.winner_name
 
 
 # ---------------------------------------------------------------------------
@@ -78,23 +44,23 @@ def read_round_pairings_from_csv(path: str) -> list[dict]:
         ]
 
 
-def create_entrants(n: int) -> list[SimEntrant]:
+def create_entrants(n: int) -> list[EntrantData]:
     step = 50 if n <= 16 else 25
-    return [SimEntrant(SimPlayer(f"Player {i + 1}", 2300 - i * step)) for i in range(n)]
+    return [EntrantData(PlayerData(f"Player {i + 1}", 2300 - i * step)) for i in range(n)]
 
 
-def simulate_match(rng, ratings, pairing, round) -> SimResultSlip:
+def simulate_match(rng, ratings, pairing, round) -> ResultSlipData:
     first, second = pairing.first.name, pairing.second.name
 
     # Bye handling
     if first.lower() == "bye":
         loser_score = BYE_SCORE
         winner_score = rng.randint(loser_score + 1, 600)
-        return SimResultSlip(round, second, first, winner_score, loser_score, False)
+        return ResultSlipData(round, second, first, winner_score, loser_score, False)
     if second.lower() == "bye":
         loser_score = BYE_SCORE
         winner_score = rng.randint(loser_score + 1, 600)
-        return SimResultSlip(round, first, second, winner_score, loser_score, True)
+        return ResultSlipData(round, first, second, winner_score, loser_score, True)
 
     # Normal match — win probability proportional to rating
     r1, r2 = ratings[first], ratings[second]
@@ -105,12 +71,12 @@ def simulate_match(rng, ratings, pairing, round) -> SimResultSlip:
 
     if first_wins:
         winner_started = True  # first is the starter in the pairing
-        return SimResultSlip(
+        return ResultSlipData(
             round, first, second, winner_score, loser_score, winner_started
         )
     else:
         winner_started = False
-        return SimResultSlip(
+        return ResultSlipData(
             round, second, first, winner_score, loser_score, winner_started
         )
 
@@ -125,7 +91,7 @@ def simulate(
     n_entrants: int,
     seed: int | None = None,
 ) -> tuple[
-    list[tuple[int, list[DisplayPairing], list[SimResultSlip]]], Starts, Repeats
+    list[tuple[int, list[DisplayPairing], list[ResultSlipData]]], Starts, Repeats
 ]:
     """Simulate a tournament.
 
@@ -142,7 +108,7 @@ def simulate(
     rng = random.Random(seed)
     entrants = create_entrants(n_entrants)
     ratings = {e.player.name: e.player.rating for e in entrants}
-    result_slips: list[SimResultSlip] = []
+    result_slips: list[ResultSlipData] = []
     pd = PairingData(result_slips=result_slips, entrants=entrants, repeats=Repeats())
     starts = Starts()
     rounds = []

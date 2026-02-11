@@ -19,9 +19,8 @@ from tournaments.pairing.base import (
     RoundPairing,
     RoundStatus,
     Starts,
-    round_status,
 )
-from tournaments.pairing.pair import can_pair, extract_pairings, pair
+from tournaments.pairing.pair import can_pair, extract_pairings, pair, round_status
 from users.models import User
 
 
