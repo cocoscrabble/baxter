@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Runner script for tournament simulation.
 
-Usage: uv run python scripts/run_simulate.py <csv_file> [n_entrants]
+Usage: uv run python scripts/run_simulate.py
 """
 
 import os
@@ -10,15 +10,19 @@ import sys
 # Ensure the project root is on sys.path when run from any directory.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "baxter.settings")
+from tournaments.simulate import simulate, check_starts_balancing
+from tournaments.pairing.round_pairing import make_pairings
 
-import django
 
-django.setup()
+def test_balanced_starts():
+    cases = [(24, "KH:24"), (16, "SW:24"), (12, "RR:11 RR:11")]
+    for n_entrants, spec in cases:
+        rps = make_pairings(spec)
+        rounds, _, _ = simulate(rps, n_entrants)
+        check_starts_balancing(rounds)
+    print("Starts balancing checks passed.")
 
-from tournaments.simulate import check_starts_balancing, read_round_pairings_from_csv
 
-rps = read_round_pairings_from_csv(sys.argv[1])
-n_entrants = int(sys.argv[2]) if len(sys.argv) > 2 else 24
-check_starts_balancing(rps, n_entrants)
-print("Starts balancing check passed.")
+if __name__ == "__main__":
+    # Run through various simulation-based tests
+    test_balanced_starts()

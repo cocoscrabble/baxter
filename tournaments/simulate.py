@@ -5,8 +5,8 @@ algorithms on simulated data, and returns per-round DisplayPairings and
 results. Useful for testing pairing strategies without needing DB-backed data.
 """
 
-import csv
 import random
+from dataclasses import dataclass
 
 from tournaments.pairing.base import (
     DisplayPairing,
@@ -17,9 +17,9 @@ from tournaments.pairing.base import (
     PlayerData,
     Repeats,
     ResultSlipData,
-    RoundPairing,
     Starts,
 )
+from tournaments.pairing.round_pairing import RoundPairing
 from tournaments.pairing.pair import pair_round
 
 
@@ -30,23 +30,11 @@ from tournaments.pairing.pair import pair_round
 BYE_SCORE = 50
 
 
-def read_round_pairings_from_csv(path: str) -> list[dict]:
-    """Read round pairings from a CSV file.
-
-    Expected format: round,pairing,start_round (no header row).
-    """
-    with open(path) as f:
-        reader = csv.reader(f)
-        return [
-            {"round": int(row[0]), "pairing": row[1], "start_round": int(row[2])}
-            for row in reader
-            if row
-        ]
-
-
 def create_entrants(n: int) -> list[EntrantData]:
     step = 50 if n <= 16 else 25
-    return [EntrantData(PlayerData(f"Player {i + 1}", 2300 - i * step)) for i in range(n)]
+    return [
+        EntrantData(PlayerData(f"Player {i + 1}", 2300 - i * step)) for i in range(n)
+    ]
 
 
 def simulate_match(rng, ratings, pairing, round) -> ResultSlipData:
@@ -86,13 +74,18 @@ def simulate_match(rng, ratings, pairing, round) -> ResultSlipData:
 # ---------------------------------------------------------------------------
 
 
+@dataclass
+class Round:
+    number: int
+    pairings: list[DisplayPairing]
+    results: list[ResultSlipData]
+
+
 def simulate(
     round_pairings: list[dict],
     n_entrants: int,
     seed: int | None = None,
-) -> tuple[
-    list[tuple[int, list[DisplayPairing], list[ResultSlipData]]], Starts, Repeats
-]:
+) -> tuple[list[Round], Starts, Repeats]:
     """Simulate a tournament.
 
     Args:
@@ -125,16 +118,12 @@ def simulate(
             slip = simulate_match(rng, ratings, result, rp.round)
             round_results.append(slip)
             result_slips.append(slip)
-        rounds.append((rp.round, display_pairings, round_results))
+        rounds.append(Round(rp.round, display_pairings, round_results))
 
     return rounds, starts, pd.repeats
 
 
-def check_starts_balancing(
-    round_pairings: list[dict],
-    n_entrants: int,
-    seed: int | None = None,
-) -> None:
+def check_starts_balancing(rounds: list[Round]) -> None:
     """Verify that starts are balanced: the starter never has more starts than the non-starter.
 
     Runs simulate(), then replays the results through a fresh Starts tracker,
@@ -142,21 +131,20 @@ def check_starts_balancing(
     the player who went second (i.e. the algorithm correctly gave the start
     to the player who needed it).
     """
-    rounds, _, _ = simulate(round_pairings, n_entrants, seed=seed)
     starts = Starts()
 
-    for round_num, _, round_results in rounds:
-        for slip in round_results:
+    for round in rounds:
+        for slip in round.results:
             first = slip.first_name
             second = slip.second_name
             assert starts.starts[first] <= starts.starts[second], (
-                f"Round {round_num}: {first} has {starts.starts[first]} starts "
+                f"Round {round.number}: {first} has {starts.starts[first]} starts "
                 f"but {second} has {starts.starts[second]} starts — "
                 f"{first} should not be starting"
             )
             p = Pairing(Player(first), Player(second))
-            starts.register(p, round_num)
+            starts.register(p, round.number)
 
 
 if __name__ == "__main__":
-    raise SystemExit("Run via: uv run python scripts/run_simulate.py <csv_file>")
+    raise SystemExit("Run via: uv run python scripts/run_simulate.py")
