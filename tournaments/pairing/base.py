@@ -1,6 +1,6 @@
 from collections import defaultdict
 from dataclasses import dataclass, field
-from enum import Enum, StrEnum
+from enum import Enum
 
 from dataclasses_json import dataclass_json
 
@@ -93,29 +93,6 @@ class DefaultDict(defaultdict):
         ret = self.default_factory(key)
         self[key] = ret
         return ret
-
-
-@dataclass_json
-@dataclass
-class RoundPairing:
-    round: int
-    start_round: int
-    pairing: str
-
-
-class RP(StrEnum):
-    KotH = "KotH"
-    QotH = "QotH"
-    Swiss = "Swiss"
-    RoundRobin = "RoundRobin"
-    Quads_Clustered = "Quads_Clustered"
-    Quads_Distributed = "Quads_Distributed"
-    Quads_Evans = "Quads_Evans"
-    Charlottesville = "Charlottesville"
-
-    @staticmethod
-    def is_round_robin(name) -> bool:
-        return name in (RP.RoundRobin, RP.Charlottesville)
 
 
 class RoundStatus(Enum):

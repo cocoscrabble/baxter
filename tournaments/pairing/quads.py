@@ -1,4 +1,5 @@
-from tournaments.pairing.base import Pairings, RoundPairing, PairingData, standings_after_round
+from tournaments.pairing.base import Pairings, PairingData, standings_after_round
+from tournaments.pairing.round_pairing import RoundPairing
 
 # -------------------
 # Quads

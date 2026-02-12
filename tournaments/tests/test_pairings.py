@@ -14,12 +14,11 @@ from tournaments.pairing.base import (
     Pairing,
     PairingData,
     Player,
-    RP,
     Repeats,
-    RoundPairing,
     RoundStatus,
     Starts,
 )
+from tournaments.pairing.round_pairing import RP, RoundPairing
 from tournaments.pairing.pair import can_pair, extract_pairings, pair, round_status
 from users.models import User
 
@@ -137,7 +136,10 @@ class PairingDBTestBase(TestCase):
     def setUpTestData(cls):
         cls.owner = User.objects.create_user(username="owner", password="testpass123")
         cls.tournament = Tournament.objects.create(
-            name="Test", location="Test", start_date=date(2026, 1, 1), owner=cls.owner,
+            name="Test",
+            location="Test",
+            start_date=date(2026, 1, 1),
+            owner=cls.owner,
         )
         cls.division = Division.objects.create(name="Open", tournament=cls.tournament)
         cls.players = []
@@ -145,12 +147,16 @@ class PairingDBTestBase(TestCase):
         for i, (name, rating) in enumerate(
             [("Alice", 1800), ("Bob", 1600), ("Carol", 1500), ("Dave", 1400)], start=1
         ):
-            p = DBPlayer.objects.create(name=name, player_number=str(i).zfill(3), rating=rating)
+            p = DBPlayer.objects.create(
+                name=name, player_number=str(i).zfill(3), rating=rating
+            )
             e = Entrant.objects.create(division=cls.division, player=p, number=i)
             cls.players.append(p)
             cls.entrants.append(e)
 
-    def add_result(self, round, winner_idx, loser_idx, w_score, l_score, winner_started=True):
+    def add_result(
+        self, round, winner_idx, loser_idx, w_score, l_score, winner_started=True
+    ):
         return ResultSlip.objects.create(
             division=self.division,
             round=round,
@@ -216,7 +222,9 @@ class PairTests(PairingDBTestBase):
         rp = []
         for i in range(1, num_rounds + 1):
             rp.append({"round": i, "pairing": RP.KotH, "start_round": i - 1})
-        return DivisionSettings.objects.create(division=self.division, round_pairings=rp)
+        return DivisionSettings.objects.create(
+            division=self.division, round_pairings=rp
+        )
 
     def _pd(self):
         return PairingData.for_division(self.division)

@@ -3,7 +3,8 @@ from dataclasses import dataclass
 import itertools
 
 import networkx as nx
-from tournaments.pairing.base import Pairing, Pairings, PairingData, RoundPairing, standings_after_round
+from tournaments.pairing.base import Pairing, Pairings, PairingData, standings_after_round
+from tournaments.pairing.round_pairing import RoundPairing
 
 
 class Groups:
