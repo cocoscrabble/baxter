@@ -1,14 +1,13 @@
 from collections import defaultdict
 
 from tournaments.pairing.base import (
-    RP,
     DisplayPairing,
     PairingData,
     Pairings,
-    RoundPairing,
     RoundStatus,
     Starts,
 )
+from tournaments.pairing.round_pairing import RP, RoundPairing
 from tournaments.pairing.basic import (
     pair_koth,
     pair_qoth,
