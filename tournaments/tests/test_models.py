@@ -1,5 +1,6 @@
 from datetime import date
 
+from django.db import IntegrityError
 from django.test import TestCase
 
 from tournaments.models import Division, DivisionSettings, Entrant, Player, ResultSlip, Tournament
@@ -99,6 +100,11 @@ class EntrantModelTests(TestCase):
             number=1,
         )
         self.assertEqual(str(entrant), "1: John Doe")
+
+    def test_duplicate_player_in_division_is_rejected(self):
+        Entrant.objects.create(division=self.division, player=self.player, number=1)
+        with self.assertRaises(IntegrityError):
+            Entrant.objects.create(division=self.division, player=self.player, number=2)
 
 
 class ResultSlipModelTests(TestCase):
