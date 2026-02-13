@@ -104,7 +104,7 @@ class Entrant(models.Model):
 
     class Meta:
         ordering = ["number"]
-        unique_together = ["division", "number"]
+        unique_together = [["division", "number"], ["division", "player"]]
 
     def __str__(self):
         return f"{self.number}: {self.player.name}"
