@@ -14,15 +14,13 @@ from django.views.generic import (
 )
 
 from .forms import (
-    EntrantCountForm,
-    EntrantFormSet,
     ResultSlipForm,
     RoundCountForm,
     RoundPairingFormSet,
     TournamentForm,
 )
-from .dto import ResultSlipDTO
-from .models import Division, DivisionSettings, Entrant, ResultSlip, Tournament
+from .dto import EntrantDTO, ResultSlipDTO
+from .models import Division, DivisionSettings, Entrant, Player, ResultSlip, Tournament
 from .pairing.base import PairingData, standings_after_round
 from .pairing.pair import pair
 
@@ -255,54 +253,54 @@ class DivisionEntrantsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
     def get_division(self):
         return get_object_or_404(Division, pk=self.kwargs["pk"])
 
-    def _existing_initial(self, division):
-        return [
-            {"number": e.number, "player": e.player.pk}
-            for e in division.entrants.all()
-        ]
-
-    def _resize_initial(self, existing, count):
-        result = (existing or [])[:count]
-        for i in range(len(result) + 1, count + 1):
-            result.append({"number": i, "player": ""})
-        return result
-
-    def get_initial_data(self, division):
-        existing = self._existing_initial(division)
-        count = self.request.GET.get("count")
-        if count:
-            return self._resize_initial(existing, int(count))
-        return existing
-
     def get(self, request, pk):
         division = self.get_division()
-        initial = self.get_initial_data(division)
-        formset = EntrantFormSet(initial=initial)
-        count_form = EntrantCountForm(initial={"count": len(initial)})
+        entrants = division.entrants.select_related("player").order_by("number")
+        entrants_json = [
+            {"number": e.number, "player": e.player.pk}
+            for e in entrants
+        ]
+        players_json = [
+            {"id": p.pk, "label": p.name}
+            for p in Player.objects.all()
+        ]
         return render(request, self.template_name, {
             "division": division,
-            "formset": formset,
-            "count_form": count_form,
+            "entrants_json": json.dumps(entrants_json),
+            "players_json": json.dumps(players_json),
         })
 
     def post(self, request, pk):
         division = self.get_division()
-        formset = EntrantFormSet(request.POST)
-        if formset.is_valid():
-            division.entrants.all().delete()
-            for form in formset:
-                Entrant.objects.create(
-                    division=division,
-                    number=form.cleaned_data["number"],
-                    player=form.cleaned_data["player"],
-                )
-            return redirect("division_detail", pk=pk)
-        count_form = EntrantCountForm(initial={"count": len(formset)})
-        return render(request, self.template_name, {
-            "division": division,
-            "formset": formset,
-            "count_form": count_form,
-        })
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({"errors": ["Invalid JSON."]}, status=400)
+
+        rows = data.get("entrants", [])
+        valid_player_ids = set(Player.objects.values_list("pk", flat=True))
+        errors = []
+        seen_players = set()
+        validated = []
+
+        for i, row in enumerate(rows):
+            entrant = EntrantDTO.from_json(row)
+            if entrant is None:
+                errors.append(f"Row {i+1}: all fields are required.")
+                continue
+            row_errors = entrant.validate(valid_player_ids, seen_players)
+            if row_errors:
+                errors.extend(f"Row {i+1}: {e}" for e in row_errors)
+            else:
+                validated.append(entrant)
+
+        if errors:
+            return JsonResponse({"errors": errors}, status=400)
+
+        division.entrants.all().delete()
+        for entrant in validated:
+            Entrant.objects.create(division=division, **entrant.to_db_kwargs())
+        return JsonResponse({"ok": True})
 
 
 class ResultSlipCreateView(CreateView):

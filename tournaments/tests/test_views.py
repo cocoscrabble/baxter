@@ -667,123 +667,101 @@ class DivisionEntrantsEditViewTests(TestCase):
         setUpTournament(self)
         self.division.entrants.all().delete()
         self.player3 = Player.objects.create(name="Charlie", player_number="003", rating=1400)
+        self.url = reverse("division_entrants_edit", kwargs={"pk": self.division.pk})
 
     def test_editor_can_access(self):
         self.client.login(username="owner", password="testpass123")
-        response = self.client.get(
-            reverse("division_entrants_edit", kwargs={"pk": self.division.pk})
-        )
+        response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
 
     def test_non_editor_forbidden(self):
         self.client.login(username="other", password="testpass123")
-        response = self.client.get(
-            reverse("division_entrants_edit", kwargs={"pk": self.division.pk})
-        )
+        response = self.client.get(self.url)
         self.assertEqual(response.status_code, 403)
 
-    def test_get_with_count_shows_n_rows(self):
-        self.client.login(username="owner", password="testpass123")
-        response = self.client.get(
-            reverse("division_entrants_edit", kwargs={"pk": self.division.pk})
-            + "?count=3"
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.context["formset"]), 3)
-
-    def test_get_with_existing_entrants(self):
+    def test_get_returns_json_context(self):
         Entrant.objects.create(division=self.division, player=self.player1, number=1)
         Entrant.objects.create(division=self.division, player=self.player2, number=2)
         self.client.login(username="owner", password="testpass123")
-        response = self.client.get(
-            reverse("division_entrants_edit", kwargs={"pk": self.division.pk})
-        )
-        formset = response.context["formset"]
-        self.assertEqual(len(formset), 2)
-        self.assertEqual(formset[0].initial["player"], self.player1.pk)
-        self.assertEqual(formset[1].initial["player"], self.player2.pk)
+        response = self.client.get(self.url)
+        entrants = json.loads(response.context["entrants_json"])
+        players = json.loads(response.context["players_json"])
+        self.assertEqual(len(entrants), 2)
+        self.assertEqual(entrants[0]["player"], self.player1.pk)
+        self.assertEqual(entrants[1]["player"], self.player2.pk)
+        # players_json should include all players in the DB
+        player_ids = {p["id"] for p in players}
+        self.assertIn(self.player1.pk, player_ids)
+        self.assertIn(self.player2.pk, player_ids)
+        self.assertIn(self.player3.pk, player_ids)
 
     def test_post_saves_entrants(self):
         self.client.login(username="owner", password="testpass123")
+        payload = {
+            "entrants": [
+                {"number": 1, "player": self.player1.pk},
+                {"number": 2, "player": self.player2.pk},
+            ]
+        }
         response = self.client.post(
-            reverse("division_entrants_edit", kwargs={"pk": self.division.pk}),
-            {
-                "form-TOTAL_FORMS": "2",
-                "form-INITIAL_FORMS": "0",
-                "form-MIN_NUM_FORMS": "0",
-                "form-MAX_NUM_FORMS": "1000",
-                "form-0-number": "1",
-                "form-0-player": str(self.player1.pk),
-                "form-1-number": "2",
-                "form-1-player": str(self.player2.pk),
-            },
+            self.url,
+            json.dumps(payload),
+            content_type="application/json",
         )
-        self.assertRedirects(
-            response,
-            reverse("division_detail", kwargs={"pk": self.division.pk}),
-        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["ok"])
         self.assertEqual(self.division.entrants.count(), 2)
-        self.assertEqual(self.division.entrants.first().player, self.player1)
+        self.assertEqual(self.division.entrants.get(number=1).player, self.player1)
 
     def test_post_replaces_existing_entrants(self):
         Entrant.objects.create(division=self.division, player=self.player1, number=1)
         self.client.login(username="owner", password="testpass123")
-        self.client.post(
-            reverse("division_entrants_edit", kwargs={"pk": self.division.pk}),
-            {
-                "form-TOTAL_FORMS": "2",
-                "form-INITIAL_FORMS": "0",
-                "form-MIN_NUM_FORMS": "0",
-                "form-MAX_NUM_FORMS": "1000",
-                "form-0-number": "1",
-                "form-0-player": str(self.player2.pk),
-                "form-1-number": "2",
-                "form-1-player": str(self.player3.pk),
-            },
+        payload = {
+            "entrants": [
+                {"number": 1, "player": self.player2.pk},
+                {"number": 2, "player": self.player3.pk},
+            ]
+        }
+        response = self.client.post(
+            self.url,
+            json.dumps(payload),
+            content_type="application/json",
         )
+        self.assertEqual(response.status_code, 200)
         self.assertEqual(self.division.entrants.count(), 2)
         self.assertEqual(self.division.entrants.get(number=1).player, self.player2)
 
-    def test_resize_preserves_existing(self):
-        Entrant.objects.create(division=self.division, player=self.player1, number=1)
+    def test_post_duplicate_player_returns_errors(self):
         self.client.login(username="owner", password="testpass123")
-        response = self.client.get(
-            reverse("division_entrants_edit", kwargs={"pk": self.division.pk})
-            + "?count=3"
-        )
-        formset = response.context["formset"]
-        self.assertEqual(len(formset), 3)
-        self.assertEqual(formset[0].initial["player"], self.player1.pk)
-        self.assertEqual(formset[1].initial["number"], 2)
-        self.assertEqual(formset[1].initial["player"], "")
-        self.assertEqual(formset[2].initial["number"], 3)
-
-    def test_count_form_in_context(self):
-        Entrant.objects.create(division=self.division, player=self.player1, number=1)
-        Entrant.objects.create(division=self.division, player=self.player2, number=2)
-        self.client.login(username="owner", password="testpass123")
-        response = self.client.get(
-            reverse("division_entrants_edit", kwargs={"pk": self.division.pk})
-        )
-        self.assertEqual(response.context["count_form"].initial["count"], 2)
-
-    def test_duplicate_player_rejected(self):
-        self.client.login(username="owner", password="testpass123")
+        payload = {
+            "entrants": [
+                {"number": 1, "player": self.player1.pk},
+                {"number": 2, "player": self.player1.pk},
+            ]
+        }
         response = self.client.post(
-            reverse("division_entrants_edit", kwargs={"pk": self.division.pk}),
-            {
-                "form-TOTAL_FORMS": "2",
-                "form-INITIAL_FORMS": "0",
-                "form-MIN_NUM_FORMS": "0",
-                "form-MAX_NUM_FORMS": "1000",
-                "form-0-number": "1",
-                "form-0-player": str(self.player1.pk),
-                "form-1-number": "2",
-                "form-1-player": str(self.player1.pk),
-            },
+            self.url,
+            json.dumps(payload),
+            content_type="application/json",
         )
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Alice is listed more than once")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("errors", response.json())
+        self.assertEqual(self.division.entrants.count(), 0)
+
+    def test_post_missing_fields_returns_errors(self):
+        self.client.login(username="owner", password="testpass123")
+        payload = {
+            "entrants": [
+                {"number": 1},
+            ]
+        }
+        response = self.client.post(
+            self.url,
+            json.dumps(payload),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("errors", response.json())
         self.assertEqual(self.division.entrants.count(), 0)
 
 
