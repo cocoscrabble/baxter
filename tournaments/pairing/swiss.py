@@ -2,9 +2,19 @@ from collections import deque
 from dataclasses import dataclass
 import itertools
 
-import networkx as nx
-from tournaments.pairing.base import Pairing, Pairings, PairingData, standings_after_round
+from tournaments.pairing.base import (
+    Pairing,
+    Pairings,
+    PairingData,
+    Repeats,
+    Standings,
+    blossom,
+    pair_no_repeats_blossom,
+    standings_after_round,
+)
 from tournaments.pairing.round_pairing import RoundPairing
+
+SWISS_DISTANCE = 10
 
 
 class Groups:
@@ -107,15 +117,6 @@ def pair_swiss_top(groups, repeats, nrep) -> list[list[candidate]]:
     return candidates
 
 
-def blossom(edges) -> list[tuple]:
-    # The nx implementation of blossom does not like negative weights.
-    m = min(x[2] for x in edges) if edges else 0
-    edges = [[v1, v2, w - m] for v1, v2, w in edges]
-    g = nx.Graph()
-    g.add_weighted_edges_from(edges)
-    return list(sorted(nx.max_weight_matching(g, maxcardinality=True)))
-
-
 def pair_candidates(bracket: list[list[candidate]]) -> list[pair]:
     edges = []
     names = {}
@@ -142,11 +143,8 @@ def pair_candidates(bracket: list[list[candidate]]) -> list[pair]:
     return pairings
 
 
-def pair_swiss(pd: PairingData, rp: RoundPairing) -> Pairings:
-    if rp.start_round < 1:
-        seeding = standings_after_round(pd, 0)
-        return pair_swiss_initial(seeding)
-    players = standings_after_round(pd, rp.start_round)
+def _pair_swiss_players(players: Standings, repeats: Repeats) -> Pairings:
+    """Core Swiss pairing logic for a list of players."""
     names = {p.name: p for p in players}
     groups = Groups.from_standings(players)
     nrep = 1
@@ -157,7 +155,7 @@ def pair_swiss(pd: PairingData, rp: RoundPairing) -> Pairings:
         while len(groups.bottom) < 6:
             groups.merge_bottom()
     while groups.length > 0:
-        candidates = pair_swiss_top(groups, pd.repeats, nrep)
+        candidates = pair_swiss_top(groups, repeats, nrep)
         if any(len(x) == 0 for x in candidates):
             if groups.length == 1:
                 nrep += 1
@@ -185,4 +183,27 @@ def pair_swiss(pd: PairingData, rp: RoundPairing) -> Pairings:
     for group in paired:
         for p in group:
             out.add(names[p.name1], names[p.name2])
+    return out
+
+
+def pair_swiss(pd: PairingData, rp: RoundPairing) -> Pairings:
+    if rp.start_round < 1:
+        seeding = standings_after_round(pd, 0)
+        return pair_swiss_initial(seeding)
+    players = standings_after_round(pd, rp.start_round)
+    return _pair_swiss_players(players, pd.repeats)
+
+
+def pair_swiss_plus_random(pd: PairingData, rp: RoundPairing) -> Pairings:
+    """Top SWISS_DISTANCE players paired Swiss, rest paired Random No Repeats."""
+    if rp.start_round < 1:
+        seeding = standings_after_round(pd, 0)
+        return pair_swiss_initial(seeding)
+    players = standings_after_round(pd, rp.start_round)
+    swiss_players = players[:SWISS_DISTANCE]
+    rand_players = players[SWISS_DISTANCE:]
+    swiss_pairings = _pair_swiss_players(swiss_players, pd.repeats)
+    random_pairings = pair_no_repeats_blossom(rand_players, pd.repeats)
+    out = Pairings()
+    out.pairings = swiss_pairings.pairings + random_pairings.pairings
     return out
