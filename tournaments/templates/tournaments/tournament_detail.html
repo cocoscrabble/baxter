@@ -34,6 +34,7 @@
     </dd>
 </dl>
 
+<p><a href="{% url 'tournament_list' %}">Back to tournaments</a></p>
 {% if can_edit %}
 <p>
     <a href="{% url 'tournament_edit' tournament.pk %}">Edit</a>
@@ -42,6 +43,4 @@
     {% endif %}
 </p>
 {% endif %}
-
-<p><a href="{% url 'tournament_list' %}">Back to tournaments</a></p>
 {% endblock %}

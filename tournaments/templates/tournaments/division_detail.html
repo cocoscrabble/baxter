@@ -11,10 +11,14 @@
     | <a href="{% url 'division_standings' division.pk %}">Standings</a>
     | <a href="{% url 'division_pairings' division.pk %}">Pairings</a>
     | <a href="{% url 'resultslip_create' division.pk %}">Add Result</a>
-    {% if can_edit %}| <a href="{% url 'division_edit_results' division.pk %}">Edit Results</a>{% endif %}
-    {% if can_edit %}| <a href="{% url 'division_settings' division.pk %}">Settings</a>{% endif %}
     | <a href="{% url 'tournament_detail' division.tournament.pk %}">Back to tournament</a>
 </p>
+{% if can_edit %}
+<p>
+    <a href="{% url 'division_edit_results' division.pk %}">Edit Results</a>
+    | <a href="{% url 'division_settings' division.pk %}">Settings</a>
+</p>
+{% endif %}
 
 <h2>Round {{ max_round }} Results</h2>
 {% if latest_results %}
