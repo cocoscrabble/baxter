@@ -10,8 +10,15 @@ from django.views.generic import (
     UpdateView,
 )
 
-from .forms import ResultSlipForm, RoundCountForm, RoundPairingFormSet, TournamentForm
-from .models import Division, DivisionSettings, ResultSlip, Tournament
+from .forms import (
+    EntrantCountForm,
+    EntrantFormSet,
+    ResultSlipForm,
+    RoundCountForm,
+    RoundPairingFormSet,
+    TournamentForm,
+)
+from .models import Division, DivisionSettings, Entrant, ResultSlip, Tournament
 from .pairing.base import PairingData, standings_after_round
 from .pairing.pair import pair
 
@@ -235,6 +242,62 @@ class DivisionSettingsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
         return render(request, self.template_name, {
             "division": division,
             "formset": formset,
+        })
+
+
+class DivisionEntrantsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    template_name = "tournaments/division_entrants_edit.html"
+
+    def get_division(self):
+        return get_object_or_404(Division, pk=self.kwargs["pk"])
+
+    def _existing_initial(self, division):
+        return [
+            {"number": e.number, "player": e.player.pk}
+            for e in division.entrants.all()
+        ]
+
+    def _resize_initial(self, existing, count):
+        result = (existing or [])[:count]
+        for i in range(len(result) + 1, count + 1):
+            result.append({"number": i, "player": ""})
+        return result
+
+    def get_initial_data(self, division):
+        existing = self._existing_initial(division)
+        count = self.request.GET.get("count")
+        if count:
+            return self._resize_initial(existing, int(count))
+        return existing
+
+    def get(self, request, pk):
+        division = self.get_division()
+        initial = self.get_initial_data(division)
+        formset = EntrantFormSet(initial=initial)
+        count_form = EntrantCountForm(initial={"count": len(initial)})
+        return render(request, self.template_name, {
+            "division": division,
+            "formset": formset,
+            "count_form": count_form,
+        })
+
+    def post(self, request, pk):
+        division = self.get_division()
+        formset = EntrantFormSet(request.POST)
+        if formset.is_valid():
+            division.entrants.all().delete()
+            for form in formset:
+                Entrant.objects.create(
+                    division=division,
+                    number=form.cleaned_data["number"],
+                    player=form.cleaned_data["player"],
+                )
+            return redirect("division_detail", pk=pk)
+        count_form = EntrantCountForm(initial={"count": len(formset)})
+        return render(request, self.template_name, {
+            "division": division,
+            "formset": formset,
+            "count_form": count_form,
         })
 
 
