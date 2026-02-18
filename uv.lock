@@ -32,6 +32,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "dataclasses-json" },
     { name = "django" },
+    { name = "django-node-assets" },
     { name = "more-itertools" },
     { name = "networkx" },
     { name = "python-decouple" },
@@ -49,6 +50,7 @@ dev = [
 requires-dist = [
     { name = "dataclasses-json", specifier = ">=0.6.7" },
     { name = "django", specifier = ">=6.0.2" },
+    { name = "django-node-assets", specifier = ">=0.9.15" },
     { name = "more-itertools", specifier = ">=10.8.0" },
     { name = "networkx", specifier = ">=3.6.1" },
     { name = "python-decouple", specifier = ">=3.8" },
@@ -118,6 +120,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/f1/4d/6acf660500d3d581bfc19460d9605cdf14c275640f35825da1329eaafafa/django_debug_toolbar-6.2.0.tar.gz", hash = "sha256:dc1c174d8fb0ea01435e02d9ceef735cf62daf37c1a6a5692d33b4127327679b", size = 313779, upload-time = "2026-01-20T12:38:25.268Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/88/04/e24611299a5ee0d4edfacf935b09cfb7d5d9cb653bd7b7883c3b43a6f90d/django_debug_toolbar-6.2.0-py3-none-any.whl", hash = "sha256:1575461954e6befa720e999dec13fe4f1cc8baf40b6c3ac2aec5f340c0f9c85f", size = 271354, upload-time = "2026-01-20T12:38:23.608Z" },
+]
+
+[[package]]
+name = "django-node-assets"
+version = "0.9.15"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/6f/2c/b093145bcec46bf6eff7eeee9e1b98c9d1fabf0b9dae49715e992d094dd8/django_node_assets-0.9.15.tar.gz", hash = "sha256:60a52dbfc43add1b58a9134e7b761cc25abc553be43af1325261ececb397e403", size = 6816, upload-time = "2025-05-20T17:17:09.206Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/86/6a/007d8c79138ef71e96f37e714d2582fce7c2193b2e0c752e017fcda8e8c8/django_node_assets-0.9.15-py3-none-any.whl", hash = "sha256:a5f8105ffe947bd049ddc2aca40694f86837a0ffbd627686252704b2b330ddcc", size = 6956, upload-time = "2025-05-20T17:17:07.814Z" },
 ]
 
 [[package]]

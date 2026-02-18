@@ -67,6 +67,9 @@ htmlcov/
 # uv
 .uv/
 
+# Node
+node_modules/
+
 # quick experiments and temp files
 tmp/
 t.py
