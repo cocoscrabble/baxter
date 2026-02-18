@@ -1,4 +1,7 @@
+import json
+
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.views import View
@@ -327,41 +330,89 @@ class ResultSlipCreateView(CreateView):
         return context
 
 
-class DivisionEditResultsView(LoginRequiredMixin, CanEditDivisionMixin, ListView):
-    model = ResultSlip
+class DivisionEditResultsView(LoginRequiredMixin, CanEditDivisionMixin, View):
     template_name = "tournaments/division_edit_results.html"
-    context_object_name = "results"
 
     def get_division(self):
         return get_object_or_404(Division, pk=self.kwargs["pk"])
 
-    def get_queryset(self):
-        return ResultSlip.objects.filter(
-            division__pk=self.kwargs["pk"]
-        ).order_by("created_at")
+    def get(self, request, pk):
+        division = self.get_division()
+        results = division.result_slips.select_related(
+            "winner", "loser"
+        ).order_by("round", "pk")
+        results_json = [
+            {
+                "id": r.pk,
+                "round": r.round,
+                "winner": r.winner_id,
+                "winner_score": r.winner_score,
+                "loser": r.loser_id,
+                "loser_score": r.loser_score,
+                "winner_started": r.winner_started,
+            }
+            for r in results
+        ]
+        entrants = division.entrants.select_related("player").order_by("number")
+        entrants_json = [
+            {"id": e.pk, "label": e.player.name}
+            for e in entrants
+        ]
+        return render(request, self.template_name, {
+            "division": division,
+            "results_json": json.dumps(results_json),
+            "entrants_json": json.dumps(entrants_json),
+        })
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["division"] = self.get_division()
-        return context
+    def post(self, request, pk):
+        division = self.get_division()
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({"errors": ["Invalid JSON."]}, status=400)
 
-
-class ResultSlipUpdateView(LoginRequiredMixin, CanEditDivisionMixin, UpdateView):
-    model = ResultSlip
-    form_class = ResultSlipForm
-    template_name = "tournaments/resultslip_form.html"
-
-    def get_division(self):
-        return get_object_or_404(Division, pk=self.kwargs["division_pk"])
-
-    def get_success_url(self):
-        return reverse(
-            "division_edit_results",
-            kwargs={"pk": self.kwargs["division_pk"]},
+        rows = data if isinstance(data, list) else data.get("results", [])
+        entrant_ids = set(
+            division.entrants.values_list("pk", flat=True)
         )
+        errors = []
+        validated = []
+        for i, row in enumerate(rows):
+            row_errors = []
+            round_val = row.get("round")
+            winner = row.get("winner")
+            winner_score = row.get("winner_score")
+            loser = row.get("loser")
+            loser_score = row.get("loser_score")
+            winner_started = row.get("winner_started")
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["division"] = self.get_division()
-        context["editing"] = True
-        return context
+            if not all(v is not None for v in [round_val, winner, winner_score, loser, loser_score, winner_started]):
+                row_errors.append(f"Row {i+1}: all fields are required.")
+            else:
+                if winner == loser:
+                    row_errors.append(f"Row {i+1}: winner and loser must be different.")
+                if winner not in entrant_ids:
+                    row_errors.append(f"Row {i+1}: invalid winner.")
+                if loser not in entrant_ids:
+                    row_errors.append(f"Row {i+1}: invalid loser.")
+
+            if row_errors:
+                errors.extend(row_errors)
+            else:
+                validated.append({
+                    "round": int(round_val),
+                    "winner_id": int(winner),
+                    "winner_score": int(winner_score),
+                    "loser_id": int(loser),
+                    "loser_score": int(loser_score),
+                    "winner_started": bool(winner_started),
+                })
+
+        if errors:
+            return JsonResponse({"errors": errors}, status=400)
+
+        division.result_slips.all().delete()
+        for v in validated:
+            ResultSlip.objects.create(division=division, **v)
+
+        return JsonResponse({"ok": True})

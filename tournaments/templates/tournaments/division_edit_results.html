@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}Edit Results - {{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
 
@@ -6,32 +7,143 @@
 <h1>Edit Results: {{ division.name }}</h1>
 <p><a href="{% url 'division_detail' division.pk %}">Back to division</a></p>
 
-{% if results %}
-<table>
-    <thead>
-        <tr>
-            <th>Round</th>
-            <th>Winner</th>
-            <th>Score</th>
-            <th>Loser</th>
-            <th>Started</th>
-            <th></th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for slip in results %}
-        <tr>
-            <td>{{ slip.round }}</td>
-            <td>{{ slip.winner.player.name }}</td>
-            <td>{{ slip.winner_score }}-{{ slip.loser_score }}</td>
-            <td>{{ slip.loser.player.name }}</td>
-            <td>{% if slip.winner_started %}Winner{% else %}Loser{% endif %}</td>
-            <td><a href="{% url 'resultslip_edit' division.pk slip.pk %}">Edit</a></td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
-{% else %}
-<p>No results yet.</p>
-{% endif %}
+<link rel="stylesheet" href="{% static 'tabulator-tables/dist/css/tabulator.min.css' %}">
+<script src="{% static 'tabulator-tables/dist/js/tabulator.min.js' %}"></script>
+
+<div id="results-table"></div>
+
+<p style="margin-top: 1em;">
+    <button id="add-row-btn" type="button">Add Row</button>
+    <button id="save-btn" type="button">Save</button>
+    <span id="save-status"></span>
+</p>
+
+<script>
+const entrants = {{ entrants_json|safe }};
+const initialData = {{ results_json|safe }};
+const csrfToken = "{{ csrf_token }}";
+
+const entrantLookup = {};
+entrants.forEach(e => { entrantLookup[e.id] = e.label; });
+
+const entrantValues = {};
+entrants.forEach(e => { entrantValues[e.id] = e.label; });
+
+const table = new Tabulator("#results-table", {
+    data: initialData,
+    layout: "fitColumns",
+    columns: [
+        {
+            title: "Round",
+            field: "round",
+            editor: "number",
+            editorParams: { min: 1 },
+            width: 80,
+        },
+        {
+            title: "Winner",
+            field: "winner",
+            editor: "list",
+            editorParams: { values: entrantValues },
+            formatter: function(cell) {
+                return entrantLookup[cell.getValue()] || "";
+            },
+        },
+        {
+            title: "W Score",
+            field: "winner_score",
+            editor: "number",
+            editorParams: { min: 0 },
+            width: 90,
+        },
+        {
+            title: "Loser",
+            field: "loser",
+            editor: "list",
+            editorParams: { values: entrantValues },
+            formatter: function(cell) {
+                return entrantLookup[cell.getValue()] || "";
+            },
+        },
+        {
+            title: "L Score",
+            field: "loser_score",
+            editor: "number",
+            editorParams: { min: 0 },
+            width: 90,
+        },
+        {
+            title: "Started",
+            field: "winner_started",
+            editor: "list",
+            editorParams: { values: { true: "Winner", false: "Loser" } },
+            formatter: function(cell) {
+                const v = cell.getValue();
+                if (v === true || v === "true") return "Winner";
+                if (v === false || v === "false") return "Loser";
+                return "";
+            },
+        },
+        {
+            title: "",
+            formatter: function() { return "<button type='button'>X</button>"; },
+            width: 50,
+            hozAlign: "center",
+            headerSort: false,
+            cellClick: function(e, cell) {
+                cell.getRow().delete();
+            },
+        },
+    ],
+});
+
+document.getElementById("add-row-btn").addEventListener("click", function() {
+    const data = table.getData();
+    let maxRound = 0;
+    data.forEach(r => { if (r.round > maxRound) maxRound = r.round; });
+    table.addRow({
+        round: maxRound + 1,
+        winner: null,
+        winner_score: null,
+        loser: null,
+        loser_score: null,
+        winner_started: true,
+    });
+});
+
+document.getElementById("save-btn").addEventListener("click", function() {
+    const data = table.getData();
+    const rows = data.map(r => ({
+        round: parseInt(r.round) || null,
+        winner: parseInt(r.winner) || null,
+        winner_score: parseInt(r.winner_score) || null,
+        loser: parseInt(r.loser) || null,
+        loser_score: parseInt(r.loser_score) || null,
+        winner_started: r.winner_started === true || r.winner_started === "true",
+    }));
+
+    const statusEl = document.getElementById("save-status");
+    statusEl.textContent = "Saving...";
+
+    fetch("", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": csrfToken,
+        },
+        body: JSON.stringify({ results: rows }),
+    })
+    .then(resp => resp.json().then(body => ({ ok: resp.ok, body })))
+    .then(({ ok, body }) => {
+        if (ok && body.ok) {
+            statusEl.textContent = "Saved!";
+        } else {
+            statusEl.textContent = "Error: " + (body.errors || []).join("; ");
+        }
+    })
+    .catch(err => {
+        statusEl.textContent = "Network error.";
+    });
+});
+</script>
 {% endblock %}

@@ -1,3 +1,4 @@
+import json
 from datetime import date
 
 from django.test import TestCase
@@ -532,37 +533,133 @@ class DivisionPairingsViewTests(TestCase):
 class DivisionEditResultsViewTests(TestCase):
     def setUp(self):
         setUpTournament(self)
+        self.url = reverse("division_edit_results", kwargs={"pk": self.division.pk})
 
     def test_editor_can_access(self):
         self.client.login(username="owner", password="testpass123")
-        response = self.client.get(
-            reverse("division_edit_results", kwargs={"pk": self.division.pk})
-        )
+        response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
 
     def test_non_editor_forbidden(self):
         self.client.login(username="other", password="testpass123")
-        response = self.client.get(
-            reverse("division_edit_results", kwargs={"pk": self.division.pk})
-        )
+        response = self.client.get(self.url)
         self.assertEqual(response.status_code, 403)
 
-    def test_lists_results_with_edit_links(self):
-        slip = ResultSlip.objects.create(
+    def test_get_returns_json_context(self):
+        ResultSlip.objects.create(
             division=self.division, round=1, winner=self.entrant1,
             winner_score=450, loser=self.entrant2, loser_score=380, winner_started=True,
         )
         self.client.login(username="owner", password="testpass123")
-        response = self.client.get(
-            reverse("division_edit_results", kwargs={"pk": self.division.pk})
+        response = self.client.get(self.url)
+        results = json.loads(response.context["results_json"])
+        entrants = json.loads(response.context["entrants_json"])
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["round"], 1)
+        self.assertEqual(results[0]["winner"], self.entrant1.pk)
+        self.assertEqual(results[0]["winner_score"], 450)
+        self.assertEqual(len(entrants), 2)
+        labels = {e["label"] for e in entrants}
+        self.assertEqual(labels, {"Alice", "Bob"})
+
+    def test_post_saves_results(self):
+        self.client.login(username="owner", password="testpass123")
+        payload = {
+            "results": [
+                {
+                    "round": 1,
+                    "winner": self.entrant1.pk,
+                    "winner_score": 450,
+                    "loser": self.entrant2.pk,
+                    "loser_score": 380,
+                    "winner_started": True,
+                },
+            ]
+        }
+        response = self.client.post(
+            self.url,
+            json.dumps(payload),
+            content_type="application/json",
         )
-        self.assertContains(response, "Alice")
-        self.assertContains(response, "450-380")
-        edit_url = reverse(
-            "resultslip_edit",
-            kwargs={"division_pk": self.division.pk, "pk": slip.pk},
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertTrue(body["ok"])
+        self.assertEqual(self.division.result_slips.count(), 1)
+        slip = self.division.result_slips.first()
+        self.assertEqual(slip.winner_score, 450)
+
+    def test_post_replaces_existing_results(self):
+        ResultSlip.objects.create(
+            division=self.division, round=1, winner=self.entrant1,
+            winner_score=400, loser=self.entrant2, loser_score=350, winner_started=True,
         )
-        self.assertContains(response, edit_url)
+        self.client.login(username="owner", password="testpass123")
+        payload = {
+            "results": [
+                {
+                    "round": 2,
+                    "winner": self.entrant2.pk,
+                    "winner_score": 500,
+                    "loser": self.entrant1.pk,
+                    "loser_score": 400,
+                    "winner_started": False,
+                },
+            ]
+        }
+        response = self.client.post(
+            self.url,
+            json.dumps(payload),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.division.result_slips.count(), 1)
+        slip = self.division.result_slips.first()
+        self.assertEqual(slip.round, 2)
+        self.assertEqual(slip.winner, self.entrant2)
+
+    def test_post_same_winner_loser_returns_error(self):
+        self.client.login(username="owner", password="testpass123")
+        payload = {
+            "results": [
+                {
+                    "round": 1,
+                    "winner": self.entrant1.pk,
+                    "winner_score": 450,
+                    "loser": self.entrant1.pk,
+                    "loser_score": 380,
+                    "winner_started": True,
+                },
+            ]
+        }
+        response = self.client.post(
+            self.url,
+            json.dumps(payload),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        body = response.json()
+        self.assertIn("errors", body)
+        self.assertEqual(self.division.result_slips.count(), 0)
+
+    def test_post_missing_fields_returns_error(self):
+        self.client.login(username="owner", password="testpass123")
+        payload = {
+            "results": [
+                {
+                    "round": 1,
+                    "winner": self.entrant1.pk,
+                },
+            ]
+        }
+        response = self.client.post(
+            self.url,
+            json.dumps(payload),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        body = response.json()
+        self.assertIn("errors", body)
+        self.assertEqual(self.division.result_slips.count(), 0)
 
 
 class DivisionEntrantsEditViewTests(TestCase):
@@ -690,69 +787,3 @@ class DivisionEntrantsEditViewTests(TestCase):
         self.assertEqual(self.division.entrants.count(), 0)
 
 
-class ResultSlipUpdateViewTests(TestCase):
-    def setUp(self):
-        setUpTournament(self)
-        self.slip = ResultSlip.objects.create(
-            division=self.division, round=1, winner=self.entrant1,
-            winner_score=450, loser=self.entrant2, loser_score=380, winner_started=True,
-        )
-
-    def test_editor_can_edit(self):
-        self.client.login(username="owner", password="testpass123")
-        response = self.client.get(
-            reverse("resultslip_edit", kwargs={
-                "division_pk": self.division.pk, "pk": self.slip.pk,
-            })
-        )
-        self.assertEqual(response.status_code, 200)
-
-    def test_non_editor_forbidden(self):
-        self.client.login(username="other", password="testpass123")
-        response = self.client.get(
-            reverse("resultslip_edit", kwargs={
-                "division_pk": self.division.pk, "pk": self.slip.pk,
-            })
-        )
-        self.assertEqual(response.status_code, 403)
-
-    def test_update_result(self):
-        self.client.login(username="owner", password="testpass123")
-        response = self.client.post(
-            reverse("resultslip_edit", kwargs={
-                "division_pk": self.division.pk, "pk": self.slip.pk,
-            }),
-            {
-                "round": 1,
-                "winner": self.entrant1.pk,
-                "winner_score": 500,
-                "loser": self.entrant2.pk,
-                "loser_score": 400,
-                "winner_started": True,
-            },
-        )
-        self.assertRedirects(
-            response,
-            reverse("division_edit_results", kwargs={"pk": self.division.pk}),
-        )
-        self.slip.refresh_from_db()
-        self.assertEqual(self.slip.winner_score, 500)
-        self.assertEqual(self.slip.loser_score, 400)
-
-    def test_invalid_same_winner_loser(self):
-        self.client.login(username="owner", password="testpass123")
-        response = self.client.post(
-            reverse("resultslip_edit", kwargs={
-                "division_pk": self.division.pk, "pk": self.slip.pk,
-            }),
-            {
-                "round": 1,
-                "winner": self.entrant1.pk,
-                "winner_score": 450,
-                "loser": self.entrant1.pk,
-                "loser_score": 380,
-                "winner_started": True,
-            },
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Winner and loser must be different")
