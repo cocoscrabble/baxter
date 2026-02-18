@@ -11,15 +11,19 @@ from tournaments.pairing.round_pairing import RP, RoundPairing
 from tournaments.pairing.basic import (
     pair_koth,
     pair_qoth,
+    pair_random,
+    pair_random_no_repeats,
     pair_round_robin,
+    pair_double_round_robin,
     pair_charlottesville,
 )
 from tournaments.pairing.quads import (
     pair_clustered_quads,
     pair_distributed_quads,
     pair_evans_quads,
+    pair_sixes,
 )
-from tournaments.pairing.swiss import pair_swiss
+from tournaments.pairing.swiss import pair_swiss, pair_swiss_plus_random
 
 
 def can_pair(rp, status) -> bool:
@@ -91,9 +95,14 @@ STRATEGIES = {
     RP.QotH: pair_qoth,
     RP.Swiss: pair_swiss,
     RP.RoundRobin: pair_round_robin,
+    RP.DoubleRoundRobin: pair_double_round_robin,
+    RP.Random: pair_random,
+    RP.RandomNoRepeats: pair_random_no_repeats,
     RP.Quads_Clustered: pair_clustered_quads,
     RP.Quads_Distributed: pair_distributed_quads,
     RP.Quads_Evans: pair_evans_quads,
+    RP.Sixes: pair_sixes,
     RP.Charlottesville: pair_charlottesville,
+    RP.SwissPlusRandom: pair_swiss_plus_random,
 }
 STRATEGY_TYPES = list(STRATEGIES.keys())

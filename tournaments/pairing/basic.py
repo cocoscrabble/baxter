@@ -1,6 +1,13 @@
+import random
+
 import more_itertools
 
-from tournaments.pairing.base import Pairings, PairingData, standings_after_round
+from tournaments.pairing.base import (
+    Pairings,
+    PairingData,
+    pair_no_repeats_blossom,
+    standings_after_round,
+)
 from tournaments.pairing.round_pairing import RoundPairing
 
 
@@ -103,3 +110,42 @@ def pair_charlottesville(pd: PairingData, rp: RoundPairing) -> Pairings:
         p2 = rotated[i]
         pairings.add(seeding[p1], seeding[p2])
     return pairings
+
+
+# -----------------------------------------------------
+# Double Round Robin
+
+def pair_double_round_robin(pd: PairingData, rp: RoundPairing) -> Pairings:
+    """Double round robin: consecutive pairs of rounds share the same RR pairing."""
+    standings = standings_after_round(pd, rp.start_round - 1)
+    n = len(standings)
+    pairings = Pairings()
+    pos = (rp.round - rp.start_round) // 2
+    h1, h2 = _pair_rr(n, pos)
+    for i in range(n // 2):
+        pairings.add(standings[h1[i]], standings[h2[i]])
+    return pairings
+
+
+# -----------------------------------------------------
+# Random
+
+def pair_random(pd: PairingData, rp: RoundPairing) -> Pairings:
+    """Random pairing: shuffle standings, pair consecutively."""
+    standings = standings_after_round(pd, rp.start_round)
+    random.shuffle(standings)
+    pairings = Pairings()
+    for p1, p2 in more_itertools.chunked(standings, 2):
+        pairings.add(p1, p2)
+    return pairings
+
+
+# -----------------------------------------------------
+# Random No Repeats
+
+def pair_random_no_repeats(pd: PairingData, rp: RoundPairing) -> Pairings:
+    """Random pairing that minimizes repeat opponents via blossom matching."""
+    if rp.start_round < 1:
+        return pair_random(pd, rp)
+    players = standings_after_round(pd, rp.start_round)
+    return pair_no_repeats_blossom(players, pd.repeats)

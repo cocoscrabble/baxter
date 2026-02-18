@@ -9,14 +9,19 @@ class RP(StrEnum):
     QotH = "QotH"
     Swiss = "Swiss"
     RoundRobin = "RoundRobin"
+    DoubleRoundRobin = "DoubleRoundRobin"
+    Random = "Random"
+    RandomNoRepeats = "RandomNoRepeats"
     Quads_Clustered = "Quads_Clustered"
     Quads_Distributed = "Quads_Distributed"
     Quads_Evans = "Quads_Evans"
+    Sixes = "Sixes"
     Charlottesville = "Charlottesville"
+    SwissPlusRandom = "SwissPlusRandom"
 
     @staticmethod
     def is_round_robin(name) -> bool:
-        return name in (RP.RoundRobin, RP.Charlottesville)
+        return name in (RP.RoundRobin, RP.DoubleRoundRobin, RP.Charlottesville)
 
 
 ABBREV = {
@@ -24,9 +29,14 @@ ABBREV = {
     "QH": RP.QotH,
     "SW": RP.Swiss,
     "RR": RP.RoundRobin,
+    "DR": RP.DoubleRoundRobin,
+    "RA": RP.Random,
+    "RN": RP.RandomNoRepeats,
     "QC": RP.Quads_Clustered,
     "QD": RP.Quads_Distributed,
     "QE": RP.Quads_Evans,
+    "SX": RP.Sixes,
+    "SR": RP.SwissPlusRandom,
 }
 
 

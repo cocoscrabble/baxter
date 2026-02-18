@@ -1,7 +1,9 @@
+import random
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
 
+import networkx as nx
 from dataclasses_json import dataclass_json
 
 # ---------------------------------------------------------------------------
@@ -318,3 +320,35 @@ def standings_after_round(pd: PairingData, round: int) -> Standings:
         return seedings(pd)
     else:
         return results_after_round(pd, round).standings()
+
+
+def blossom(edges) -> list[tuple]:
+    # The nx implementation of blossom does not like negative weights.
+    m = min(x[2] for x in edges) if edges else 0
+    edges = [[v1, v2, w - m] for v1, v2, w in edges]
+    g = nx.Graph()
+    g.add_weighted_edges_from(edges)
+    return list(sorted(nx.max_weight_matching(g, maxcardinality=True)))
+
+
+def pair_no_repeats_blossom(players: Standings, repeats: Repeats) -> Pairings:
+    """Blossom matching to minimize repeat opponents with random tiebreaking."""
+    edges = []
+    names = {}
+    inames = {}
+    for i, player in enumerate(players):
+        names[player.name] = i
+        inames[i] = player.name
+    for p1 in players:
+        for p2 in players:
+            if p1.name < p2.name:
+                reps = repeats.get(Pairing(p1, p2))
+                weight = -(10 * reps + random.random())
+                v1 = names[p1.name]
+                v2 = names[p2.name]
+                edges.append([v1, v2, weight])
+    b = blossom(edges)
+    pairings = Pairings()
+    for v1, v2 in b:
+        pairings.add(Player(inames[v1]), Player(inames[v2]))
+    return pairings

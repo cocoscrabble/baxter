@@ -106,3 +106,53 @@ def pair_evans_quads(pd: PairingData, rp: RoundPairing) -> Pairings:
         quads[i % stride].append(new_standings[i])
     maybe_add_hex(quads, standings, last_quad)
     return pair_groups_at_position(quads, pos)
+
+
+# -------------------
+# Sixes (Evans-style groups of 6)
+
+def get_last_hex_position(standings) -> int:
+    n = len(standings)
+    leftover = n % 6
+    if leftover == 0:
+        return n
+    elif leftover == 2:
+        return n - 8
+    elif leftover == 4:
+        return n - 4
+    else:
+        raise ValueError("uneven field for sixes!")
+
+
+def maybe_add_quads(hexes, standings, last_hex) -> None:
+    diff = len(standings) - last_hex
+    if diff == 8:
+        hexes.append(standings[last_hex: last_hex + 4])
+        hexes.append(standings[last_hex + 4:])
+    elif diff == 4:
+        hexes.append(standings[last_hex: last_hex + 4])
+
+
+def pair_sixes(pd: PairingData, rp: RoundPairing) -> Pairings:
+    """Evans-style snake distribution into groups of 6."""
+    pos = rp.round - rp.start_round
+    standings = standings_after_round(pd, rp.start_round)
+    last_hex = get_last_hex_position(standings)
+    stride = last_hex // 6
+
+    # Generate new standings snake-style
+    new_standings = []
+    flip = False
+    for i in range(0, last_hex, stride):
+        chunk = standings[i: i + stride]
+        if flip:
+            chunk.reverse()
+        flip = not flip
+        new_standings.extend(chunk)
+
+    # Make hexes from the new standings
+    hexes = [[] for _ in range(stride)]
+    for i in range(last_hex):
+        hexes[i % stride].append(new_standings[i])
+    maybe_add_quads(hexes, standings, last_hex)
+    return pair_groups_at_position(hexes, pos)
