@@ -145,5 +145,16 @@ class ResultSlip(models.Model):
     def loser_name(self):
         return self.loser.player.name
 
+    def to_dict(self):
+        return {
+            "id": self.pk,
+            "round": self.round,
+            "winner": self.winner_id,
+            "winner_score": self.winner_score,
+            "loser": self.loser_id,
+            "loser_score": self.loser_score,
+            "winner_started": self.winner_started,
+        }
+
     def __str__(self):
         return f"R{self.round}: {self.winner_name} {self.winner_score}-{self.loser_score} {self.loser_name}"
