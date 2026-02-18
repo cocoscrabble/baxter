@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 
-{% block title %}Add Result - {{ division.name }} - Baxter{% endblock %}
+{% block title %}{% if editing %}Edit Result{% else %}Add Result{% endif %} - {{ division.name }} - Baxter{% endblock %}
 
 {% block content %}
-<h1>Add Result</h1>
+<h1>{% if editing %}Edit Result{% else %}Add Result{% endif %}</h1>
 <p>Division: {{ division.name }}</p>
 
 <form method="post">
@@ -12,5 +12,11 @@
     <button type="submit">Save</button>
 </form>
 
-<p><a href="{% url 'division_detail' division.pk %}">Cancel</a></p>
+<p>
+{% if editing %}
+<a href="{% url 'division_edit_results' division.pk %}">Cancel</a>
+{% else %}
+<a href="{% url 'division_detail' division.pk %}">Cancel</a>
+{% endif %}
+</p>
 {% endblock %}

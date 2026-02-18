@@ -11,7 +11,7 @@ from django.views.generic import (
 )
 
 from .forms import ResultSlipForm, RoundCountForm, RoundPairingFormSet, TournamentForm
-from .models import Division, DivisionSettings, Tournament
+from .models import Division, DivisionSettings, ResultSlip, Tournament
 from .pairing.base import PairingData, standings_after_round
 from .pairing.pair import pair
 
@@ -261,4 +261,44 @@ class ResultSlipCreateView(CreateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["division"] = self.get_division()
+        return context
+
+
+class DivisionEditResultsView(LoginRequiredMixin, CanEditDivisionMixin, ListView):
+    model = ResultSlip
+    template_name = "tournaments/division_edit_results.html"
+    context_object_name = "results"
+
+    def get_division(self):
+        return get_object_or_404(Division, pk=self.kwargs["pk"])
+
+    def get_queryset(self):
+        return ResultSlip.objects.filter(
+            division__pk=self.kwargs["pk"]
+        ).order_by("created_at")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["division"] = self.get_division()
+        return context
+
+
+class ResultSlipUpdateView(LoginRequiredMixin, CanEditDivisionMixin, UpdateView):
+    model = ResultSlip
+    form_class = ResultSlipForm
+    template_name = "tournaments/resultslip_form.html"
+
+    def get_division(self):
+        return get_object_or_404(Division, pk=self.kwargs["division_pk"])
+
+    def get_success_url(self):
+        return reverse(
+            "division_edit_results",
+            kwargs={"pk": self.kwargs["division_pk"]},
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["division"] = self.get_division()
+        context["editing"] = True
         return context
