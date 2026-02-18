@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Entrants - {{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
+
+{% block content %}
+<h1>Edit Entrants: {{ division.name }}</h1>
+<p>Tournament: <a href="{% url 'tournament_detail' division.tournament.pk %}">{{ division.tournament.name }}</a></p>
+<p><a href="{% url 'division_detail' division.pk %}">Back to division</a></p>
+
+<form method="get">
+    {{ count_form.count.label_tag }} {{ count_form.count }}
+    <button type="submit">Change</button>
+</form>
+
+<form method="post">
+    {% csrf_token %}
+    {{ formset.management_form }}
+    {% if formset.non_form_errors %}
+    <ul class="errorlist">
+        {% for error in formset.non_form_errors %}
+        <li>{{ error }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Player</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for form in formset %}
+            <tr>
+                <td>{{ form.number }}{{ form.number.value }}</td>
+                <td>{{ form.player }}{% if form.player.errors %}<br>{{ form.player.errors }}{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% if formset.forms %}
+    <button type="submit">Save</button>
+    {% endif %}
+</form>
+{% endblock %}

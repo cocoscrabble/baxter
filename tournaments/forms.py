@@ -2,9 +2,9 @@ from django import forms
 
 from users.models import User
 
-from django.forms import formset_factory
+from django.forms import BaseFormSet, formset_factory
 
-from .models import Division, Entrant, ResultSlip, Tournament
+from .models import Division, Entrant, Player, ResultSlip, Tournament
 from .pairing.pair import STRATEGY_TYPES
 
 
@@ -168,3 +168,29 @@ class RoundPairingForm(forms.Form):
 
 
 RoundPairingFormSet = formset_factory(RoundPairingForm, extra=0)
+
+
+class EntrantCountForm(forms.Form):
+    count = forms.IntegerField(min_value=1, label="Number of entrants")
+
+
+class EntrantForm(forms.Form):
+    number = forms.IntegerField(widget=forms.HiddenInput)
+    player = forms.ModelChoiceField(queryset=Player.objects.all(), required=True)
+
+
+class BaseEntrantFormSet(BaseFormSet):
+    def clean(self):
+        if any(self.errors):
+            return
+        players = []
+        for form in self.forms:
+            player = form.cleaned_data.get("player")
+            if player in players:
+                raise forms.ValidationError(
+                    f"{player.name} is listed more than once."
+                )
+            players.append(player)
+
+
+EntrantFormSet = formset_factory(EntrantForm, formset=BaseEntrantFormSet, extra=0)

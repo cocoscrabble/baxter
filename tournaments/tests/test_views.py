@@ -648,6 +648,141 @@ class DivisionEditResultsViewTests(TestCase):
         self.assertContains(response, edit_url)
 
 
+class DivisionEntrantsEditViewTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username="owner", password="testpass123")
+        self.other = User.objects.create_user(username="other", password="testpass123")
+        self.tournament = Tournament.objects.create(
+            name="Test Tournament",
+            location="Test Location",
+            start_date=date(2026, 3, 15),
+            owner=self.owner,
+        )
+        self.tournament.editors.add(self.owner)
+        self.division = Division.objects.create(name="Open", tournament=self.tournament)
+        self.player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
+        self.player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
+        self.player3 = Player.objects.create(name="Charlie", player_number="003", rating=1400)
+
+    def test_editor_can_access(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(
+            reverse("division_entrants_edit", kwargs={"pk": self.division.pk})
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_non_editor_forbidden(self):
+        self.client.login(username="other", password="testpass123")
+        response = self.client.get(
+            reverse("division_entrants_edit", kwargs={"pk": self.division.pk})
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_with_count_shows_n_rows(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(
+            reverse("division_entrants_edit", kwargs={"pk": self.division.pk})
+            + "?count=3"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context["formset"]), 3)
+
+    def test_get_with_existing_entrants(self):
+        Entrant.objects.create(division=self.division, player=self.player1, number=1)
+        Entrant.objects.create(division=self.division, player=self.player2, number=2)
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(
+            reverse("division_entrants_edit", kwargs={"pk": self.division.pk})
+        )
+        formset = response.context["formset"]
+        self.assertEqual(len(formset), 2)
+        self.assertEqual(formset[0].initial["player"], self.player1.pk)
+        self.assertEqual(formset[1].initial["player"], self.player2.pk)
+
+    def test_post_saves_entrants(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.post(
+            reverse("division_entrants_edit", kwargs={"pk": self.division.pk}),
+            {
+                "form-TOTAL_FORMS": "2",
+                "form-INITIAL_FORMS": "0",
+                "form-MIN_NUM_FORMS": "0",
+                "form-MAX_NUM_FORMS": "1000",
+                "form-0-number": "1",
+                "form-0-player": str(self.player1.pk),
+                "form-1-number": "2",
+                "form-1-player": str(self.player2.pk),
+            },
+        )
+        self.assertRedirects(
+            response,
+            reverse("division_detail", kwargs={"pk": self.division.pk}),
+        )
+        self.assertEqual(self.division.entrants.count(), 2)
+        self.assertEqual(self.division.entrants.first().player, self.player1)
+
+    def test_post_replaces_existing_entrants(self):
+        Entrant.objects.create(division=self.division, player=self.player1, number=1)
+        self.client.login(username="owner", password="testpass123")
+        self.client.post(
+            reverse("division_entrants_edit", kwargs={"pk": self.division.pk}),
+            {
+                "form-TOTAL_FORMS": "2",
+                "form-INITIAL_FORMS": "0",
+                "form-MIN_NUM_FORMS": "0",
+                "form-MAX_NUM_FORMS": "1000",
+                "form-0-number": "1",
+                "form-0-player": str(self.player2.pk),
+                "form-1-number": "2",
+                "form-1-player": str(self.player3.pk),
+            },
+        )
+        self.assertEqual(self.division.entrants.count(), 2)
+        self.assertEqual(self.division.entrants.get(number=1).player, self.player2)
+
+    def test_resize_preserves_existing(self):
+        Entrant.objects.create(division=self.division, player=self.player1, number=1)
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(
+            reverse("division_entrants_edit", kwargs={"pk": self.division.pk})
+            + "?count=3"
+        )
+        formset = response.context["formset"]
+        self.assertEqual(len(formset), 3)
+        self.assertEqual(formset[0].initial["player"], self.player1.pk)
+        self.assertEqual(formset[1].initial["number"], 2)
+        self.assertEqual(formset[1].initial["player"], "")
+        self.assertEqual(formset[2].initial["number"], 3)
+
+    def test_count_form_in_context(self):
+        Entrant.objects.create(division=self.division, player=self.player1, number=1)
+        Entrant.objects.create(division=self.division, player=self.player2, number=2)
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(
+            reverse("division_entrants_edit", kwargs={"pk": self.division.pk})
+        )
+        self.assertEqual(response.context["count_form"].initial["count"], 2)
+
+    def test_duplicate_player_rejected(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.post(
+            reverse("division_entrants_edit", kwargs={"pk": self.division.pk}),
+            {
+                "form-TOTAL_FORMS": "2",
+                "form-INITIAL_FORMS": "0",
+                "form-MIN_NUM_FORMS": "0",
+                "form-MAX_NUM_FORMS": "1000",
+                "form-0-number": "1",
+                "form-0-player": str(self.player1.pk),
+                "form-1-number": "2",
+                "form-1-player": str(self.player1.pk),
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Alice is listed more than once")
+        self.assertEqual(self.division.entrants.count(), 0)
+
+
 class ResultSlipUpdateViewTests(TestCase):
     def setUp(self):
         self.owner = User.objects.create_user(username="owner", password="testpass123")
