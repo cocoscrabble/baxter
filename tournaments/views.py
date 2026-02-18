@@ -21,6 +21,7 @@ from .forms import (
     RoundPairingFormSet,
     TournamentForm,
 )
+from .dto import ResultSlipDTO
 from .models import Division, DivisionSettings, Entrant, ResultSlip, Tournament
 from .pairing.base import PairingData, standings_after_round
 from .pairing.pair import pair
@@ -341,18 +342,7 @@ class DivisionEditResultsView(LoginRequiredMixin, CanEditDivisionMixin, View):
         results = division.result_slips.select_related(
             "winner", "loser"
         ).order_by("round", "pk")
-        results_json = [
-            {
-                "id": r.pk,
-                "round": r.round,
-                "winner": r.winner_id,
-                "winner_score": r.winner_score,
-                "loser": r.loser_id,
-                "loser_score": r.loser_score,
-                "winner_started": r.winner_started,
-            }
-            for r in results
-        ]
+        results_json = [r.to_dict() for r in results]
         entrants = division.entrants.select_related("player").order_by("number")
         entrants_json = [
             {"id": e.pk, "label": e.player.name}
@@ -372,47 +362,25 @@ class DivisionEditResultsView(LoginRequiredMixin, CanEditDivisionMixin, View):
             return JsonResponse({"errors": ["Invalid JSON."]}, status=400)
 
         rows = data if isinstance(data, list) else data.get("results", [])
-        entrant_ids = set(
-            division.entrants.values_list("pk", flat=True)
-        )
+        entrant_ids = set(division.entrants.values_list("pk", flat=True))
         errors = []
         validated = []
         for i, row in enumerate(rows):
-            row_errors = []
-            round_val = row.get("round")
-            winner = row.get("winner")
-            winner_score = row.get("winner_score")
-            loser = row.get("loser")
-            loser_score = row.get("loser_score")
-            winner_started = row.get("winner_started")
-
-            if not all(v is not None for v in [round_val, winner, winner_score, loser, loser_score, winner_started]):
-                row_errors.append(f"Row {i+1}: all fields are required.")
-            else:
-                if winner == loser:
-                    row_errors.append(f"Row {i+1}: winner and loser must be different.")
-                if winner not in entrant_ids:
-                    row_errors.append(f"Row {i+1}: invalid winner.")
-                if loser not in entrant_ids:
-                    row_errors.append(f"Row {i+1}: invalid loser.")
-
+            slip = ResultSlipDTO.from_json(row)
+            if slip is None:
+                errors.append(f"Row {i+1}: all fields are required.")
+                continue
+            row_errors = slip.validate(entrant_ids)
             if row_errors:
-                errors.extend(row_errors)
+                errors.extend(f"Row {i+1}: {e}" for e in row_errors)
             else:
-                validated.append({
-                    "round": int(round_val),
-                    "winner_id": int(winner),
-                    "winner_score": int(winner_score),
-                    "loser_id": int(loser),
-                    "loser_score": int(loser_score),
-                    "winner_started": bool(winner_started),
-                })
+                validated.append(slip)
 
         if errors:
             return JsonResponse({"errors": errors}, status=400)
 
         division.result_slips.all().delete()
-        for v in validated:
-            ResultSlip.objects.create(division=division, **v)
+        for slip in validated:
+            ResultSlip.objects.create(division=division, **slip.to_db_kwargs())
 
         return JsonResponse({"ok": True})
