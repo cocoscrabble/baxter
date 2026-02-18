@@ -3,11 +3,13 @@ from django.urls import path
 from .views import (
     DivisionAllResultsView,
     DivisionDetailView,
+    DivisionEditResultsView,
     DivisionEntrantsView,
     DivisionPairingsView,
     DivisionSettingsEditView,
     DivisionStandingsView,
     ResultSlipCreateView,
+    ResultSlipUpdateView,
     TournamentCreateView,
     TournamentDeleteView,
     TournamentDetailView,
@@ -29,4 +31,6 @@ urlpatterns = [
     path("division/<int:pk>/standings/<int:round>/", DivisionStandingsView.as_view(), name="division_standings_round"),
     path("division/<int:pk>/pairings/", DivisionPairingsView.as_view(), name="division_pairings"),
     path("division/<int:pk>/settings/", DivisionSettingsEditView.as_view(), name="division_settings"),
+    path("division/<int:pk>/edit-results/", DivisionEditResultsView.as_view(), name="division_edit_results"),
+    path("division/<int:division_pk>/edit-result/<int:pk>/", ResultSlipUpdateView.as_view(), name="resultslip_edit"),
 ]

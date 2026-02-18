@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Results - {{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
+
+{% block content %}
+<h1>Edit Results: {{ division.name }}</h1>
+<p><a href="{% url 'division_detail' division.pk %}">Back to division</a></p>
+
+{% if results %}
+<table>
+    <thead>
+        <tr>
+            <th>Round</th>
+            <th>Winner</th>
+            <th>Score</th>
+            <th>Loser</th>
+            <th>Started</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for slip in results %}
+        <tr>
+            <td>{{ slip.round }}</td>
+            <td>{{ slip.winner.player.name }}</td>
+            <td>{{ slip.winner_score }}-{{ slip.loser_score }}</td>
+            <td>{{ slip.loser.player.name }}</td>
+            <td>{% if slip.winner_started %}Winner{% else %}Loser{% endif %}</td>
+            <td><a href="{% url 'resultslip_edit' division.pk slip.pk %}">Edit</a></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No results yet.</p>
+{% endif %}
+{% endblock %}

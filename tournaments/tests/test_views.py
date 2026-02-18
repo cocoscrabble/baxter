@@ -593,3 +593,141 @@ class DivisionPairingsViewTests(TestCase):
             response,
             reverse("division_pairings", kwargs={"pk": self.division.pk}),
         )
+
+
+class DivisionEditResultsViewTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username="owner", password="testpass123")
+        self.other = User.objects.create_user(username="other", password="testpass123")
+        self.tournament = Tournament.objects.create(
+            name="Test Tournament",
+            location="Test Location",
+            start_date=date(2026, 3, 15),
+            owner=self.owner,
+        )
+        self.tournament.editors.add(self.owner)
+        self.division = Division.objects.create(name="Open", tournament=self.tournament)
+        self.player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
+        self.player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
+        self.entrant1 = Entrant.objects.create(
+            division=self.division, player=self.player1, number=1
+        )
+        self.entrant2 = Entrant.objects.create(
+            division=self.division, player=self.player2, number=2
+        )
+
+    def test_editor_can_access(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(
+            reverse("division_edit_results", kwargs={"pk": self.division.pk})
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_non_editor_forbidden(self):
+        self.client.login(username="other", password="testpass123")
+        response = self.client.get(
+            reverse("division_edit_results", kwargs={"pk": self.division.pk})
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_lists_results_with_edit_links(self):
+        slip = ResultSlip.objects.create(
+            division=self.division, round=1, winner=self.entrant1,
+            winner_score=450, loser=self.entrant2, loser_score=380, winner_started=True,
+        )
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(
+            reverse("division_edit_results", kwargs={"pk": self.division.pk})
+        )
+        self.assertContains(response, "Alice")
+        self.assertContains(response, "450-380")
+        edit_url = reverse(
+            "resultslip_edit",
+            kwargs={"division_pk": self.division.pk, "pk": slip.pk},
+        )
+        self.assertContains(response, edit_url)
+
+
+class ResultSlipUpdateViewTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username="owner", password="testpass123")
+        self.other = User.objects.create_user(username="other", password="testpass123")
+        self.tournament = Tournament.objects.create(
+            name="Test Tournament",
+            location="Test Location",
+            start_date=date(2026, 3, 15),
+            owner=self.owner,
+        )
+        self.tournament.editors.add(self.owner)
+        self.division = Division.objects.create(name="Open", tournament=self.tournament)
+        self.player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
+        self.player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
+        self.entrant1 = Entrant.objects.create(
+            division=self.division, player=self.player1, number=1
+        )
+        self.entrant2 = Entrant.objects.create(
+            division=self.division, player=self.player2, number=2
+        )
+        self.slip = ResultSlip.objects.create(
+            division=self.division, round=1, winner=self.entrant1,
+            winner_score=450, loser=self.entrant2, loser_score=380, winner_started=True,
+        )
+
+    def test_editor_can_edit(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(
+            reverse("resultslip_edit", kwargs={
+                "division_pk": self.division.pk, "pk": self.slip.pk,
+            })
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_non_editor_forbidden(self):
+        self.client.login(username="other", password="testpass123")
+        response = self.client.get(
+            reverse("resultslip_edit", kwargs={
+                "division_pk": self.division.pk, "pk": self.slip.pk,
+            })
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_result(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.post(
+            reverse("resultslip_edit", kwargs={
+                "division_pk": self.division.pk, "pk": self.slip.pk,
+            }),
+            {
+                "round": 1,
+                "winner": self.entrant1.pk,
+                "winner_score": 500,
+                "loser": self.entrant2.pk,
+                "loser_score": 400,
+                "winner_started": True,
+            },
+        )
+        self.assertRedirects(
+            response,
+            reverse("division_edit_results", kwargs={"pk": self.division.pk}),
+        )
+        self.slip.refresh_from_db()
+        self.assertEqual(self.slip.winner_score, 500)
+        self.assertEqual(self.slip.loser_score, 400)
+
+    def test_invalid_same_winner_loser(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.post(
+            reverse("resultslip_edit", kwargs={
+                "division_pk": self.division.pk, "pk": self.slip.pk,
+            }),
+            {
+                "round": 1,
+                "winner": self.entrant1.pk,
+                "winner_score": 450,
+                "loser": self.entrant1.pk,
+                "loser_score": 380,
+                "winner_started": True,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Winner and loser must be different")
