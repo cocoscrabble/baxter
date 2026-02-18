@@ -7,18 +7,33 @@ from tournaments.models import Division, DivisionSettings, Entrant, Player, Resu
 from users.models import User
 
 
+def setUpTournament(target):
+    """Common test setup: owner, other user, tournament, division, 2 players + entrants."""
+    target.owner = User.objects.create_user(username="owner", password="testpass123")
+    target.other = User.objects.create_user(username="other", password="testpass123")
+    target.tournament = Tournament.objects.create(
+        name="Test Tournament",
+        location="Test Location",
+        start_date=date(2026, 3, 15),
+        owner=target.owner,
+    )
+    target.tournament.editors.add(target.owner)
+    target.division = Division.objects.create(name="Open", tournament=target.tournament)
+    target.player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
+    target.player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
+    target.entrant1 = Entrant.objects.create(
+        division=target.division, player=target.player1, number=1
+    )
+    target.entrant2 = Entrant.objects.create(
+        division=target.division, player=target.player2, number=2
+    )
+
+
 class TournamentModelTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.owner = User.objects.create_user(username="owner", password="testpass123")
+        setUpTournament(cls)
         cls.editor = User.objects.create_user(username="editor", password="testpass123")
-        cls.other_user = User.objects.create_user(username="other", password="testpass123")
-        cls.tournament = Tournament.objects.create(
-            name="Test Tournament",
-            location="Test Location",
-            start_date=date(2026, 3, 15),
-            owner=cls.owner,
-        )
 
     def test_str_returns_name(self):
         self.assertEqual(str(self.tournament), "Test Tournament")
@@ -35,23 +50,16 @@ class TournamentModelTests(TestCase):
         self.assertTrue(self.tournament.can_edit(self.editor))
 
     def test_other_user_cannot_edit(self):
-        self.assertFalse(self.tournament.can_edit(self.other_user))
+        self.assertFalse(self.tournament.can_edit(self.other))
 
 
 class DivisionModelTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.owner = User.objects.create_user(username="owner", password="testpass123")
-        cls.tournament = Tournament.objects.create(
-            name="Test Tournament",
-            location="Test Location",
-            start_date=date(2026, 3, 15),
-            owner=cls.owner,
-        )
+        setUpTournament(cls)
 
     def test_str_returns_name(self):
-        division = Division.objects.create(name="Open", tournament=self.tournament)
-        self.assertEqual(str(division), "Open")
+        self.assertEqual(str(self.division), "Open")
 
     def test_max_round_with_no_results(self):
         division = Division.objects.create(name="Empty", tournament=self.tournament)
@@ -59,10 +67,8 @@ class DivisionModelTests(TestCase):
 
     def test_max_round_with_results(self):
         division = Division.objects.create(name="WithResults", tournament=self.tournament)
-        player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
-        player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
-        entrant1 = Entrant.objects.create(division=division, player=player1, number=1)
-        entrant2 = Entrant.objects.create(division=division, player=player2, number=2)
+        entrant1 = Entrant.objects.create(division=division, player=self.player1, number=1)
+        entrant2 = Entrant.objects.create(division=division, player=self.player2, number=2)
         for r in [1, 3, 2]:
             ResultSlip.objects.create(
                 division=division,
@@ -79,14 +85,8 @@ class DivisionModelTests(TestCase):
 class EntrantModelTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.owner = User.objects.create_user(username="owner", password="testpass123")
-        cls.tournament = Tournament.objects.create(
-            name="Test Tournament",
-            location="Test Location",
-            start_date=date(2026, 3, 15),
-            owner=cls.owner,
-        )
-        cls.division = Division.objects.create(name="Open", tournament=cls.tournament)
+        setUpTournament(cls)
+        cls.division.entrants.all().delete()
         cls.player = Player.objects.create(
             name="John Doe",
             player_number="12345",
@@ -110,22 +110,7 @@ class EntrantModelTests(TestCase):
 class ResultSlipModelTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.owner = User.objects.create_user(username="owner", password="testpass123")
-        cls.tournament = Tournament.objects.create(
-            name="Test Tournament",
-            location="Test Location",
-            start_date=date(2026, 3, 15),
-            owner=cls.owner,
-        )
-        cls.division = Division.objects.create(name="Open", tournament=cls.tournament)
-        cls.player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
-        cls.player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
-        cls.entrant1 = Entrant.objects.create(
-            division=cls.division, player=cls.player1, number=1
-        )
-        cls.entrant2 = Entrant.objects.create(
-            division=cls.division, player=cls.player2, number=2
-        )
+        setUpTournament(cls)
 
     def test_str_returns_formatted_result(self):
         slip = ResultSlip.objects.create(
@@ -156,16 +141,8 @@ class ResultSlipModelTests(TestCase):
 class DivisionSettingsModelTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.owner = User.objects.create_user(username="owner", password="testpass123")
-        cls.tournament = Tournament.objects.create(
-            name="Test Tournament",
-            location="Test Location",
-            start_date=date(2026, 3, 15),
-            owner=cls.owner,
-        )
-        cls.division = Division.objects.create(name="Open", tournament=cls.tournament)
+        setUpTournament(cls)
 
     def test_str(self):
         settings = DivisionSettings.objects.create(division=self.division)
         self.assertEqual(str(settings), "Settings for Open")
-
