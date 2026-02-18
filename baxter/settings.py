@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django_node_assets",
     "tournaments",
     "users",
 ]
@@ -123,6 +124,13 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
+STATICFILES_FINDERS = [
+    "django.contrib.staticfiles.finders.FileSystemFinder",
+    "django.contrib.staticfiles.finders.AppDirectoriesFinder",
+    "django_node_assets.finders.NodeModulesFinder",
+]
+NODE_PACKAGE_JSON = BASE_DIR / "package.json"
+NODE_MODULES_ROOT = BASE_DIR / "node_modules"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
