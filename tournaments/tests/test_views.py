@@ -7,16 +7,32 @@ from tournaments.models import Division, DivisionSettings, Entrant, Player, Resu
 from users.models import User
 
 
+def setUpTournament(target):
+    """Common test setup: owner, other user, tournament, division, 2 players + entrants."""
+    target.owner = User.objects.create_user(username="owner", password="testpass123")
+    target.other = User.objects.create_user(username="other", password="testpass123")
+    target.tournament = Tournament.objects.create(
+        name="Test Tournament",
+        location="Test Location",
+        start_date=date(2026, 3, 15),
+        owner=target.owner,
+    )
+    target.tournament.editors.add(target.owner)
+    target.division = Division.objects.create(name="Open", tournament=target.tournament)
+    target.player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
+    target.player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
+    target.entrant1 = Entrant.objects.create(
+        division=target.division, player=target.player1, number=1
+    )
+    target.entrant2 = Entrant.objects.create(
+        division=target.division, player=target.player2, number=2
+    )
+
+
 class TournamentDetailViewTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.owner = User.objects.create_user(username="owner", password="testpass123")
-        cls.tournament = Tournament.objects.create(
-            name="Test Tournament",
-            location="Test Location",
-            start_date=date(2026, 3, 15),
-            owner=cls.owner,
-        )
+        setUpTournament(cls)
 
     def test_shows_edit_link_for_owner(self):
         self.client.login(username="owner", password="testpass123")
@@ -37,10 +53,10 @@ class TournamentDetailViewTests(TestCase):
 class TournamentCreateViewTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.user = User.objects.create_user(username="testuser", password="testpass123")
+        setUpTournament(cls)
 
     def test_create_tournament(self):
-        self.client.login(username="testuser", password="testpass123")
+        self.client.login(username="owner", password="testpass123")
         response = self.client.post(
             reverse("tournament_create"),
             {
@@ -55,10 +71,10 @@ class TournamentCreateViewTests(TestCase):
         self.assertRedirects(
             response, reverse("tournament_detail", kwargs={"pk": tournament.pk})
         )
-        self.assertEqual(tournament.owner, self.user)
+        self.assertEqual(tournament.owner, self.owner)
 
     def test_create_tournament_with_divisions(self):
-        self.client.login(username="testuser", password="testpass123")
+        self.client.login(username="owner", password="testpass123")
         self.client.post(
             reverse("tournament_create"),
             {
@@ -75,16 +91,9 @@ class TournamentCreateViewTests(TestCase):
 
 class TournamentUpdateViewTests(TestCase):
     def setUp(self):
-        self.owner = User.objects.create_user(username="owner", password="testpass123")
+        setUpTournament(self)
         self.editor = User.objects.create_user(username="editor", password="testpass123")
-        self.other = User.objects.create_user(username="other", password="testpass123")
-        self.tournament = Tournament.objects.create(
-            name="Test Tournament",
-            location="Test Location",
-            start_date=date(2026, 3, 15),
-            owner=self.owner,
-        )
-        self.tournament.editors.add(self.owner, self.editor)
+        self.tournament.editors.add(self.editor)
 
     def test_owner_can_edit(self):
         self.client.login(username="owner", password="testpass123")
@@ -128,15 +137,9 @@ class TournamentUpdateViewTests(TestCase):
 
 class TournamentDeleteViewTests(TestCase):
     def setUp(self):
-        self.owner = User.objects.create_user(username="owner", password="testpass123")
+        setUpTournament(self)
         self.editor = User.objects.create_user(username="editor", password="testpass123")
-        self.tournament = Tournament.objects.create(
-            name="Test Tournament",
-            location="Test Location",
-            start_date=date(2026, 3, 15),
-            owner=self.owner,
-        )
-        self.tournament.editors.add(self.owner, self.editor)
+        self.tournament.editors.add(self.editor)
 
     def test_owner_can_delete(self):
         self.client.login(username="owner", password="testpass123")
@@ -165,22 +168,7 @@ class TournamentDeleteViewTests(TestCase):
 class ResultSlipCreateViewTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.owner = User.objects.create_user(username="owner", password="testpass123")
-        cls.tournament = Tournament.objects.create(
-            name="Test Tournament",
-            location="Test Location",
-            start_date=date(2026, 3, 15),
-            owner=cls.owner,
-        )
-        cls.division = Division.objects.create(name="Open", tournament=cls.tournament)
-        cls.player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
-        cls.player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
-        cls.entrant1 = Entrant.objects.create(
-            division=cls.division, player=cls.player1, number=1
-        )
-        cls.entrant2 = Entrant.objects.create(
-            division=cls.division, player=cls.player2, number=2
-        )
+        setUpTournament(cls)
 
     def test_create_result_slip(self):
         response = self.client.post(
@@ -230,22 +218,7 @@ class ResultSlipCreateViewTests(TestCase):
 class DivisionDetailLatestResultsTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.owner = User.objects.create_user(username="owner", password="testpass123")
-        cls.tournament = Tournament.objects.create(
-            name="Test Tournament",
-            location="Test Location",
-            start_date=date(2026, 3, 15),
-            owner=cls.owner,
-        )
-        cls.division = Division.objects.create(name="Open", tournament=cls.tournament)
-        cls.player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
-        cls.player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
-        cls.entrant1 = Entrant.objects.create(
-            division=cls.division, player=cls.player1, number=1
-        )
-        cls.entrant2 = Entrant.objects.create(
-            division=cls.division, player=cls.player2, number=2
-        )
+        setUpTournament(cls)
 
     def test_shows_only_max_round_results(self):
         ResultSlip.objects.create(
@@ -282,22 +255,7 @@ class DivisionDetailLatestResultsTests(TestCase):
 class DivisionStandingsViewTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.owner = User.objects.create_user(username="owner", password="testpass123")
-        cls.tournament = Tournament.objects.create(
-            name="Test Tournament",
-            location="Test Location",
-            start_date=date(2026, 3, 15),
-            owner=cls.owner,
-        )
-        cls.division = Division.objects.create(name="Open", tournament=cls.tournament)
-        cls.player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
-        cls.player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
-        cls.entrant1 = Entrant.objects.create(
-            division=cls.division, player=cls.player1, number=1
-        )
-        cls.entrant2 = Entrant.objects.create(
-            division=cls.division, player=cls.player2, number=2
-        )
+        setUpTournament(cls)
 
     def test_standings_with_results(self):
         ResultSlip.objects.create(
@@ -346,15 +304,7 @@ class DivisionStandingsViewTests(TestCase):
 
 class DivisionSettingsEditViewTests(TestCase):
     def setUp(self):
-        self.owner = User.objects.create_user(username="owner", password="testpass123")
-        self.tournament = Tournament.objects.create(
-            name="Test Tournament",
-            location="Test Location",
-            start_date=date(2026, 3, 15),
-            owner=self.owner,
-        )
-        self.tournament.editors.add(self.owner)
-        self.division = Division.objects.create(name="Open", tournament=self.tournament)
+        setUpTournament(self)
 
     def test_get_with_rounds_param(self):
         self.client.login(username="owner", password="testpass123")
@@ -392,7 +342,6 @@ class DivisionSettingsEditViewTests(TestCase):
         self.assertEqual(response.context["round_count_form"].initial["num_rounds"], 0)
 
     def test_non_editor_forbidden(self):
-        other = User.objects.create_user(username="other", password="testpass123")
         self.client.login(username="other", password="testpass123")
         response = self.client.get(
             reverse("division_settings", kwargs={"pk": self.division.pk})
@@ -502,22 +451,7 @@ class DivisionSettingsEditViewTests(TestCase):
 class DivisionPairingsViewTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.owner = User.objects.create_user(username="owner", password="testpass123")
-        cls.tournament = Tournament.objects.create(
-            name="Test Tournament",
-            location="Test Location",
-            start_date=date(2026, 3, 15),
-            owner=cls.owner,
-        )
-        cls.division = Division.objects.create(name="Open", tournament=cls.tournament)
-        cls.player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
-        cls.player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
-        cls.entrant1 = Entrant.objects.create(
-            division=cls.division, player=cls.player1, number=1
-        )
-        cls.entrant2 = Entrant.objects.create(
-            division=cls.division, player=cls.player2, number=2
-        )
+        setUpTournament(cls)
 
     def test_no_settings_shows_not_configured(self):
         response = self.client.get(
@@ -597,24 +531,7 @@ class DivisionPairingsViewTests(TestCase):
 
 class DivisionEditResultsViewTests(TestCase):
     def setUp(self):
-        self.owner = User.objects.create_user(username="owner", password="testpass123")
-        self.other = User.objects.create_user(username="other", password="testpass123")
-        self.tournament = Tournament.objects.create(
-            name="Test Tournament",
-            location="Test Location",
-            start_date=date(2026, 3, 15),
-            owner=self.owner,
-        )
-        self.tournament.editors.add(self.owner)
-        self.division = Division.objects.create(name="Open", tournament=self.tournament)
-        self.player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
-        self.player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
-        self.entrant1 = Entrant.objects.create(
-            division=self.division, player=self.player1, number=1
-        )
-        self.entrant2 = Entrant.objects.create(
-            division=self.division, player=self.player2, number=2
-        )
+        setUpTournament(self)
 
     def test_editor_can_access(self):
         self.client.login(username="owner", password="testpass123")
@@ -650,18 +567,8 @@ class DivisionEditResultsViewTests(TestCase):
 
 class DivisionEntrantsEditViewTests(TestCase):
     def setUp(self):
-        self.owner = User.objects.create_user(username="owner", password="testpass123")
-        self.other = User.objects.create_user(username="other", password="testpass123")
-        self.tournament = Tournament.objects.create(
-            name="Test Tournament",
-            location="Test Location",
-            start_date=date(2026, 3, 15),
-            owner=self.owner,
-        )
-        self.tournament.editors.add(self.owner)
-        self.division = Division.objects.create(name="Open", tournament=self.tournament)
-        self.player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
-        self.player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
+        setUpTournament(self)
+        self.division.entrants.all().delete()
         self.player3 = Player.objects.create(name="Charlie", player_number="003", rating=1400)
 
     def test_editor_can_access(self):
@@ -785,24 +692,7 @@ class DivisionEntrantsEditViewTests(TestCase):
 
 class ResultSlipUpdateViewTests(TestCase):
     def setUp(self):
-        self.owner = User.objects.create_user(username="owner", password="testpass123")
-        self.other = User.objects.create_user(username="other", password="testpass123")
-        self.tournament = Tournament.objects.create(
-            name="Test Tournament",
-            location="Test Location",
-            start_date=date(2026, 3, 15),
-            owner=self.owner,
-        )
-        self.tournament.editors.add(self.owner)
-        self.division = Division.objects.create(name="Open", tournament=self.tournament)
-        self.player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
-        self.player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
-        self.entrant1 = Entrant.objects.create(
-            division=self.division, player=self.player1, number=1
-        )
-        self.entrant2 = Entrant.objects.create(
-            division=self.division, player=self.player2, number=2
-        )
+        setUpTournament(self)
         self.slip = ResultSlip.objects.create(
             division=self.division, round=1, winner=self.entrant1,
             winner_score=450, loser=self.entrant2, loser_score=380, winner_started=True,

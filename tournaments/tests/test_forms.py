@@ -43,10 +43,31 @@ class CleanMultilineTextTests(TestCase):
         )
 
 
+def setUpTournament(target):
+    """Common test setup: owner, tournament, division, 2 players + entrants."""
+    target.owner = User.objects.create_user(username="owner", password="testpass123")
+    target.tournament = Tournament.objects.create(
+        name="Test Tournament",
+        location="Test Location",
+        start_date=date(2026, 3, 15),
+        owner=target.owner,
+    )
+    target.tournament.editors.add(target.owner)
+    target.division = Division.objects.create(name="Open", tournament=target.tournament)
+    target.player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
+    target.player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
+    target.entrant1 = Entrant.objects.create(
+        division=target.division, player=target.player1, number=1
+    )
+    target.entrant2 = Entrant.objects.create(
+        division=target.division, player=target.player2, number=2
+    )
+
+
 class TournamentFormTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.owner = User.objects.create_user(username="owner", password="testpass123")
+        setUpTournament(cls)
         cls.editor1 = User.objects.create_user(
             username="editor1", password="testpass123"
         )
@@ -229,31 +250,12 @@ class TournamentFormTests(TestCase):
 class ResultSlipFormTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.owner = User.objects.create_user(username="owner", password="testpass123")
-        cls.tournament = Tournament.objects.create(
-            name="Test Tournament",
-            location="Test Location",
-            start_date=date(2026, 3, 15),
-            owner=cls.owner,
-        )
-        cls.division = Division.objects.create(name="Open", tournament=cls.tournament)
+        setUpTournament(cls)
         cls.division2 = Division.objects.create(
             name="Novice", tournament=cls.tournament
         )
-        cls.player1 = Player.objects.create(
-            name="Alice", player_number="001", rating=1600
-        )
-        cls.player2 = Player.objects.create(
-            name="Bob", player_number="002", rating=1500
-        )
         cls.player3 = Player.objects.create(
             name="Charlie", player_number="003", rating=1400
-        )
-        cls.entrant1 = Entrant.objects.create(
-            division=cls.division, player=cls.player1, number=1
-        )
-        cls.entrant2 = Entrant.objects.create(
-            division=cls.division, player=cls.player2, number=2
         )
         cls.entrant3 = Entrant.objects.create(
             division=cls.division2, player=cls.player3, number=1
