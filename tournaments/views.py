@@ -1,7 +1,7 @@
 import json
 
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.views import View
@@ -39,9 +39,12 @@ class TournamentDetailView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
-        context["can_edit"] = (
-            user.is_authenticated and self.object.can_edit(user)
-        )
+        can_edit = user.is_authenticated and self.object.can_edit(user)
+        context["can_edit"] = can_edit
+        divisions = self.object.divisions.all()
+        if not can_edit:
+            divisions = divisions.filter(is_test=False)
+        context["divisions"] = divisions
         return context
 
 
@@ -77,6 +80,18 @@ class CanEditDivisionMixin(UserPassesTestMixin):
         return get_object_or_404(Division, pk=self.kwargs["pk"])
 
 
+class VisibleDivisionMixin:
+    """Mixin that raises 404 for test divisions when user is not an editor."""
+
+    def get_object(self, queryset=None):
+        obj = super().get_object(queryset)
+        if obj.is_test:
+            user = self.request.user
+            if not (user.is_authenticated and obj.tournament.can_edit(user)):
+                raise Http404
+        return obj
+
+
 class TournamentUpdateView(LoginRequiredMixin, CanEditTournamentMixin, UpdateView):
     model = Tournament
     form_class = TournamentForm
@@ -102,7 +117,7 @@ class TournamentDeleteView(LoginRequiredMixin, IsOwnerMixin, DeleteView):
     success_url = reverse_lazy("tournament_list")
 
 
-class DivisionDetailView(DetailView):
+class DivisionDetailView(VisibleDivisionMixin, DetailView):
     model = Division
     template_name = "tournaments/division_detail.html"
     context_object_name = "division"
@@ -127,19 +142,19 @@ class DivisionDetailView(DetailView):
         return context
 
 
-class DivisionAllResultsView(DetailView):
+class DivisionAllResultsView(VisibleDivisionMixin, DetailView):
     model = Division
     template_name = "tournaments/division_all_results.html"
     context_object_name = "division"
 
 
-class DivisionEntrantsView(DetailView):
+class DivisionEntrantsView(VisibleDivisionMixin, DetailView):
     model = Division
     template_name = "tournaments/division_entrants.html"
     context_object_name = "division"
 
 
-class DivisionStandingsView(DetailView):
+class DivisionStandingsView(VisibleDivisionMixin, DetailView):
     model = Division
     template_name = "tournaments/division_standings.html"
     context_object_name = "division"
@@ -156,7 +171,7 @@ class DivisionStandingsView(DetailView):
         return context
 
 
-class DivisionPairingsView(DetailView):
+class DivisionPairingsView(VisibleDivisionMixin, DetailView):
     model = Division
     template_name = "tournaments/division_pairings.html"
     context_object_name = "division"
@@ -309,7 +324,12 @@ class ResultSlipCreateView(CreateView):
     template_name = "tournaments/resultslip_form.html"
 
     def get_division(self):
-        return get_object_or_404(Division, pk=self.kwargs["pk"])
+        division = get_object_or_404(Division, pk=self.kwargs["pk"])
+        if division.is_test:
+            user = self.request.user
+            if not (user.is_authenticated and division.tournament.can_edit(user)):
+                raise Http404
+        return division
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
