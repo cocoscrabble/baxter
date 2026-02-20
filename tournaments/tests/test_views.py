@@ -1,7 +1,7 @@
 import json
 from datetime import date
 
-from django.test import TestCase
+from django.test import TestCase, tag
 from django.urls import reverse
 
 from tournaments.models import Division, DivisionSettings, Entrant, Player, ResultSlip, Tournament
@@ -30,6 +30,7 @@ def setUpTournament(target):
     )
 
 
+@tag("slow")
 class TournamentDetailViewTests(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -51,6 +52,7 @@ class TournamentDetailViewTests(TestCase):
         self.assertNotContains(response, edit_url)
 
 
+@tag("slow")
 class TournamentCreateViewTests(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -90,6 +92,7 @@ class TournamentCreateViewTests(TestCase):
         self.assertEqual(tournament.divisions.count(), 2)
 
 
+@tag("slow")
 class TournamentUpdateViewTests(TestCase):
     def setUp(self):
         setUpTournament(self)
@@ -136,6 +139,7 @@ class TournamentUpdateViewTests(TestCase):
         self.assertEqual(self.tournament.name, "Updated Tournament")
 
 
+@tag("slow")
 class TournamentDeleteViewTests(TestCase):
     def setUp(self):
         setUpTournament(self)
@@ -166,6 +170,7 @@ class TournamentDeleteViewTests(TestCase):
         self.assertFalse(Tournament.objects.filter(pk=self.tournament.pk).exists())
 
 
+@tag("slow")
 class ResultSlipCreateViewTests(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -216,6 +221,7 @@ class ResultSlipCreateViewTests(TestCase):
         self.assertContains(response, "Winner and loser must be different")
 
 
+@tag("slow")
 class DivisionDetailLatestResultsTests(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -253,6 +259,7 @@ class DivisionDetailLatestResultsTests(TestCase):
         self.assertNotContains(response, "Settings")
 
 
+@tag("slow")
 class DivisionStandingsViewTests(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -303,6 +310,7 @@ class DivisionStandingsViewTests(TestCase):
         )
 
 
+@tag("slow")
 class DivisionSettingsEditViewTests(TestCase):
     def setUp(self):
         setUpTournament(self)
@@ -449,6 +457,7 @@ class DivisionSettingsEditViewTests(TestCase):
         self.assertFalse(DivisionSettings.objects.filter(division=self.division).exists())
 
 
+@tag("slow")
 class DivisionPairingsViewTests(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -530,6 +539,7 @@ class DivisionPairingsViewTests(TestCase):
         )
 
 
+@tag("slow")
 class DivisionEditResultsViewTests(TestCase):
     def setUp(self):
         setUpTournament(self)
@@ -662,6 +672,7 @@ class DivisionEditResultsViewTests(TestCase):
         self.assertEqual(self.division.result_slips.count(), 0)
 
 
+@tag("slow")
 class DivisionEntrantsEditViewTests(TestCase):
     def setUp(self):
         setUpTournament(self)
