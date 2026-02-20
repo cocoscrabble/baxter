@@ -126,3 +126,14 @@ dd {
     margin-left: 0;
     margin-bottom: 5px;
 }
+
+.test-badge {
+    display: inline-block;
+    background-color: #ffc107;
+    color: #333;
+    font-size: 0.75em;
+    font-weight: bold;
+    padding: 1px 6px;
+    border-radius: 3px;
+    vertical-align: middle;
+}

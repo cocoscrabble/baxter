@@ -86,10 +86,29 @@ class TournamentCreateViewTests(TestCase):
                 "start_date": "2026-05-01",
                 "editor_usernames": "",
                 "division_names": "Open\nNovice",
+                "test_division_names": "",
             },
         )
         tournament = Tournament.objects.get(name="New Tournament")
         self.assertEqual(tournament.divisions.count(), 2)
+
+    def test_create_tournament_with_test_divisions(self):
+        self.client.login(username="owner", password="testpass123")
+        self.client.post(
+            reverse("tournament_create"),
+            {
+                "name": "New Tournament",
+                "location": "New Location",
+                "start_date": "2026-05-01",
+                "editor_usernames": "",
+                "division_names": "Open",
+                "test_division_names": "Sandbox",
+            },
+        )
+        tournament = Tournament.objects.get(name="New Tournament")
+        self.assertEqual(tournament.divisions.count(), 2)
+        self.assertTrue(tournament.divisions.filter(name="Open", is_test=False).exists())
+        self.assertTrue(tournament.divisions.filter(name="Sandbox", is_test=True).exists())
 
 
 @tag("slow")

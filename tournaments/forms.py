@@ -41,6 +41,13 @@ class TournamentForm(forms.ModelForm):
         help_text="Enter division names, one per line.",
     )
 
+    test_division_names = forms.CharField(
+        label="Test divisions",
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3}),
+        help_text="Test divisions are only visible to editors.",
+    )
+
     class Meta:
         model = Tournament
         fields = ["name", "location", "start_date"]
@@ -58,8 +65,16 @@ class TournamentForm(forms.ModelForm):
             self.fields["editor_usernames"].initial = "\n".join(editor_names)
 
             # Populate division_names for existing tournament
-            divisions = self.instance.divisions.values_list("name", flat=True)
+            divisions = self.instance.divisions.filter(
+                is_test=False
+            ).values_list("name", flat=True)
             self.fields["division_names"].initial = "\n".join(divisions)
+
+            # Populate test_division_names for existing tournament
+            test_divisions = self.instance.divisions.filter(
+                is_test=True
+            ).values_list("name", flat=True)
+            self.fields["test_division_names"].initial = "\n".join(test_divisions)
 
     def clean_editor_usernames(self):
         """Validate that all usernames exist."""
@@ -85,6 +100,10 @@ class TournamentForm(forms.ModelForm):
         """Parse division names."""
         return clean_multiline_text(self.cleaned_data.get("division_names", ""))
 
+    def clean_test_division_names(self):
+        """Parse test division names."""
+        return clean_multiline_text(self.cleaned_data.get("test_division_names", ""))
+
     def save(self, commit=True):
         tournament = super().save(commit=commit)
         if commit:
@@ -97,16 +116,30 @@ class TournamentForm(forms.ModelForm):
 
             # Handle divisions
             division_names = self.cleaned_data.get("division_names", [])
-            existing_divisions = {d.name: d for d in tournament.divisions.all()}
+            test_division_names = self.cleaned_data.get("test_division_names", [])
+            existing = {
+                (d.name, d.is_test): d for d in tournament.divisions.all()
+            }
 
-            # Add new divisions
+            # Add new regular divisions
             for name in division_names:
-                if name not in existing_divisions:
-                    Division.objects.create(tournament=tournament, name=name)
+                if (name, False) not in existing:
+                    Division.objects.create(
+                        tournament=tournament, name=name, is_test=False
+                    )
 
-            # Remove divisions not in the list
-            for name, division in existing_divisions.items():
-                if name not in division_names:
+            # Add new test divisions
+            for name in test_division_names:
+                if (name, True) not in existing:
+                    Division.objects.create(
+                        tournament=tournament, name=name, is_test=True
+                    )
+
+            # Remove divisions not in either list
+            for (name, is_test), division in existing.items():
+                if is_test and name not in test_division_names:
+                    division.delete()
+                elif not is_test and name not in division_names:
                     division.delete()
 
         return tournament
