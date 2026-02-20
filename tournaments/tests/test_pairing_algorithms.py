@@ -1,0 +1,342 @@
+from unittest import TestCase
+
+from tournaments.pairing.base import (
+    EntrantData,
+    PairingData,
+    PlayerData,
+    Repeats,
+)
+from tournaments.pairing.round_pairing import RP, RoundPairing
+from tournaments.pairing.basic import (
+    pair_koth,
+    pair_qoth,
+    pair_round_robin,
+    pair_double_round_robin,
+    pair_charlottesville,
+)
+from tournaments.pairing.quads import (
+    pair_clustered_quads,
+    pair_distributed_quads,
+    pair_evans_quads,
+    pair_sixes,
+)
+from tournaments.pairing.swiss import pair_swiss
+
+
+def make_pd(standings_str):
+    """Create PairingData where seedings (round 0) match the letter order.
+
+    Each letter becomes a player whose rating ensures the seeding order
+    matches the string order: first letter = highest rated, etc.
+    """
+    n = len(standings_str)
+    entrants = [
+        EntrantData(PlayerData(name=ch, rating=(n - i) * 100))
+        for i, ch in enumerate(standings_str)
+    ]
+    return PairingData(result_slips=[], entrants=entrants, repeats=Repeats())
+
+
+def pairings_str(pairings):
+    """Flatten pairings into a string: 'AB' means first pair is A vs B, etc."""
+    return "".join(p.first.name + p.second.name for p in pairings)
+
+
+class PairingTestCase(TestCase):
+    """Base class providing assert_pairings helper.
+
+    assert_pairings(pair_fn, standings, expected, ...) creates a field of
+    players whose seeding order matches `standings` (one letter per player),
+    runs `pair_fn`, and checks that the resulting pairing sequence matches
+    `expected` (read in consecutive pairs: "ABCD" means A-B, C-D).
+    """
+
+    def assert_pairings(
+        self,
+        pair_fn,
+        standings,
+        expected,
+        round=1,
+        start_round=0,
+        pairing=RP.KotH,
+    ):
+        standings = standings.replace(" ", "")
+        expected = expected.replace(" ", "")
+        pd = make_pd(standings)
+        rp = RoundPairing(round=round, start_round=start_round, pairing=pairing)
+        pairings = pair_fn(pd, rp)
+        self.assertEqual(pairings_str(pairings), expected)
+
+
+# ── KotH ────────────────────────────────────────────────
+
+
+class KotHTests(PairingTestCase):
+    """KotH pairs consecutively: 1v2, 3v4, ..."""
+
+    def test_4_players(self):
+        self.assert_pairings(pair_koth, "ABCD", "ABCD")
+
+    def test_6_players(self):
+        self.assert_pairings(pair_koth, "ABCDEF", "ABCDEF")
+
+    def test_8_players(self):
+        self.assert_pairings(pair_koth, "ABCDEFGH", "ABCDEFGH")
+
+
+# ── QotH ────────────────────────────────────────────────
+
+
+class QotHTests(PairingTestCase):
+    """QotH cross-pairs in groups of 4: 1v3, 2v4.
+    When field % 4 == 2 the last 6 are paired 1-4, 2-5, 3-6.
+    """
+
+    def test_8_players(self):
+        # Two groups of 4: (A,C)(B,D) | (E,G)(F,H)
+        self.assert_pairings(pair_qoth, "ABCD EFGH", "ACBD EGFH")
+
+    def test_12_players(self):
+        # Three groups of 4
+        self.assert_pairings(pair_qoth, "ABCD EFGH IJKL", "ACBD EGFH IKJL")
+
+    def test_6_players(self):
+        # 6 % 4 == 2: last 6 paired as 1-4, 2-5, 3-6
+        self.assert_pairings(pair_qoth, "ABCDEF", "ADBECF")
+
+    def test_10_players(self):
+        # 10 % 4 == 2: first group of 4 cross-paired, last 6 as 1-4, 2-5, 3-6
+        self.assert_pairings(pair_qoth, "ABCD EFGHIJ", "ACBD EHFIGJ")
+
+
+# ── Round Robin ─────────────────────────────────────────
+
+
+class RoundRobinTests(PairingTestCase):
+    """Round robin for N players over N-1 rounds.
+
+    Uses the circle method: player 0 stays fixed, others rotate.
+    start_round=1 means standings come from seedings (round 0).
+    """
+
+    def _rr(self, standings, expected, round):
+        self.assert_pairings(
+            pair_round_robin,
+            standings,
+            expected,
+            round=round,
+            start_round=1,
+            pairing=RP.RoundRobin,
+        )
+
+    def test_4_players(self):
+        self._rr("ABCD", "ADBC", round=1)
+        self._rr("ABCD", "ACDB", round=2)
+        self._rr("ABCD", "ABCD", round=3)
+
+    def test_6_players(self):
+        self._rr("ABCDEF", "AFBECD", round=1)
+        self._rr("ABCDEF", "AEFDBC", round=2)
+        self._rr("ABCDEF", "ADECFB", round=3)
+        self._rr("ABCDEF", "ACDBEF", round=4)
+        self._rr("ABCDEF", "ABCFDE", round=5)
+
+
+# ── Double Round Robin ──────────────────────────────────
+
+
+class DoubleRoundRobinTests(PairingTestCase):
+    """Double round robin: consecutive pairs of rounds share the same pairing."""
+
+    def _drr(self, standings, expected, round):
+        self.assert_pairings(
+            pair_double_round_robin,
+            standings,
+            expected,
+            round=round,
+            start_round=1,
+            pairing=RP.DoubleRoundRobin,
+        )
+
+    def test_4_players(self):
+        # repeat each RR pairing twice
+        self._drr("ABCD", "ADBC", round=1)
+        self._drr("ABCD", "ADBC", round=2)
+        self._drr("ABCD", "ACDB", round=3)
+        self._drr("ABCD", "ACDB", round=4)
+        self._drr("ABCD", "ABCD", round=5)
+        self._drr("ABCD", "ABCD", round=6)
+
+
+# ── Charlottesville ─────────────────────────────────────
+
+
+class CharlottesvilleTests(PairingTestCase):
+    """Charlottesville: snake split into 2 groups, cross-group round robin.
+
+    For 8 players ABCDEFGH:
+      Group 1 (indices 1,3,5,7): B, D, F, H
+      Group 2 (indices 0,2,4,6): A, C, E, G  →  reversed: G, E, C, A
+    Group 2 is rotated each round and paired against group 1.
+    """
+
+    def _cv(self, standings, expected, round):
+        self.assert_pairings(
+            pair_charlottesville,
+            standings,
+            expected,
+            round=round,
+            start_round=1,
+            pairing=RP.Charlottesville,
+        )
+
+    def test_8_players(self):
+        self._cv("ABCDEFGH", "BGDEFCHA", round=1)
+        self._cv("ABCDEFGH", "BEDCFAHG", round=2)
+        self._cv("ABCDEFGH", "BCDAFGHE", round=3)
+        self._cv("ABCDEFGH", "BADGFEHC", round=4)
+
+
+# ── Clustered Quads ─────────────────────────────────────
+
+
+class ClusteredQuadsTests(PairingTestCase):
+    """Clustered quads: groups of 4 from consecutive standings.
+
+    For 8 players: quads [A,B,C,D] and [E,F,G,H].
+    """
+
+    def _cq(self, standings, expected, pos):
+        self.assert_pairings(
+            pair_clustered_quads,
+            standings,
+            expected,
+            round=pos,
+            start_round=0,
+            pairing=RP.Quads_Clustered,
+        )
+
+    def test_8_players(self):
+        self._cq("ABCD EFGH", "ADBC EHFG", pos=1)
+        self._cq("ABCD EFGH", "ACBD EGFH", pos=2)
+        self._cq("ABCD EFGH", "ABCD EFGH", pos=3)
+
+    def test_10_players_with_hex(self):
+        # 10 % 4 == 2: quad [A,B,C,D], hex [E,F,G,H,I,J]
+        self._cq("ABCD EFGHIJ", "ADBC EFGHIJ", pos=1)
+        self._cq("ABCD EFGHIJ", "ACBD EGHIFJ", pos=2)
+        self._cq("ABCD EFGHIJ", "ABCD EHFIGJ", pos=3)
+
+
+# ── Distributed Quads ───────────────────────────────────
+
+
+class DistributedQuadsTests(PairingTestCase):
+    """Distributed quads: interleave standings into groups.
+
+    For 8 players with stride=2: quads [A,C,E,G] and [B,D,F,H].
+    """
+
+    def _dq(self, standings, expected, pos):
+        self.assert_pairings(
+            pair_distributed_quads,
+            standings,
+            expected,
+            round=pos,
+            start_round=0,
+            pairing=RP.Quads_Distributed,
+        )
+
+    def test_8_players(self):
+        self._dq("ABCDEFGH", "AGCEBHDF", pos=1)
+        self._dq("ABCDEFGH", "AECGBFDH", pos=2)
+        self._dq("ABCDEFGH", "ACEGBDFH", pos=3)
+
+
+# ── Evans Quads ─────────────────────────────────────────
+
+
+class EvansQuadsTests(PairingTestCase):
+    """Evans quads: snake distribution to equalize opponent strength.
+
+    For 8 players with stride=2:
+      Snake: [A,B] [D,C] [E,F] [H,G]
+      Quads: [A,D,E,H] and [B,C,F,G]
+    """
+
+    def _eq(self, standings, expected, pos):
+        self.assert_pairings(
+            pair_evans_quads,
+            standings,
+            expected,
+            round=pos,
+            start_round=0,
+            pairing=RP.Quads_Evans,
+        )
+
+    def test_8_players(self):
+        self._eq("ABCDEFGH", "AHDEBGCF", pos=1)
+        self._eq("ABCDEFGH", "AEDHBFCG", pos=2)
+        self._eq("ABCDEFGH", "ADEHBCFG", pos=3)
+
+
+# ── Sixes ───────────────────────────────────────────────
+
+
+class SixesTests(PairingTestCase):
+    """Sixes: Evans-style snake distribution into groups of 6.
+
+    For 12 players with stride=2:
+      Snake: [A,B] [D,C] [E,F] [H,G] [I,J] [L,K]
+      Hexes: [A,D,E,H,I,L] and [B,C,F,G,J,K]
+    """
+
+    def _sx(self, standings, expected, pos):
+        self.assert_pairings(
+            pair_sixes,
+            standings,
+            expected,
+            round=pos,
+            start_round=0,
+            pairing=RP.Sixes,
+        )
+
+    def test_12_players(self):
+        self._sx("ABCDEF GHIJKL", "ADEHILBCFGJK", pos=1)
+        self._sx("ABCDEFGHIJKL", "AEHIDLBFGJCK", pos=2)
+        self._sx("ABCDEFGHIJKL", "AHDIELBGCJFK", pos=3)
+
+    def test_10_players_with_quad(self):
+        # 10 % 6 == 4: 1 hex [A,B,C,D,E,F], 1 quad [G,H,I,J]
+        self._sx("ABCDEFGHIJ", "ABCDEFGJHI", pos=1)
+        self._sx("ABCDEFGHIJ", "ACDEBFGIHJ", pos=2)
+        self._sx("ABCDEFGHIJ", "ADBECFGHIJ", pos=3)
+
+
+# ── Swiss Initial ───────────────────────────────────────
+
+
+class SwissInitialTests(PairingTestCase):
+    """Swiss initial pairing: top half vs bottom half."""
+
+    def _sw(self, standings, expected):
+        self.assert_pairings(
+            pair_swiss,
+            standings,
+            expected,
+            round=1,
+            start_round=0,
+            pairing=RP.Swiss,
+        )
+
+    def test_4_players(self):
+        # A-C, B-D
+        self._sw("ABCD", "ACBD")
+
+    def test_6_players(self):
+        # A-D, B-E, C-F
+        self._sw("ABCDEF", "ADBECF")
+
+    def test_8_players(self):
+        # A-E, B-F, C-G, D-H
+        self._sw("ABCDEFGH", "AEBFCGDH")
