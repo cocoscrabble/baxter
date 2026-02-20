@@ -27,7 +27,7 @@
     <dt>Divisions</dt>
     <dd>
         {% for division in divisions %}
-            <a href="{% url 'division_detail' division.pk %}">{{ division.name }}</a>{% if not forloop.last %}, {% endif %}
+            <div><a href="{% url 'division_detail' division.pk %}">{{ division.name }}</a>{% if division.is_test %} <span class="test-badge">test</span>{% endif %}</div>
         {% empty %}
             None
         {% endfor %}
