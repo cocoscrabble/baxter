@@ -45,6 +45,7 @@ class Division(models.Model):
         on_delete=models.CASCADE,
         related_name="divisions",
     )
+    is_test = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["name"]

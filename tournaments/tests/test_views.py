@@ -673,6 +673,49 @@ class DivisionEditResultsViewTests(TestCase):
 
 
 @tag("slow")
+class TestDivisionVisibilityTests(TestCase):
+    def setUp(self):
+        setUpTournament(self)
+        self.test_division = Division.objects.create(
+            name="Test Div", tournament=self.tournament, is_test=True
+        )
+
+    def test_test_division_hidden_on_tournament_detail_for_non_editor(self):
+        response = self.client.get(
+            reverse("tournament_detail", kwargs={"pk": self.tournament.pk})
+        )
+        self.assertContains(response, "Open")
+        self.assertNotContains(response, "Test Div")
+
+    def test_test_division_shown_on_tournament_detail_for_editor(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(
+            reverse("tournament_detail", kwargs={"pk": self.tournament.pk})
+        )
+        self.assertContains(response, "Open")
+        self.assertContains(response, "Test Div")
+
+    def test_test_division_detail_404_for_non_editor(self):
+        response = self.client.get(
+            reverse("division_detail", kwargs={"pk": self.test_division.pk})
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_test_division_detail_works_for_editor(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(
+            reverse("division_detail", kwargs={"pk": self.test_division.pk})
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_regular_division_visible_to_non_editor(self):
+        response = self.client.get(
+            reverse("division_detail", kwargs={"pk": self.division.pk})
+        )
+        self.assertEqual(response.status_code, 200)
+
+
+@tag("slow")
 class DivisionEntrantsEditViewTests(TestCase):
     def setUp(self):
         setUpTournament(self)
