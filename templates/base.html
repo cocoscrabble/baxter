@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Baxter{% endblock %}</title>
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    {% block extra_head %}{% endblock %}
 </head>
 <body>
     <nav>
@@ -28,5 +29,8 @@
     {% endif %}
 
     {% block content %}{% endblock %}
+
+    <script type="module" src="{% static 'js/datastar.js' %}"></script>
+    {% block extra_js %}{% endblock %}
 </body>
 </html>

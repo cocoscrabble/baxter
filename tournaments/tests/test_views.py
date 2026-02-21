@@ -737,6 +737,59 @@ class TestDivisionVisibilityTests(TestCase):
 
 
 @tag("slow")
+class SimulateMatchViewTests(TestCase):
+    def setUp(self):
+        setUpTournament(self)
+        self.test_division = Division.objects.create(
+            name="Test Div", tournament=self.tournament, is_test=True
+        )
+        self.test_entrant1 = Entrant.objects.create(
+            division=self.test_division, player=self.player1, number=1
+        )
+        self.test_entrant2 = Entrant.objects.create(
+            division=self.test_division, player=self.player2, number=2
+        )
+        self.url = reverse("simulate_match", kwargs={"pk": self.test_division.pk})
+
+    def test_creates_result_slip(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.post(
+            self.url,
+            json.dumps({"round": 1, "first": "Alice", "second": "Bob"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["ok"])
+        self.assertEqual(self.test_division.result_slips.count(), 1)
+        slip = self.test_division.result_slips.first()
+        self.assertEqual(slip.round, 1)
+        self.assertIn(slip.winner, [self.test_entrant1, self.test_entrant2])
+        self.assertIn(slip.loser, [self.test_entrant1, self.test_entrant2])
+        self.assertNotEqual(slip.winner, slip.loser)
+
+    def test_forbidden_for_non_test_division(self):
+        self.client.login(username="owner", password="testpass123")
+        url = reverse("simulate_match", kwargs={"pk": self.division.pk})
+        response = self.client.post(
+            url,
+            json.dumps({"round": 1, "first": "Alice", "second": "Bob"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(self.division.result_slips.count(), 0)
+
+    def test_forbidden_for_non_editor(self):
+        self.client.login(username="other", password="testpass123")
+        response = self.client.post(
+            self.url,
+            json.dumps({"round": 1, "first": "Alice", "second": "Bob"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(self.test_division.result_slips.count(), 0)
+
+
+@tag("slow")
 class DivisionEntrantsEditViewTests(TestCase):
     def setUp(self):
         setUpTournament(self)
