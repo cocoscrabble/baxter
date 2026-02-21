@@ -1,4 +1,5 @@
 import json
+import random
 
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.http import Http404, JsonResponse
@@ -418,4 +419,64 @@ class DivisionEditResultsView(LoginRequiredMixin, CanEditDivisionMixin, View):
         for slip in validated:
             ResultSlip.objects.create(division=division, **slip.to_db_kwargs())
 
+        return JsonResponse({"ok": True})
+
+
+class SimulateMatchView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    """Simulate a single match for a test division and create a result slip."""
+
+    def get_division(self):
+        return get_object_or_404(Division, pk=self.kwargs["pk"])
+
+    def post(self, request, pk):
+        division = self.get_division()
+        if not division.is_test:
+            return JsonResponse(
+                {"error": "Simulation is only available for test divisions."},
+                status=403,
+            )
+
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "Invalid JSON."}, status=400)
+
+        round_num = data.get("round")
+        first_name = data.get("first")
+        second_name = data.get("second")
+        if not all([round_num, first_name, second_name]):
+            return JsonResponse({"error": "Missing required fields."}, status=400)
+
+        entrants = {
+            e.player.name: e
+            for e in division.entrants.select_related("player")
+        }
+        first_entrant = entrants.get(first_name)
+        second_entrant = entrants.get(second_name)
+        if not first_entrant or not second_entrant:
+            return JsonResponse({"error": "Entrant not found."}, status=400)
+
+        r1 = first_entrant.player.rating
+        r2 = second_entrant.player.rating
+        first_wins = random.random() < r1 / (r1 + r2)
+
+        loser_score = random.randint(200, 450)
+        winner_score = random.randint(loser_score, 600)
+
+        if first_wins:
+            winner, loser = first_entrant, second_entrant
+            winner_started = True
+        else:
+            winner, loser = second_entrant, first_entrant
+            winner_started = False
+
+        ResultSlip.objects.create(
+            division=division,
+            round=round_num,
+            winner=winner,
+            winner_score=winner_score,
+            loser=loser,
+            loser_score=loser_score,
+            winner_started=winner_started,
+        )
         return JsonResponse({"ok": True})

@@ -39,6 +39,38 @@
     </tbody>
 </table>
 {% endfor %}
+
+{% if division.is_test %}
+<script>
+document.querySelectorAll('.simulate-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var button = this;
+        button.disabled = true;
+        fetch("{% url 'simulate_match' division.pk %}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": "{{ csrf_token }}"
+            },
+            body: JSON.stringify({
+                round: parseInt(button.dataset.round),
+                first: button.dataset.first,
+                second: button.dataset.second
+            })
+        }).then(function(response) {
+            if (response.ok) {
+                location.reload();
+            } else {
+                response.json().then(function(data) {
+                    alert(data.error || "Simulation failed.");
+                    button.disabled = false;
+                });
+            }
+        });
+    });
+});
+</script>
+{% endif %}
 {% endif %}
 
 {% endblock %}
