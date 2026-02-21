@@ -15,6 +15,7 @@ from django.views.generic import (
 )
 
 from .datastar_utils import fragment_response, is_datastar
+from datastar_py.django import read_signals
 from .forms import (
     ResultSlipForm,
     RoundCountForm,
@@ -182,6 +183,42 @@ class DivisionStandingsView(VisibleDivisionMixin, DetailView):
         return self.render_to_response(context)
 
 
+def _build_pairings_context(division):
+    """Build pairings context dict for a division. Used by both pairings and simulate views."""
+    context = {"division": division}
+    try:
+        settings = division.settings
+        if not settings.round_pairings:
+            context["pairings_message"] = "No round pairings configured."
+        else:
+            pd = PairingData.for_division(division)
+            pairings = pair(pd, settings)
+            if pairings:
+                played = {}
+                for slip in pd.result_slips:
+                    key = (slip.round, frozenset({slip.winner_name, slip.loser_name}))
+                    played[key] = slip
+                annotated = []
+                for round_num, round_pairings in pairings:
+                    round_annotated = []
+                    for p in round_pairings:
+                        key = (round_num, frozenset({p.first.name, p.second.name}))
+                        slip = played.get(key)
+                        if slip:
+                            scores = {slip.winner_name: slip.winner_score, slip.loser_name: slip.loser_score}
+                            result = f"{scores[p.first.name]} - {scores[p.second.name]}"
+                        else:
+                            result = ""
+                        round_annotated.append({"pairing": p, "result": result})
+                    annotated.append((round_num, round_annotated))
+                context["pairings"] = annotated
+            else:
+                context["pairings_message"] = "No upcoming pairings available."
+    except DivisionSettings.DoesNotExist:
+        context["pairings_message"] = "Division settings have not been configured."
+    return context
+
+
 class DivisionPairingsView(VisibleDivisionMixin, DetailView):
     model = Division
     template_name = "tournaments/division_pairings.html"
@@ -189,37 +226,7 @@ class DivisionPairingsView(VisibleDivisionMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        division = self.object
-        try:
-            settings = division.settings
-            if not settings.round_pairings:
-                context["pairings_message"] = "No round pairings configured."
-            else:
-                pd = PairingData.for_division(division)
-                pairings = pair(pd, settings)
-                if pairings:
-                    played = {}
-                    for slip in pd.result_slips:
-                        key = (slip.round, frozenset({slip.winner_name, slip.loser_name}))
-                        played[key] = slip
-                    annotated = []
-                    for round_num, round_pairings in pairings:
-                        round_annotated = []
-                        for p in round_pairings:
-                            key = (round_num, frozenset({p.first.name, p.second.name}))
-                            slip = played.get(key)
-                            if slip:
-                                scores = {slip.winner_name: slip.winner_score, slip.loser_name: slip.loser_score}
-                                result = f"{scores[p.first.name]} - {scores[p.second.name]}"
-                            else:
-                                result = ""
-                            round_annotated.append({"pairing": p, "result": result})
-                        annotated.append((round_num, round_annotated))
-                    context["pairings"] = annotated
-                else:
-                    context["pairings_message"] = "No upcoming pairings available."
-        except DivisionSettings.DoesNotExist:
-            context["pairings_message"] = "Division settings have not been configured."
+        context.update(_build_pairings_context(self.object))
         return context
 
 
@@ -451,10 +458,13 @@ class SimulateMatchView(LoginRequiredMixin, CanEditDivisionMixin, View):
                 status=403,
             )
 
-        try:
-            data = json.loads(request.body)
-        except json.JSONDecodeError:
-            return JsonResponse({"error": "Invalid JSON."}, status=400)
+        if is_datastar(request):
+            data = read_signals(request) or {}
+        else:
+            try:
+                data = json.loads(request.body)
+            except json.JSONDecodeError:
+                return JsonResponse({"error": "Invalid JSON."}, status=400)
 
         round_num = data.get("round")
         first_name = data.get("first")
@@ -494,4 +504,10 @@ class SimulateMatchView(LoginRequiredMixin, CanEditDivisionMixin, View):
             loser_score=loser_score,
             winner_started=winner_started,
         )
+
+        if is_datastar(request):
+            context = _build_pairings_context(division)
+            return fragment_response(
+                "tournaments/_pairings_content.html", context, request=request
+            )
         return JsonResponse({"ok": True})
