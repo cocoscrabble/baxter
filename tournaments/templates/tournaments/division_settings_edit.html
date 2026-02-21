@@ -7,34 +7,11 @@
 <p>Tournament: <a href="{% url 'tournament_detail' division.tournament.pk %}">{{ division.tournament.name }}</a></p>
 <p><a href="{% url 'division_detail' division.pk %}">Back to division</a></p>
 
-<form method="get">
-    {{ round_count_form.num_rounds.label_tag }} {{ round_count_form.num_rounds }}
-    <button type="submit">Change</button>
-</form>
+<div>
+    {{ round_count_form.num_rounds.label_tag }}
+    <input type="number" min="1" data-bind="numRounds" value="{{ round_count_form.num_rounds.value|default:'' }}">
+    <button data-on:click="@get('{% url 'division_settings' division.pk %}?num_rounds=' + $numRounds)">Change</button>
+</div>
 
-<form method="post">
-    {% csrf_token %}
-    {{ formset.management_form }}
-    <table>
-        <thead>
-            <tr>
-                <th>Round</th>
-                <th>Pairing Type</th>
-                <th>Based on Round</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for form in formset %}
-            <tr>
-                <td>{{ form.round }}{{ form.round.value }}</td>
-                <td>{{ form.pairing_type }}{% if form.pairing_type.errors %}<br>{{ form.pairing_type.errors }}{% endif %}</td>
-                <td>{{ form.start_round }}{% if form.start_round.errors %}<br>{{ form.start_round.errors }}{% endif %}</td>
-                <td>{% if form.non_field_errors %}{{ form.non_field_errors }}{% endif %}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    <button type="submit">Save</button>
-</form>
+{% include "tournaments/_settings_formset.html" %}
 {% endblock %}

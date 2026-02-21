@@ -262,11 +262,16 @@ class DivisionSettingsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
         initial = self.get_initial_data(division)
         formset = RoundPairingFormSet(initial=initial)
         round_count_form = RoundCountForm(initial={"num_rounds": len(initial)})
-        return render(request, self.template_name, {
+        context = {
             "division": division,
             "formset": formset,
             "round_count_form": round_count_form,
-        })
+        }
+        if is_datastar(request):
+            return fragment_response(
+                "tournaments/_settings_formset.html", context, request=request
+            )
+        return render(request, self.template_name, context)
 
     def post(self, request, pk):
         division = self.get_division()
