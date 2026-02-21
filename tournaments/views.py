@@ -14,6 +14,7 @@ from django.views.generic import (
     UpdateView,
 )
 
+from .datastar_utils import fragment_response, is_datastar
 from .forms import (
     ResultSlipForm,
     RoundCountForm,
@@ -170,6 +171,15 @@ class DivisionStandingsView(VisibleDivisionMixin, DetailView):
         context["round"] = current_round
         context["rounds"] = range(1, max_round + 1)
         return context
+
+    def get(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        context = self.get_context_data(object=self.object)
+        if is_datastar(request):
+            return fragment_response(
+                "tournaments/_standings_content.html", context, request=request
+            )
+        return self.render_to_response(context)
 
 
 class DivisionPairingsView(VisibleDivisionMixin, DetailView):
