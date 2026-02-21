@@ -18,14 +18,22 @@
             <th>First</th>
             <th>Second</th>
             <th>Repeats</th>
+            <th></th>
         </tr>
     </thead>
     <tbody>
-        {% for pairing in round_pairings %}
+        {% for entry in round_pairings %}
         <tr>
-            <td>{{ pairing.first.name }}</td>
-            <td>{{ pairing.second.name }}</td>
-            <td>{{ pairing.repeats }}</td>
+            <td>{{ entry.pairing.first.name }}</td>
+            <td>{{ entry.pairing.second.name }}</td>
+            <td>{{ entry.pairing.repeats }}</td>
+             <td>
++                {% if entry.result %}
++                    {{ entry.result }}
+                 {% elif division.is_test %}
+                     <button class="simulate-btn" data-round="{{ round_num }}" data-first="{{ entry.pairing.first.name }}" data-second="{{ entry.pairing.second.name }}">simulate</button>
+                 {% endif %}
+             </td>
         </tr>
         {% endfor %}
     </tbody>

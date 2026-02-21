@@ -187,7 +187,24 @@ class DivisionPairingsView(VisibleDivisionMixin, DetailView):
                 pd = PairingData.for_division(division)
                 pairings = pair(pd, settings)
                 if pairings:
-                    context["pairings"] = pairings
+                    played = {}
+                    for slip in pd.result_slips:
+                        key = (slip.round, frozenset({slip.winner_name, slip.loser_name}))
+                        played[key] = slip
+                    annotated = []
+                    for round_num, round_pairings in pairings:
+                        round_annotated = []
+                        for p in round_pairings:
+                            key = (round_num, frozenset({p.first.name, p.second.name}))
+                            slip = played.get(key)
+                            if slip:
+                                scores = {slip.winner_name: slip.winner_score, slip.loser_name: slip.loser_score}
+                                result = f"{scores[p.first.name]} - {scores[p.second.name]}"
+                            else:
+                                result = ""
+                            round_annotated.append({"pairing": p, "result": result})
+                        annotated.append((round_num, round_annotated))
+                    context["pairings"] = annotated
                 else:
                     context["pairings_message"] = "No upcoming pairings available."
         except DivisionSettings.DoesNotExist:

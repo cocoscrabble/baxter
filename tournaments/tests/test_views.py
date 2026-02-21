@@ -522,8 +522,10 @@ class DivisionPairingsViewTests(TestCase):
         round_num, round_pairings = pairings[0]
         self.assertEqual(round_num, 1)
         self.assertEqual(len(round_pairings), 1)
-        names = {round_pairings[0].first.name, round_pairings[0].second.name}
+        p = round_pairings[0]["pairing"]
+        names = {p.first.name, p.second.name}
         self.assertEqual(names, {"Alice", "Bob"})
+        self.assertEqual(round_pairings[0]["result"], "")
         self.assertContains(response, "Round 1")
         self.assertContains(response, "Alice")
         self.assertContains(response, "Bob")
