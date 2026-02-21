@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
     {% block extra_head %}{% endblock %}
 </head>
-<body>
+<body data-signals="{_csrfToken: '{{ csrf_token }}'}">
     <nav>
         <a href="/">Home</a>
         {% if user.is_authenticated %}
