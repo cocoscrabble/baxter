@@ -376,6 +376,27 @@ class ResultSlipCreateView(CreateView):
         kwargs["division"] = self.get_division()
         return kwargs
 
+    def post(self, request, *args, **kwargs):
+        if is_datastar(request):
+            division = self.get_division()
+            signals = read_signals(request) or {}
+            form = ResultSlipForm(signals, division=division)
+            if form.is_valid():
+                form.instance.division = division
+                form.save()
+                fresh_form = ResultSlipForm(division=division)
+                return fragment_response(
+                    "tournaments/_resultslip_form.html",
+                    {"form": fresh_form, "division": division, "success_message": "Result saved."},
+                    request=request,
+                )
+            return fragment_response(
+                "tournaments/_resultslip_form.html",
+                {"form": form, "division": division},
+                request=request,
+            )
+        return super().post(request, *args, **kwargs)
+
     def form_valid(self, form):
         form.instance.division = self.get_division()
         return super().form_valid(form)

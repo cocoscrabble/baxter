@@ -6,11 +6,7 @@
 <h1>{% if editing %}Edit Result{% else %}Add Result{% endif %}</h1>
 <p>Division: {{ division.name }}</p>
 
-<form method="post">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Save</button>
-</form>
+{% include "tournaments/_resultslip_form.html" %}
 
 <p>
 {% if editing %}

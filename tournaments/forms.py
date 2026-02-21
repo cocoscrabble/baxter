@@ -166,6 +166,8 @@ class ResultSlipForm(forms.ModelForm):
             self.fields["loser"].queryset = entrants
             self.fields["winner"].label_from_instance = lambda e: e.player.name
             self.fields["loser"].label_from_instance = lambda e: e.player.name
+        for field_name, field in self.fields.items():
+            field.widget.attrs["data-bind"] = field_name
 
     def clean(self):
         cleaned_data = super().clean()
