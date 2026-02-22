@@ -4,5 +4,6 @@
     {% csrf_token %}
     {{ form.as_p }}
     <button type="submit">Save</button>
+    {% if success_message %}<button type="button" onclick="window.location='{% url 'division_detail' division.pk %}'">Done</button>{% endif %}
 </form>
 </div>
