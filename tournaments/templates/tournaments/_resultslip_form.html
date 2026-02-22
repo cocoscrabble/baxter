@@ -1,6 +1,6 @@
 <div id="resultslip-form-container">
 {% if success_message %}<p class="success">{{ success_message }}</p>{% endif %}
-<form method="post" data-on:submit.prevent="@post('{% url 'resultslip_create' division.pk %}', {headers: {'X-CSRFToken': $_csrfToken}})">
+<form method="post" data-on:submit__prevent="@post('{% url 'resultslip_create' division.pk %}', {headers: {'X-CSRFToken': $_csrfToken}})">
     {% csrf_token %}
     {{ form.as_p }}
     <button type="submit">Save</button>

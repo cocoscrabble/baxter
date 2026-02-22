@@ -1,7 +1,7 @@
 <div id="standings-content">
 <p>Rounds:
     {% for r in rounds %}
-        {% if r == round %}<strong>{{ r }}</strong>{% else %}<a href="#" data-on:click.prevent="@get('{% url 'division_standings_round' division.pk r %}')">{{ r }}</a>{% endif %}
+        {% if r == round %}<strong>{{ r }}</strong>{% else %}<a href="#" data-on:click__prevent="@get('{% url 'division_standings_round' division.pk r %}')">{{ r }}</a>{% endif %}
         {% if not forloop.last %} | {% endif %}
     {% endfor %}
 </p>
