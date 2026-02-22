@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import models
 from django.urls import reverse
+from django.utils import timezone
 
 
 class Tournament(models.Model):
@@ -36,6 +37,11 @@ class Tournament(models.Model):
         return user == self.owner or self.editors.filter(pk=user.pk).exists()
 
 
+class ActiveDivisionManager(models.Manager):
+    def get_queryset(self):
+        return super().get_queryset().filter(is_deleted=False)
+
+
 class Division(models.Model):
     """A division within a tournament."""
 
@@ -46,6 +52,11 @@ class Division(models.Model):
         related_name="divisions",
     )
     is_test = models.BooleanField(default=False)
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    objects = ActiveDivisionManager()
+    all_objects = models.Manager()
 
     class Meta:
         ordering = ["name"]
@@ -53,6 +64,16 @@ class Division(models.Model):
 
     def __str__(self):
         return self.name
+
+    def soft_delete(self):
+        self.is_deleted = True
+        self.deleted_at = timezone.now()
+        self.save()
+
+    def restore(self):
+        self.is_deleted = False
+        self.deleted_at = None
+        self.save()
 
     def max_round(self):
         return self.result_slips.aggregate(

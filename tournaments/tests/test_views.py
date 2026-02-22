@@ -116,12 +116,11 @@ class DivisionCreateDeleteViewTests(TestCase):
             response, reverse("tournament_detail", kwargs={"pk": self.tournament.pk})
         )
 
-    def test_delete_division(self):
+    def test_delete_division_soft_deletes(self):
         self.client.login(username="owner", password="testpass123")
-        self.client.post(
-            reverse("division_delete", kwargs={"pk": self.division.pk}),
-        )
+        self.client.post(reverse("division_delete", kwargs={"pk": self.division.pk}))
         self.assertFalse(Division.objects.filter(pk=self.division.pk).exists())
+        self.assertTrue(Division.all_objects.filter(pk=self.division.pk, is_deleted=True).exists())
 
     def test_delete_division_non_editor_forbidden(self):
         self.client.login(username="other", password="testpass123")
@@ -139,6 +138,21 @@ class DivisionCreateDeleteViewTests(TestCase):
         self.assertRedirects(
             response, reverse("tournament_detail", kwargs={"pk": self.tournament.pk})
         )
+
+    def test_restore_division(self):
+        self.division.soft_delete()
+        self.client.login(username="owner", password="testpass123")
+        self.client.post(reverse("division_restore", kwargs={"pk": self.division.pk}))
+        self.assertTrue(Division.objects.filter(pk=self.division.pk, is_deleted=False).exists())
+
+    def test_restore_division_non_editor_forbidden(self):
+        self.division.soft_delete()
+        self.client.login(username="other", password="testpass123")
+        response = self.client.post(
+            reverse("division_restore", kwargs={"pk": self.division.pk}),
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(Division.all_objects.filter(pk=self.division.pk, is_deleted=True).exists())
 
 
 @tag("slow")
