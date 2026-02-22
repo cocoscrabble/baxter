@@ -13,6 +13,22 @@
     {% endfor %}
 </ul>
 
+{% if deleted_divisions %}
+<p><strong>Recently deleted:</strong></p>
+<ul>
+    {% for division in deleted_divisions %}
+    <li>
+        {{ division.name }}
+        {% if division.is_test %}<span class="test-badge">test</span>{% endif %}
+        <form method="post" action="{% url 'division_restore' division.pk %}" style="display:inline">
+            {% csrf_token %}
+            <button type="submit">Restore</button>
+        </form>
+    </li>
+    {% endfor %}
+</ul>
+{% endif %}
+
 <details>
     <summary>Add Division</summary>
     <form method="post" action="{% url 'division_create' tournament.pk %}">

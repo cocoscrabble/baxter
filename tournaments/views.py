@@ -50,6 +50,10 @@ class TournamentDetailView(DetailView):
         if not can_edit:
             divisions = divisions.filter(is_test=False)
         context["divisions"] = divisions
+        if can_edit:
+            context["deleted_divisions"] = Division.all_objects.filter(
+                tournament=self.object, is_deleted=True
+            )
         return context
 
 
@@ -106,6 +110,9 @@ class TournamentUpdateView(LoginRequiredMixin, CanEditTournamentMixin, UpdateVie
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["divisions"] = self.object.divisions.all()
+        context["deleted_divisions"] = Division.all_objects.filter(
+            tournament=self.object, is_deleted=True
+        )
         return context
 
     def get_success_url(self):
@@ -146,7 +153,18 @@ class DivisionDeleteView(LoginRequiredMixin, CanEditDivisionMixin, View):
     def post(self, request, pk):
         division = self.get_division()
         tournament_pk = division.tournament.pk
-        division.delete()
+        division.soft_delete()
+        return redirect("tournament_detail", pk=tournament_pk)
+
+
+class DivisionRestoreView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    def get_division(self):
+        return get_object_or_404(Division.all_objects, pk=self.kwargs["pk"])
+
+    def post(self, request, pk):
+        division = self.get_division()
+        tournament_pk = division.tournament.pk
+        division.restore()
         return redirect("tournament_detail", pk=tournament_pk)
 
 
