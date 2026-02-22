@@ -1,5 +1,6 @@
 import json
 import random
+from itertools import groupby
 
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.http import Http404, JsonResponse
@@ -23,7 +24,7 @@ from .forms import (
     TournamentForm,
 )
 from .dto import EntrantDTO, ResultSlipDTO
-from .models import Division, DivisionSettings, Entrant, Player, ResultSlip, Tournament
+from .models import Division, DivisionSettings, Entrant, Pairing, Player, ResultSlip, Tournament
 from .pairing.base import PairingData, standings_after_round
 from .pairing.pair import pair
 
@@ -183,39 +184,74 @@ class DivisionStandingsView(VisibleDivisionMixin, DetailView):
         return self.render_to_response(context)
 
 
-def _build_pairings_context(division):
-    """Build pairings context dict for a division. Used by both pairings and simulate views."""
-    context = {"division": division}
+def _regenerate_pairings(division):
+    """Run the pairing algorithm and save results to the Pairing table."""
     try:
         settings = division.settings
         if not settings.round_pairings:
-            context["pairings_message"] = "No round pairings configured."
-        else:
-            pd = PairingData.for_division(division)
-            pairings = pair(pd, settings)
-            if pairings:
-                played = {}
-                for slip in pd.result_slips:
-                    key = (slip.round, frozenset({slip.winner_name, slip.loser_name}))
-                    played[key] = slip
-                annotated = []
-                for round_num, round_pairings in pairings:
-                    round_annotated = []
-                    for p in round_pairings:
-                        key = (round_num, frozenset({p.first.name, p.second.name}))
-                        slip = played.get(key)
-                        if slip:
-                            scores = {slip.winner_name: slip.winner_score, slip.loser_name: slip.loser_score}
-                            result = f"{scores[p.first.name]} - {scores[p.second.name]}"
-                        else:
-                            result = ""
-                        round_annotated.append({"pairing": p, "result": result})
-                    annotated.append((round_num, round_annotated))
-                context["pairings"] = annotated
+            division.pairings.all().delete()
+            return
+    except DivisionSettings.DoesNotExist:
+        division.pairings.all().delete()
+        return
+    pd = PairingData.for_division(division)
+    pairings = pair(pd, settings)
+    entrant_by_name = {
+        e.player.name: e
+        for e in division.entrants.select_related("player")
+    }
+    division.pairings.all().delete()
+    for round_num, round_pairings in pairings:
+        for p in round_pairings:
+            first_entrant = entrant_by_name.get(p.first.name)
+            second_entrant = entrant_by_name.get(p.second.name)
+            if first_entrant and second_entrant:
+                Pairing.objects.create(
+                    division=division,
+                    round=round_num,
+                    first=first_entrant,
+                    second=second_entrant,
+                    repeats=p.repeats,
+                )
+
+
+def _build_pairings_context(division):
+    """Build pairings context dict for a division. Reads from the Pairing table."""
+    context = {"division": division}
+    _regenerate_pairings(division)
+    db_pairings = list(
+        division.pairings
+        .select_related("first", "first__player", "second", "second__player")
+        .order_by("round")
+    )
+    if not db_pairings:
+        try:
+            settings = division.settings
+            if not settings.round_pairings:
+                context["pairings_message"] = "No round pairings configured."
             else:
                 context["pairings_message"] = "No upcoming pairings available."
-    except DivisionSettings.DoesNotExist:
-        context["pairings_message"] = "Division settings have not been configured."
+        except DivisionSettings.DoesNotExist:
+            context["pairings_message"] = "Division settings have not been configured."
+        return context
+    played = {}
+    for slip in division.result_slips.all():
+        key = (slip.round, frozenset({slip.winner_id, slip.loser_id}))
+        played[key] = slip
+    annotated = []
+    for round_num, round_pairings in groupby(db_pairings, key=lambda p: p.round):
+        round_annotated = []
+        for p in round_pairings:
+            key = (round_num, frozenset({p.first_id, p.second_id}))
+            slip = played.get(key)
+            if slip:
+                scores = {slip.winner_id: slip.winner_score, slip.loser_id: slip.loser_score}
+                result = f"{scores[p.first_id]} - {scores[p.second_id]}"
+            else:
+                result = ""
+            round_annotated.append({"pairing": p, "result": result})
+        annotated.append((round_num, round_annotated))
+    context["pairings"] = annotated
     return context
 
 

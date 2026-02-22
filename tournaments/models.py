@@ -110,6 +110,10 @@ class Entrant(models.Model):
     def __str__(self):
         return f"{self.number}: {self.player.name}"
 
+    @property
+    def name(self):
+        return self.player.name
+
 
 class ResultSlip(models.Model):
     """A game result slip."""
@@ -159,3 +163,31 @@ class ResultSlip(models.Model):
 
     def __str__(self):
         return f"R{self.round}: {self.winner_name} {self.winner_score}-{self.loser_score} {self.loser_name}"
+
+
+class Pairing(models.Model):
+    """A generated pairing for a division round."""
+
+    division = models.ForeignKey(
+        Division,
+        on_delete=models.CASCADE,
+        related_name="pairings",
+    )
+    round = models.IntegerField()
+    first = models.ForeignKey(
+        Entrant,
+        on_delete=models.CASCADE,
+        related_name="pairings_as_first",
+    )
+    second = models.ForeignKey(
+        Entrant,
+        on_delete=models.CASCADE,
+        related_name="pairings_as_second",
+    )
+    repeats = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ["round"]
+
+    def __str__(self):
+        return f"R{self.round}: {self.first.name} vs {self.second.name}"
