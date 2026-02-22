@@ -11,6 +11,11 @@
 <form method="post" action="{% url 'generate_pairings' division.pk %}">
     {% csrf_token %}
     <button type="submit">Generate Pairings</button>
+    {% if available_rounds %}
+        Pairings available for rounds: {{ available_rounds|join:", " }}
+    {% else %}
+        No rounds available to pair.
+    {% endif %}
 </form>
 {% endif %}
 
