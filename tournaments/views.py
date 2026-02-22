@@ -26,7 +26,8 @@ from .forms import (
 from .dto import EntrantDTO, ResultSlipDTO
 from .models import Division, DivisionSettings, Entrant, Pairing, Player, ResultSlip, Tournament
 from .pairing.base import PairingData, standings_after_round
-from .pairing.pair import pair
+from .pairing.pair import can_pair, pair, round_status
+from .pairing.round_pairing import RoundPairing
 
 
 class TournamentListView(ListView):
@@ -184,6 +185,20 @@ class DivisionStandingsView(VisibleDivisionMixin, DetailView):
         return self.render_to_response(context)
 
 
+def _available_rounds(division):
+    """Return list of round numbers that can currently be paired."""
+    try:
+        settings = division.settings
+        if not settings.round_pairings:
+            return []
+    except DivisionSettings.DoesNotExist:
+        return []
+    pd = PairingData.for_division(division)
+    status = round_status(pd)
+    round_pairings = [RoundPairing.from_dict(x) for x in settings.round_pairings]
+    return [rp.round for rp in round_pairings if can_pair(rp, status)]
+
+
 def _regenerate_pairings(division):
     """Run the pairing algorithm and save results to the Pairing table."""
     try:
@@ -263,7 +278,10 @@ class DivisionPairingsView(VisibleDivisionMixin, DetailView):
         context = super().get_context_data(**kwargs)
         context.update(_build_pairings_context(self.object))
         user = self.request.user
-        context["can_edit"] = user.is_authenticated and self.object.tournament.can_edit(user)
+        can_edit = user.is_authenticated and self.object.tournament.can_edit(user)
+        context["can_edit"] = can_edit
+        if can_edit:
+            context["available_rounds"] = _available_rounds(self.object)
         return context
 
 
