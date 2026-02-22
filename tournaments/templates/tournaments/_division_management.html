@@ -1,50 +1,80 @@
-<ul>
-    {% for division in divisions %}
-    <li>
-        <a href="{% url 'division_detail' division.pk %}">{{ division.name }}</a>
-        {% if division.is_test %}<span class="test-badge">test</span>{% endif %}
-        <form method="post" action="{% url 'division_delete' division.pk %}" style="display:inline">
-            {% csrf_token %}
-            <button type="submit">Delete</button>
-        </form>
-    </li>
-    {% empty %}
-    <li>None</li>
-    {% endfor %}
-</ul>
+<div data-signals="{showForm: ''}">
 
-{% if deleted_divisions %}
-<p><strong>Recently deleted:</strong></p>
-<ul>
-    {% for division in deleted_divisions %}
-    <li>
-        {{ division.name }}
-        {% if division.is_test %}<span class="test-badge">test</span>{% endif %}
-        <form method="post" action="{% url 'division_restore' division.pk %}" style="display:inline">
-            {% csrf_token %}
-            <button type="submit">Restore</button>
-        </form>
-    </li>
-    {% endfor %}
-</ul>
-{% endif %}
+<div class="division-toolbar">
+    <button class="btn-secondary" data-on:click="$showForm = ($showForm === 'regular' ? '' : 'regular')">+ Add Division</button>
+    <button class="btn-secondary" data-on:click="$showForm = ($showForm === 'test' ? '' : 'test')">+ Add Test Division</button>
+</div>
 
-<details>
-    <summary>Add Division</summary>
+<div class="division-inline-form" style="display:none" data-show="$showForm === 'regular'">
     <form method="post" action="{% url 'division_create' tournament.pk %}">
         {% csrf_token %}
         <input type="hidden" name="is_test" value="0">
         <input type="text" name="name" placeholder="Division name" required>
         <button type="submit">Add</button>
+        <button type="button" class="btn-cancel" data-on:click="$showForm = ''">Cancel</button>
     </form>
-</details>
+</div>
 
-<details>
-    <summary>Add Test Division</summary>
+<div class="division-inline-form" style="display:none" data-show="$showForm === 'test'">
     <form method="post" action="{% url 'division_create' tournament.pk %}">
         {% csrf_token %}
         <input type="hidden" name="is_test" value="1">
-        <input type="text" name="name" placeholder="Division name" required>
-        <button type="submit">Add</button>
+        <input type="text" name="name" placeholder="Test division name" required>
+        <button type="submit">Add Test</button>
+        <button type="button" class="btn-cancel" data-on:click="$showForm = ''">Cancel</button>
     </form>
-</details>
+</div>
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Test</th>
+            <th>Deleted</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for division in regular_divisions %}
+        <tr>
+            <td><a href="{% url 'division_detail' division.pk %}">{{ division.name }}</a></td>
+            <td></td>
+            <td></td>
+            <td>
+                <form method="post" action="{% url 'division_delete' division.pk %}">
+                    {% csrf_token %}<button type="submit">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+        {% for division in test_divisions %}
+        <tr class="division-test">
+            <td><a href="{% url 'division_detail' division.pk %}">{{ division.name }}</a></td>
+            <td><input type="checkbox" checked disabled></td>
+            <td></td>
+            <td>
+                <form method="post" action="{% url 'division_delete' division.pk %}">
+                    {% csrf_token %}<button type="submit">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+        {% for division in deleted_divisions %}
+        <tr class="division-deleted">
+            <td>{{ division.name }}</td>
+            <td>{% if division.is_test %}<input type="checkbox" checked disabled>{% endif %}</td>
+            <td><input type="checkbox" checked disabled></td>
+            <td>
+                <form method="post" action="{% url 'division_restore' division.pk %}">
+                    {% csrf_token %}<button type="submit">Restore</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+        {% if not regular_divisions and not test_divisions and not deleted_divisions %}
+        <tr><td colspan="4">No divisions yet.</td></tr>
+        {% endif %}
+    </tbody>
+</table>
+
+</div>
