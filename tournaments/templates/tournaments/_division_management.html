@@ -1,0 +1,34 @@
+<ul>
+    {% for division in divisions %}
+    <li>
+        <a href="{% url 'division_detail' division.pk %}">{{ division.name }}</a>
+        {% if division.is_test %}<span class="test-badge">test</span>{% endif %}
+        <form method="post" action="{% url 'division_delete' division.pk %}" style="display:inline">
+            {% csrf_token %}
+            <button type="submit">Delete</button>
+        </form>
+    </li>
+    {% empty %}
+    <li>None</li>
+    {% endfor %}
+</ul>
+
+<details>
+    <summary>Add Division</summary>
+    <form method="post" action="{% url 'division_create' tournament.pk %}">
+        {% csrf_token %}
+        <input type="hidden" name="is_test" value="0">
+        <input type="text" name="name" placeholder="Division name" required>
+        <button type="submit">Add</button>
+    </form>
+</details>
+
+<details>
+    <summary>Add Test Division</summary>
+    <form method="post" action="{% url 'division_create' tournament.pk %}">
+        {% csrf_token %}
+        <input type="hidden" name="is_test" value="1">
+        <input type="text" name="name" placeholder="Division name" required>
+        <button type="submit">Add</button>
+    </form>
+</details>

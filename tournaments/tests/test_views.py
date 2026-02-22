@@ -67,7 +67,6 @@ class TournamentCreateViewTests(TestCase):
                 "location": "New Location",
                 "start_date": "2026-05-01",
                 "editor_usernames": "",
-                "division_names": "",
             },
         )
         tournament = Tournament.objects.get(name="New Tournament")
@@ -76,39 +75,70 @@ class TournamentCreateViewTests(TestCase):
         )
         self.assertEqual(tournament.owner, self.owner)
 
-    def test_create_tournament_with_divisions(self):
-        self.client.login(username="owner", password="testpass123")
-        self.client.post(
-            reverse("tournament_create"),
-            {
-                "name": "New Tournament",
-                "location": "New Location",
-                "start_date": "2026-05-01",
-                "editor_usernames": "",
-                "division_names": "Open\nNovice",
-                "test_division_names": "",
-            },
-        )
-        tournament = Tournament.objects.get(name="New Tournament")
-        self.assertEqual(tournament.divisions.count(), 2)
 
-    def test_create_tournament_with_test_divisions(self):
+@tag("slow")
+class DivisionCreateDeleteViewTests(TestCase):
+    def setUp(self):
+        setUpTournament(self)
+
+    def test_create_division(self):
         self.client.login(username="owner", password="testpass123")
         self.client.post(
-            reverse("tournament_create"),
-            {
-                "name": "New Tournament",
-                "location": "New Location",
-                "start_date": "2026-05-01",
-                "editor_usernames": "",
-                "division_names": "Open",
-                "test_division_names": "Sandbox",
-            },
+            reverse("division_create", kwargs={"tournament_pk": self.tournament.pk}),
+            {"name": "Open", "is_test": "0"},
         )
-        tournament = Tournament.objects.get(name="New Tournament")
-        self.assertEqual(tournament.divisions.count(), 2)
-        self.assertTrue(tournament.divisions.filter(name="Open", is_test=False).exists())
-        self.assertTrue(tournament.divisions.filter(name="Sandbox", is_test=True).exists())
+        self.assertTrue(self.tournament.divisions.filter(name="Open", is_test=False).exists())
+
+    def test_create_test_division(self):
+        self.client.login(username="owner", password="testpass123")
+        self.client.post(
+            reverse("division_create", kwargs={"tournament_pk": self.tournament.pk}),
+            {"name": "Sandbox", "is_test": "1"},
+        )
+        self.assertTrue(self.tournament.divisions.filter(name="Sandbox", is_test=True).exists())
+
+    def test_create_division_non_editor_forbidden(self):
+        self.client.login(username="other", password="testpass123")
+        response = self.client.post(
+            reverse("division_create", kwargs={"tournament_pk": self.tournament.pk}),
+            {"name": "Novice", "is_test": "0"},
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(self.tournament.divisions.filter(name="Novice").exists())
+
+    def test_create_redirects_to_tournament_detail(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.post(
+            reverse("division_create", kwargs={"tournament_pk": self.tournament.pk}),
+            {"name": "Open", "is_test": "0"},
+        )
+        self.assertRedirects(
+            response, reverse("tournament_detail", kwargs={"pk": self.tournament.pk})
+        )
+
+    def test_delete_division(self):
+        self.client.login(username="owner", password="testpass123")
+        self.client.post(
+            reverse("division_delete", kwargs={"pk": self.division.pk}),
+        )
+        self.assertFalse(Division.objects.filter(pk=self.division.pk).exists())
+
+    def test_delete_division_non_editor_forbidden(self):
+        self.client.login(username="other", password="testpass123")
+        response = self.client.post(
+            reverse("division_delete", kwargs={"pk": self.division.pk}),
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(Division.objects.filter(pk=self.division.pk).exists())
+
+    def test_delete_redirects_to_tournament_detail(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.post(
+            reverse("division_delete", kwargs={"pk": self.division.pk}),
+        )
+        self.assertRedirects(
+            response, reverse("tournament_detail", kwargs={"pk": self.tournament.pk})
+        )
 
 
 @tag("slow")
@@ -148,7 +178,6 @@ class TournamentUpdateViewTests(TestCase):
                 "location": "Updated Location",
                 "start_date": "2026-06-01",
                 "editor_usernames": "",
-                "division_names": "",
             },
         )
         self.assertRedirects(

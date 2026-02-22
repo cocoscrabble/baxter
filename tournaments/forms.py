@@ -4,7 +4,7 @@ from users.models import User
 
 from django.forms import formset_factory
 
-from .models import Division, Entrant, ResultSlip, Tournament
+from .models import Entrant, ResultSlip, Tournament
 from .pairing.pair import STRATEGY_TYPES
 
 
@@ -34,20 +34,6 @@ class TournamentForm(forms.ModelForm):
         help_text="Enter usernames, one per line.",
     )
 
-    division_names = forms.CharField(
-        label="Divisions",
-        required=False,
-        widget=forms.Textarea(attrs={"rows": 3}),
-        help_text="Enter division names, one per line.",
-    )
-
-    test_division_names = forms.CharField(
-        label="Test divisions",
-        required=False,
-        widget=forms.Textarea(attrs={"rows": 3}),
-        help_text="Test divisions are only visible to editors.",
-    )
-
     class Meta:
         model = Tournament
         fields = ["name", "location", "start_date"]
@@ -63,18 +49,6 @@ class TournamentForm(forms.ModelForm):
                 pk=self.instance.owner.pk
             ).values_list("username", flat=True)
             self.fields["editor_usernames"].initial = "\n".join(editor_names)
-
-            # Populate division_names for existing tournament
-            divisions = self.instance.divisions.filter(
-                is_test=False
-            ).values_list("name", flat=True)
-            self.fields["division_names"].initial = "\n".join(divisions)
-
-            # Populate test_division_names for existing tournament
-            test_divisions = self.instance.divisions.filter(
-                is_test=True
-            ).values_list("name", flat=True)
-            self.fields["test_division_names"].initial = "\n".join(test_divisions)
 
     def clean_editor_usernames(self):
         """Validate that all usernames exist."""
@@ -96,52 +70,13 @@ class TournamentForm(forms.ModelForm):
 
         return valid_users
 
-    def clean_division_names(self):
-        """Parse division names."""
-        return clean_multiline_text(self.cleaned_data.get("division_names", ""))
-
-    def clean_test_division_names(self):
-        """Parse test division names."""
-        return clean_multiline_text(self.cleaned_data.get("test_division_names", ""))
-
     def save(self, commit=True):
         tournament = super().save(commit=commit)
         if commit:
-            # Get editor users from cleaned data
             editor_users = self.cleaned_data.get("editor_usernames", [])
-            # Always include owner as editor
             all_editors = set(editor_users)
             all_editors.add(tournament.owner)
             tournament.editors.set(all_editors)
-
-            # Handle divisions
-            division_names = self.cleaned_data.get("division_names", [])
-            test_division_names = self.cleaned_data.get("test_division_names", [])
-            existing = {
-                (d.name, d.is_test): d for d in tournament.divisions.all()
-            }
-
-            # Add new regular divisions
-            for name in division_names:
-                if (name, False) not in existing:
-                    Division.objects.create(
-                        tournament=tournament, name=name, is_test=False
-                    )
-
-            # Add new test divisions
-            for name in test_division_names:
-                if (name, True) not in existing:
-                    Division.objects.create(
-                        tournament=tournament, name=name, is_test=True
-                    )
-
-            # Remove divisions not in either list
-            for (name, is_test), division in existing.items():
-                if is_test and name not in test_division_names:
-                    division.delete()
-                elif not is_test and name not in division_names:
-                    division.delete()
-
         return tournament
 
 
