@@ -9,6 +9,9 @@ pageData.entrants.forEach(e => { entrantValues[e.id] = e.label; });
 const table = new Tabulator("#results-table", {
     data: pageData.results,
     layout: "fitColumns",
+    keybindings: true,
+    selectableRange: 1,
+    editTriggerEvent: "dblclick",
     columns: [
         {
             title: "Round",
