@@ -218,21 +218,13 @@ def _regenerate_pairings(division):
 def _build_pairings_context(division):
     """Build pairings context dict for a division. Reads from the Pairing table."""
     context = {"division": division}
-    _regenerate_pairings(division)
     db_pairings = list(
         division.pairings
         .select_related("first", "first__player", "second", "second__player")
         .order_by("round")
     )
     if not db_pairings:
-        try:
-            settings = division.settings
-            if not settings.round_pairings:
-                context["pairings_message"] = "No round pairings configured."
-            else:
-                context["pairings_message"] = "No upcoming pairings available."
-        except DivisionSettings.DoesNotExist:
-            context["pairings_message"] = "Division settings have not been configured."
+        context["pairings_message"] = "No pairings generated yet."
         return context
     played = {}
     for slip in division.result_slips.all():
@@ -255,6 +247,13 @@ def _build_pairings_context(division):
     return context
 
 
+class GeneratePairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    def post(self, request, pk):
+        division = self.get_division()
+        _regenerate_pairings(division)
+        return redirect("division_pairings", pk=pk)
+
+
 class DivisionPairingsView(VisibleDivisionMixin, DetailView):
     model = Division
     template_name = "tournaments/division_pairings.html"
@@ -263,6 +262,8 @@ class DivisionPairingsView(VisibleDivisionMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.update(_build_pairings_context(self.object))
+        user = self.request.user
+        context["can_edit"] = user.is_authenticated and self.object.tournament.can_edit(user)
         return context
 
 

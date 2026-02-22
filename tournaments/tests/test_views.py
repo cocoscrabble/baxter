@@ -4,7 +4,7 @@ from datetime import date
 from django.test import TestCase, tag
 from django.urls import reverse
 
-from tournaments.models import Division, DivisionSettings, Entrant, Player, ResultSlip, Tournament
+from tournaments.models import Division, DivisionSettings, Entrant, Pairing, Player, ResultSlip, Tournament
 from users.models import User
 
 
@@ -482,37 +482,16 @@ class DivisionPairingsViewTests(TestCase):
     def setUpTestData(cls):
         setUpTournament(cls)
 
-    def test_no_settings_shows_not_configured(self):
+    def test_no_pairings_generated_shows_message(self):
         response = self.client.get(
             reverse("division_pairings", kwargs={"pk": self.division.pk})
         )
-        self.assertContains(response, "Division settings have not been configured")
+        self.assertContains(response, "No pairings generated yet")
 
-    def test_empty_settings_shows_no_pairings_configured(self):
-        DivisionSettings.objects.create(division=self.division, round_pairings=[])
-        response = self.client.get(
-            reverse("division_pairings", kwargs={"pk": self.division.pk})
-        )
-        self.assertContains(response, "No round pairings configured")
-
-    def test_all_rounds_finished_shows_no_upcoming(self):
-        DivisionSettings.objects.create(
-            division=self.division,
-            round_pairings=[{"round": 1, "pairing": "KotH", "start_round": 0}],
-        )
-        ResultSlip.objects.create(
-            division=self.division, round=1, winner=self.entrant1,
-            winner_score=450, loser=self.entrant2, loser_score=380, winner_started=True,
-        )
-        response = self.client.get(
-            reverse("division_pairings", kwargs={"pk": self.division.pk})
-        )
-        self.assertContains(response, "No upcoming pairings available")
-
-    def test_with_settings_shows_pairings(self):
-        DivisionSettings.objects.create(
-            division=self.division,
-            round_pairings=[{"round": 1, "pairing": "KotH", "start_round": 0}],
+    def test_with_pairings_in_db_shows_pairings(self):
+        Pairing.objects.create(
+            division=self.division, round=1,
+            first=self.entrant1, second=self.entrant2, repeats=0,
         )
         response = self.client.get(
             reverse("division_pairings", kwargs={"pk": self.division.pk})
@@ -530,25 +509,27 @@ class DivisionPairingsViewTests(TestCase):
         self.assertContains(response, "Alice")
         self.assertContains(response, "Bob")
 
-    def test_finished_rounds_not_shown(self):
-        DivisionSettings.objects.create(
-            division=self.division,
-            round_pairings=[
-                {"round": 1, "pairing": "KotH", "start_round": 0},
-                {"round": 2, "pairing": "KotH", "start_round": 1},
-            ],
-        )
-        ResultSlip.objects.create(
-            division=self.division, round=1, winner=self.entrant1,
-            winner_score=450, loser=self.entrant2, loser_score=380, winner_started=True,
+    def test_only_stored_pairings_shown(self):
+        # Round 1 pairing in DB, round 2 not yet generated
+        Pairing.objects.create(
+            division=self.division, round=1,
+            first=self.entrant1, second=self.entrant2, repeats=0,
         )
         response = self.client.get(
             reverse("division_pairings", kwargs={"pk": self.division.pk})
         )
         pairings = response.context["pairings"]
-        # Round 1 is finished, only round 2 should appear
         self.assertEqual(len(pairings), 1)
-        self.assertEqual(pairings[0][0], 2)
+        self.assertEqual(pairings[0][0], 1)
+
+    def test_generate_pairings_populates_db(self):
+        DivisionSettings.objects.create(
+            division=self.division,
+            round_pairings=[{"round": 1, "pairing": "KotH", "start_round": 0}],
+        )
+        self.client.login(username="owner", password="testpass123")
+        self.client.post(reverse("generate_pairings", kwargs={"pk": self.division.pk}))
+        self.assertEqual(Pairing.objects.filter(division=self.division).count(), 1)
 
     def test_pairings_link_on_division_detail(self):
         response = self.client.get(
