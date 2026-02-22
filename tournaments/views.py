@@ -387,7 +387,7 @@ class ResultSlipCreateView(CreateView):
                 fresh_form = ResultSlipForm(division=division)
                 return fragment_response(
                     "tournaments/_resultslip_form.html",
-                    {"form": fresh_form, "division": division, "success_message": "Result saved."},
+                    {"form": fresh_form, "division": division, "success_message": "Result saved. If there are any mistakes, edit the form and click save again. If everything looks correct, hit Done to close the form."},
                     request=request,
                 )
             return fragment_response(
