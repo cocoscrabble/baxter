@@ -9,6 +9,9 @@ pageData.players.forEach(p => { playerValues[p.id] = p.label; });
 const table = new Tabulator("#entrants-table", {
     data: pageData.entrants,
     layout: "fitColumns",
+    keybindings: true,
+    selectableRange: 1,
+    editTriggerEvent: "dblclick",
     columns: [
         {
             title: "#",
