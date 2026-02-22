@@ -9,6 +9,7 @@ from .views import (
     DivisionPairingsView,
     DivisionSettingsEditView,
     DivisionStandingsView,
+    GeneratePairingsView,
     ResultSlipCreateView,
     SimulateMatchView,
     TournamentCreateView,
@@ -35,4 +36,5 @@ urlpatterns = [
     path("division/<int:pk>/settings/", DivisionSettingsEditView.as_view(), name="division_settings"),
     path("division/<int:pk>/edit-results/", DivisionEditResultsView.as_view(), name="division_edit_results"),
     path("division/<int:pk>/simulate-match/", SimulateMatchView.as_view(), name="simulate_match"),
+    path("division/<int:pk>/generate-pairings/", GeneratePairingsView.as_view(), name="generate_pairings"),
 ]

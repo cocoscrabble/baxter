@@ -7,6 +7,13 @@
 <p>Tournament: <a href="{% url 'tournament_detail' division.tournament.pk %}">{{ division.tournament.name }}</a></p>
 <p><a href="{% url 'division_detail' division.pk %}">Back to division</a></p>
 
+{% if can_edit %}
+<form method="post" action="{% url 'generate_pairings' division.pk %}">
+    {% csrf_token %}
+    <button type="submit">Generate Pairings</button>
+</form>
+{% endif %}
+
 {% include "tournaments/_pairings_content.html" %}
 
 {% endblock %}
