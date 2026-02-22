@@ -82,7 +82,6 @@ class TournamentFormTests(TestCase):
                 "location": "Test Location",
                 "start_date": "2026-03-15",
                 "editor_usernames": "",
-                "division_names": "",
             }
         )
         self.assertTrue(form.is_valid())
@@ -94,7 +93,6 @@ class TournamentFormTests(TestCase):
                 "location": "Test Location",
                 "start_date": "2026-03-15",
                 "editor_usernames": "editor1\neditor2",
-                "division_names": "",
             }
         )
         self.assertTrue(form.is_valid())
@@ -107,7 +105,6 @@ class TournamentFormTests(TestCase):
                 "location": "Test Location",
                 "start_date": "2026-03-15",
                 "editor_usernames": "editor1\nnonexistent",
-                "division_names": "",
             }
         )
         self.assertFalse(form.is_valid())
@@ -121,57 +118,11 @@ class TournamentFormTests(TestCase):
                 "location": "Test Location",
                 "start_date": "2026-03-15",
                 "editor_usernames": "fake1\nfake2",
-                "division_names": "",
             }
         )
         self.assertFalse(form.is_valid())
         self.assertIn("fake1", form.errors["editor_usernames"][0])
         self.assertIn("fake2", form.errors["editor_usernames"][0])
-
-    def test_valid_form_with_divisions(self):
-        form = TournamentForm(
-            data={
-                "name": "Test Tournament",
-                "location": "Test Location",
-                "start_date": "2026-03-15",
-                "editor_usernames": "",
-                "division_names": "Open\nNovice",
-            }
-        )
-        self.assertTrue(form.is_valid())
-        self.assertEqual(form.cleaned_data["division_names"], ["Open", "Novice"])
-
-    def test_division_names_deduped(self):
-        form = TournamentForm(
-            data={
-                "name": "Test Tournament",
-                "location": "Test Location",
-                "start_date": "2026-03-15",
-                "editor_usernames": "",
-                "division_names": "Open\nNovice\nOpen",
-            }
-        )
-        self.assertTrue(form.is_valid())
-        self.assertEqual(form.cleaned_data["division_names"], ["Open", "Novice"])
-
-    def test_save_creates_divisions(self):
-        form = TournamentForm(
-            data={
-                "name": "Test Tournament",
-                "location": "Test Location",
-                "start_date": "2026-03-15",
-                "editor_usernames": "",
-                "division_names": "Open\nNovice",
-            }
-        )
-        self.assertTrue(form.is_valid())
-        tournament = form.save(commit=False)
-        tournament.owner = self.owner
-        tournament.save()
-        form.save()
-        self.assertEqual(tournament.divisions.count(), 2)
-        self.assertTrue(tournament.divisions.filter(name="Open").exists())
-        self.assertTrue(tournament.divisions.filter(name="Novice").exists())
 
     def test_save_adds_owner_as_editor(self):
         form = TournamentForm(
@@ -180,7 +131,6 @@ class TournamentFormTests(TestCase):
                 "location": "Test Location",
                 "start_date": "2026-03-15",
                 "editor_usernames": "editor1",
-                "division_names": "",
             }
         )
         self.assertTrue(form.is_valid())
@@ -190,109 +140,6 @@ class TournamentFormTests(TestCase):
         form.save()
         self.assertIn(self.owner, tournament.editors.all())
         self.assertIn(self.editor1, tournament.editors.all())
-
-    def test_save_removes_divisions(self):
-        tournament = Tournament.objects.create(
-            name="Test Tournament",
-            location="Test Location",
-            start_date=date(2026, 3, 15),
-            owner=self.owner,
-        )
-        Division.objects.create(name="Open", tournament=tournament)
-        Division.objects.create(name="Novice", tournament=tournament)
-
-        form = TournamentForm(
-            data={
-                "name": "Test Tournament",
-                "location": "Test Location",
-                "start_date": "2026-03-15",
-                "editor_usernames": "",
-                "division_names": "Open",
-            },
-            instance=tournament,
-        )
-        self.assertTrue(form.is_valid())
-        form.save()
-        self.assertEqual(tournament.divisions.count(), 1)
-        self.assertTrue(tournament.divisions.filter(name="Open").exists())
-        self.assertFalse(tournament.divisions.filter(name="Novice").exists())
-
-    def test_edit_form_populates_divisions(self):
-        tournament = Tournament.objects.create(
-            name="Test Tournament",
-            location="Test Location",
-            start_date=date(2026, 3, 15),
-            owner=self.owner,
-        )
-        Division.objects.create(name="Open", tournament=tournament)
-        Division.objects.create(name="Novice", tournament=tournament)
-
-        form = TournamentForm(instance=tournament)
-        # Divisions are ordered by name
-        self.assertIn("Novice", form.fields["division_names"].initial)
-        self.assertIn("Open", form.fields["division_names"].initial)
-
-    def test_save_creates_test_divisions(self):
-        form = TournamentForm(
-            data={
-                "name": "Test Tournament",
-                "location": "Test Location",
-                "start_date": "2026-03-15",
-                "editor_usernames": "",
-                "division_names": "Open",
-                "test_division_names": "Sandbox",
-            }
-        )
-        self.assertTrue(form.is_valid())
-        tournament = form.save(commit=False)
-        tournament.owner = self.owner
-        tournament.save()
-        form.save()
-        self.assertEqual(tournament.divisions.count(), 2)
-        self.assertTrue(tournament.divisions.filter(name="Open", is_test=False).exists())
-        self.assertTrue(tournament.divisions.filter(name="Sandbox", is_test=True).exists())
-
-    def test_save_removes_test_divisions(self):
-        tournament = Tournament.objects.create(
-            name="Test Tournament",
-            location="Test Location",
-            start_date=date(2026, 3, 15),
-            owner=self.owner,
-        )
-        Division.objects.create(name="Open", tournament=tournament)
-        Division.objects.create(name="Sandbox", tournament=tournament, is_test=True)
-
-        form = TournamentForm(
-            data={
-                "name": "Test Tournament",
-                "location": "Test Location",
-                "start_date": "2026-03-15",
-                "editor_usernames": "",
-                "division_names": "Open",
-                "test_division_names": "",
-            },
-            instance=tournament,
-        )
-        self.assertTrue(form.is_valid())
-        form.save()
-        self.assertEqual(tournament.divisions.count(), 1)
-        self.assertFalse(tournament.divisions.filter(name="Sandbox").exists())
-
-    def test_edit_form_populates_test_divisions(self):
-        tournament = Tournament.objects.create(
-            name="Test Tournament",
-            location="Test Location",
-            start_date=date(2026, 3, 15),
-            owner=self.owner,
-        )
-        Division.objects.create(name="Open", tournament=tournament)
-        Division.objects.create(name="Sandbox", tournament=tournament, is_test=True)
-
-        form = TournamentForm(instance=tournament)
-        self.assertIn("Open", form.fields["division_names"].initial)
-        self.assertNotIn("Sandbox", form.fields["division_names"].initial)
-        self.assertIn("Sandbox", form.fields["test_division_names"].initial)
-        self.assertNotIn("Open", form.fields["test_division_names"].initial)
 
     def test_edit_form_populates_editors(self):
         tournament = Tournament.objects.create(

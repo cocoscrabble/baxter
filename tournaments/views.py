@@ -103,6 +103,11 @@ class TournamentUpdateView(LoginRequiredMixin, CanEditTournamentMixin, UpdateVie
     template_name = "tournaments/tournament_form.html"
     context_object_name = "tournament"
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["divisions"] = self.object.divisions.all()
+        return context
+
     def get_success_url(self):
         return self.object.get_absolute_url()
 
@@ -120,6 +125,29 @@ class TournamentDeleteView(LoginRequiredMixin, IsOwnerMixin, DeleteView):
     template_name = "tournaments/tournament_confirm_delete.html"
     context_object_name = "tournament"
     success_url = reverse_lazy("tournament_list")
+
+
+class DivisionCreateView(LoginRequiredMixin, View):
+    def post(self, request, tournament_pk):
+        tournament = get_object_or_404(Tournament, pk=tournament_pk)
+        if not tournament.can_edit(request.user):
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied
+        name = request.POST.get("name", "").strip()
+        is_test = request.POST.get("is_test") == "1"
+        if name:
+            Division.objects.get_or_create(
+                tournament=tournament, name=name, defaults={"is_test": is_test}
+            )
+        return redirect("tournament_detail", pk=tournament_pk)
+
+
+class DivisionDeleteView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    def post(self, request, pk):
+        division = self.get_division()
+        tournament_pk = division.tournament.pk
+        division.delete()
+        return redirect("tournament_detail", pk=tournament_pk)
 
 
 class DivisionDetailView(VisibleDivisionMixin, DetailView):

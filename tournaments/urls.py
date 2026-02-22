@@ -2,6 +2,8 @@ from django.urls import path
 
 from .views import (
     DivisionAllResultsView,
+    DivisionCreateView,
+    DivisionDeleteView,
     DivisionDetailView,
     DivisionEditResultsView,
     DivisionEntrantsEditView,
@@ -37,4 +39,6 @@ urlpatterns = [
     path("division/<int:pk>/edit-results/", DivisionEditResultsView.as_view(), name="division_edit_results"),
     path("division/<int:pk>/simulate-match/", SimulateMatchView.as_view(), name="simulate_match"),
     path("division/<int:pk>/generate-pairings/", GeneratePairingsView.as_view(), name="generate_pairings"),
+    path("<int:tournament_pk>/division/create/", DivisionCreateView.as_view(), name="division_create"),
+    path("division/<int:pk>/delete/", DivisionDeleteView.as_view(), name="division_delete"),
 ]
