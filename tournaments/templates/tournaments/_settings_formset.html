@@ -5,6 +5,7 @@
     <table>
         <thead>
             <tr>
+                <th><input type="checkbox" id="select-all-rounds"></th>
                 <th>Round</th>
                 <th>Pairing Type</th>
                 <th>Based on Round</th>
@@ -14,6 +15,7 @@
         <tbody>
             {% for form in formset %}
             <tr>
+                <td><input type="checkbox" class="round-checkbox" data-round="{{ form.round.value }}"></td>
                 <td>{{ form.round }}{{ form.round.value }}</td>
                 <td>{{ form.pairing_type }}{% if form.pairing_type.errors %}<br>{{ form.pairing_type.errors }}{% endif %}</td>
                 <td>{{ form.start_round }}{% if form.start_round.errors %}<br>{{ form.start_round.errors }}{% endif %}</td>
