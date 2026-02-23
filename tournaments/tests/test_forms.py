@@ -174,9 +174,9 @@ class ResultSlipFormTests(TestCase):
         form = ResultSlipForm(
             data={
                 "round": 1,
-                "winner": self.entrant1.pk,
+                "winner": "Alice",
                 "winner_score": 450,
-                "loser": self.entrant2.pk,
+                "loser": "Bob",
                 "loser_score": 380,
                 "winner_started": True,
             },
@@ -188,9 +188,9 @@ class ResultSlipFormTests(TestCase):
         form = ResultSlipForm(
             data={
                 "round": 1,
-                "winner": self.entrant1.pk,
+                "winner": "Alice",
                 "winner_score": 450,
-                "loser": self.entrant1.pk,
+                "loser": "Alice",
                 "loser_score": 380,
                 "winner_started": True,
             },
@@ -199,24 +199,28 @@ class ResultSlipFormTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn("Winner and loser must be different", str(form.errors))
 
-    def test_queryset_filtered_by_division(self):
-        form = ResultSlipForm(division=self.division)
-        winner_queryset = form.fields["winner"].queryset
-        loser_queryset = form.fields["loser"].queryset
-        # Should include entrants from division 1
-        self.assertIn(self.entrant1, winner_queryset)
-        self.assertIn(self.entrant2, winner_queryset)
-        # Should not include entrants from division 2
-        self.assertNotIn(self.entrant3, winner_queryset)
-        self.assertNotIn(self.entrant3, loser_queryset)
-
-    def test_entrant_from_wrong_division_invalid(self):
+    def test_player_not_in_division_invalid(self):
         form = ResultSlipForm(
             data={
                 "round": 1,
-                "winner": self.entrant1.pk,
+                "winner": "Alice",
                 "winner_score": 450,
-                "loser": self.entrant3.pk,  # Wrong division
+                "loser": "Charlie",  # In division2, not self.division
+                "loser_score": 380,
+                "winner_started": True,
+            },
+            division=self.division,
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("loser", form.errors)
+
+    def test_unknown_player_name_invalid(self):
+        form = ResultSlipForm(
+            data={
+                "round": 1,
+                "winner": "Alice",
+                "winner_score": 450,
+                "loser": "Nobody",
                 "loser_score": 380,
                 "winner_started": True,
             },

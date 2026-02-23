@@ -83,26 +83,39 @@ class TournamentForm(forms.ModelForm):
 class ResultSlipForm(forms.ModelForm):
     """Form for entering game results."""
 
+    winner = forms.CharField(widget=forms.TextInput(attrs={"list": "players-datalist"}))
+    loser = forms.CharField(widget=forms.TextInput(attrs={"list": "players-datalist"}))
+
     class Meta:
         model = ResultSlip
         fields = ["round", "winner", "winner_score", "loser", "loser_score", "winner_started"]
 
     def __init__(self, *args, division=None, **kwargs):
         super().__init__(*args, **kwargs)
-        if division:
-            entrants = Entrant.objects.filter(division=division)
-            self.fields["winner"].queryset = entrants
-            self.fields["loser"].queryset = entrants
-            self.fields["winner"].label_from_instance = lambda e: e.player.name
-            self.fields["loser"].label_from_instance = lambda e: e.player.name
-        elif self.instance.pk:
-            entrants = Entrant.objects.filter(division=self.instance.division)
-            self.fields["winner"].queryset = entrants
-            self.fields["loser"].queryset = entrants
-            self.fields["winner"].label_from_instance = lambda e: e.player.name
-            self.fields["loser"].label_from_instance = lambda e: e.player.name
+        self._division = division or (self.instance.division if self.instance.pk else None)
+        if self.instance.pk:
+            if self.instance.winner:
+                self.fields["winner"].initial = self.instance.winner.player.name
+            if self.instance.loser:
+                self.fields["loser"].initial = self.instance.loser.player.name
         for field_name, field in self.fields.items():
             field.widget.attrs["data-bind"] = field_name
+
+    def _get_entrant(self, name):
+        if not self._division:
+            raise forms.ValidationError("Division not set.")
+        try:
+            return Entrant.objects.select_related("player").get(
+                division=self._division, player__name=name
+            )
+        except Entrant.DoesNotExist:
+            raise forms.ValidationError(f"Player '{name}' not found in this division.")
+
+    def clean_winner(self):
+        return self._get_entrant(self.cleaned_data.get("winner", ""))
+
+    def clean_loser(self):
+        return self._get_entrant(self.cleaned_data.get("loser", ""))
 
     def clean(self):
         cleaned_data = super().clean()

@@ -478,23 +478,32 @@ class ResultSlipCreateView(CreateView):
         kwargs["division"] = self.get_division()
         return kwargs
 
+    def _player_names(self, division):
+        return list(
+            Entrant.objects.filter(division=division)
+            .select_related("player")
+            .values_list("player__name", flat=True)
+            .order_by("player__name")
+        )
+
     def post(self, request, *args, **kwargs):
         if is_datastar(request):
             division = self.get_division()
             signals = read_signals(request) or {}
             form = ResultSlipForm(signals, division=division)
+            player_names = self._player_names(division)
             if form.is_valid():
                 form.instance.division = division
                 form.save()
                 fresh_form = ResultSlipForm(division=division)
                 return fragment_response(
                     "tournaments/_resultslip_form.html",
-                    {"form": fresh_form, "division": division, "success_message": "Result saved. If there are any mistakes, edit the form and click save again. If everything looks correct, hit Done to close the form."},
+                    {"form": fresh_form, "division": division, "player_names": player_names, "success_message": "Result saved. If there are any mistakes, edit the form and click save again. If everything looks correct, hit Done to close the form."},
                     request=request,
                 )
             return fragment_response(
                 "tournaments/_resultslip_form.html",
-                {"form": form, "division": division},
+                {"form": form, "division": division, "player_names": player_names},
                 request=request,
             )
         return super().post(request, *args, **kwargs)
@@ -508,7 +517,9 @@ class ResultSlipCreateView(CreateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["division"] = self.get_division()
+        division = self.get_division()
+        context["division"] = division
+        context["player_names"] = self._player_names(division)
         return context
 
 
