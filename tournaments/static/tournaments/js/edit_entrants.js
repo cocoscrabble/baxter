@@ -51,7 +51,14 @@ function renumber() {
 
 document.getElementById("add-row-btn").addEventListener("click", function() {
     const count = table.getDataCount();
-    table.addRow({ number: count + 1, player: null });
+    table.addRow({ number: count + 1, player: null }).then(function(row) {
+        const cell = row.getCell("player");
+        cell.edit();
+        setTimeout(() => {
+            const input = cell.getElement().querySelector("input");
+            if (input) input.focus();
+        }, 0);
+    });
 });
 
 document.getElementById("save-btn").addEventListener("click", function() {
