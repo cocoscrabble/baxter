@@ -243,9 +243,9 @@ class ResultSlipCreateViewTests(TestCase):
             reverse("resultslip_create", kwargs={"pk": self.division.pk}),
             {
                 "round": 1,
-                "winner": self.entrant1.pk,
+                "winner": "Alice",
                 "winner_score": 450,
-                "loser": self.entrant2.pk,
+                "loser": "Bob",
                 "loser_score": 380,
                 "winner_started": True,
             },
@@ -272,9 +272,9 @@ class ResultSlipCreateViewTests(TestCase):
             reverse("resultslip_create", kwargs={"pk": self.division.pk}),
             {
                 "round": 1,
-                "winner": self.entrant1.pk,
+                "winner": "Alice",
                 "winner_score": 450,
-                "loser": self.entrant1.pk,
+                "loser": "Alice",
                 "loser_score": 380,
                 "winner_started": True,
             },
