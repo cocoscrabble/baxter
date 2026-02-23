@@ -143,6 +143,14 @@ dd {
     background-color: #fdecea;
 }
 
+.settings-controls {
+    display: flex;
+    gap: 24px;
+    align-items: baseline;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+
 .division-toolbar {
     display: flex;
     gap: 8px;

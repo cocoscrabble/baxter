@@ -7,11 +7,46 @@
 <p>Tournament: <a href="{% url 'tournament_detail' division.tournament.pk %}">{{ division.tournament.name }}</a></p>
 <p><a href="{% url 'division_detail' division.pk %}">Back to division</a></p>
 
-<div>
-    {{ round_count_form.num_rounds.label_tag }}
-    <input type="number" min="1" data-bind="numRounds" value="{{ round_count_form.num_rounds.value|default:'' }}">
-    <button data-on:click="@get('{% url 'division_settings' division.pk %}?num_rounds=' + $numRounds)">Change</button>
+<div class="settings-controls">
+    <div>
+        {{ round_count_form.num_rounds.label_tag }}
+        <input type="number" min="1" data-bind="numRounds" value="{{ round_count_form.num_rounds.value|default:'' }}">
+        <button data-on:click="@get('{% url 'division_settings' division.pk %}?num_rounds=' + $numRounds)">Change</button>
+    </div>
+    <div>
+        <label for="bulk-start-offset">Pair selected rounds based on</label>
+        <select id="bulk-start-offset">
+            <option value="1">One round back</option>
+            <option value="2">Two rounds back</option>
+        </select>
+        <button type="button" id="bulk-offset-btn">Change</button>
+    </div>
 </div>
 
 {% include "tournaments/_settings_formset.html" %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('bulk-offset-btn').addEventListener('click', function() {
+    const offset = parseInt(document.getElementById('bulk-start-offset').value);
+    document.querySelectorAll('.round-checkbox:checked').forEach(function(cb) {
+        const round = parseInt(cb.dataset.round);
+        const input = cb.closest('tr').querySelector('[name$="-start_round"]');
+        if (input) input.value = Math.max(0, round - offset);
+    });
+});
+
+document.addEventListener('change', function(e) {
+    if (e.target.id === 'select-all-rounds') {
+        document.querySelectorAll('.round-checkbox').forEach(function(cb) {
+            cb.checked = e.target.checked;
+        });
+    } else if (e.target.classList.contains('round-checkbox')) {
+        const anyUnchecked = document.querySelectorAll('.round-checkbox:not(:checked)').length > 0;
+        const selectAll = document.getElementById('select-all-rounds');
+        if (selectAll) selectAll.checked = !anyUnchecked;
+    }
+});
+</script>
 {% endblock %}
