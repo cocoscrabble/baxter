@@ -23,7 +23,7 @@ const table = new Tabulator("#entrants-table", {
             title: "Player",
             field: "player",
             editor: "list",
-            editorParams: { values: playerValues },
+            editorParams: { values: playerValues, autocomplete: true, listOnEmpty: true },
             formatter: function(cell) {
                 return playerLookup[cell.getValue()] || "";
             },
