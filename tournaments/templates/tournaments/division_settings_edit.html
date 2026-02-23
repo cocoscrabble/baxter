@@ -14,6 +14,13 @@
         <button data-on:click="@get('{% url 'division_settings' division.pk %}?num_rounds=' + $numRounds)">Change</button>
     </div>
     <div>
+        <label for="bulk-pairing-type">Pair selected rounds</label>
+        <select id="bulk-pairing-type">
+            {% for s in strategy_types %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+        </select>
+        <button type="button" id="bulk-pairing-btn">Change</button>
+    </div>
+    <div>
         <label for="bulk-start-offset">Pair selected rounds based on</label>
         <select id="bulk-start-offset">
             <option value="1">One round back</option>
@@ -28,6 +35,14 @@
 
 {% block extra_js %}
 <script>
+document.getElementById('bulk-pairing-btn').addEventListener('click', function() {
+    const pairingType = document.getElementById('bulk-pairing-type').value;
+    document.querySelectorAll('.round-checkbox:checked').forEach(function(cb) {
+        const select = cb.closest('tr').querySelector('[name$="-pairing_type"]');
+        if (select) select.value = pairingType;
+    });
+});
+
 document.getElementById('bulk-offset-btn').addEventListener('click', function() {
     const offset = parseInt(document.getElementById('bulk-start-offset').value);
     document.querySelectorAll('.round-checkbox:checked').forEach(function(cb) {

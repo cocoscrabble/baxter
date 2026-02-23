@@ -26,7 +26,7 @@ from .forms import (
 from .dto import EntrantDTO, ResultSlipDTO
 from .models import Division, DivisionSettings, Entrant, Pairing, Player, ResultSlip, Tournament
 from .pairing.base import PairingData, standings_after_round
-from .pairing.pair import can_pair, pair, round_status
+from .pairing.pair import can_pair, pair, round_status, STRATEGY_TYPES
 from .pairing.round_pairing import RoundPairing
 
 
@@ -375,6 +375,7 @@ class DivisionSettingsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
             "division": division,
             "formset": formset,
             "round_count_form": round_count_form,
+            "strategy_types": STRATEGY_TYPES,
         }
         if is_datastar(request):
             return fragment_response(
