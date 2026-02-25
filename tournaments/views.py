@@ -23,8 +23,8 @@ from .forms import (
     RoundPairingFormSet,
     TournamentForm,
 )
-from .dto import EntrantDTO, ResultSlipDTO
-from .models import Division, DivisionSettings, Entrant, Pairing, Player, ResultSlip, Tournament
+from .dto import EntrantDTO, FixedPairingDTO, ResultSlipDTO
+from .models import Division, DivisionSettings, Entrant, FixedPairing, Pairing, Player, ResultSlip, Tournament
 from .pairing.base import PairingData, standings_after_round
 from .pairing.pair import can_pair, pair, round_status, STRATEGY_TYPES
 from .pairing.round_pairing import RoundPairing
@@ -458,6 +458,59 @@ class DivisionEntrantsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
         division.entrants.all().delete()
         for entrant in validated:
             Entrant.objects.create(division=division, **entrant.to_db_kwargs())
+        return JsonResponse({"ok": True})
+
+
+class DivisionFixedPairingsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    template_name = "tournaments/division_fixed_pairings_edit.html"
+
+    def get_division(self):
+        return get_object_or_404(Division, pk=self.kwargs["pk"])
+
+    def get(self, request, pk):
+        division = self.get_division()
+        entrants = division.entrants.select_related("player").order_by("number")
+        entrant_values = [{"id": e.pk, "label": e.player.name} for e in entrants]
+        existing = [
+            {"round_number": fp.round_number, "entrant1": fp.entrant1_id, "entrant2": fp.entrant2_id}
+            for fp in division.fixed_pairings.all()
+        ]
+        return render(request, self.template_name, {
+            "division": division,
+            "entrant_values_json": json.dumps(entrant_values),
+            "fixed_pairings_json": json.dumps(existing),
+        })
+
+    def post(self, request, pk):
+        division = self.get_division()
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({"errors": ["Invalid JSON."]}, status=400)
+
+        rows = data.get("pairings", [])
+        valid_entrant_ids = set(division.entrants.values_list("pk", flat=True))
+        errors = []
+        seen_per_round: dict[int, set[int]] = {}
+        validated = []
+
+        for i, row in enumerate(rows):
+            fp = FixedPairingDTO.from_json(row)
+            if fp is None:
+                errors.append(f"Row {i+1}: all fields are required.")
+                continue
+            row_errors = fp.validate(valid_entrant_ids, seen_per_round)
+            if row_errors:
+                errors.extend(f"Row {i+1}: {e}" for e in row_errors)
+            else:
+                validated.append(fp)
+
+        if errors:
+            return JsonResponse({"errors": errors}, status=400)
+
+        division.fixed_pairings.all().delete()
+        for fp in validated:
+            FixedPairing.objects.create(division=division, **fp.to_db_kwargs())
         return JsonResponse({"ok": True})
 
 

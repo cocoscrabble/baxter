@@ -73,3 +73,54 @@ class EntrantDTO(DataClassJsonMixin):
             "number": self.number,
             "player_id": self.player,
         }
+
+
+@dataclass
+class FixedPairingDTO(DataClassJsonMixin):
+    round_number: int
+    entrant1: int  # entrant pk
+    entrant2: int  # entrant pk
+
+    @classmethod
+    def from_json(cls, row: dict) -> "FixedPairingDTO | None":
+        """Parse a JSON row dict. Returns None if any required field is missing/invalid."""
+        if any(row.get(f.name) is None for f in fields(cls)):
+            return None
+        try:
+            return cls(
+                round_number=int(row["round_number"]),
+                entrant1=int(row["entrant1"]),
+                entrant2=int(row["entrant2"]),
+            )
+        except (ValueError, TypeError):
+            return None
+
+    def validate(self, valid_entrant_ids: set[int], seen_per_round: dict[int, set[int]]) -> list[str]:
+        """Return list of validation error strings."""
+        errors = []
+        if self.entrant1 == self.entrant2:
+            errors.append("entrant1 and entrant2 must be different.")
+            return errors
+        if self.entrant1 not in valid_entrant_ids:
+            errors.append("player 1 not found in division.")
+        if self.entrant2 not in valid_entrant_ids:
+            errors.append("player 2 not found in division.")
+        if errors:
+            return errors
+        seen = seen_per_round.setdefault(self.round_number, set())
+        if self.entrant1 in seen:
+            errors.append(f"player 1 already paired in round {self.round_number}.")
+        elif self.entrant2 in seen:
+            errors.append(f"player 2 already paired in round {self.round_number}.")
+        else:
+            seen.add(self.entrant1)
+            seen.add(self.entrant2)
+        return errors
+
+    def to_db_kwargs(self) -> dict:
+        """Return kwargs for FixedPairing.objects.create()."""
+        return {
+            "round_number": self.round_number,
+            "entrant1_id": self.entrant1,
+            "entrant2_id": self.entrant2,
+        }
