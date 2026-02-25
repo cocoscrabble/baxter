@@ -4,8 +4,10 @@ from tournaments.pairing.base import (
     DisplayPairing,
     PairingData,
     Pairings,
+    Player,
     RoundStatus,
     Starts,
+    standings_after_round,
 )
 from tournaments.pairing.round_pairing import RP, RoundPairing
 from tournaments.pairing.basic import (
@@ -38,11 +40,28 @@ def can_pair(rp, status) -> bool:
 
 
 def pair_round(pd: PairingData, rp) -> Pairings:
+    fixed_pairs = pd.fixed_pairings.get(rp.round, [])
+
+    if fixed_pairs:
+        # Temporarily exclude fixed players from standings so the strategy only sees
+        # the remaining entrants. See PairingData.excluded_names for full explanation.
+        pd.excluded_names = {name for pair in fixed_pairs for name in pair}
+
     strategy = STRATEGIES.get(rp.pairing)
-    if strategy:
-        return strategy(pd, rp)
-    else:
-        return Pairings()
+    result = strategy(pd, rp) if strategy else Pairings()
+
+    pd.excluded_names = set()
+
+    if fixed_pairs:
+        # Look up Player objects from the full (unfiltered) standings so that starts.add()
+        # has accurate score/starts data for the starts-balancing decision.
+        all_players = {p.name: p for p in standings_after_round(pd, rp.start_round)}
+        for name1, name2 in fixed_pairs:
+            p1 = all_players.get(name1) or Player(name1)
+            p2 = all_players.get(name2) or Player(name2)
+            result.add(p1, p2)
+
+    return result
 
 
 def round_status(pd: PairingData) -> dict[int, RoundStatus]:

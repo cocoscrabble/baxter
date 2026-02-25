@@ -75,13 +75,30 @@ class PairingData:
     # It is populated in pairings.pair() before pair_round() is called.
     repeats: Repeats
 
+    # Fixed pairings keyed by round number. Each entry is a list of unordered (name1, name2)
+    # pairs that must be matched regardless of what the pairing strategy would choose.
+    fixed_pairings: dict[int, list[tuple[str, str]]] = field(default_factory=dict)
+
+    # Temporary filter used by pair_round() while invoking a strategy for a round that has
+    # fixed pairings. pair_round() sets this to the names of all fixed players before calling
+    # the strategy, so that standings_after_round() omits them and the strategy only sees the
+    # remaining entrants. pair_round() clears it again before returning.
+    #
+    # Strategies call standings_after_round(pd, ...) directly as a module-level function, so
+    # this field is the least-invasive way to communicate the exclusion set to them without
+    # modifying every strategy individually.
+    excluded_names: set[str] = field(default_factory=set)
+
     @classmethod
     def for_division(cls, division) -> "PairingData":
         entrants = [
             EntrantData(PlayerData.from_db(e.player)) for e in division.entrants.all()
         ]
         slips = [ResultSlipData.from_db(r) for r in division.result_slips.all()]
-        return cls(result_slips=slips, entrants=entrants, repeats=Repeats())
+        fixed: dict[int, list[tuple[str, str]]] = defaultdict(list)
+        for fp in division.fixed_pairings.select_related("entrant1__player", "entrant2__player").all():
+            fixed[fp.round_number].append((fp.entrant1.player.name, fp.entrant2.player.name))
+        return cls(result_slips=slips, entrants=entrants, repeats=Repeats(), fixed_pairings=dict(fixed))
 
 
 class DefaultDict(defaultdict):
@@ -317,9 +334,12 @@ def seedings(pd: PairingData) -> Standings:
 
 def standings_after_round(pd: PairingData, round: int) -> Standings:
     if round == 0:
-        return seedings(pd)
+        s = seedings(pd)
     else:
-        return results_after_round(pd, round).standings()
+        s = results_after_round(pd, round).standings()
+    if pd.excluded_names:
+        s = [p for p in s if p.name not in pd.excluded_names]
+    return s
 
 
 def blossom(edges) -> list[tuple]:
