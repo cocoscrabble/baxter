@@ -30,7 +30,7 @@ from tournaments.pairing.swiss import pair_swiss, pair_swiss_plus_random
 
 def can_pair(rp, status) -> bool:
     stat = status[rp.round]
-    if stat == RoundStatus.Finished:
+    if stat in (RoundStatus.Finished, RoundStatus.Partial):
         return False
     if RP.is_round_robin(rp.pairing):
         # Round robins do not depend on results from a previous round
