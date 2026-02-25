@@ -6,20 +6,25 @@ from tournaments.models import (
     Division,
     DivisionSettings,
     Entrant,
+    FixedPairing as DBFixedPairing,
     Player as DBPlayer,
     ResultSlip,
     Tournament,
 )
 from tournaments.pairing.base import (
+    EntrantData,
     Pairing,
     PairingData,
     Player,
+    PlayerData,
     Repeats,
+    ResultSlipData,
     RoundStatus,
     Starts,
+    standings_after_round,
 )
 from tournaments.pairing.round_pairing import RP, RoundPairing
-from tournaments.pairing.pair import can_pair, extract_pairings, pair, round_status
+from tournaments.pairing.pair import can_pair, extract_pairings, pair, pair_round, round_status
 from users.models import User
 
 
@@ -313,3 +318,179 @@ class PairTests(PairingDBTestBase):
         # first in DisplayPairing is the starter.
         starters = {p.first.name for p in pairings}
         self.assertEqual(starters, {"Bob", "Dave"})
+
+
+# ── standings_after_round with excluded_names ────────────────────────────────
+
+
+def _make_pd(names, result_slips=None, fixed_pairings=None):
+    """Build a PairingData from a list of player names (first = highest rated)."""
+    n = len(names)
+    entrants = [
+        EntrantData(PlayerData(name=name, rating=(n - i) * 100))
+        for i, name in enumerate(names)
+    ]
+    return PairingData(
+        result_slips=result_slips or [],
+        entrants=entrants,
+        repeats=Repeats(),
+        fixed_pairings=fixed_pairings or {},
+    )
+
+
+class StandingsExclusionTests(TestCase):
+    """standings_after_round filters pd.excluded_names from its output."""
+
+    def test_filters_excluded_from_seedings(self):
+        pd = _make_pd(["Alice", "Bob", "Carol", "Dave"])
+        pd.excluded_names = {"Alice", "Dave"}
+        names = [p.name for p in standings_after_round(pd, 0)]
+        self.assertNotIn("Alice", names)
+        self.assertNotIn("Dave", names)
+        self.assertIn("Bob", names)
+        self.assertIn("Carol", names)
+
+    def test_filters_excluded_from_results_standings(self):
+        slips = [
+            ResultSlipData(1, "Alice", "Bob", 400, 350, True),
+            ResultSlipData(1, "Carol", "Dave", 420, 360, True),
+        ]
+        pd = _make_pd(["Alice", "Bob", "Carol", "Dave"], result_slips=slips)
+        pd.excluded_names = {"Alice", "Carol"}
+        names = [p.name for p in standings_after_round(pd, 1)]
+        self.assertNotIn("Alice", names)
+        self.assertNotIn("Carol", names)
+        self.assertIn("Bob", names)
+        self.assertIn("Dave", names)
+
+    def test_empty_excluded_names_returns_all(self):
+        pd = _make_pd(["Alice", "Bob", "Carol", "Dave"])
+        self.assertEqual(len(standings_after_round(pd, 0)), 4)
+
+
+# ── pair_round with fixed pairings ───────────────────────────────────────────
+
+
+class PairRoundFixedTests(TestCase):
+    """pair_round injects fixed pairings and excludes those players from the strategy."""
+
+    def _pair_sets(self, pairings):
+        return [{p.first.name, p.second.name} for p in pairings]
+
+    def test_fixed_pair_included_in_output(self):
+        # Fix Alice-Dave; KotH on remaining Bob-Carol.
+        pd = _make_pd(["Alice", "Bob", "Carol", "Dave"], fixed_pairings={1: [("Alice", "Dave")]})
+        rp = RoundPairing(round=1, start_round=0, pairing=RP.KotH)
+        self.assertIn({"Alice", "Dave"}, self._pair_sets(pair_round(pd, rp)))
+
+    def test_strategy_only_sees_remaining_players(self):
+        # With Alice-Dave fixed, KotH gets [Bob, Carol] and must pair them together.
+        pd = _make_pd(["Alice", "Bob", "Carol", "Dave"], fixed_pairings={1: [("Alice", "Dave")]})
+        rp = RoundPairing(round=1, start_round=0, pairing=RP.KotH)
+        pairings = list(pair_round(pd, rp))
+        self.assertEqual(len(pairings), 2)
+        self.assertIn({"Bob", "Carol"}, self._pair_sets(pairings))
+
+    def test_fixed_players_not_double_paired(self):
+        # Alice and Dave must not appear in any strategy-generated pair.
+        pd = _make_pd(["Alice", "Bob", "Carol", "Dave"], fixed_pairings={1: [("Alice", "Dave")]})
+        rp = RoundPairing(round=1, start_round=0, pairing=RP.KotH)
+        pair_sets = self._pair_sets(pair_round(pd, rp))
+        for s in pair_sets:
+            if s != {"Alice", "Dave"}:
+                self.assertNotIn("Alice", s)
+                self.assertNotIn("Dave", s)
+
+    def test_excluded_names_cleared_after_call(self):
+        pd = _make_pd(["Alice", "Bob", "Carol", "Dave"], fixed_pairings={1: [("Alice", "Dave")]})
+        rp = RoundPairing(round=1, start_round=0, pairing=RP.KotH)
+        pair_round(pd, rp)
+        self.assertEqual(pd.excluded_names, set())
+
+    def test_no_fixed_pairings_behaves_normally(self):
+        # Sanity check: without fixed pairings, KotH pairs by seeding order.
+        pd = _make_pd(["Alice", "Bob", "Carol", "Dave"])
+        rp = RoundPairing(round=1, start_round=0, pairing=RP.KotH)
+        pair_sets = self._pair_sets(pair_round(pd, rp))
+        self.assertIn({"Alice", "Bob"}, pair_sets)
+        self.assertIn({"Carol", "Dave"}, pair_sets)
+
+
+# ── DB-backed integration tests ──────────────────────────────────────────────
+
+
+class FixedPairingIntegrationTests(PairingDBTestBase):
+    """End-to-end tests for fixed pairings through the full pair() pipeline."""
+
+    def _koth_config(self, num_rounds):
+        rp = [{"round": i, "pairing": RP.KotH, "start_round": i - 1} for i in range(1, num_rounds + 1)]
+        return DivisionSettings.objects.create(division=self.division, round_pairings=rp)
+
+    def _add_fixed(self, round_number, idx1, idx2):
+        return DBFixedPairing.objects.create(
+            division=self.division,
+            round_number=round_number,
+            entrant1=self.entrants[idx1],
+            entrant2=self.entrants[idx2],
+        )
+
+    def _pd(self):
+        return PairingData.for_division(self.division)
+
+    def test_for_division_loads_fixed_pairings(self):
+        self._add_fixed(1, 0, 3)  # Alice-Dave in round 1
+        pd = self._pd()
+        self.assertIn(1, pd.fixed_pairings)
+        self.assertEqual(set(pd.fixed_pairings[1][0]), {"Alice", "Dave"})
+
+    def test_for_division_no_fixed_pairings_is_empty(self):
+        pd = self._pd()
+        self.assertEqual(pd.fixed_pairings, {})
+
+    def test_for_division_multiple_fixed_in_same_round(self):
+        # All four players fixed in round 1: Alice-Dave and Bob-Carol.
+        self._add_fixed(1, 0, 3)
+        self._add_fixed(1, 1, 2)
+        pd = self._pd()
+        self.assertEqual(len(pd.fixed_pairings[1]), 2)
+        pair_sets = [set(pair) for pair in pd.fixed_pairings[1]]
+        self.assertIn({"Alice", "Dave"}, pair_sets)
+        self.assertIn({"Bob", "Carol"}, pair_sets)
+
+    def test_fixed_pair_appears_in_pair_output(self):
+        self._add_fixed(1, 0, 3)  # Alice-Dave fixed
+        settings = self._koth_config(1)
+        _, pairings = pair(self._pd(), settings)[0]
+        pair_sets = [{p.first.name, p.second.name} for p in pairings]
+        self.assertIn({"Alice", "Dave"}, pair_sets)
+
+    def test_non_fixed_players_paired_by_strategy(self):
+        # With Alice-Dave fixed, KotH pairs the two remaining players Bob and Carol.
+        self._add_fixed(1, 0, 3)
+        settings = self._koth_config(1)
+        _, pairings = pair(self._pd(), settings)[0]
+        pair_sets = [{p.first.name, p.second.name} for p in pairings]
+        self.assertIn({"Bob", "Carol"}, pair_sets)
+
+    def test_fixed_pair_goes_through_starts_balancing(self):
+        # Round 1: Alice starts vs Bob (Alice wins), Carol starts vs Dave.
+        self.add_result(1, 0, 1, 450, 380, winner_started=True)
+        self.add_result(1, 2, 3, 400, 350, winner_started=True)
+        # After round 1: Alice has 1 start, Bob has 0.
+        # Round 2: fix Alice-Bob. Starts balancing should give Bob the start.
+        self._add_fixed(2, 0, 1)
+        settings = self._koth_config(2)
+        _, pairings = pair(self._pd(), settings)[0]
+        alice_bob = next(p for p in pairings if {p.first.name, p.second.name} == {"Alice", "Bob"})
+        self.assertEqual(alice_bob.first.name, "Bob")
+
+    def test_fixed_pair_repeats_tracked(self):
+        # Round 1: Alice beats Bob — their first meeting.
+        self.add_result(1, 0, 1, 450, 380, winner_started=True)
+        self.add_result(1, 2, 3, 400, 350, winner_started=True)
+        # Round 2: fix Alice-Bob again. repeats should be 2 (once in R1, once in R2).
+        self._add_fixed(2, 0, 1)
+        settings = self._koth_config(2)
+        _, pairings = pair(self._pd(), settings)[0]
+        alice_bob = next(p for p in pairings if {p.first.name, p.second.name} == {"Alice", "Bob"})
+        self.assertEqual(alice_bob.repeats, 2)
