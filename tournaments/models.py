@@ -212,3 +212,18 @@ class Pairing(models.Model):
 
     def __str__(self):
         return f"R{self.round}: {self.first.name} vs {self.second.name}"
+
+
+class FixedPairing(models.Model):
+    """A fixed (pre-set) pairing for a division round."""
+
+    division = models.ForeignKey(Division, on_delete=models.CASCADE, related_name="fixed_pairings")
+    round_number = models.IntegerField()
+    entrant1 = models.ForeignKey(Entrant, on_delete=models.CASCADE, related_name="fixed_pairings_as_first")
+    entrant2 = models.ForeignKey(Entrant, on_delete=models.CASCADE, related_name="fixed_pairings_as_second")
+
+    class Meta:
+        ordering = ["round_number"]
+
+    def __str__(self):
+        return f"R{self.round_number}: {self.entrant1.name} vs {self.entrant2.name}"
