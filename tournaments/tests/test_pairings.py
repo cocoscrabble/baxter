@@ -125,6 +125,16 @@ class CanPairTests(TestCase):
         status = {1: RoundStatus.Partial, 2: RoundStatus.Empty}
         self.assertFalse(can_pair(rp, status))
 
+    def test_partial_round_cannot_pair(self):
+        rp = RoundPairing(round=1, start_round=0, pairing=RP.KotH)
+        status = {1: RoundStatus.Partial}
+        self.assertFalse(can_pair(rp, status))
+
+    def test_partial_round_robin_cannot_pair(self):
+        rp = RoundPairing(round=1, start_round=1, pairing=RP.RoundRobin)
+        status = {1: RoundStatus.Partial}
+        self.assertFalse(can_pair(rp, status))
+
     def test_round_robin_ignores_start_round(self):
         rp = RoundPairing(round=2, start_round=1, pairing=RP.RoundRobin)
         status = {1: RoundStatus.Empty, 2: RoundStatus.Empty}
@@ -265,15 +275,13 @@ class PairTests(PairingDBTestBase):
         self.assertIn({"Alice", "Carol"}, paired_sets)
         self.assertIn({"Bob", "Dave"}, paired_sets)
 
-    def test_dependent_round_not_paired_if_start_round_incomplete(self):
+    def test_no_round_paired_if_any_round_is_partial(self):
         settings = self._koth_config(2)
         # Round 1 partial: only one result entered
         self.add_result(1, 0, 1, 450, 380)
         result = pair(self._pd(), settings)
-        # Round 1 (start_round=0) can still be paired from seedings,
-        # but round 2 depends on round 1 which is incomplete
-        self.assertEqual(len(result), 1)
-        self.assertEqual(result[0][0], 1)
+        # Round 1 is partial so it cannot be re-paired; round 2 also blocked
+        self.assertEqual(len(result), 0)
 
     def test_repeats_tracked(self):
         settings = self._koth_config(3)

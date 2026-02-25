@@ -25,7 +25,7 @@ from .forms import (
 )
 from .dto import EntrantDTO, FixedPairingDTO, ResultSlipDTO
 from .models import Division, DivisionSettings, Entrant, FixedPairing, Pairing, Player, ResultSlip, Tournament
-from .pairing.base import PairingData, standings_after_round
+from .pairing.base import PairingData, RoundStatus, standings_after_round
 from .pairing.pair import can_pair, pair, round_status, STRATEGY_TYPES
 from .pairing.round_pairing import RoundPairing
 
@@ -288,12 +288,16 @@ def _build_pairings_context(division):
     if not db_pairings:
         context["pairings_message"] = "No pairings generated yet."
         return context
+    pd = PairingData.for_division(division)
+    status = round_status(pd)
     played = {}
     for slip in division.result_slips.all():
         key = (slip.round, frozenset({slip.winner_id, slip.loser_id}))
         played[key] = slip
     annotated = []
     for round_num, round_pairings in groupby(db_pairings, key=lambda p: p.round):
+        if status[round_num] == RoundStatus.Finished:
+            continue
         round_annotated = []
         for p in round_pairings:
             key = (round_num, frozenset({p.first_id, p.second_id}))
