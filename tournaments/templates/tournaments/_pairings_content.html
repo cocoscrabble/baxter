@@ -10,7 +10,7 @@
             <th>First</th>
             <th>Second</th>
             <th>Repeats</th>
-            <th></th>
+            <th>{% if division.is_test %}<button data-on:click="@post('{% url 'simulate_round' division.pk %}', {headers: {'X-CSRFToken': $_csrfToken}, payload: {round: {{ round_num }}}})">simulate all</button>{% endif %}</th>
         </tr>
     </thead>
     <tbody>
