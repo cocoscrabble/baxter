@@ -84,3 +84,37 @@ class MakePairingsTests(TestCase):
                 {"round": 1, "start_round": 0, "pairing": "Swiss"},
             ],
         )
+
+    def test_quads_share_start_round(self):
+        # All rounds in a quad block share the same start_round (the round before the block).
+        self.assert_pairings(
+            "QC:3",
+            [
+                {"round": 1, "start_round": 0, "pairing": "Quads_Clustered"},
+                {"round": 2, "start_round": 0, "pairing": "Quads_Clustered"},
+                {"round": 3, "start_round": 0, "pairing": "Quads_Clustered"},
+            ],
+        )
+
+    def test_quads_after_other_rounds(self):
+        # start_round for a quad block is the last round before the block.
+        self.assert_pairings(
+            "KH:2 QC:3",
+            [
+                {"round": 1, "start_round": 0, "pairing": "KotH"},
+                {"round": 2, "start_round": 1, "pairing": "KotH"},
+                {"round": 3, "start_round": 2, "pairing": "Quads_Clustered"},
+                {"round": 4, "start_round": 2, "pairing": "Quads_Clustered"},
+                {"round": 5, "start_round": 2, "pairing": "Quads_Clustered"},
+            ],
+        )
+
+    def test_sixes_share_start_round(self):
+        self.assert_pairings(
+            "SX:3",
+            [
+                {"round": 1, "start_round": 0, "pairing": "Sixes"},
+                {"round": 2, "start_round": 0, "pairing": "Sixes"},
+                {"round": 3, "start_round": 0, "pairing": "Sixes"},
+            ],
+        )
