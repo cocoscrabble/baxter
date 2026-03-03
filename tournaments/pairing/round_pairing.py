@@ -23,6 +23,10 @@ class RP(StrEnum):
     def is_round_robin(name) -> bool:
         return name in (RP.RoundRobin, RP.DoubleRoundRobin, RP.Charlottesville)
 
+    @staticmethod
+    def is_quad(name) -> bool:
+        return name in (RP.Quads_Clustered, RP.Quads_Distributed, RP.Quads_Evans, RP.Sixes)
+
 
 ABBREV = {
     "KH": RP.KotH,
@@ -62,11 +66,15 @@ def make_pairings(spec: str) -> list[RoundPairing]:
         curr = len(out) + 1
         for i in range(v):
             if RP.is_round_robin(rp):
-                # All entries in a single round robin have their start round as the
-                # first round of the set
+                # All entries in a single round robin share the first round of
+                # the set as their start_round (which is itself part of the block).
                 e = RoundPairing(curr + i, curr, rp)
+            elif RP.is_quad(rp):
+                # All entries in a quad/sixes block share the round immediately
+                # before the block as their start_round (not part of the block).
+                e = RoundPairing(curr + i, curr - 1, rp)
             else:
-                # Otherwise, each round is paired from the previous one
+                # Otherwise, each round is paired from the previous one.
                 e = RoundPairing(curr + i, curr + i - 1, rp)
             out.append(e)
     return out

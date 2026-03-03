@@ -23,7 +23,7 @@ from tournaments.pairing.quads import (
 from tournaments.pairing.swiss import pair_swiss
 
 
-def make_pd(standings_str):
+def make_pd(standings_str, round_pairings=None):
     """Create PairingData where seedings (round 0) match the letter order.
 
     Each letter becomes a player whose rating ensures the seeding order
@@ -34,7 +34,7 @@ def make_pd(standings_str):
         EntrantData(PlayerData(name=ch, rating=(n - i) * 100))
         for i, ch in enumerate(standings_str)
     ]
-    return PairingData(result_slips=[], entrants=entrants, repeats=Repeats())
+    return PairingData(result_slips=[], entrants=entrants, repeats=Repeats(), round_pairings=round_pairings or [])
 
 
 def pairings_str(pairings):
@@ -59,10 +59,11 @@ class PairingTestCase(TestCase):
         round=1,
         start_round=0,
         pairing=RP.KotH,
+        round_pairings=None,
     ):
         standings = standings.replace(" ", "")
         expected = expected.replace(" ", "")
-        pd = make_pd(standings)
+        pd = make_pd(standings, round_pairings=round_pairings)
         rp = RoundPairing(round=round, start_round=start_round, pairing=pairing)
         pairings = pair_fn(pd, rp)
         self.assertEqual(pairings_str(pairings), expected)
@@ -207,6 +208,7 @@ class ClusteredQuadsTests(PairingTestCase):
     """
 
     def _cq(self, standings, expected, pos):
+        rps = [RoundPairing(i, 0, RP.Quads_Clustered) for i in range(1, 4)]
         self.assert_pairings(
             pair_clustered_quads,
             standings,
@@ -214,6 +216,7 @@ class ClusteredQuadsTests(PairingTestCase):
             round=pos,
             start_round=0,
             pairing=RP.Quads_Clustered,
+            round_pairings=rps,
         )
 
     def test_8_players(self):
@@ -238,6 +241,7 @@ class DistributedQuadsTests(PairingTestCase):
     """
 
     def _dq(self, standings, expected, pos):
+        rps = [RoundPairing(i, 0, RP.Quads_Distributed) for i in range(1, 4)]
         self.assert_pairings(
             pair_distributed_quads,
             standings,
@@ -245,6 +249,7 @@ class DistributedQuadsTests(PairingTestCase):
             round=pos,
             start_round=0,
             pairing=RP.Quads_Distributed,
+            round_pairings=rps,
         )
 
     def test_8_players(self):
@@ -265,6 +270,7 @@ class EvansQuadsTests(PairingTestCase):
     """
 
     def _eq(self, standings, expected, pos):
+        rps = [RoundPairing(i, 0, RP.Quads_Evans) for i in range(1, 4)]
         self.assert_pairings(
             pair_evans_quads,
             standings,
@@ -272,6 +278,7 @@ class EvansQuadsTests(PairingTestCase):
             round=pos,
             start_round=0,
             pairing=RP.Quads_Evans,
+            round_pairings=rps,
         )
 
     def test_8_players(self):
@@ -292,6 +299,7 @@ class SixesTests(PairingTestCase):
     """
 
     def _sx(self, standings, expected, pos):
+        rps = [RoundPairing(i, 0, RP.Sixes) for i in range(1, 4)]
         self.assert_pairings(
             pair_sixes,
             standings,
@@ -299,6 +307,7 @@ class SixesTests(PairingTestCase):
             round=pos,
             start_round=0,
             pairing=RP.Sixes,
+            round_pairings=rps,
         )
 
     def test_12_players(self):
