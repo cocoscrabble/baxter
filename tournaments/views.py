@@ -692,3 +692,70 @@ class SimulateMatchView(LoginRequiredMixin, CanEditDivisionMixin, View):
                 "tournaments/_pairings_content.html", context, request=request
             )
         return JsonResponse({"ok": True})
+
+
+class SimulateRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    """Simulate all remaining matches in a round for a test division."""
+
+    def get_division(self):
+        return get_object_or_404(Division, pk=self.kwargs["pk"])
+
+    def post(self, request, pk):
+        division = self.get_division()
+        if not division.is_test:
+            return JsonResponse(
+                {"error": "Simulation is only available for test divisions."},
+                status=403,
+            )
+
+        if is_datastar(request):
+            data = read_signals(request) or {}
+        else:
+            try:
+                data = json.loads(request.body)
+            except json.JSONDecodeError:
+                return JsonResponse({"error": "Invalid JSON."}, status=400)
+
+        round_num = data.get("round")
+        if not round_num:
+            return JsonResponse({"error": "Missing required fields."}, status=400)
+
+        played = frozenset(
+            frozenset({slip.winner_id, slip.loser_id})
+            for slip in division.result_slips.filter(round=round_num)
+        )
+
+        pairings = division.pairings.filter(round=round_num).select_related(
+            "first__player", "second__player"
+        )
+
+        for pairing in pairings:
+            if frozenset({pairing.first_id, pairing.second_id}) in played:
+                continue
+            r1 = pairing.first.player.rating
+            r2 = pairing.second.player.rating
+            first_wins = random.random() < r1 / (r1 + r2)
+            loser_score = random.randint(200, 450)
+            winner_score = random.randint(loser_score, 600)
+            if first_wins:
+                winner, loser = pairing.first, pairing.second
+                winner_started = True
+            else:
+                winner, loser = pairing.second, pairing.first
+                winner_started = False
+            ResultSlip.objects.create(
+                division=division,
+                round=round_num,
+                winner=winner,
+                winner_score=winner_score,
+                loser=loser,
+                loser_score=loser_score,
+                winner_started=winner_started,
+            )
+
+        if is_datastar(request):
+            context = _build_pairings_context(division)
+            return fragment_response(
+                "tournaments/_pairings_content.html", context, request=request
+            )
+        return JsonResponse({"ok": True})
