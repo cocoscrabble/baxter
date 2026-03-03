@@ -6,6 +6,8 @@ from enum import Enum
 import networkx as nx
 from dataclasses_json import dataclass_json
 
+from tournaments.pairing.round_pairing import RoundPairing
+
 # ---------------------------------------------------------------------------
 # Snapshot of db objects
 # ---------------------------------------------------------------------------
@@ -75,6 +77,9 @@ class PairingData:
     # It is populated in pairings.pair() before pair_round() is called.
     repeats: Repeats
 
+    # Round-by-round pairing configuration loaded from DivisionSettings.
+    round_pairings: list[RoundPairing] = field(default_factory=list)
+
     # Fixed pairings keyed by round number. Each entry is a list of unordered (name1, name2)
     # pairs that must be matched regardless of what the pairing strategy would choose.
     fixed_pairings: dict[int, list[tuple[str, str]]] = field(default_factory=dict)
@@ -98,7 +103,12 @@ class PairingData:
         fixed: dict[int, list[tuple[str, str]]] = defaultdict(list)
         for fp in division.fixed_pairings.select_related("entrant1__player", "entrant2__player").all():
             fixed[fp.round_number].append((fp.entrant1.player.name, fp.entrant2.player.name))
-        return cls(result_slips=slips, entrants=entrants, repeats=Repeats(), fixed_pairings=dict(fixed))
+        try:
+            raw_rps = division.settings.round_pairings or []
+        except Exception:
+            raw_rps = []
+        rps = [RoundPairing.from_dict(x) for x in raw_rps]
+        return cls(result_slips=slips, entrants=entrants, repeats=Repeats(), fixed_pairings=dict(fixed), round_pairings=rps)
 
 
 class DefaultDict(defaultdict):

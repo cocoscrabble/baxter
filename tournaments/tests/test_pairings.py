@@ -245,8 +245,8 @@ class PairTests(PairingDBTestBase):
         return PairingData.for_division(self.division)
 
     def test_first_round_pairs_by_seeding(self):
-        settings = self._koth_config(1)
-        result = pair(self._pd(), settings)
+        self._koth_config(1)
+        result = pair(self._pd())
         # One round to pair
         self.assertEqual(len(result), 1)
         round_num, pairings = result[0]
@@ -259,11 +259,11 @@ class PairTests(PairingDBTestBase):
         self.assertIn({"Carol", "Dave"}, paired_sets)
 
     def test_finished_round_skipped_next_round_paired(self):
-        settings = self._koth_config(2)
+        self._koth_config(2)
         # Round 1 complete: Alice beat Bob, Carol beat Dave
         self.add_result(1, 0, 1, 450, 380, winner_started=True)
         self.add_result(1, 2, 3, 400, 350, winner_started=True)
-        result = pair(self._pd(), settings)
+        result = pair(self._pd())
         # Round 1 is finished so only round 2 is returned
         self.assertEqual(len(result), 1)
         round_num, pairings = result[0]
@@ -276,22 +276,22 @@ class PairTests(PairingDBTestBase):
         self.assertIn({"Bob", "Dave"}, paired_sets)
 
     def test_no_round_paired_if_any_round_is_partial(self):
-        settings = self._koth_config(2)
+        self._koth_config(2)
         # Round 1 partial: only one result entered
         self.add_result(1, 0, 1, 450, 380)
-        result = pair(self._pd(), settings)
+        result = pair(self._pd())
         # Round 1 is partial so it cannot be re-paired; round 2 also blocked
         self.assertEqual(len(result), 0)
 
     def test_repeats_tracked(self):
-        settings = self._koth_config(3)
+        self._koth_config(3)
         # Round 1: Alice-Bob, Carol-Dave
         self.add_result(1, 0, 1, 450, 380, winner_started=True)
         self.add_result(1, 2, 3, 400, 350, winner_started=True)
         # Round 2: Alice-Carol, Bob-Dave
         self.add_result(2, 0, 2, 430, 390, winner_started=True)
         self.add_result(2, 1, 3, 410, 370, winner_started=False)
-        result = pair(self._pd(), settings)
+        result = pair(self._pd())
         # Round 3 pairings should exist
         self.assertEqual(len(result), 1)
         round_num, pairings = result[0]
@@ -304,21 +304,21 @@ class PairTests(PairingDBTestBase):
                 self.assertEqual(p.repeats, 2)
 
     def test_all_rounds_finished_returns_empty(self):
-        settings = self._koth_config(1)
+        self._koth_config(1)
         self.add_result(1, 0, 1, 450, 380)
         self.add_result(1, 2, 3, 400, 350)
-        result = pair(self._pd(), settings)
+        result = pair(self._pd())
         self.assertEqual(len(result), 0)
 
     def test_starts_balanced(self):
-        settings = self._koth_config(3)
+        self._koth_config(3)
         # Round 1: Alice started vs Bob, Carol started vs Dave
         self.add_result(1, 0, 1, 450, 380, winner_started=True)
         self.add_result(1, 2, 3, 400, 350, winner_started=True)
         # Round 2: Alice started vs Carol, Dave started vs Bob
         self.add_result(2, 0, 2, 430, 390, winner_started=True)
         self.add_result(2, 1, 3, 410, 370, winner_started=False)
-        result = pair(self._pd(), settings)
+        result = pair(self._pd())
         _, pairings = result[0]
         # After 2 rounds: Alice has 2 starts, Carol has 1, Dave has 1, Bob has 0.
         # Round 3 KotH: Alice-Bob, Carol-Dave.
@@ -467,16 +467,16 @@ class FixedPairingIntegrationTests(PairingDBTestBase):
 
     def test_fixed_pair_appears_in_pair_output(self):
         self._add_fixed(1, 0, 3)  # Alice-Dave fixed
-        settings = self._koth_config(1)
-        _, pairings = pair(self._pd(), settings)[0]
+        self._koth_config(1)
+        _, pairings = pair(self._pd())[0]
         pair_sets = [{p.first.name, p.second.name} for p in pairings]
         self.assertIn({"Alice", "Dave"}, pair_sets)
 
     def test_non_fixed_players_paired_by_strategy(self):
         # With Alice-Dave fixed, KotH pairs the two remaining players Bob and Carol.
         self._add_fixed(1, 0, 3)
-        settings = self._koth_config(1)
-        _, pairings = pair(self._pd(), settings)[0]
+        self._koth_config(1)
+        _, pairings = pair(self._pd())[0]
         pair_sets = [{p.first.name, p.second.name} for p in pairings]
         self.assertIn({"Bob", "Carol"}, pair_sets)
 
@@ -487,8 +487,8 @@ class FixedPairingIntegrationTests(PairingDBTestBase):
         # After round 1: Alice has 1 start, Bob has 0.
         # Round 2: fix Alice-Bob. Starts balancing should give Bob the start.
         self._add_fixed(2, 0, 1)
-        settings = self._koth_config(2)
-        _, pairings = pair(self._pd(), settings)[0]
+        self._koth_config(2)
+        _, pairings = pair(self._pd())[0]
         alice_bob = next(p for p in pairings if {p.first.name, p.second.name} == {"Alice", "Bob"})
         self.assertEqual(alice_bob.first.name, "Bob")
 
@@ -498,7 +498,7 @@ class FixedPairingIntegrationTests(PairingDBTestBase):
         self.add_result(1, 2, 3, 400, 350, winner_started=True)
         # Round 2: fix Alice-Bob again. repeats should be 2 (once in R1, once in R2).
         self._add_fixed(2, 0, 1)
-        settings = self._koth_config(2)
-        _, pairings = pair(self._pd(), settings)[0]
+        self._koth_config(2)
+        _, pairings = pair(self._pd())[0]
         alice_bob = next(p for p in pairings if {p.first.name, p.second.name} == {"Alice", "Bob"})
         self.assertEqual(alice_bob.repeats, 2)

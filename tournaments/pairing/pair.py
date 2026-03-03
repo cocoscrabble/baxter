@@ -9,7 +9,7 @@ from tournaments.pairing.base import (
     Starts,
     standings_after_round,
 )
-from tournaments.pairing.round_pairing import RP, RoundPairing
+from tournaments.pairing.round_pairing import RP
 from tournaments.pairing.basic import (
     pair_koth,
     pair_qoth,
@@ -87,13 +87,12 @@ def extract_pairings(pd: PairingData, round: int) -> Pairings:
     return pairings
 
 
-def pair(pd: PairingData, config) -> list[tuple[int, list[DisplayPairing]]]:
+def pair(pd: PairingData) -> list[tuple[int, list[DisplayPairing]]]:
     """Pair a whole tournament round by round."""
     ret = []
     starts = Starts()
     status = round_status(pd)
-    round_pairings = [RoundPairing.from_dict(x) for x in config.round_pairings]
-    for rp in round_pairings:
+    for rp in pd.round_pairings:
         if status[rp.round] == RoundStatus.Finished:
             for p in extract_pairings(pd, rp.round):
                 pd.repeats.add(p)
