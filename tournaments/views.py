@@ -27,7 +27,6 @@ from .dto import EntrantDTO, FixedPairingDTO, ResultSlipDTO
 from .models import Division, DivisionSettings, Entrant, FixedPairing, Pairing, Player, ResultSlip, Tournament
 from .pairing.base import PairingData, RoundStatus, standings_after_round
 from .pairing.pair import can_pair, pair, round_status, STRATEGY_TYPES
-from .pairing.round_pairing import RoundPairing
 
 
 class TournamentListView(ListView):
@@ -234,30 +233,20 @@ class DivisionStandingsView(VisibleDivisionMixin, DetailView):
 
 def _available_rounds(division):
     """Return list of round numbers that can currently be paired."""
-    try:
-        settings = division.settings
-        if not settings.round_pairings:
-            return []
-    except DivisionSettings.DoesNotExist:
-        return []
     pd = PairingData.for_division(division)
+    if not pd.round_pairings:
+        return []
     status = round_status(pd)
-    round_pairings = [RoundPairing.from_dict(x) for x in settings.round_pairings]
-    return [rp.round for rp in round_pairings if can_pair(rp, status)]
+    return [rp.round for rp in pd.round_pairings if can_pair(rp, status)]
 
 
 def _regenerate_pairings(division):
     """Run the pairing algorithm and save results to the Pairing table."""
-    try:
-        settings = division.settings
-        if not settings.round_pairings:
-            division.pairings.all().delete()
-            return
-    except DivisionSettings.DoesNotExist:
+    pd = PairingData.for_division(division)
+    if not pd.round_pairings:
         division.pairings.all().delete()
         return
-    pd = PairingData.for_division(division)
-    pairings = pair(pd, settings)
+    pairings = pair(pd)
     entrant_by_name = {
         e.player.name: e
         for e in division.entrants.select_related("player")
