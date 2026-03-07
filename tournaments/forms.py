@@ -90,7 +90,7 @@ class ResultSlipForm(forms.ModelForm):
         model = ResultSlip
         fields = ["round", "winner", "winner_score", "loser", "loser_score", "winner_started"]
 
-    def __init__(self, *args, division=None, **kwargs):
+    def __init__(self, *args, division=None, round_numbers=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._division = division or (self.instance.division if self.instance.pk else None)
         if self.instance.pk:
@@ -98,6 +98,8 @@ class ResultSlipForm(forms.ModelForm):
                 self.fields["winner"].initial = self.instance.winner.player.name
             if self.instance.loser:
                 self.fields["loser"].initial = self.instance.loser.player.name
+        rounds = round_numbers or list(range(1, 16))
+        self.fields["round"].widget = forms.Select(choices=[(r, f"Round {r}") for r in rounds])
         for field_name, field in self.fields.items():
             field.widget.attrs["data-bind"] = field_name
 

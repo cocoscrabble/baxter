@@ -522,7 +522,9 @@ class ResultSlipCreateView(CreateView):
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs["division"] = self.get_division()
+        division = self.get_division()
+        kwargs["division"] = division
+        kwargs["round_numbers"] = self._round_numbers(division)
         return kwargs
 
     def _player_names(self, division):
@@ -533,16 +535,27 @@ class ResultSlipCreateView(CreateView):
             .order_by("player__name")
         )
 
+    def _round_numbers(self, division):
+        try:
+            rps = division.settings.round_pairings
+            all_rounds = sorted(set(rp["round"] for rp in rps))
+        except (AttributeError, KeyError, TypeError):
+            all_rounds = list(range(1, 16))
+        pd = PairingData.for_division(division)
+        status = round_status(pd)
+        return [r for r in all_rounds if status[r] != RoundStatus.Finished]
+
     def post(self, request, *args, **kwargs):
         if is_datastar(request):
             division = self.get_division()
+            round_numbers = self._round_numbers(division)
             signals = read_signals(request) or {}
-            form = ResultSlipForm(signals, division=division)
+            form = ResultSlipForm(signals, division=division, round_numbers=round_numbers)
             player_names = self._player_names(division)
             if form.is_valid():
                 form.instance.division = division
                 form.save()
-                fresh_form = ResultSlipForm(division=division)
+                fresh_form = ResultSlipForm(division=division, round_numbers=self._round_numbers(division))
                 return fragment_response(
                     "tournaments/_resultslip_form.html",
                     {"form": fresh_form, "division": division, "player_names": player_names, "success_message": "Result saved. If there are any mistakes, edit the form and click save again. If everything looks correct, hit Done to close the form."},
