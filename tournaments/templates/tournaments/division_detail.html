@@ -31,7 +31,7 @@
             <th>Round</th>
             <th>Winner</th>
             <th>Score</th>
-            <th>Loser</th>
+            <th>Opponent</th>
             <th>Started</th>
         </tr>
     </thead>
@@ -42,7 +42,7 @@
             <td>{{ slip.winner.player.name }}</td>
             <td>{{ slip.winner_score }}-{{ slip.loser_score }}</td>
             <td>{{ slip.loser.player.name }}</td>
-            <td>{% if slip.winner_started %}Winner{% else %}Loser{% endif %}</td>
+            <td>{% if slip.winner_started %}Winner{% else %}Opponent{% endif %}</td>
         </tr>
         {% endfor %}
     </tbody>

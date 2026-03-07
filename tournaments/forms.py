@@ -84,7 +84,7 @@ class ResultSlipForm(forms.ModelForm):
     """Form for entering game results."""
 
     winner = forms.CharField(widget=forms.TextInput(attrs={"list": "players-datalist"}))
-    loser = forms.CharField(widget=forms.TextInput(attrs={"list": "players-datalist"}))
+    loser = forms.CharField(label="Opponent", widget=forms.TextInput(attrs={"list": "players-datalist"}))
 
     class Meta:
         model = ResultSlip
@@ -122,7 +122,7 @@ class ResultSlipForm(forms.ModelForm):
         winner = cleaned_data.get("winner")
         loser = cleaned_data.get("loser")
         if winner and loser and winner == loser:
-            raise forms.ValidationError("Winner and loser must be different players.")
+            raise forms.ValidationError("Winner and opponent must be different players.")
         return cleaned_data
 
 
