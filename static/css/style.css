@@ -78,7 +78,7 @@ textarea {
 
 button,
 input[type="submit"] {
-    background-color: #0066cc;
+    background-color: #531882;
     color: white;
     padding: 10px 20px;
     border: none;
@@ -88,7 +88,7 @@ input[type="submit"] {
 
 button:hover,
 input[type="submit"]:hover {
-    background-color: #0052a3;
+    background-color: #3d1160;
 }
 
 .errorlist {
@@ -159,8 +159,8 @@ dd {
 
 .btn-secondary {
     background-color: #fff;
-    color: #0066cc;
-    border: 1px solid #0066cc;
+    color: #531882;
+    border: 1px solid #531882;
     padding: 6px 14px;
     border-radius: 4px;
     cursor: pointer;
@@ -168,7 +168,7 @@ dd {
 }
 
 .btn-secondary:hover {
-    background-color: #e8f0fb;
+    background-color: #f3e8fb;
 }
 
 .btn-cancel {
