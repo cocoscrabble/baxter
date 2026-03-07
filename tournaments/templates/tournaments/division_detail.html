@@ -11,7 +11,6 @@
     | <a href="{% url 'division_standings' division.pk %}">Standings</a>
     | <a href="{% url 'division_pairings' division.pk %}">Pairings</a>
     | <a href="{% url 'resultslip_create' division.pk %}">Add Result</a>
-    | <a href="{% url 'tournament_detail' division.tournament.pk %}">Back to tournament</a>
 </p>
 {% if can_edit %}
 <p>
