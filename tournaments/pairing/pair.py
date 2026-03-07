@@ -22,7 +22,7 @@ from tournaments.pairing.basic import (
 from tournaments.pairing.quads import (
     pair_clustered_quads,
     pair_distributed_quads,
-    pair_evans_quads,
+    pair_equalized_quads,
     pair_sixes,
 )
 from tournaments.pairing.swiss import pair_swiss, pair_swiss_plus_random
@@ -118,7 +118,7 @@ STRATEGIES = {
     RP.RandomNoRepeats: pair_random_no_repeats,
     RP.Quads_Clustered: pair_clustered_quads,
     RP.Quads_Distributed: pair_distributed_quads,
-    RP.Quads_Evans: pair_evans_quads,
+    RP.Quads_Equalized: pair_equalized_quads,
     RP.Sixes: pair_sixes,
     RP.Charlottesville: pair_charlottesville,
     RP.SwissPlusRandom: pair_swiss_plus_random,

@@ -14,7 +14,7 @@ class RP(StrEnum):
     RandomNoRepeats = "RandomNoRepeats"
     Quads_Clustered = "Quads_Clustered"
     Quads_Distributed = "Quads_Distributed"
-    Quads_Evans = "Quads_Evans"
+    Quads_Equalized = "Quads_Equalized"
     Sixes = "Sixes"
     Charlottesville = "Charlottesville"
     SwissPlusRandom = "SwissPlusRandom"
@@ -25,7 +25,7 @@ class RP(StrEnum):
 
     @staticmethod
     def is_quad(name) -> bool:
-        return name in (RP.Quads_Clustered, RP.Quads_Distributed, RP.Quads_Evans, RP.Sixes)
+        return name in (RP.Quads_Clustered, RP.Quads_Distributed, RP.Quads_Equalized, RP.Sixes)
 
 
 ABBREV = {
@@ -38,7 +38,7 @@ ABBREV = {
     "RN": RP.RandomNoRepeats,
     "QC": RP.Quads_Clustered,
     "QD": RP.Quads_Distributed,
-    "QE": RP.Quads_Evans,
+    "QE": RP.Quads_Equalized,
     "SX": RP.Sixes,
     "SR": RP.SwissPlusRandom,
 }
