@@ -76,7 +76,7 @@ class StartsBalancingTests(TestCase):
     def test_quads_distributed(self):
         self._check("QD:3", 24)
 
-    def test_quads_evans(self):
+    def test_quads_equalized(self):
         self._check("QE:3", 24)
 
     def test_quads_with_hex(self):

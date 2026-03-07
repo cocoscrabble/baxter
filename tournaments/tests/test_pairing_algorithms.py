@@ -17,7 +17,7 @@ from tournaments.pairing.basic import (
 from tournaments.pairing.quads import (
     pair_clustered_quads,
     pair_distributed_quads,
-    pair_evans_quads,
+    pair_equalized_quads,
     pair_sixes,
 )
 from tournaments.pairing.swiss import pair_swiss
@@ -34,7 +34,12 @@ def make_pd(standings_str, round_pairings=None):
         EntrantData(PlayerData(name=ch, rating=(n - i) * 100))
         for i, ch in enumerate(standings_str)
     ]
-    return PairingData(result_slips=[], entrants=entrants, repeats=Repeats(), round_pairings=round_pairings or [])
+    return PairingData(
+        result_slips=[],
+        entrants=entrants,
+        repeats=Repeats(),
+        round_pairings=round_pairings or [],
+    )
 
 
 def pairings_str(pairings):
@@ -258,11 +263,11 @@ class DistributedQuadsTests(PairingTestCase):
         self._dq("ABCDEFGH", "ACEGBDFH", pos=3)
 
 
-# ── Evans Quads ─────────────────────────────────────────
+# ── Equalized Quads ─────────────────────────────────────────
 
 
-class EvansQuadsTests(PairingTestCase):
-    """Evans quads: snake distribution to equalize opponent strength.
+class EqualizedQuadsTests(PairingTestCase):
+    """Equalized quads: snake distribution to equalize opponent strength.
 
     For 8 players with stride=2:
       Snake: [A,B] [D,C] [E,F] [H,G]
@@ -270,14 +275,14 @@ class EvansQuadsTests(PairingTestCase):
     """
 
     def _eq(self, standings, expected, pos):
-        rps = [RoundPairing(i, 0, RP.Quads_Evans) for i in range(1, 4)]
+        rps = [RoundPairing(i, 0, RP.Quads_Equalized) for i in range(1, 4)]
         self.assert_pairings(
-            pair_evans_quads,
+            pair_equalized_quads,
             standings,
             expected,
             round=pos,
             start_round=0,
-            pairing=RP.Quads_Evans,
+            pairing=RP.Quads_Equalized,
             round_pairings=rps,
         )
 
@@ -291,7 +296,7 @@ class EvansQuadsTests(PairingTestCase):
 
 
 class SixesTests(PairingTestCase):
-    """Sixes: Evans-style snake distribution into groups of 6.
+    """Sixes: Equalized-quads-style snake distribution into groups of 6.
 
     For 12 players with stride=2:
       Snake: [A,B] [D,C] [E,F] [H,G] [I,J] [L,K]

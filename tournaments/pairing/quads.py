@@ -89,7 +89,7 @@ def pair_distributed_quads(pd: PairingData, rp: RoundPairing) -> Pairings:
     return pair_groups_at_position(quads, pos)
 
 
-def pair_evans_quads(pd: PairingData, rp: RoundPairing) -> Pairings:
+def pair_equalized_quads(pd: PairingData, rp: RoundPairing) -> Pairings:
     # Like distributed quads but flip every other subgroup first,
     # so that the sum of opponent seeds ends up roughly equal.
     # e.g. for 12 people you would make quads from
@@ -118,7 +118,7 @@ def pair_evans_quads(pd: PairingData, rp: RoundPairing) -> Pairings:
 
 
 # -------------------
-# Sixes (Evans-style groups of 6)
+# Sixes (Equalized-quads-style groups of 6)
 
 
 def get_last_hex_position(standings) -> int:
@@ -144,7 +144,7 @@ def maybe_add_quads(hexes, standings, last_hex) -> None:
 
 
 def pair_sixes(pd: PairingData, rp: RoundPairing) -> Pairings:
-    """Evans-style snake distribution into groups of 6."""
+    """Equalized-quads-style snake distribution into groups of 6."""
     pos = quad_position(rp, pd.round_pairings)
     standings = standings_after_round(pd, rp.start_round)
     last_hex = get_last_hex_position(standings)
