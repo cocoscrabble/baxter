@@ -37,7 +37,7 @@ const table = new Tabulator("#results-table", {
             width: 90,
         },
         {
-            title: "Loser",
+            title: "Opponent",
             field: "loser",
             editor: "list",
             editorParams: { values: entrantValues },
@@ -46,7 +46,7 @@ const table = new Tabulator("#results-table", {
             },
         },
         {
-            title: "L Score",
+            title: "Opp Score",
             field: "loser_score",
             editor: "number",
             editorParams: { min: 0 },
@@ -56,11 +56,11 @@ const table = new Tabulator("#results-table", {
             title: "Started",
             field: "winner_started",
             editor: "list",
-            editorParams: { values: { true: "Winner", false: "Loser" } },
+            editorParams: { values: { true: "Winner", false: "Opponent" } },
             formatter: function(cell) {
                 const v = cell.getValue();
                 if (v === true || v === "true") return "Winner";
-                if (v === false || v === "false") return "Loser";
+                if (v === false || v === "false") return "Opponent";
                 return "";
             },
         },
