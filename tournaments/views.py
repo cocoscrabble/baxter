@@ -63,7 +63,9 @@ class TournamentCreateView(LoginRequiredMixin, CreateView):
 
     def form_valid(self, form):
         form.instance.owner = self.request.user
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        Division.objects.create(tournament=self.object, name="Open")
+        return response
 
     def get_success_url(self):
         return self.object.get_absolute_url()
