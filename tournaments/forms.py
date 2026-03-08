@@ -89,6 +89,7 @@ class ResultSlipForm(forms.ModelForm):
     class Meta:
         model = ResultSlip
         fields = ["round", "winner", "winner_score", "loser", "loser_score", "winner_started"]
+        labels = {"loser_score": "Opponent score"}
 
     def __init__(self, *args, division=None, round_numbers=None, **kwargs):
         super().__init__(*args, **kwargs)

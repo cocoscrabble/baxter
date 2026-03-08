@@ -170,6 +170,11 @@ class ResultSlipFormTests(TestCase):
             division=cls.division2, player=cls.player3, number=1
         )
 
+    def test_loser_field_label(self):
+        form = ResultSlipForm(division=self.division)
+        self.assertEqual(form.fields["loser"].label, "Opponent")
+        self.assertEqual(form.fields["loser_score"].label, "Opponent score")
+
     def test_valid_form(self):
         form = ResultSlipForm(
             data={
@@ -197,7 +202,7 @@ class ResultSlipFormTests(TestCase):
             division=self.division,
         )
         self.assertFalse(form.is_valid())
-        self.assertIn("Winner and loser must be different", str(form.errors))
+        self.assertIn("Winner and opponent must be different", str(form.errors))
 
     def test_player_not_in_division_invalid(self):
         form = ResultSlipForm(
