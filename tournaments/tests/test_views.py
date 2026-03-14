@@ -4,7 +4,7 @@ from datetime import date
 from django.test import TestCase, tag
 from django.urls import reverse
 
-from tournaments.models import Division, DivisionSettings, Entrant, Pairing, Player, ResultSlip, Tournament
+from tournaments.models import Division, DivisionSettings, Entrant, FixedTable, Pairing, Player, ResultSlip, Tournament
 from users.models import User
 
 
@@ -758,6 +758,130 @@ class TestDivisionVisibilityTests(TestCase):
             reverse("division_detail", kwargs={"pk": self.division.pk})
         )
         self.assertEqual(response.status_code, 200)
+
+
+@tag("slow")
+class DivisionFixedTablesEditViewTests(TestCase):
+    def setUp(self):
+        setUpTournament(self)
+        self.url = reverse("division_fixed_tables", kwargs={"pk": self.division.pk})
+
+    def test_editor_can_access(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+
+    def test_non_editor_forbidden(self):
+        self.client.login(username="other", password="testpass123")
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_returns_entrant_values(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(self.url)
+        entrant_values = json.loads(response.context["entrant_values_json"])
+        ids = {e["id"] for e in entrant_values}
+        self.assertIn(self.entrant1.pk, ids)
+        self.assertIn(self.entrant2.pk, ids)
+
+    def test_get_round_values_includes_all(self):
+        DivisionSettings.objects.create(
+            division=self.division,
+            round_pairings=[{"round": 1, "pairing": "KotH", "start_round": 0}],
+        )
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(self.url)
+        round_values = json.loads(response.context["round_values_json"])
+        values = [r["value"] for r in round_values]
+        self.assertIn(-1, values)
+        self.assertIn(1, values)
+        all_entry = next(r for r in round_values if r["value"] == -1)
+        self.assertEqual(all_entry["label"], "All")
+
+    def test_get_returns_existing_fixed_tables(self):
+        FixedTable.objects.create(
+            division=self.division, round_number=1,
+            entrant=self.entrant1, table_number=2,
+        )
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(self.url)
+        fixed_tables = json.loads(response.context["fixed_tables_json"])
+        self.assertEqual(len(fixed_tables), 1)
+        self.assertEqual(fixed_tables[0]["entrant"], self.entrant1.pk)
+        self.assertEqual(fixed_tables[0]["table_number"], 2)
+
+    def test_post_saves_fixed_table(self):
+        self.client.login(username="owner", password="testpass123")
+        payload = {"tables": [{"round_number": 1, "entrant": self.entrant1.pk, "table_number": 2}]}
+        response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["ok"])
+        self.assertEqual(self.division.fixed_tables.count(), 1)
+        ft = self.division.fixed_tables.first()
+        self.assertEqual(ft.entrant, self.entrant1)
+        self.assertEqual(ft.table_number, 2)
+
+    def test_post_all_sentinel_round(self):
+        self.client.login(username="owner", password="testpass123")
+        payload = {"tables": [{"round_number": -1, "entrant": self.entrant1.pk, "table_number": 1}]}
+        response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        ft = self.division.fixed_tables.first()
+        self.assertEqual(ft.round_number, -1)
+
+    def test_post_replaces_existing(self):
+        FixedTable.objects.create(
+            division=self.division, round_number=1, entrant=self.entrant1, table_number=1,
+        )
+        self.client.login(username="owner", password="testpass123")
+        payload = {"tables": [{"round_number": 2, "entrant": self.entrant2.pk, "table_number": 3}]}
+        response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.division.fixed_tables.count(), 1)
+        ft = self.division.fixed_tables.first()
+        self.assertEqual(ft.entrant, self.entrant2)
+
+    def test_post_missing_fields_returns_error(self):
+        self.client.login(username="owner", password="testpass123")
+        payload = {"tables": [{"round_number": 1, "entrant": self.entrant1.pk}]}  # missing table_number
+        response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("errors", response.json())
+        self.assertEqual(self.division.fixed_tables.count(), 0)
+
+    def test_post_invalid_entrant_returns_error(self):
+        self.client.login(username="owner", password="testpass123")
+        payload = {"tables": [{"round_number": 1, "entrant": 99999, "table_number": 1}]}
+        response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("errors", response.json())
+        self.assertEqual(self.division.fixed_tables.count(), 0)
+
+    def test_post_duplicate_entrant_per_round_returns_error(self):
+        self.client.login(username="owner", password="testpass123")
+        payload = {
+            "tables": [
+                {"round_number": 1, "entrant": self.entrant1.pk, "table_number": 1},
+                {"round_number": 1, "entrant": self.entrant1.pk, "table_number": 2},
+            ]
+        }
+        response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("errors", response.json())
+        self.assertEqual(self.division.fixed_tables.count(), 0)
+
+    def test_post_same_entrant_different_rounds_is_valid(self):
+        self.client.login(username="owner", password="testpass123")
+        payload = {
+            "tables": [
+                {"round_number": 1, "entrant": self.entrant1.pk, "table_number": 1},
+                {"round_number": 2, "entrant": self.entrant1.pk, "table_number": 2},
+            ]
+        }
+        response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["ok"])
+        self.assertEqual(self.division.fixed_tables.count(), 2)
 
 
 @tag("slow")
