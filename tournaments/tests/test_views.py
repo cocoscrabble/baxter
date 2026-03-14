@@ -280,7 +280,7 @@ class ResultSlipCreateViewTests(TestCase):
             },
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Winner and loser must be different")
+        self.assertContains(response, "Winner and opponent must be different")
 
 
 @tag("slow")
