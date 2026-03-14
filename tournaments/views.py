@@ -280,7 +280,7 @@ def _build_pairings_context(division):
     db_pairings = list(
         division.pairings
         .select_related("first", "first__player", "second", "second__player")
-        .order_by("round")
+        .order_by("round", "table")
     )
     if not db_pairings:
         context["pairings_message"] = "No pairings generated yet."
