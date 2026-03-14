@@ -16,8 +16,16 @@ const table = new Tabulator("#fixed-tables-table", {
         {
             title: "Round",
             field: "round_number",
-            editor: "number",
-            editorParams: { min: 1 },
+            editor: "list",
+            editorParams: {
+                values: Object.fromEntries(pageData.roundValues.map(r => [r.value, r.label])),
+                listOnEmpty: true,
+            },
+            formatter: function(cell) {
+                const v = cell.getValue();
+                if (v === -1 || v === "-1") return "All";
+                return v != null ? String(v) : "";
+            },
             width: 80,
             hozAlign: "center",
         },
@@ -52,7 +60,7 @@ const table = new Tabulator("#fixed-tables-table", {
 });
 
 document.getElementById("add-row-btn").addEventListener("click", function() {
-    table.addRow({ round_number: null, entrant: null, table_number: null }).then(function(row) {
+    table.addRow({ round_number: -1, entrant: null, table_number: null }).then(function(row) {
         const cell = row.getCell("round_number");
         cell.edit();
         setTimeout(() => {
@@ -65,7 +73,7 @@ document.getElementById("add-row-btn").addEventListener("click", function() {
 document.getElementById("save-btn").addEventListener("click", function() {
     const data = table.getData();
     const rows = data.map(r => ({
-        round_number: parseInt(r.round_number) || null,
+        round_number: r.round_number != null ? parseInt(r.round_number) : null,
         entrant: parseInt(r.entrant) || null,
         table_number: parseInt(r.table_number) || null,
     }));
