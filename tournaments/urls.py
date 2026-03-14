@@ -10,6 +10,7 @@ from .views import (
     DivisionEntrantsEditView,
     DivisionEntrantsView,
     DivisionFixedPairingsEditView,
+    DivisionFixedTablesEditView,
     DivisionPairingsView,
     DivisionSettingsEditView,
     DivisionStandingsView,
@@ -47,4 +48,5 @@ urlpatterns = [
     path("division/<int:pk>/delete/", DivisionDeleteView.as_view(), name="division_delete"),
     path("division/<int:pk>/restore/", DivisionRestoreView.as_view(), name="division_restore"),
     path("division/<int:pk>/fixed-pairings/", DivisionFixedPairingsEditView.as_view(), name="division_fixed_pairings"),
+    path("division/<int:pk>/fixed-tables/", DivisionFixedTablesEditView.as_view(), name="division_fixed_tables"),
 ]

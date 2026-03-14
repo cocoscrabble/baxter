@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Edit Fixed Tables - {{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
+
+{% block content %}
+<h1>Edit Fixed Tables: {{ division.name }}</h1>
+<p>Tournament: <a href="{% url 'tournament_detail' division.tournament.pk %}">{{ division.tournament.name }}</a></p>
+<p><a href="{% url 'division_detail' division.pk %}">Back to division</a></p>
+
+<link rel="stylesheet" href="{% static 'tabulator-tables/dist/css/tabulator.min.css' %}">
+<script src="{% static 'tabulator-tables/dist/js/tabulator.min.js' %}"></script>
+
+<div id="fixed-tables-table"></div>
+
+<p style="margin-top: 1em;">
+    <button id="add-row-btn" type="button">Add Row</button>
+    <button id="save-btn" type="button">Save</button>
+    <span id="save-status"></span>
+</p>
+
+<script>
+const pageData = {
+    entrantValues: {{ entrant_values_json|safe }},
+    fixedTables: {{ fixed_tables_json|safe }},
+    csrfToken: "{{ csrf_token }}",
+};
+</script>
+<script src="{% static 'tournaments/js/edit_fixed_tables.js' %}"></script>
+{% endblock %}

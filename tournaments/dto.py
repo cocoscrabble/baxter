@@ -124,3 +124,42 @@ class FixedPairingDTO(DataClassJsonMixin):
             "entrant1_id": self.entrant1,
             "entrant2_id": self.entrant2,
         }
+
+
+@dataclass
+class FixedTableDTO(DataClassJsonMixin):
+    round_number: int
+    entrant: int  # entrant pk
+    table_number: int
+
+    @classmethod
+    def from_json(cls, row: dict) -> "FixedTableDTO | None":
+        if any(row.get(f.name) is None for f in fields(cls)):
+            return None
+        try:
+            return cls(
+                round_number=int(row["round_number"]),
+                entrant=int(row["entrant"]),
+                table_number=int(row["table_number"]),
+            )
+        except (ValueError, TypeError):
+            return None
+
+    def validate(self, valid_entrant_ids: set[int], seen_per_round: dict[int, set[int]]) -> list[str]:
+        errors = []
+        if self.entrant not in valid_entrant_ids:
+            errors.append("player not found in division.")
+            return errors
+        seen = seen_per_round.setdefault(self.round_number, set())
+        if self.entrant in seen:
+            errors.append(f"player already has a fixed table in round {self.round_number}.")
+        else:
+            seen.add(self.entrant)
+        return errors
+
+    def to_db_kwargs(self) -> dict:
+        return {
+            "round_number": self.round_number,
+            "entrant_id": self.entrant,
+            "table_number": self.table_number,
+        }
