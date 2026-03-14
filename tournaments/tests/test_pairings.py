@@ -7,6 +7,8 @@ from tournaments.models import (
     DivisionSettings,
     Entrant,
     FixedPairing as DBFixedPairing,
+    FixedTable as DBFixedTable,
+    Pairing as DBPairing,
     Player as DBPlayer,
     ResultSlip,
     Tournament,
@@ -502,3 +504,100 @@ class FixedPairingIntegrationTests(PairingDBTestBase):
         _, pairings = pair(self._pd())[0]
         alice_bob = next(p for p in pairings if {p.first.name, p.second.name} == {"Alice", "Bob"})
         self.assertEqual(alice_bob.repeats, 2)
+
+
+# ── _regenerate_pairings with fixed tables ────────────────────────────────────
+
+
+class FixedTableIntegrationTests(PairingDBTestBase):
+    """Tests for fixed table assignment in _regenerate_pairings.
+
+    Players by rating: Alice(1), Bob(2), Carol(3), Dave(4).
+    KotH round 1 pairs: Alice-Bob (table 1), Carol-Dave (table 2) without fixed tables.
+    """
+
+    def _koth_config(self, num_rounds):
+        rp = [{"round": i, "pairing": RP.KotH, "start_round": i - 1} for i in range(1, num_rounds + 1)]
+        return DivisionSettings.objects.create(division=self.division, round_pairings=rp)
+
+    def _add_fixed_table(self, round_number, entrant_idx, table_number):
+        return DBFixedTable.objects.create(
+            division=self.division,
+            round_number=round_number,
+            entrant=self.entrants[entrant_idx],
+            table_number=table_number,
+        )
+
+    def _regenerate(self):
+        from tournaments.views import _regenerate_pairings
+        _regenerate_pairings(self.division)
+        return list(
+            DBPairing.objects.filter(division=self.division)
+            .select_related("first__player", "second__player")
+            .order_by("round", "table")
+        )
+
+    def _table_for(self, pairings, name1, name2):
+        for p in pairings:
+            if {p.first.player.name, p.second.player.name} == {name1, name2}:
+                return p.table
+        return None
+
+    def test_no_fixed_tables_assigns_tables_1_to_n(self):
+        self._koth_config(1)
+        pairings = self._regenerate()
+        self.assertEqual(len(pairings), 2)
+        tables = {p.table for p in pairings}
+        self.assertEqual(tables, {1, 2})
+
+    def test_higher_standing_pair_gets_lower_table(self):
+        # Alice-Bob (ranks 1,2) should be at table 1; Carol-Dave (ranks 3,4) at table 2.
+        self._koth_config(1)
+        pairings = self._regenerate()
+        self.assertEqual(self._table_for(pairings, "Alice", "Bob"), 1)
+        self.assertEqual(self._table_for(pairings, "Carol", "Dave"), 2)
+
+    def test_fixed_table_assigned_to_pairing(self):
+        self._koth_config(1)
+        self._add_fixed_table(1, 0, 2)  # Alice → table 2
+        pairings = self._regenerate()
+        self.assertEqual(self._table_for(pairings, "Alice", "Bob"), 2)
+
+    def test_all_sentinel_applies_to_round(self):
+        # Bob fixed to table 1 for "all" rounds (-1); should get table 1 in round 1.
+        self._koth_config(1)
+        self._add_fixed_table(-1, 1, 1)  # Bob → table 1 (all rounds)
+        pairings = self._regenerate()
+        self.assertEqual(self._table_for(pairings, "Alice", "Bob"), 1)
+
+    def test_round_specific_overrides_all(self):
+        # Bob has all→table 1, but round 1 specific→table 2. Specific wins.
+        self._koth_config(1)
+        self._add_fixed_table(-1, 1, 1)  # Bob → table 1 (all)
+        self._add_fixed_table(1, 1, 2)   # Bob → table 2 (round 1 specific)
+        pairings = self._regenerate()
+        self.assertEqual(self._table_for(pairings, "Alice", "Bob"), 2)
+
+    def test_conflict_both_specific_higher_standing_wins(self):
+        # Alice (rank 1) fixed → table 1; Bob (rank 2) fixed → table 2.
+        # Both specific; Alice has higher standing → her table (1) is used.
+        self._koth_config(1)
+        self._add_fixed_table(1, 0, 1)  # Alice → table 1
+        self._add_fixed_table(1, 1, 2)  # Bob → table 2
+        pairings = self._regenerate()
+        self.assertEqual(self._table_for(pairings, "Alice", "Bob"), 1)
+
+    def test_conflict_specific_beats_all(self):
+        # Alice has all→table 2; Bob has specific→table 1. Specific wins.
+        self._koth_config(1)
+        self._add_fixed_table(-1, 0, 2)  # Alice → table 2 (all)
+        self._add_fixed_table(1, 1, 1)   # Bob → table 1 (specific)
+        pairings = self._regenerate()
+        self.assertEqual(self._table_for(pairings, "Alice", "Bob"), 1)
+
+    def test_free_pairings_fill_remaining_slots(self):
+        # Alice fixed to table 2. Carol-Dave (free) should fill table 1.
+        self._koth_config(1)
+        self._add_fixed_table(1, 0, 2)  # Alice → table 2
+        pairings = self._regenerate()
+        self.assertEqual(self._table_for(pairings, "Carol", "Dave"), 1)
