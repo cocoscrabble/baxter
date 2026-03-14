@@ -529,10 +529,17 @@ class DivisionFixedTablesEditView(LoginRequiredMixin, CanEditDivisionMixin, View
             {"round_number": ft.round_number, "entrant": ft.entrant_id, "table_number": ft.table_number}
             for ft in division.fixed_tables.all()
         ]
+        try:
+            rps = division.settings.round_pairings
+            round_numbers = sorted(set(rp["round"] for rp in rps))
+        except (AttributeError, KeyError, TypeError):
+            round_numbers = list(range(1, 16))
+        round_values = [{"value": -1, "label": "All"}] + [{"value": r, "label": str(r)} for r in round_numbers]
         return render(request, self.template_name, {
             "division": division,
             "entrant_values_json": json.dumps(entrant_values),
             "fixed_tables_json": json.dumps(existing),
+            "round_values_json": json.dumps(round_values),
         })
 
     def post(self, request, pk):
