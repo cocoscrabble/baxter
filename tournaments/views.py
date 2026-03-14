@@ -253,9 +253,14 @@ def _regenerate_pairings(division):
         e.player.name: e
         for e in division.entrants.select_related("player")
     }
+    start_round_by_round = {rp.round: rp.start_round for rp in pd.round_pairings}
     division.pairings.all().delete()
     for round_num, round_pairings in pairings:
-        for p in round_pairings:
+        start_round = start_round_by_round.get(round_num, 0)
+        standings = standings_after_round(pd, start_round)
+        rank = {p.name: i + 1 for i, p in enumerate(standings)}
+        sorted_pairings = sorted(round_pairings, key=lambda p: min(rank.get(p.first.name, 0), rank.get(p.second.name, 0)))
+        for table_num, p in enumerate(sorted_pairings, start=1):
             first_entrant = entrant_by_name.get(p.first.name)
             second_entrant = entrant_by_name.get(p.second.name)
             if first_entrant and second_entrant:
@@ -265,6 +270,7 @@ def _regenerate_pairings(division):
                     first=first_entrant,
                     second=second_entrant,
                     repeats=p.repeats,
+                    table=table_num,
                 )
 
 
