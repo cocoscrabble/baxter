@@ -206,9 +206,10 @@ class Pairing(models.Model):
         related_name="pairings_as_second",
     )
     repeats = models.IntegerField(default=0)
+    table = models.IntegerField(default=0)
 
     class Meta:
-        ordering = ["round"]
+        ordering = ["round", "table"]
 
     def __str__(self):
         return f"R{self.round}: {self.first.name} vs {self.second.name}"
