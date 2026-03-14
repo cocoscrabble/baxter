@@ -228,3 +228,18 @@ class FixedPairing(models.Model):
 
     def __str__(self):
         return f"R{self.round_number}: {self.entrant1.name} vs {self.entrant2.name}"
+
+
+class FixedTable(models.Model):
+    """A fixed (pre-set) table assignment for an entrant in a division round."""
+
+    division = models.ForeignKey(Division, on_delete=models.CASCADE, related_name="fixed_tables")
+    round_number = models.IntegerField()
+    entrant = models.ForeignKey(Entrant, on_delete=models.CASCADE, related_name="fixed_tables")
+    table_number = models.IntegerField()
+
+    class Meta:
+        ordering = ["round_number", "table_number"]
+
+    def __str__(self):
+        return f"R{self.round_number}: {self.entrant.player.name} at table {self.table_number}"
