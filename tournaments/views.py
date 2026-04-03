@@ -450,7 +450,12 @@ class DivisionPairingsView(VisibleDivisionMixin, DetailView):
         can_edit = user.is_authenticated and self.object.tournament.can_edit(user)
         context["can_edit"] = can_edit
         if can_edit:
-            context["available_rounds"] = _available_rounds(self.object)
+            rounds = _available_rounds(self.object)
+            if rounds:
+                plural = "rounds" if len(rounds) > 1 else "round"
+                context["generate_label"] = f"Generate Pairings ({plural} {', '.join(str(r) for r in rounds)})"
+            else:
+                context["generate_label"] = "Generate Pairings"
             context["entrants"] = list(
                 self.object.entrants.select_related("player").order_by("player__name")
             )

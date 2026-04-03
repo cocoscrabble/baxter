@@ -11,7 +11,7 @@
 <p>
 <form method="post" action="{% url 'generate_pairings' division.pk %}" style="display:inline">
     {% csrf_token %}
-    <button type="submit">Generate Pairings</button>
+    <button type="submit">{{ generate_label }}</button>
 </form>
 {% if pairings and entrants %}
 <button data-on:click="$showFixedPairing = !$showFixedPairing; $removeFixedPairing = false">Add Fixed Pairing</button>
