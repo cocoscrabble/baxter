@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Division, Entrant, Player, ResultSlip, Tournament
+from .models import Division, Entrant, Pairing, Player, ResultSlip, RoundPairings, Tournament
 
 
 class DivisionInline(admin.TabularInline):
@@ -28,6 +28,18 @@ class EntrantAdmin(admin.ModelAdmin):
     list_display = ("number", "player", "division")
     list_filter = ("division",)
     search_fields = ("player__name",)
+
+
+@admin.register(RoundPairings)
+class RoundPairingsAdmin(admin.ModelAdmin):
+    list_display = ("division", "round", "status")
+    list_filter = ("division", "status")
+
+
+@admin.register(Pairing)
+class PairingAdmin(admin.ModelAdmin):
+    list_display = ("round", "first", "second", "table", "division")
+    list_filter = ("division", "round")
 
 
 @admin.register(ResultSlip)

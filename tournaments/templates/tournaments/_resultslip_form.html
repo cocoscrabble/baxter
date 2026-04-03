@@ -1,11 +1,43 @@
-<div id="resultslip-form-container">
+<div id="resultslip-form-container"
+     data-signals="{selectedRound: '', selectedPairing: '', selectedWinner: '', pairingsData: {{ pairings_json }}}">
 {% if success_message %}<p class="success">{{ success_message }}</p>{% endif %}
+{% if form.non_field_errors %}
+<ul class="errorlist">
+    {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+</ul>
+{% endif %}
 <form method="post" data-on:submit__prevent="@post('{% url 'resultslip_create' division.pk %}', {headers: {'X-CSRFToken': $_csrfToken}})">
     {% csrf_token %}
-    <datalist id="players-datalist">
-        {% for name in player_names %}<option value="{{ name }}">{% endfor %}
-    </datalist>
-    {{ form.as_p }}
+    <p>
+        <label for="id_round">Round:</label>
+        {{ form.round }}
+        {% if form.round.errors %}<ul class="errorlist">{% for e in form.round.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+    </p>
+    <p>
+        <label for="id_pairing">Pairing:</label>
+        {{ form.pairing }}
+        {% if form.pairing.errors %}<ul class="errorlist">{% for e in form.pairing.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+    </p>
+    <p>
+        <label for="id_winner">Winner:</label>
+        {{ form.winner }}
+        {% if form.winner.errors %}<ul class="errorlist">{% for e in form.winner.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+    </p>
+    <p>
+        <label for="id_winner_score">Winner score:</label>
+        {{ form.winner_score }}
+        {% if form.winner_score.errors %}<ul class="errorlist">{% for e in form.winner_score.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+    </p>
+    <p>
+        <label for="id_loser_score">Opponent score:</label>
+        {{ form.loser_score }}
+        {% if form.loser_score.errors %}<ul class="errorlist">{% for e in form.loser_score.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+    </p>
+    <p>
+        <label for="id_winner_started">Winner started:</label>
+        {{ form.winner_started }}
+        {% if form.winner_started.errors %}<ul class="errorlist">{% for e in form.winner_started.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+    </p>
     <button type="submit">Save</button>
     {% if success_message %}<button type="button" onclick="window.location='{% url 'division_detail' division.pk %}'">Done</button>{% endif %}
 </form>

@@ -2,6 +2,8 @@ from datetime import date
 
 from django.test import TestCase
 
+from django.db import IntegrityError
+
 from tournaments.models import (
     Division,
     DivisionSettings,
@@ -11,6 +13,7 @@ from tournaments.models import (
     Pairing as DBPairing,
     Player as DBPlayer,
     ResultSlip,
+    RoundPairings,
     Tournament,
 )
 from tournaments.pairing.base import (
@@ -601,3 +604,236 @@ class FixedTableIntegrationTests(PairingDBTestBase):
         self._add_fixed_table(1, 0, 2)  # Alice → table 2
         pairings = self._regenerate()
         self.assertEqual(self._table_for(pairings, "Carol", "Dave"), 1)
+
+
+# ── RoundPairings lifecycle ─────────────────────────────
+
+
+class RoundPairingsLifecycleTests(PairingDBTestBase):
+    """Tests for the RoundPairings model and lifecycle transitions."""
+
+    def _koth_config(self, num_rounds):
+        rp = []
+        for i in range(1, num_rounds + 1):
+            rp.append({"round": i, "pairing": RP.KotH, "start_round": i - 1})
+        return DivisionSettings.objects.create(
+            division=self.division, round_pairings=rp
+        )
+
+    def _regenerate(self):
+        from tournaments.views import _regenerate_pairings
+        _regenerate_pairings(self.division)
+
+    def _complete_round(self, round_num):
+        """Add results for all pairings in a round so the next round can be paired."""
+        self.add_result(round_num, 0, 1, 450, 380)
+        self.add_result(round_num, 2, 3, 400, 350)
+
+    # -- Steps 1-3: model structure --
+
+    def test_round_pairings_created_on_generate(self):
+        self._koth_config(1)
+        self._regenerate()
+        rps = RoundPairings.objects.filter(division=self.division).order_by("round")
+        self.assertEqual(rps.count(), 1)
+        rp = rps.first()
+        self.assertEqual(rp.status, RoundPairings.DRAFT)
+        self.assertEqual(rp.pairings.count(), 2)  # 4 players = 2 pairings
+        # Verify FK is set on Pairing objects
+        for p in DBPairing.objects.filter(division=self.division):
+            self.assertIsNotNone(p.round_pairings)
+
+    def test_round_pairings_multiple_rounds(self):
+        """With results for round 1, regenerate creates RoundPairings for rounds 1 and 2."""
+        self._koth_config(2)
+        self._complete_round(1)
+        self._regenerate()
+        rps = RoundPairings.objects.filter(division=self.division).order_by("round")
+        self.assertEqual(rps.count(), 1)  # Only round 2 (round 1 is finished, skipped by pair())
+        self.assertEqual(rps.first().round, 2)
+
+    def test_round_pairings_unique_constraint(self):
+        RoundPairings.objects.create(division=self.division, round=1)
+        with self.assertRaises(IntegrityError):
+            RoundPairings.objects.create(division=self.division, round=1)
+
+    def test_result_slip_pairing_fk_nullable(self):
+        rs = ResultSlip.objects.create(
+            division=self.division,
+            round=1,
+            winner=self.entrants[0],
+            winner_score=450,
+            loser=self.entrants[1],
+            loser_score=380,
+            winner_started=True,
+        )
+        self.assertIsNone(rs.pairing)
+
+    # -- Step 4: regenerate preserves non-draft rounds --
+
+    def test_regenerate_preserves_published_round(self):
+        self._koth_config(2)
+        self._regenerate()
+        rp1 = RoundPairings.objects.get(division=self.division, round=1)
+        rp1_pk = rp1.pk
+        rp1.status = RoundPairings.PUBLISHED
+        rp1.save()
+
+        self._regenerate()
+
+        # Published round preserved with same PK
+        rp1 = RoundPairings.objects.get(pk=rp1_pk)
+        self.assertEqual(rp1.status, RoundPairings.PUBLISHED)
+        self.assertTrue(rp1.pairings.exists())
+
+    def test_regenerate_preserves_finished_round_with_results(self):
+        self._koth_config(2)
+        self._regenerate()
+        rp1 = RoundPairings.objects.get(division=self.division, round=1)
+        rp1.status = RoundPairings.FINISHED
+        rp1.save()
+        pairing1 = rp1.pairings.first()
+        rs = ResultSlip.objects.create(
+            division=self.division,
+            round=1,
+            pairing=pairing1,
+            winner=self.entrants[0],
+            winner_score=450,
+            loser=self.entrants[1],
+            loser_score=380,
+            winner_started=True,
+        )
+        rs_pk = rs.pk
+
+        self._regenerate()
+
+        # Round 1 and its data preserved
+        self.assertTrue(RoundPairings.objects.filter(pk=rp1.pk).exists())
+        self.assertTrue(rp1.pairings.exists())
+        self.assertTrue(ResultSlip.objects.filter(pk=rs_pk).exists())
+
+    def test_regenerate_with_fixed_pairings(self):
+        self._koth_config(1)
+        DBFixedPairing.objects.create(
+            division=self.division,
+            round_number=1,
+            entrant1=self.entrants[0],
+            entrant2=self.entrants[3],
+        )
+        self._regenerate()
+        rp = RoundPairings.objects.get(division=self.division, round=1)
+        self.assertEqual(rp.status, RoundPairings.DRAFT)
+        # Check that Alice-Dave pairing exists
+        names = set()
+        for p in rp.pairings.select_related("first__player", "second__player"):
+            names.add(frozenset({p.first.player.name, p.second.player.name}))
+        self.assertIn(frozenset({"Alice", "Dave"}), names)
+
+    # -- Step 5: publish flow --
+
+    def test_publish_transitions_draft_to_published(self):
+        self._koth_config(1)
+        self._regenerate()
+        self.assertEqual(
+            RoundPairings.objects.filter(
+                division=self.division, status=RoundPairings.DRAFT
+            ).count(),
+            1,
+        )
+        RoundPairings.objects.filter(
+            division=self.division, status=RoundPairings.DRAFT
+        ).update(status=RoundPairings.PUBLISHED)
+        self.assertEqual(
+            RoundPairings.objects.filter(
+                division=self.division, status=RoundPairings.PUBLISHED
+            ).count(),
+            1,
+        )
+
+    def test_publish_ignores_non_draft(self):
+        self._koth_config(2)
+        self._complete_round(1)
+        self._regenerate()
+        # We should have round 2 as draft. Manually create round 1 as in_progress.
+        rp1 = RoundPairings.objects.create(
+            division=self.division, round=1, status=RoundPairings.IN_PROGRESS
+        )
+        rp2 = RoundPairings.objects.get(division=self.division, round=2)
+        self.assertEqual(rp2.status, RoundPairings.DRAFT)
+
+        # Publish only drafts
+        RoundPairings.objects.filter(
+            division=self.division, status=RoundPairings.DRAFT
+        ).update(status=RoundPairings.PUBLISHED)
+
+        rp1.refresh_from_db()
+        rp2.refresh_from_db()
+        self.assertEqual(rp1.status, RoundPairings.IN_PROGRESS)
+        self.assertEqual(rp2.status, RoundPairings.PUBLISHED)
+
+    # -- Step 6: auto status transitions --
+
+    def test_first_result_transitions_to_in_progress(self):
+        self._koth_config(1)
+        self._regenerate()
+        rp = RoundPairings.objects.get(division=self.division, round=1)
+        rp.status = RoundPairings.PUBLISHED
+        rp.save()
+        pairing = rp.pairings.first()
+        ResultSlip.objects.create(
+            division=self.division, round=1, pairing=pairing,
+            winner=self.entrants[0], winner_score=450,
+            loser=self.entrants[1], loser_score=380,
+            winner_started=True,
+        )
+        from tournaments.views import _update_round_status
+        _update_round_status(pairing)
+        rp.refresh_from_db()
+        self.assertEqual(rp.status, RoundPairings.IN_PROGRESS)
+
+    def test_all_results_transitions_to_finished(self):
+        self._koth_config(1)
+        self._regenerate()
+        rp = RoundPairings.objects.get(division=self.division, round=1)
+        rp.status = RoundPairings.PUBLISHED
+        rp.save()
+        pairings = list(rp.pairings.all())
+        ResultSlip.objects.create(
+            division=self.division, round=1, pairing=pairings[0],
+            winner=pairings[0].first, winner_score=450,
+            loser=pairings[0].second, loser_score=380,
+            winner_started=True,
+        )
+        ResultSlip.objects.create(
+            division=self.division, round=1, pairing=pairings[1],
+            winner=pairings[1].first, winner_score=400,
+            loser=pairings[1].second, loser_score=350,
+            winner_started=True,
+        )
+        from tournaments.views import _update_round_status
+        _update_round_status(pairings[0])
+        rp.refresh_from_db()
+        self.assertEqual(rp.status, RoundPairings.FINISHED)
+
+    def test_result_deletion_resets_to_published(self):
+        self._koth_config(1)
+        self._regenerate()
+        rp = RoundPairings.objects.get(division=self.division, round=1)
+        rp.status = RoundPairings.PUBLISHED
+        rp.save()
+        pairing = rp.pairings.first()
+        rs = ResultSlip.objects.create(
+            division=self.division, round=1, pairing=pairing,
+            winner=self.entrants[0], winner_score=450,
+            loser=self.entrants[1], loser_score=380,
+            winner_started=True,
+        )
+        from tournaments.views import _update_round_status
+        _update_round_status(pairing)
+        rp.refresh_from_db()
+        self.assertEqual(rp.status, RoundPairings.IN_PROGRESS)
+        # Delete the result — status should revert.
+        rs.delete()
+        _update_round_status(pairing)
+        rp.refresh_from_db()
+        self.assertEqual(rp.status, RoundPairings.PUBLISHED)

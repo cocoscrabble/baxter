@@ -4,7 +4,7 @@ from users.models import User
 
 from django.forms import formset_factory
 
-from .models import Entrant, ResultSlip, Tournament
+from .models import Entrant, Pairing, ResultSlip, RoundPairings, Tournament
 from .pairing.pair import STRATEGY_TYPES
 
 
@@ -80,53 +80,102 @@ class TournamentForm(forms.ModelForm):
         return tournament
 
 
-class ResultSlipForm(forms.ModelForm):
-    """Form for entering game results."""
+class ResultSlipForm(forms.Form):
+    """Form for entering game results via pairing selection."""
 
-    winner = forms.CharField(widget=forms.TextInput(attrs={"list": "players-datalist"}))
-    loser = forms.CharField(label="Opponent", widget=forms.TextInput(attrs={"list": "players-datalist"}))
+    round = forms.IntegerField(widget=forms.Select())
+    pairing = forms.IntegerField(widget=forms.Select())
+    winner = forms.IntegerField(widget=forms.Select())
+    winner_score = forms.IntegerField()
+    loser_score = forms.IntegerField(label="Opponent score")
+    winner_started = forms.BooleanField(required=False)
 
-    class Meta:
-        model = ResultSlip
-        fields = ["round", "winner", "winner_score", "loser", "loser_score", "winner_started"]
-        labels = {"loser_score": "Opponent score"}
-
-    def __init__(self, *args, division=None, round_numbers=None, **kwargs):
+    def __init__(self, *args, division=None, pairings_by_round=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self._division = division or (self.instance.division if self.instance.pk else None)
-        if self.instance.pk:
-            if self.instance.winner:
-                self.fields["winner"].initial = self.instance.winner.player.name
-            if self.instance.loser:
-                self.fields["loser"].initial = self.instance.loser.player.name
-        rounds = round_numbers or list(range(1, 16))
-        self.fields["round"].widget = forms.Select(choices=[(r, f"Round {r}") for r in rounds])
+        self._division = division
+        # pairings_by_round: {round_num: [(pairing_pk, first_pk, first_name, second_pk, second_name), ...]}
+        self._pairings_by_round = pairings_by_round or {}
+        self._pairing_lookup = {}  # pk -> Pairing data
+
+        round_choices = [("", "---")]
+        for r in sorted(self._pairings_by_round.keys()):
+            round_choices.append((r, f"Round {r}"))
+        self.fields["round"].widget = forms.Select(choices=round_choices)
+
+        # Build flat pairing choices and lookup.
+        pairing_choices = [("", "---")]
+        winner_choices = [("", "---")]
+        for r, pairing_list in sorted(self._pairings_by_round.items()):
+            for p_pk, first_pk, first_name, second_pk, second_name in pairing_list:
+                label = f"{first_name} vs {second_name}"
+                pairing_choices.append((p_pk, label))
+                self._pairing_lookup[p_pk] = (first_pk, first_name, second_pk, second_name, r)
+                winner_choices.append((first_pk, first_name))
+                winner_choices.append((second_pk, second_name))
+
+        self.fields["pairing"].widget = forms.Select(choices=pairing_choices)
+        # Deduplicate winner choices.
+        seen = set()
+        unique_winner_choices = [("", "---")]
+        for val, label in winner_choices[1:]:
+            if val not in seen:
+                seen.add(val)
+                unique_winner_choices.append((val, label))
+        self.fields["winner"].widget = forms.Select(choices=unique_winner_choices)
+
         for field_name, field in self.fields.items():
             field.widget.attrs["data-bind"] = field_name
 
-    def _get_entrant(self, name):
-        if not self._division:
-            raise forms.ValidationError("Division not set.")
+    def clean_pairing(self):
+        pairing_pk = self.cleaned_data.get("pairing")
+        if not pairing_pk:
+            raise forms.ValidationError("Please select a pairing.")
+        if pairing_pk not in self._pairing_lookup:
+            raise forms.ValidationError("Invalid pairing selection.")
+        # Verify no result already exists for this pairing.
         try:
-            return Entrant.objects.select_related("player").get(
-                division=self._division, player__name=name
-            )
-        except Entrant.DoesNotExist:
-            raise forms.ValidationError(f"Player '{name}' not found in this division.")
+            pairing_obj = Pairing.objects.get(pk=pairing_pk)
+        except Pairing.DoesNotExist:
+            raise forms.ValidationError("Pairing not found.")
+        if hasattr(pairing_obj, "result") and pairing_obj.result is not None:
+            raise forms.ValidationError("This pairing already has a result.")
+        return pairing_obj
 
     def clean_winner(self):
-        return self._get_entrant(self.cleaned_data.get("winner", ""))
-
-    def clean_loser(self):
-        return self._get_entrant(self.cleaned_data.get("loser", ""))
+        winner_pk = self.cleaned_data.get("winner")
+        if not winner_pk:
+            raise forms.ValidationError("Please select a winner.")
+        try:
+            return Entrant.objects.get(pk=winner_pk)
+        except Entrant.DoesNotExist:
+            raise forms.ValidationError("Winner not found.")
 
     def clean(self):
         cleaned_data = super().clean()
+        pairing = cleaned_data.get("pairing")
         winner = cleaned_data.get("winner")
-        loser = cleaned_data.get("loser")
-        if winner and loser and winner == loser:
-            raise forms.ValidationError("Winner and opponent must be different players.")
+        if pairing and winner:
+            valid_ids = {pairing.first_id, pairing.second_id}
+            if winner.pk not in valid_ids:
+                raise forms.ValidationError("Winner must be one of the players in the pairing.")
         return cleaned_data
+
+    def save(self):
+        pairing = self.cleaned_data["pairing"]
+        winner = self.cleaned_data["winner"]
+        loser_id = pairing.first_id if winner.pk == pairing.second_id else pairing.second_id
+        loser = Entrant.objects.get(pk=loser_id)
+        rp = pairing.round_pairings
+        return ResultSlip.objects.create(
+            division=rp.division,
+            round=rp.round,
+            pairing=pairing,
+            winner=winner,
+            winner_score=self.cleaned_data["winner_score"],
+            loser=loser,
+            loser_score=self.cleaned_data["loser_score"],
+            winner_started=self.cleaned_data["winner_started"],
+        )
 
 
 class RoundCountForm(forms.Form):

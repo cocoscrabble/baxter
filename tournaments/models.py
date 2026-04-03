@@ -53,8 +53,6 @@ class Division(models.Model):
     )
     is_test = models.BooleanField(default=False)
     is_deleted = models.BooleanField(default=False)
-    published_through_round = models.IntegerField(default=0)
-    pairings_changed = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
 
     objects = ActiveDivisionManager()
@@ -147,6 +145,13 @@ class ResultSlip(models.Model):
         related_name="result_slips",
     )
     round = models.IntegerField()
+    pairing = models.OneToOneField(
+        "Pairing",
+        on_delete=models.SET_NULL,
+        related_name="result",
+        null=True,
+        blank=True,
+    )
     winner = models.ForeignKey(
         Entrant,
         on_delete=models.CASCADE,
@@ -188,6 +193,37 @@ class ResultSlip(models.Model):
         return f"R{self.round}: {self.winner_name} {self.winner_score}-{self.loser_score} {self.loser_name}"
 
 
+class RoundPairings(models.Model):
+    """Lifecycle container for all pairings in a division round."""
+
+    DRAFT = "draft"
+    PUBLISHED = "published"
+    IN_PROGRESS = "in_progress"
+    FINISHED = "finished"
+    STATUS_CHOICES = [
+        (DRAFT, "Draft"),
+        (PUBLISHED, "Published"),
+        (IN_PROGRESS, "In Progress"),
+        (FINISHED, "Finished"),
+    ]
+
+    division = models.ForeignKey(
+        Division,
+        on_delete=models.CASCADE,
+        related_name="round_pairings_set",
+    )
+    round = models.IntegerField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=DRAFT)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ["division", "round"]
+        ordering = ["round"]
+
+    def __str__(self):
+        return f"R{self.round} ({self.get_status_display()}) - {self.division}"
+
+
 class Pairing(models.Model):
     """A generated pairing for a division round."""
 
@@ -197,6 +233,13 @@ class Pairing(models.Model):
         related_name="pairings",
     )
     round = models.IntegerField()
+    round_pairings = models.ForeignKey(
+        RoundPairings,
+        on_delete=models.CASCADE,
+        related_name="pairings",
+        null=True,
+        blank=True,
+    )
     first = models.ForeignKey(
         Entrant,
         on_delete=models.CASCADE,

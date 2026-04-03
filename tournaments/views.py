@@ -26,7 +26,7 @@ from .forms import (
     TournamentForm,
 )
 from .dto import EntrantDTO, FixedPairingDTO, FixedTableDTO, ResultSlipDTO
-from .models import Division, DivisionSettings, Entrant, FixedPairing, FixedTable, Pairing, Player, ResultSlip, Tournament
+from .models import Division, DivisionSettings, Entrant, FixedPairing, FixedTable, Pairing, Player, ResultSlip, RoundPairings, Tournament
 from .pairing.base import PairingData, RoundStatus, standings_after_round
 from .pairing.pair import can_pair, pair, round_status, STRATEGY_TYPES
 
@@ -288,11 +288,37 @@ def _resolve_fixed_table(first_ft, second_ft, first_rank, second_rank):
     return first_ft[0] if first_rank < second_rank else second_ft[0]
 
 
+def _update_round_status(pairing_obj):
+    """Update RoundPairings status after a result is added or removed.
+
+    Called after creating/deleting a ResultSlip linked to a Pairing.
+    """
+    if not pairing_obj or not pairing_obj.round_pairings:
+        return
+    rp = pairing_obj.round_pairings
+    total = rp.pairings.count()
+    with_results = rp.pairings.filter(result__isnull=False).count()
+    if with_results == 0 and rp.status == RoundPairings.IN_PROGRESS:
+        rp.status = RoundPairings.PUBLISHED
+        rp.save(update_fields=["status"])
+    elif 0 < with_results < total and rp.status == RoundPairings.PUBLISHED:
+        rp.status = RoundPairings.IN_PROGRESS
+        rp.save(update_fields=["status"])
+    elif with_results == total and rp.status in (RoundPairings.PUBLISHED, RoundPairings.IN_PROGRESS):
+        rp.status = RoundPairings.FINISHED
+        rp.save(update_fields=["status"])
+
+
 def _regenerate_pairings(division):
-    """Run the pairing algorithm and save results to the Pairing table."""
+    """Run the pairing algorithm and save results to the Pairing table.
+
+    Only draft RoundPairings are deleted and recreated. Published, in-progress,
+    and finished rounds are preserved.
+    """
     pd = PairingData.for_division(division)
     if not pd.round_pairings:
-        division.pairings.all().delete()
+        division.round_pairings_set.filter(status=RoundPairings.DRAFT).delete()
+        division.pairings.filter(round_pairings__isnull=True).delete()
         return
     pairings = pair(pd)
     entrant_by_name = {
@@ -304,8 +330,23 @@ def _regenerate_pairings(division):
         (ft.entrant_id, ft.round_number): ft.table_number
         for ft in division.fixed_tables.all()
     }
-    division.pairings.all().delete()
+    # Only delete draft rounds (cascades to their Pairing objects).
+    # Also clean up any legacy pairings not linked to a RoundPairings.
+    division.round_pairings_set.filter(status=RoundPairings.DRAFT).delete()
+    division.pairings.filter(round_pairings__isnull=True).delete()
+
     for round_num, round_pairings in pairings:
+        # Create the RoundPairings container for this round.
+        rp_obj, _ = RoundPairings.objects.get_or_create(
+            division=division,
+            round=round_num,
+            defaults={"status": RoundPairings.DRAFT},
+        )
+        # Skip rounds that already have a non-draft status (shouldn't happen
+        # since pair() skips finished rounds, but be defensive).
+        if rp_obj.status != RoundPairings.DRAFT:
+            continue
+
         start_round = start_round_by_round.get(round_num, 0)
         standings = standings_after_round(pd, start_round)
         rank = {p.name: i + 1 for i, p in enumerate(standings)}
@@ -348,13 +389,12 @@ def _regenerate_pairings(division):
             Pairing.objects.create(
                 division=division,
                 round=round_num,
+                round_pairings=rp_obj,
                 first=first_entrant,
                 second=second_entrant,
                 repeats=p.repeats,
                 table=table_num,
             )
-    division.pairings_changed = True
-    division.save(update_fields=["pairings_changed"])
 
 
 def _pairings_common(division):
@@ -393,7 +433,16 @@ def _annotate_round(round_pairings, round_num, played, fixed_lookup):
 
 
 def _completed_rounds(division):
-    """Return sorted list of finished round numbers from round_status."""
+    """Return sorted list of finished round numbers."""
+    # Use RoundPairings status if available, fall back to round_status().
+    rp_finished = list(
+        division.round_pairings_set
+        .filter(status=RoundPairings.FINISHED)
+        .values_list("round", flat=True)
+    )
+    if rp_finished:
+        return sorted(rp_finished)
+    # Fallback for rounds without RoundPairings objects.
     pd = PairingData.for_division(division)
     status = round_status(pd)
     return sorted(r for r, s in status.items() if s == RoundStatus.Finished)
@@ -408,13 +457,27 @@ def _build_pairings_context(division):
         if not context["completed_rounds"]:
             context["pairings_message"] = "No pairings generated yet."
         return context
+    # Rounds that are finished (either via RoundPairings status or round_status fallback).
+    finished_rounds = set(
+        division.round_pairings_set
+        .filter(status=RoundPairings.FINISHED)
+        .values_list("round", flat=True)
+    )
+    if not finished_rounds:
+        finished_rounds = {r for r, s in status.items() if s == RoundStatus.Finished}
     annotated = []
     for round_num, round_pairings in groupby(db_pairings, key=lambda p: p.round):
-        if status[round_num] == RoundStatus.Finished:
+        if round_num in finished_rounds:
             continue
         round_annotated = _annotate_round(round_pairings, round_num, played, fixed_lookup)
         annotated.append((round_num, round_annotated))
     context["pairings"] = annotated
+    context["has_draft_rounds"] = division.round_pairings_set.filter(
+        status=RoundPairings.DRAFT
+    ).exists()
+    context["has_published_rounds"] = division.round_pairings_set.exclude(
+        status=RoundPairings.DRAFT
+    ).exists()
     return context
 
 
@@ -456,12 +519,9 @@ class GeneratePairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
 class PublishPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
     def post(self, request, pk):
         division = self.get_division()
-        max_round = division.pairings.aggregate(
-            max_round=models.Max("round")
-        )["max_round"] or 0
-        division.published_through_round = max_round
-        division.pairings_changed = False
-        division.save(update_fields=["published_through_round", "pairings_changed"])
+        division.round_pairings_set.filter(
+            status=RoundPairings.DRAFT
+        ).update(status=RoundPairings.PUBLISHED)
         return redirect("division_pairings", pk=pk)
 
 
@@ -545,14 +605,20 @@ class CompletedRoundPairingsView(VisibleDivisionMixin, DetailView):
 
 
 def _build_published_pairings_context(division):
-    """Build context for the published pairings page (rounds up to published_through_round)."""
+    """Build context for the published pairings page (non-draft rounds)."""
     context = {"division": division}
-    if division.published_through_round == 0:
+    # Published rounds = anything not draft (published, in_progress, finished).
+    published_rounds = set(
+        division.round_pairings_set
+        .exclude(status=RoundPairings.DRAFT)
+        .values_list("round", flat=True)
+    )
+    if not published_rounds:
         context["pairings_message"] = "No pairings published yet."
         return context
     db_pairings = list(
         division.pairings
-        .filter(round__lte=division.published_through_round)
+        .filter(round__in=published_rounds)
         .select_related("first", "first__player", "second", "second__player")
         .order_by("round", "table")
     )
@@ -820,9 +886,44 @@ class DivisionFixedTablesEditView(LoginRequiredMixin, CanEditDivisionMixin, View
         return JsonResponse({"ok": True})
 
 
-class ResultSlipCreateView(CreateView):
-    model = Division
-    form_class = ResultSlipForm
+def _pairings_by_round(division):
+    """Build pairings data grouped by round for the ResultSlipForm.
+
+    Returns {round_num: [(pairing_pk, first_pk, first_name, second_pk, second_name), ...]}
+    Only includes rounds with published/in_progress status and pairings without results.
+    """
+    rp_objs = (
+        division.round_pairings_set
+        .filter(status__in=[RoundPairings.PUBLISHED, RoundPairings.IN_PROGRESS])
+        .prefetch_related(
+            models.Prefetch(
+                "pairings",
+                queryset=Pairing.objects.select_related(
+                    "first__player", "second__player"
+                ).order_by("table"),
+            )
+        )
+        .order_by("round")
+    )
+    result = {}
+    for rp in rp_objs:
+        pairing_list = []
+        for p in rp.pairings.all():
+            if hasattr(p, "result"):
+                continue
+            pairing_list.append((
+                p.pk,
+                p.first_id,
+                p.first.player.name,
+                p.second_id,
+                p.second.player.name,
+            ))
+        if pairing_list:
+            result[rp.round] = pairing_list
+    return result
+
+
+class ResultSlipCreateView(View):
     template_name = "tournaments/resultslip_form.html"
 
     def get_division(self):
@@ -833,67 +934,60 @@ class ResultSlipCreateView(CreateView):
                 raise Http404
         return division
 
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        division = self.get_division()
-        kwargs["division"] = division
-        kwargs["round_numbers"] = self._round_numbers(division)
-        return kwargs
-
-    def _player_names(self, division):
-        return list(
-            Entrant.objects.filter(division=division)
-            .select_related("player")
-            .values_list("player__name", flat=True)
-            .order_by("player__name")
-        )
-
-    def _round_numbers(self, division):
-        try:
-            rps = division.settings.round_pairings
-            all_rounds = sorted(set(rp["round"] for rp in rps))
-        except (AttributeError, KeyError, TypeError):
-            all_rounds = list(range(1, 16))
-        pd = PairingData.for_division(division)
-        status = round_status(pd)
-        return [r for r in all_rounds if status[r] != RoundStatus.Finished]
-
-    def post(self, request, *args, **kwargs):
-        if is_datastar(request):
-            division = self.get_division()
-            round_numbers = self._round_numbers(division)
-            signals = read_signals(request) or {}
-            form = ResultSlipForm(signals, division=division, round_numbers=round_numbers)
-            player_names = self._player_names(division)
-            if form.is_valid():
-                form.instance.division = division
-                form.save()
-                fresh_form = ResultSlipForm(division=division, round_numbers=self._round_numbers(division))
-                return fragment_response(
-                    "tournaments/_resultslip_form.html",
-                    {"form": fresh_form, "division": division, "player_names": player_names, "success_message": "Result saved. If there are any mistakes, edit the form and click save again. If everything looks correct, hit Done to close the form."},
-                    request=request,
-                )
-            return fragment_response(
-                "tournaments/_resultslip_form.html",
-                {"form": form, "division": division, "player_names": player_names},
-                request=request,
-            )
-        return super().post(request, *args, **kwargs)
-
-    def form_valid(self, form):
-        form.instance.division = self.get_division()
-        return super().form_valid(form)
-
-    def get_success_url(self):
-        return reverse("division_detail", kwargs={"pk": self.kwargs["pk"]})
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        division = self.get_division()
-        context["division"] = division
-        context["player_names"] = self._player_names(division)
+    def _form_context(self, division, form, success_message=None):
+        pbr = form._pairings_by_round
+        # Build JSON-safe pairings data for datastar client-side filtering.
+        pairings_json = {}
+        for r, pairing_list in pbr.items():
+            pairings_json[str(r)] = [
+                {"pk": p_pk, "first_pk": f_pk, "first_name": f_name,
+                 "second_pk": s_pk, "second_name": s_name}
+                for p_pk, f_pk, f_name, s_pk, s_name in pairing_list
+            ]
+        context = {
+            "form": form,
+            "division": division,
+            "pairings_json": json.dumps(pairings_json),
+        }
+        if success_message:
+            context["success_message"] = success_message
         return context
+
+    def get(self, request, pk):
+        division = self.get_division()
+        pbr = _pairings_by_round(division)
+        form = ResultSlipForm(division=division, pairings_by_round=pbr)
+        context = self._form_context(division, form)
+        return render(request, self.template_name, context)
+
+    def post(self, request, pk):
+        division = self.get_division()
+        pbr = _pairings_by_round(division)
+        if is_datastar(request):
+            data = read_signals(request) or {}
+        else:
+            data = request.POST
+        form = ResultSlipForm(data, division=division, pairings_by_round=pbr)
+        if form.is_valid():
+            rs = form.save()
+            _update_round_status(rs.pairing)
+            fresh_pbr = _pairings_by_round(division)
+            fresh_form = ResultSlipForm(division=division, pairings_by_round=fresh_pbr)
+            context = self._form_context(
+                division, fresh_form,
+                success_message="Result saved. If there are any mistakes, edit the form and click save again. If everything looks correct, hit Done to close the form.",
+            )
+            if is_datastar(request):
+                return fragment_response(
+                    "tournaments/_resultslip_form.html", context, request=request,
+                )
+            return render(request, self.template_name, context)
+        context = self._form_context(division, form)
+        if is_datastar(request):
+            return fragment_response(
+                "tournaments/_resultslip_form.html", context, request=request,
+            )
+        return render(request, self.template_name, context)
 
 
 class DivisionEditResultsView(LoginRequiredMixin, CanEditDivisionMixin, View):
@@ -944,9 +1038,31 @@ class DivisionEditResultsView(LoginRequiredMixin, CanEditDivisionMixin, View):
         if errors:
             return JsonResponse({"errors": errors}, status=400)
 
+        # Build a lookup from (round, {entrant1_id, entrant2_id}) -> Pairing for FK linking.
+        pairing_lookup = {}
+        for p in division.pairings.all():
+            key = (p.round, frozenset({p.first_id, p.second_id}))
+            pairing_lookup[key] = p
+
+        # Track which RoundPairings are affected for status updates.
+        affected_rounds = set(
+            division.result_slips.values_list("round", flat=True)
+        )
+
         division.result_slips.all().delete()
         for slip in validated:
-            ResultSlip.objects.create(division=division, **slip.to_db_kwargs())
+            db_kwargs = slip.to_db_kwargs()
+            # Match to Pairing object by round + entrant pair.
+            key = (db_kwargs["round"], frozenset({db_kwargs["winner_id"], db_kwargs["loser_id"]}))
+            pairing_obj = pairing_lookup.get(key)
+            ResultSlip.objects.create(division=division, pairing=pairing_obj, **db_kwargs)
+            affected_rounds.add(db_kwargs["round"])
+
+        # Update status for all affected rounds.
+        for rp in division.round_pairings_set.filter(round__in=affected_rounds):
+            first_pairing = rp.pairings.first()
+            if first_pairing:
+                _update_round_status(first_pairing)
 
         return JsonResponse({"ok": True})
 
@@ -1002,15 +1118,25 @@ class SimulateMatchView(LoginRequiredMixin, CanEditDivisionMixin, View):
             winner, loser = second_entrant, first_entrant
             winner_started = False
 
+        # Find the matching Pairing object to link via FK.
+        pairing_obj = division.pairings.filter(
+            round=round_num,
+        ).filter(
+            models.Q(first=first_entrant, second=second_entrant) |
+            models.Q(first=second_entrant, second=first_entrant)
+        ).first()
+
         ResultSlip.objects.create(
             division=division,
             round=round_num,
+            pairing=pairing_obj,
             winner=winner,
             winner_score=winner_score,
             loser=loser,
             loser_score=loser_score,
             winner_started=winner_started,
         )
+        _update_round_status(pairing_obj)
 
         if is_datastar(request):
             context = _build_pairings_context(division)
@@ -1072,12 +1198,20 @@ class SimulateRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
             ResultSlip.objects.create(
                 division=division,
                 round=round_num,
+                pairing=pairing,
                 winner=winner,
                 winner_score=winner_score,
                 loser=loser,
                 loser_score=loser_score,
                 winner_started=winner_started,
             )
+
+        # Update round status after all results are created.
+        rp_obj = division.round_pairings_set.filter(round=round_num).first()
+        if rp_obj:
+            # Use the first pairing to trigger status check.
+            first_pairing = rp_obj.pairings.first()
+            _update_round_status(first_pairing)
 
         if is_datastar(request):
             context = _build_pairings_context(division)

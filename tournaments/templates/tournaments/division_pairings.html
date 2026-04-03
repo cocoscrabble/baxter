@@ -21,10 +21,10 @@
 {% if pairings %}
 <form method="post" action="{% url 'publish_pairings' division.pk %}" style="display:inline">
     {% csrf_token %}
-    <button type="submit" class="{% if division.pairings_changed %}btn-publish-needed{% else %}btn-publish-current{% endif %}">Publish Pairings</button>
+    <button type="submit" class="{% if has_draft_rounds %}btn-publish-needed{% else %}btn-publish-current{% endif %}">Publish Pairings</button>
 </form>
 {% endif %}
-{% if division.published_through_round %}
+{% if has_published_rounds %}
 <a href="{% url 'published_pairings' division.pk %}">View published pairings page</a>
 {% endif %}
 </p>

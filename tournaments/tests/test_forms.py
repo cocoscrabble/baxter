@@ -9,7 +9,7 @@ from tournaments.forms import (
     TournamentForm,
     clean_multiline_text,
 )
-from tournaments.models import Division, Entrant, Player, Tournament
+from tournaments.models import Division, Entrant, Pairing, Player, RoundPairings, Tournament
 from users.models import User
 
 
@@ -160,79 +160,96 @@ class ResultSlipFormTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         setUpTournament(cls)
-        cls.division2 = Division.objects.create(
-            name="Novice", tournament=cls.tournament
+        # Create a RoundPairings + Pairing so the form has data to work with.
+        cls.rp = RoundPairings.objects.create(
+            division=cls.division, round=1, status=RoundPairings.PUBLISHED,
         )
-        cls.player3 = Player.objects.create(
-            name="Charlie", player_number="003", rating=1400
-        )
-        cls.entrant3 = Entrant.objects.create(
-            division=cls.division2, player=cls.player3, number=1
+        cls.pairing = Pairing.objects.create(
+            division=cls.division, round=1, round_pairings=cls.rp,
+            first=cls.entrant1, second=cls.entrant2,
+            table=1,
         )
 
-    def test_loser_field_label(self):
-        form = ResultSlipForm(division=self.division)
-        self.assertEqual(form.fields["loser"].label, "Opponent")
+    def _pbr(self):
+        return {
+            1: [(self.pairing.pk, self.entrant1.pk, "Alice", self.entrant2.pk, "Bob")],
+        }
+
+    def test_loser_score_field_label(self):
+        form = ResultSlipForm(division=self.division, pairings_by_round=self._pbr())
         self.assertEqual(form.fields["loser_score"].label, "Opponent score")
 
     def test_valid_form(self):
         form = ResultSlipForm(
             data={
                 "round": 1,
-                "winner": "Alice",
+                "pairing": self.pairing.pk,
+                "winner": self.entrant1.pk,
                 "winner_score": 450,
-                "loser": "Bob",
                 "loser_score": 380,
                 "winner_started": True,
             },
             division=self.division,
+            pairings_by_round=self._pbr(),
         )
-        self.assertTrue(form.is_valid())
+        self.assertTrue(form.is_valid(), form.errors)
 
-    def test_winner_and_loser_cannot_be_same(self):
+    def test_winner_must_be_in_pairing(self):
+        other_player = Player.objects.create(name="Charlie", player_number="003", rating=1400)
+        other_entrant = Entrant.objects.create(division=self.division, player=other_player, number=3)
         form = ResultSlipForm(
             data={
                 "round": 1,
-                "winner": "Alice",
+                "pairing": self.pairing.pk,
+                "winner": other_entrant.pk,
                 "winner_score": 450,
-                "loser": "Alice",
                 "loser_score": 380,
                 "winner_started": True,
             },
             division=self.division,
+            pairings_by_round=self._pbr(),
         )
         self.assertFalse(form.is_valid())
-        self.assertIn("Winner and opponent must be different", str(form.errors))
+        self.assertIn("Winner must be one of the players in the pairing", str(form.errors))
 
-    def test_player_not_in_division_invalid(self):
+    def test_invalid_pairing_pk(self):
         form = ResultSlipForm(
             data={
                 "round": 1,
-                "winner": "Alice",
+                "pairing": 99999,
+                "winner": self.entrant1.pk,
                 "winner_score": 450,
-                "loser": "Charlie",  # In division2, not self.division
                 "loser_score": 380,
                 "winner_started": True,
             },
             division=self.division,
+            pairings_by_round=self._pbr(),
         )
         self.assertFalse(form.is_valid())
-        self.assertIn("loser", form.errors)
+        self.assertIn("pairing", form.errors)
 
-    def test_unknown_player_name_invalid(self):
+    def test_save_creates_result_slip(self):
         form = ResultSlipForm(
             data={
                 "round": 1,
-                "winner": "Alice",
+                "pairing": self.pairing.pk,
+                "winner": self.entrant1.pk,
                 "winner_score": 450,
-                "loser": "Nobody",
                 "loser_score": 380,
                 "winner_started": True,
             },
             division=self.division,
+            pairings_by_round=self._pbr(),
         )
-        self.assertFalse(form.is_valid())
-        self.assertIn("loser", form.errors)
+        self.assertTrue(form.is_valid(), form.errors)
+        rs = form.save()
+        self.assertEqual(rs.division, self.division)
+        self.assertEqual(rs.round, 1)
+        self.assertEqual(rs.pairing, self.pairing)
+        self.assertEqual(rs.winner, self.entrant1)
+        self.assertEqual(rs.loser, self.entrant2)
+        self.assertEqual(rs.winner_score, 450)
+        self.assertEqual(rs.loser_score, 380)
 
 
 class RoundPairingFormTests(TestCase):

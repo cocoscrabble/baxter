@@ -4,7 +4,7 @@ from datetime import date
 from django.test import TestCase, tag
 from django.urls import reverse
 
-from tournaments.models import Division, DivisionSettings, Entrant, FixedTable, Pairing, Player, ResultSlip, Tournament
+from tournaments.models import Division, DivisionSettings, Entrant, FixedTable, Pairing, Player, ResultSlip, RoundPairings, Tournament
 from users.models import User
 
 
@@ -237,50 +237,56 @@ class ResultSlipCreateViewTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         setUpTournament(cls)
+        cls.rp = RoundPairings.objects.create(
+            division=cls.division, round=1, status=RoundPairings.PUBLISHED,
+        )
+        cls.pairing = Pairing.objects.create(
+            division=cls.division, round=1, round_pairings=cls.rp,
+            first=cls.entrant1, second=cls.entrant2,
+            table=1,
+        )
 
     def test_create_result_slip(self):
         response = self.client.post(
             reverse("resultslip_create", kwargs={"pk": self.division.pk}),
             {
                 "round": 1,
-                "winner": "Alice",
+                "pairing": self.pairing.pk,
+                "winner": self.entrant1.pk,
                 "winner_score": 450,
-                "loser": "Bob",
-                "loser_score": 380,
-                "winner_started": True,
-            },
-        )
-        self.assertRedirects(
-            response, reverse("division_detail", kwargs={"pk": self.division.pk})
-        )
-        self.assertEqual(self.division.result_slips.count(), 1)
-
-    def test_form_shows_division_entrants_only(self):
-        other_division = Division.objects.create(name="Novice", tournament=self.tournament)
-        other_player = Player.objects.create(name="Charlie", player_number="003", rating=1400)
-        Entrant.objects.create(division=other_division, player=other_player, number=1)
-
-        response = self.client.get(
-            reverse("resultslip_create", kwargs={"pk": self.division.pk})
-        )
-        self.assertContains(response, "Alice")
-        self.assertContains(response, "Bob")
-        self.assertNotContains(response, "Charlie")
-
-    def test_invalid_same_winner_loser(self):
-        response = self.client.post(
-            reverse("resultslip_create", kwargs={"pk": self.division.pk}),
-            {
-                "round": 1,
-                "winner": "Alice",
-                "winner_score": 450,
-                "loser": "Alice",
                 "loser_score": 380,
                 "winner_started": True,
             },
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Winner and opponent must be different")
+        self.assertContains(response, "Result saved")
+        self.assertEqual(self.division.result_slips.count(), 1)
+        rs = self.division.result_slips.first()
+        self.assertEqual(rs.pairing, self.pairing)
+
+    def test_form_shows_pairing_options(self):
+        response = self.client.get(
+            reverse("resultslip_create", kwargs={"pk": self.division.pk})
+        )
+        self.assertContains(response, "Alice")
+        self.assertContains(response, "Bob")
+
+    def test_invalid_winner_not_in_pairing(self):
+        other_player = Player.objects.create(name="Charlie", player_number="003", rating=1400)
+        other_entrant = Entrant.objects.create(division=self.division, player=other_player, number=3)
+        response = self.client.post(
+            reverse("resultslip_create", kwargs={"pk": self.division.pk}),
+            {
+                "round": 1,
+                "pairing": self.pairing.pk,
+                "winner": other_entrant.pk,
+                "winner_score": 450,
+                "loser_score": 380,
+                "winner_started": True,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Winner must be one of the players in the pairing")
 
 
 @tag("slow")
