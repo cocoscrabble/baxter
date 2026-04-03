@@ -8,6 +8,7 @@
 <p><a href="{% url 'division_detail' division.pk %}">Back to division</a></p>
 
 {% if can_edit %}
+{% if generate_label %}
 <p>
 <form method="post" action="{% url 'generate_pairings' division.pk %}" style="display:inline">
     {% csrf_token %}
@@ -53,6 +54,9 @@
         <button type="button" data-on:click="$showFixedPairing = false">Cancel</button>
     </form>
 </div>
+{% endif %}
+{% elif waiting_message %}
+<p>{{ waiting_message }}</p>
 {% endif %}
 {% endif %}
 

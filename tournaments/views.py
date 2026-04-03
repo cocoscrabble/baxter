@@ -244,6 +244,23 @@ def _available_rounds(division):
     return [rp.round for rp in pd.round_pairings if can_pair(rp, status)]
 
 
+def _waiting_message(division):
+    """Return a message describing why no rounds can be paired, or None."""
+    pd = PairingData.for_division(division)
+    if not pd.round_pairings:
+        return "No round pairings configured."
+    status = round_status(pd)
+    for rp in pd.round_pairings:
+        stat = status[rp.round]
+        if stat in (RoundStatus.Finished, RoundStatus.Partial):
+            continue
+        # This is the next round that needs pairing.
+        if rp.start_round and status[rp.start_round] != RoundStatus.Finished:
+            return f"Round {rp.round} is waiting for round {rp.start_round} results."
+        return None
+    return "All rounds are finished."
+
+
 def _get_fixed_table(fixed_table_lookup, entrant_id, round_num):
     """Return (table_number, is_all) for an entrant in a round, or None.
 
@@ -455,7 +472,7 @@ class DivisionPairingsView(VisibleDivisionMixin, DetailView):
                 plural = "rounds" if len(rounds) > 1 else "round"
                 context["generate_label"] = f"Generate Pairings ({plural} {', '.join(str(r) for r in rounds)})"
             else:
-                context["generate_label"] = "Generate Pairings"
+                context["waiting_message"] = _waiting_message(self.object)
             context["entrants"] = list(
                 self.object.entrants.select_related("player").order_by("player__name")
             )
