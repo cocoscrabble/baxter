@@ -185,6 +185,23 @@ dd {
     background-color: #f5f5f5;
 }
 
+.btn-publish-needed {
+    background-color: #c0392b;
+}
+
+.btn-publish-needed:hover {
+    background-color: #a93226;
+}
+
+.btn-publish-current {
+    background-color: #999;
+    cursor: default;
+}
+
+.btn-publish-current:hover {
+    background-color: #999;
+}
+
 .division-inline-form {
     background-color: #f8f9fa;
     border: 1px solid #dee2e6;

@@ -54,6 +54,7 @@ class Division(models.Model):
     is_test = models.BooleanField(default=False)
     is_deleted = models.BooleanField(default=False)
     published_through_round = models.IntegerField(default=0)
+    pairings_changed = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
 
     objects = ActiveDivisionManager()

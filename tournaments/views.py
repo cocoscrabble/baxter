@@ -336,6 +336,8 @@ def _regenerate_pairings(division):
                 repeats=p.repeats,
                 table=table_num,
             )
+    division.pairings_changed = True
+    division.save(update_fields=["pairings_changed"])
 
 
 def _build_pairings_context(division):
@@ -392,7 +394,8 @@ class PublishPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
             max_round=models.Max("round")
         )["max_round"] or 0
         division.published_through_round = max_round
-        division.save(update_fields=["published_through_round"])
+        division.pairings_changed = False
+        division.save(update_fields=["published_through_round", "pairings_changed"])
         return redirect("division_pairings", pk=pk)
 
 
