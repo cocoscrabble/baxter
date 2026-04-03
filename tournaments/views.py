@@ -355,6 +355,9 @@ def _build_pairings_context(division):
     for slip in division.result_slips.all():
         key = (slip.round, frozenset({slip.winner_id, slip.loser_id}))
         played[key] = slip
+    fixed_keys = set()
+    for fp in division.fixed_pairings.all():
+        fixed_keys.add((fp.round_number, frozenset({fp.entrant1_id, fp.entrant2_id})))
     annotated = []
     for round_num, round_pairings in groupby(db_pairings, key=lambda p: p.round):
         if status[round_num] == RoundStatus.Finished:
@@ -368,7 +371,8 @@ def _build_pairings_context(division):
                 result = f"{scores[p.first_id]} - {scores[p.second_id]}"
             else:
                 result = ""
-            round_annotated.append({"pairing": p, "result": result})
+            is_fixed = key in fixed_keys
+            round_annotated.append({"pairing": p, "result": result, "is_fixed": is_fixed})
         annotated.append((round_num, round_annotated))
     context["pairings"] = annotated
     return context
