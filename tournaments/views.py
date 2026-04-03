@@ -357,17 +357,13 @@ def _regenerate_pairings(division):
     division.save(update_fields=["pairings_changed"])
 
 
-def _build_pairings_context(division):
-    """Build pairings context dict for a division. Reads from the Pairing table."""
-    context = {"division": division}
+def _pairings_common(division):
+    """Load pairings, result slips, fixed pairings, and round statuses for a division."""
     db_pairings = list(
         division.pairings
         .select_related("first", "first__player", "second", "second__player")
         .order_by("round", "table")
     )
-    if not db_pairings:
-        context["pairings_message"] = "No pairings generated yet."
-        return context
     pd = PairingData.for_division(division)
     status = round_status(pd)
     played = {}
@@ -377,23 +373,76 @@ def _build_pairings_context(division):
     fixed_lookup = {}
     for fp in division.fixed_pairings.all():
         fixed_lookup[(fp.round_number, frozenset({fp.entrant1_id, fp.entrant2_id}))] = fp.pk
+    return db_pairings, status, played, fixed_lookup
+
+
+def _annotate_round(round_pairings, round_num, played, fixed_lookup):
+    """Build annotated pairing list for a single round."""
+    annotated = []
+    for p in round_pairings:
+        key = (round_num, frozenset({p.first_id, p.second_id}))
+        slip = played.get(key)
+        if slip:
+            scores = {slip.winner_id: slip.winner_score, slip.loser_id: slip.loser_score}
+            result = f"{scores[p.first_id]} - {scores[p.second_id]}"
+        else:
+            result = ""
+        fixed_id = fixed_lookup.get(key)
+        annotated.append({"pairing": p, "result": result, "is_fixed": bool(fixed_id), "fixed_id": fixed_id})
+    return annotated
+
+
+def _completed_rounds(division):
+    """Return sorted list of finished round numbers from round_status."""
+    pd = PairingData.for_division(division)
+    status = round_status(pd)
+    return sorted(r for r, s in status.items() if s == RoundStatus.Finished)
+
+
+def _build_pairings_context(division):
+    """Build pairings context dict for a division. Reads from the Pairing table."""
+    context = {"division": division}
+    context["completed_rounds"] = _completed_rounds(division)
+    db_pairings, status, played, fixed_lookup = _pairings_common(division)
+    if not db_pairings:
+        if not context["completed_rounds"]:
+            context["pairings_message"] = "No pairings generated yet."
+        return context
     annotated = []
     for round_num, round_pairings in groupby(db_pairings, key=lambda p: p.round):
         if status[round_num] == RoundStatus.Finished:
             continue
-        round_annotated = []
-        for p in round_pairings:
-            key = (round_num, frozenset({p.first_id, p.second_id}))
-            slip = played.get(key)
-            if slip:
-                scores = {slip.winner_id: slip.winner_score, slip.loser_id: slip.loser_score}
-                result = f"{scores[p.first_id]} - {scores[p.second_id]}"
-            else:
-                result = ""
-            fixed_id = fixed_lookup.get(key)
-            round_annotated.append({"pairing": p, "result": result, "is_fixed": bool(fixed_id), "fixed_id": fixed_id})
+        round_annotated = _annotate_round(round_pairings, round_num, played, fixed_lookup)
         annotated.append((round_num, round_annotated))
     context["pairings"] = annotated
+    return context
+
+
+def _build_completed_round_context(division, round_num):
+    """Build context for viewing a single completed round's pairings."""
+    context = {"division": division}
+    context["completed_rounds"] = _completed_rounds(division)
+    context["completed_round"] = round_num
+    # Build pairings from result slips for this round.
+    slips = list(
+        division.result_slips
+        .filter(round=round_num)
+        .select_related("winner__player", "loser__player")
+        .order_by("pk")
+    )
+    fixed_lookup = {}
+    for fp in division.fixed_pairings.filter(round_number=round_num):
+        fixed_lookup[frozenset({fp.entrant1_id, fp.entrant2_id})] = fp.pk
+    completed_pairings = []
+    for slip in slips:
+        is_fixed = frozenset({slip.winner_id, slip.loser_id}) in fixed_lookup
+        completed_pairings.append({
+            "first_name": slip.winner.player.name,
+            "second_name": slip.loser.player.name,
+            "result": f"{slip.winner_score} - {slip.loser_score}",
+            "is_fixed": is_fixed,
+        })
+    context["completed_pairings"] = completed_pairings
     return context
 
 
@@ -477,6 +526,22 @@ class DivisionPairingsView(VisibleDivisionMixin, DetailView):
                 self.object.entrants.select_related("player").order_by("player__name")
             )
         return context
+
+
+class CompletedRoundPairingsView(VisibleDivisionMixin, DetailView):
+    model = Division
+    template_name = "tournaments/division_pairings.html"
+    context_object_name = "division"
+
+    def get(self, request, pk, round):
+        self.object = self.get_object()
+        context = self.get_context_data(object=self.object)
+        context.update(_build_completed_round_context(self.object, round))
+        if is_datastar(request):
+            return fragment_response(
+                "tournaments/_completed_pairings_content.html", context, request=request
+            )
+        return self.render_to_response(context)
 
 
 def _build_published_pairings_context(division):

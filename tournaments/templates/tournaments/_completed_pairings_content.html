@@ -1,0 +1,33 @@
+<div id="completed-pairings-content">
+{% if completed_rounds %}
+<p>Completed rounds:
+    {% for r in completed_rounds %}
+        {% if r == completed_round %}<strong>{{ r }}</strong>{% else %}<a href="#" data-on:click__prevent="@get('{% url 'completed_round_pairings' division.pk r %}')">{{ r }}</a>{% endif %}
+        {% if not forloop.last %} | {% endif %}
+    {% endfor %}
+</p>
+{% if completed_pairings %}
+<h2>Round {{ completed_round }}</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Winner</th>
+            <th></th>
+            <th>Loser</th>
+            <th>Result</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for entry in completed_pairings %}
+        <tr>
+            <td>{{ entry.first_name }}</td>
+            <td>{% if entry.is_fixed %}&#x1F512;{% endif %}</td>
+            <td>{{ entry.second_name }}</td>
+            <td>{{ entry.result }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+{% endif %}
+</div>
