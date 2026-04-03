@@ -8,15 +8,21 @@
 <p><a href="{% url 'division_detail' division.pk %}">Back to division</a></p>
 
 {% if can_edit %}
-<form method="post" action="{% url 'generate_pairings' division.pk %}">
+<p>
+<form method="post" action="{% url 'generate_pairings' division.pk %}" style="display:inline">
     {% csrf_token %}
     <button type="submit">Generate Pairings</button>
-    {% if available_rounds %}
-        Pairings available for rounds: {{ available_rounds|join:", " }}
-    {% else %}
-        No rounds available to pair.
-    {% endif %}
 </form>
+{% if pairings %}
+<form method="post" action="{% url 'publish_pairings' division.pk %}" style="display:inline">
+    {% csrf_token %}
+    <button type="submit">Publish Pairings</button>
+</form>
+{% endif %}
+{% if division.published_through_round %}
+<a href="{% url 'published_pairings' division.pk %}">View published pairings page</a>
+{% endif %}
+</p>
 {% endif %}
 
 {% include "tournaments/_pairings_content.html" %}

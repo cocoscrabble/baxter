@@ -1,0 +1,10 @@
+{% extends "base_embed.html" %}
+
+{% block title %}Pairings - {{ division.name }} - {{ division.tournament.name }}{% endblock %}
+
+{% block content %}
+<h1>Pairings: {{ division.name }}</h1>
+
+{% include "tournaments/_published_pairings_content.html" %}
+
+{% endblock %}

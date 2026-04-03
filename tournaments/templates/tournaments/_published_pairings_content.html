@@ -1,0 +1,25 @@
+{% if pairings_message %}
+<p>{{ pairings_message }}</p>
+{% elif pairings %}
+{% for round_num, round_pairings in pairings %}
+<h2>Round {{ round_num }}</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Table</th>
+            <th>First</th>
+            <th>Second</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for entry in round_pairings %}
+        <tr>
+            <td>{{ entry.pairing.table }}</td>
+            <td>{{ entry.pairing.first.name }}</td>
+            <td>{{ entry.pairing.second.name }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endfor %}
+{% endif %}

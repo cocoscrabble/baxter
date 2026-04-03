@@ -3,6 +3,7 @@ import random
 from itertools import groupby
 
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.db import models
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
@@ -379,6 +380,17 @@ class GeneratePairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
         return redirect("division_pairings", pk=pk)
 
 
+class PublishPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    def post(self, request, pk):
+        division = self.get_division()
+        max_round = division.pairings.aggregate(
+            max_round=models.Max("round")
+        )["max_round"] or 0
+        division.published_through_round = max_round
+        division.save(update_fields=["published_through_round"])
+        return redirect("division_pairings", pk=pk)
+
+
 class DivisionPairingsView(VisibleDivisionMixin, DetailView):
     model = Division
     template_name = "tournaments/division_pairings.html"
@@ -392,6 +404,40 @@ class DivisionPairingsView(VisibleDivisionMixin, DetailView):
         context["can_edit"] = can_edit
         if can_edit:
             context["available_rounds"] = _available_rounds(self.object)
+        return context
+
+
+def _build_published_pairings_context(division):
+    """Build context for the published pairings page (rounds up to published_through_round)."""
+    context = {"division": division}
+    if division.published_through_round == 0:
+        context["pairings_message"] = "No pairings published yet."
+        return context
+    db_pairings = list(
+        division.pairings
+        .filter(round__lte=division.published_through_round)
+        .select_related("first", "first__player", "second", "second__player")
+        .order_by("round", "table")
+    )
+    if not db_pairings:
+        context["pairings_message"] = "No pairings published yet."
+        return context
+    annotated = []
+    for round_num, round_pairings in groupby(db_pairings, key=lambda p: p.round):
+        round_annotated = [{"pairing": p} for p in round_pairings]
+        annotated.append((round_num, round_annotated))
+    context["pairings"] = annotated
+    return context
+
+
+class PublishedPairingsView(VisibleDivisionMixin, DetailView):
+    model = Division
+    template_name = "tournaments/published_pairings.html"
+    context_object_name = "division"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(_build_published_pairings_context(self.object))
         return context
 
 
