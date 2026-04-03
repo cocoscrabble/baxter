@@ -355,9 +355,9 @@ def _build_pairings_context(division):
     for slip in division.result_slips.all():
         key = (slip.round, frozenset({slip.winner_id, slip.loser_id}))
         played[key] = slip
-    fixed_keys = set()
+    fixed_lookup = {}
     for fp in division.fixed_pairings.all():
-        fixed_keys.add((fp.round_number, frozenset({fp.entrant1_id, fp.entrant2_id})))
+        fixed_lookup[(fp.round_number, frozenset({fp.entrant1_id, fp.entrant2_id}))] = fp.pk
     annotated = []
     for round_num, round_pairings in groupby(db_pairings, key=lambda p: p.round):
         if status[round_num] == RoundStatus.Finished:
@@ -371,8 +371,8 @@ def _build_pairings_context(division):
                 result = f"{scores[p.first_id]} - {scores[p.second_id]}"
             else:
                 result = ""
-            is_fixed = key in fixed_keys
-            round_annotated.append({"pairing": p, "result": result, "is_fixed": is_fixed})
+            fixed_id = fixed_lookup.get(key)
+            round_annotated.append({"pairing": p, "result": result, "is_fixed": bool(fixed_id), "fixed_id": fixed_id})
         annotated.append((round_num, round_annotated))
     context["pairings"] = annotated
     return context
@@ -423,6 +423,15 @@ class AddFixedPairingView(LoginRequiredMixin, CanEditDivisionMixin, View):
         except Exception:
             fp.delete()
             messages.error(request, "Could not regenerate pairings with this fixed pairing.")
+        return redirect("division_pairings", pk=pk)
+
+
+class RemoveFixedPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    def post(self, request, pk):
+        division = self.get_division()
+        keep_ids = set(request.POST.getlist("keep"))
+        division.fixed_pairings.exclude(pk__in=keep_ids).delete()
+        _regenerate_pairings(division)
         return redirect("division_pairings", pk=pk)
 
 

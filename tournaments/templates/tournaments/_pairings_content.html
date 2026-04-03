@@ -20,7 +20,7 @@
         <tr>
             <td>{{ entry.pairing.table }}</td>
             <td>{{ entry.pairing.first.name }}</td>
-            <td>{% if entry.is_fixed %}&#x1F512;{% endif %}</td>
+            <td>{% if entry.is_fixed %}<span data-show="!$removeFixedPairing">&#x1F512;</span><input type="checkbox" name="keep" value="{{ entry.fixed_id }}" checked data-show="$removeFixedPairing">{% endif %}</td>
             <td>{{ entry.pairing.second.name }}</td>
             <td>{{ entry.pairing.repeats }}</td>
             <td>

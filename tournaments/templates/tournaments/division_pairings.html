@@ -14,7 +14,8 @@
     <button type="submit">Generate Pairings</button>
 </form>
 {% if pairings and entrants %}
-<button data-on:click="$showFixedPairing = !$showFixedPairing">Add Fixed Pairing</button>
+<button data-on:click="$showFixedPairing = !$showFixedPairing; $removeFixedPairing = false">Add Fixed Pairing</button>
+<button data-on:click="$removeFixedPairing = !$removeFixedPairing; $showFixedPairing = false">Remove Fixed Pairing</button>
 {% endif %}
 {% if pairings %}
 <form method="post" action="{% url 'publish_pairings' division.pk %}" style="display:inline">
@@ -55,6 +56,19 @@
 {% endif %}
 {% endif %}
 
+{% if can_edit %}
+<form method="post" action="{% url 'remove_fixed_pairings' division.pk %}">
+{% csrf_token %}
+<div style="display:none" data-show="$removeFixedPairing">
+    <p>Uncheck the pairings you want to remove.
+        <button type="submit">Save</button>
+        <button type="button" data-on:click="$removeFixedPairing = false">Cancel</button>
+    </p>
+</div>
 {% include "tournaments/_pairings_content.html" %}
+</form>
+{% else %}
+{% include "tournaments/_pairings_content.html" %}
+{% endif %}
 
 {% endblock %}
