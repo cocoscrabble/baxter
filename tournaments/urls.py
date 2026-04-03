@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import (
+    AddFixedPairingView,
     DivisionAllResultsView,
     DivisionCreateView,
     DivisionDeleteView,
@@ -47,6 +48,7 @@ urlpatterns = [
     path("division/<int:pk>/simulate-round/", SimulateRoundView.as_view(), name="simulate_round"),
     path("division/<int:pk>/generate-pairings/", GeneratePairingsView.as_view(), name="generate_pairings"),
     path("division/<int:pk>/publish-pairings/", PublishPairingsView.as_view(), name="publish_pairings"),
+    path("division/<int:pk>/add-fixed-pairing/", AddFixedPairingView.as_view(), name="add_fixed_pairing"),
     path("division/<int:pk>/published-pairings/", PublishedPairingsView.as_view(), name="published_pairings"),
     path("<int:tournament_pk>/division/create/", DivisionCreateView.as_view(), name="division_create"),
     path("division/<int:pk>/delete/", DivisionDeleteView.as_view(), name="division_delete"),

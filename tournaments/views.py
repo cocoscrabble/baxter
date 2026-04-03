@@ -391,6 +391,24 @@ class PublishPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
         return redirect("division_pairings", pk=pk)
 
 
+class AddFixedPairingView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    def post(self, request, pk):
+        division = self.get_division()
+        round_number = int(request.POST["round"])
+        entrant1_id = int(request.POST["entrant1"])
+        entrant2_id = int(request.POST["entrant2"])
+        valid_ids = set(division.entrants.values_list("pk", flat=True))
+        if entrant1_id in valid_ids and entrant2_id in valid_ids and entrant1_id != entrant2_id:
+            FixedPairing.objects.create(
+                division=division,
+                round_number=round_number,
+                entrant1_id=entrant1_id,
+                entrant2_id=entrant2_id,
+            )
+            _regenerate_pairings(division)
+        return redirect("division_pairings", pk=pk)
+
+
 class DivisionPairingsView(VisibleDivisionMixin, DetailView):
     model = Division
     template_name = "tournaments/division_pairings.html"
@@ -404,6 +422,9 @@ class DivisionPairingsView(VisibleDivisionMixin, DetailView):
         context["can_edit"] = can_edit
         if can_edit:
             context["available_rounds"] = _available_rounds(self.object)
+            context["entrants"] = list(
+                self.object.entrants.select_related("player").order_by("player__name")
+            )
         return context
 
 

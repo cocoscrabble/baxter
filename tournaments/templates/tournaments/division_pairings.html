@@ -13,6 +13,9 @@
     {% csrf_token %}
     <button type="submit">Generate Pairings</button>
 </form>
+{% if pairings and entrants %}
+<button data-on:click="$showFixedPairing = !$showFixedPairing">Add Fixed Pairing</button>
+{% endif %}
 {% if pairings %}
 <form method="post" action="{% url 'publish_pairings' division.pk %}" style="display:inline">
     {% csrf_token %}
@@ -23,6 +26,33 @@
 <a href="{% url 'published_pairings' division.pk %}">View published pairings page</a>
 {% endif %}
 </p>
+{% if pairings and entrants %}
+<div style="display:none" data-show="$showFixedPairing">
+    <form method="post" action="{% url 'add_fixed_pairing' division.pk %}">
+        {% csrf_token %}
+        <label>Round:
+        <select name="round">
+            {% for round_num, round_pairings in pairings %}
+            <option value="{{ round_num }}">{{ round_num }}</option>
+            {% endfor %}
+        </select>
+        </label>
+        <select name="entrant1">
+            {% for e in entrants %}
+            <option value="{{ e.pk }}">{{ e.player.name }}</option>
+            {% endfor %}
+        </select>
+        vs
+        <select name="entrant2">
+            {% for e in entrants %}
+            <option value="{{ e.pk }}">{{ e.player.name }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit">Save</button>
+        <button type="button" data-on:click="$showFixedPairing = false">Cancel</button>
+    </form>
+</div>
+{% endif %}
 {% endif %}
 
 {% include "tournaments/_pairings_content.html" %}
