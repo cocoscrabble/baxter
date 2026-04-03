@@ -2,6 +2,7 @@ import json
 import random
 from itertools import groupby
 
+from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.db import models
 from django.http import Http404, JsonResponse
@@ -398,14 +399,26 @@ class AddFixedPairingView(LoginRequiredMixin, CanEditDivisionMixin, View):
         entrant1_id = int(request.POST["entrant1"])
         entrant2_id = int(request.POST["entrant2"])
         valid_ids = set(division.entrants.values_list("pk", flat=True))
-        if entrant1_id in valid_ids and entrant2_id in valid_ids and entrant1_id != entrant2_id:
-            FixedPairing.objects.create(
-                division=division,
-                round_number=round_number,
-                entrant1_id=entrant1_id,
-                entrant2_id=entrant2_id,
-            )
+        if entrant1_id not in valid_ids or entrant2_id not in valid_ids or entrant1_id == entrant2_id:
+            return redirect("division_pairings", pk=pk)
+        # Check that neither player already has a fixed pairing for this round.
+        already_fixed = set()
+        for fp in division.fixed_pairings.filter(round_number=round_number):
+            already_fixed.update([fp.entrant1_id, fp.entrant2_id])
+        if entrant1_id in already_fixed or entrant2_id in already_fixed:
+            messages.error(request, "One or both players already have a fixed pairing for this round.")
+            return redirect("division_pairings", pk=pk)
+        fp = FixedPairing.objects.create(
+            division=division,
+            round_number=round_number,
+            entrant1_id=entrant1_id,
+            entrant2_id=entrant2_id,
+        )
+        try:
             _regenerate_pairings(division)
+        except Exception:
+            fp.delete()
+            messages.error(request, "Could not regenerate pairings with this fixed pairing.")
         return redirect("division_pairings", pk=pk)
 
 
