@@ -3,7 +3,7 @@ from datetime import date
 from django.db import IntegrityError
 from django.test import TestCase
 
-from tournaments.models import Division, DivisionSettings, Entrant, Player, ResultSlip, Tournament
+from tournaments.models import Division, DivisionSettings, Entrant, Player, ResultSlip, Tournament, next_player_number
 from users.models import User
 
 
@@ -146,3 +146,24 @@ class DivisionSettingsModelTests(TestCase):
     def test_str(self):
         settings = DivisionSettings.objects.create(division=self.division)
         self.assertEqual(str(settings), "Settings for Open")
+
+
+class NextPlayerNumberTests(TestCase):
+    def test_no_players(self):
+        self.assertEqual(next_player_number(), "1")
+
+    def test_numeric_only(self):
+        Player.objects.create(name="A", player_number="100", rating=1500)
+        Player.objects.create(name="B", player_number="101", rating=1500)
+        self.assertEqual(next_player_number(), "102")
+
+    def test_alpha_prefix(self):
+        Player.objects.create(name="A", player_number="A100", rating=1500)
+        Player.objects.create(name="B", player_number="A101", rating=1500)
+        self.assertEqual(next_player_number(), "A102")
+
+    def test_mixed_prefixes_uses_last_lexically(self):
+        Player.objects.create(name="A", player_number="A50", rating=1500)
+        Player.objects.create(name="B", player_number="B10", rating=1500)
+        # "B10" sorts after "A50" lexically
+        self.assertEqual(next_player_number(), "B11")

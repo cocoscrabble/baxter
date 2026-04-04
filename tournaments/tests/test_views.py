@@ -233,6 +233,118 @@ class TournamentDeleteViewTests(TestCase):
 
 
 @tag("slow")
+class CreatePlayerViewTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(username="owner", password="testpass123")
+
+    def test_create_player(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.post(
+            reverse("create_player"),
+            json.dumps({"name": "NewPlayer", "rating": 1500}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["label"], "NewPlayer")
+        self.assertTrue(Player.objects.filter(name="NewPlayer").exists())
+
+    def test_duplicate_name_rejected(self):
+        Player.objects.create(name="Alice", player_number="001", rating=1600)
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.post(
+            reverse("create_player"),
+            json.dumps({"name": "alice"}),  # case-insensitive
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("already exists", response.json()["error"])
+
+    def test_empty_name_rejected(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.post(
+            reverse("create_player"),
+            json.dumps({"name": ""}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_default_rating_zero(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.post(
+            reverse("create_player"),
+            json.dumps({"name": "NoRating"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Player.objects.get(name="NoRating").rating, 0)
+
+
+class BulkImportEntrantsViewTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        setUpTournament(cls)
+
+    def _upload(self, csv_content):
+        from io import BytesIO
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.client.login(username="owner", password="testpass123")
+        f = SimpleUploadedFile("import.csv", csv_content.encode("utf-8"), content_type="text/csv")
+        return self.client.post(
+            reverse("bulk_import_entrants", kwargs={"pk": self.division.pk}),
+            {"csv_file": f},
+        )
+
+    def test_import_new_players(self):
+        response = self._upload("Charlie,1400\nDave,1300\n")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["added"], 2)
+        self.assertEqual(len(data["created"]), 2)
+        self.assertTrue(Player.objects.filter(name="Charlie").exists())
+        self.assertEqual(self.division.entrants.count(), 4)  # 2 existing + 2 new
+
+    def test_import_existing_player_matched(self):
+        # Alice already exists as player1 but is already an entrant
+        response = self._upload("Alice,1600\n")
+        data = response.json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["added"], 0)
+        self.assertEqual(len(data["skipped"]), 1)
+
+    def test_import_existing_player_not_in_division(self):
+        other_player = Player.objects.create(name="Eve", player_number="003", rating=1200)
+        response = self._upload("Eve,1200\n")
+        data = response.json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["added"], 1)
+        self.assertEqual(len(data["matched"]), 1)
+
+    def test_duplicate_in_csv_rejected(self):
+        response = self._upload("Charlie,1400\nCharlie,1300\n")
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertTrue(any("duplicate" in e.lower() for e in data["errors"]))
+
+    def test_name_only_import(self):
+        response = self._upload("Charlie\n")
+        data = response.json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["added"], 1)
+        self.assertEqual(Player.objects.get(name="Charlie").rating, 0)
+
+    def test_entrant_numbers_append(self):
+        # Existing entrants are numbered 1, 2
+        response = self._upload("Charlie,1400\n")
+        data = response.json()
+        self.assertTrue(data["ok"])
+        entrant = self.division.entrants.get(player__name="Charlie")
+        self.assertEqual(entrant.number, 3)
+
+
 class ResultSlipCreateViewTests(TestCase):
     @classmethod
     def setUpTestData(cls):

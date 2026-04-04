@@ -15,15 +15,42 @@
 
 <p style="margin-top: 1em;">
     <button id="add-row-btn" type="button">Add Entrant</button>
+    <button type="button" data-on:click="$showNewPlayer = !$showNewPlayer">Add New Player</button>
     <button id="save-btn" type="button">Save</button>
     <span id="save-status"></span>
 </p>
+
+<div style="display:none; margin-top: 1em; padding: 1em; border: 1px solid #ccc;" data-show="$showNewPlayer">
+    <h3>Create New Player</h3>
+    <p>
+        <label>Name: <input type="text" data-bind="newPlayerName"></label>
+        <label style="margin-left: 1em;">Rating: <input type="number" data-bind="newPlayerRating"></label>
+        <button id="create-player-btn" type="button">Create &amp; Add</button>
+        <button type="button" data-on:click="$showNewPlayer = false">Cancel</button>
+    </p>
+    <span id="new-player-status"></span>
+</div>
+
+<details style="margin-top: 2em;">
+    <summary>Bulk Import (CSV)</summary>
+    <p style="margin-top: 0.5em;">
+        Upload a CSV file. One column: <code>name</code>. Two columns: <code>name, rating</code>.
+        Rating is optional (defaults to 0). Existing players keep their current rating. Existing entrants are skipped.
+    </p>
+    <form id="bulk-import-form" enctype="multipart/form-data">
+        <input type="file" id="csv-file" accept=".csv,.txt">
+        <button type="submit">Import</button>
+    </form>
+    <div id="import-status" style="margin-top: 0.5em;"></div>
+</details>
 
 <script>
 const pageData = {
     players: {{ players_json|safe }},
     entrants: {{ entrants_json|safe }},
     csrfToken: "{{ csrf_token }}",
+    createPlayerUrl: "{% url 'create_player' %}",
+    bulkImportUrl: "{% url 'bulk_import_entrants' division.pk %}",
 };
 </script>
 <script src="{% static 'tournaments/js/edit_entrants.js' %}"></script>

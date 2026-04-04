@@ -1,3 +1,5 @@
+import re
+
 from django.conf import settings
 from django.db import models
 from django.urls import reverse
@@ -93,6 +95,26 @@ class DivisionSettings(models.Model):
 
     def __str__(self):
         return f"Settings for {self.division}"
+
+
+def next_player_number():
+    """Generate the next player number by incrementing the last one lexically.
+
+    Player numbers have an optional alpha prefix followed by digits (e.g. "A100", "100").
+    Sort all existing numbers lexically, take the last, and increment the integer part.
+    """
+    all_numbers = list(
+        Player.objects.values_list("player_number", flat=True)
+    )
+    if not all_numbers:
+        return "1"
+    all_numbers.sort()
+    last = all_numbers[-1]
+    m = re.match(r"^([A-Za-z]*)(\d+)$", last)
+    if not m:
+        return "1"
+    prefix, num_str = m.groups()
+    return f"{prefix}{int(num_str) + 1}"
 
 
 class Player(models.Model):

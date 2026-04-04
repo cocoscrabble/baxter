@@ -26,7 +26,7 @@ from .forms import (
     TournamentForm,
 )
 from .dto import EntrantDTO, FixedPairingDTO, FixedTableDTO, ResultSlipDTO
-from .models import Division, DivisionSettings, Entrant, FixedPairing, FixedTable, Pairing, Player, ResultSlip, RoundPairings, Tournament
+from .models import Division, DivisionSettings, Entrant, FixedPairing, FixedTable, Pairing, Player, ResultSlip, RoundPairings, Tournament, next_player_number
 from .pairing.base import PairingData, RoundStatus, standings_after_round
 from .pairing.pair import can_pair, pair, round_status, STRATEGY_TYPES
 
@@ -771,6 +771,74 @@ class DivisionEntrantsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
         for entrant in validated:
             Entrant.objects.create(division=division, **entrant.to_db_kwargs())
         return JsonResponse({"ok": True})
+
+
+class CreatePlayerView(LoginRequiredMixin, View):
+    """AJAX endpoint to create a new Player and return its data."""
+
+    def post(self, request):
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "Invalid JSON."}, status=400)
+
+        name = (data.get("name") or "").strip()
+        if not name:
+            return JsonResponse({"error": "Name is required."}, status=400)
+
+        # Case-insensitive uniqueness check.
+        if Player.objects.filter(name__iexact=name).exists():
+            return JsonResponse(
+                {"error": f"A player named '{name}' already exists."},
+                status=400,
+            )
+
+        rating = data.get("rating", 0)
+        try:
+            rating = int(rating)
+        except (ValueError, TypeError):
+            rating = 0
+
+        player = Player.objects.create(
+            name=name,
+            player_number=next_player_number(),
+            rating=rating,
+        )
+        return JsonResponse({
+            "ok": True,
+            "id": player.pk,
+            "label": player.name,
+            "player_number": player.player_number,
+        })
+
+
+class BulkImportEntrantsView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    """Import entrants from a CSV file, creating new Players as needed."""
+
+    def post(self, request, pk):
+        from tournaments.import_entrants import import_entrants
+
+        division = self.get_division()
+        uploaded = request.FILES.get("csv_file")
+        if not uploaded:
+            return JsonResponse({"errors": ["No file uploaded."]}, status=400)
+
+        try:
+            text = uploaded.read().decode("utf-8-sig")
+        except UnicodeDecodeError:
+            return JsonResponse({"errors": ["File must be UTF-8 encoded text."]}, status=400)
+
+        result, errors = import_entrants(division, text)
+        if errors:
+            return JsonResponse({"errors": errors}, status=400)
+
+        return JsonResponse({
+            "ok": True,
+            "created": result.created,
+            "matched": result.matched,
+            "skipped": result.skipped,
+            "added": result.added,
+        })
 
 
 class DivisionFixedPairingsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
