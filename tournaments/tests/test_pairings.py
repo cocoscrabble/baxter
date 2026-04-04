@@ -532,8 +532,8 @@ class FixedTableIntegrationTests(PairingDBTestBase):
         )
 
     def _regenerate(self):
-        from tournaments.views import _regenerate_pairings
-        _regenerate_pairings(self.division)
+        from tournaments.generate_pairings import regenerate_pairings
+        regenerate_pairings(self.division)
         return list(
             DBPairing.objects.filter(division=self.division)
             .select_related("first__player", "second__player")
@@ -621,8 +621,8 @@ class RoundPairingsLifecycleTests(PairingDBTestBase):
         )
 
     def _regenerate(self):
-        from tournaments.views import _regenerate_pairings
-        _regenerate_pairings(self.division)
+        from tournaments.generate_pairings import regenerate_pairings
+        regenerate_pairings(self.division)
 
     def _complete_round(self, round_num):
         """Add results for all pairings in a round so the next round can be paired."""
@@ -786,8 +786,8 @@ class RoundPairingsLifecycleTests(PairingDBTestBase):
             loser=self.entrants[1], loser_score=380,
             winner_started=True,
         )
-        from tournaments.views import _update_round_status
-        _update_round_status(pairing)
+        from tournaments.generate_pairings import update_round_status
+        update_round_status(pairing)
         rp.refresh_from_db()
         self.assertEqual(rp.status, RoundPairings.IN_PROGRESS)
 
@@ -810,8 +810,8 @@ class RoundPairingsLifecycleTests(PairingDBTestBase):
             loser=pairings[1].second, loser_score=350,
             winner_started=True,
         )
-        from tournaments.views import _update_round_status
-        _update_round_status(pairings[0])
+        from tournaments.generate_pairings import update_round_status
+        update_round_status(pairings[0])
         rp.refresh_from_db()
         self.assertEqual(rp.status, RoundPairings.FINISHED)
 
@@ -828,12 +828,12 @@ class RoundPairingsLifecycleTests(PairingDBTestBase):
             loser=self.entrants[1], loser_score=380,
             winner_started=True,
         )
-        from tournaments.views import _update_round_status
-        _update_round_status(pairing)
+        from tournaments.generate_pairings import update_round_status
+        update_round_status(pairing)
         rp.refresh_from_db()
         self.assertEqual(rp.status, RoundPairings.IN_PROGRESS)
         # Delete the result — status should revert.
         rs.delete()
-        _update_round_status(pairing)
+        update_round_status(pairing)
         rp.refresh_from_db()
         self.assertEqual(rp.status, RoundPairings.PUBLISHED)
