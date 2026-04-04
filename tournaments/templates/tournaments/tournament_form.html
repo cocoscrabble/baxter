@@ -2,6 +2,13 @@
 
 {% block title %}{% if tournament %}Edit{% else %}Create{% endif %} Tournament - Baxter{% endblock %}
 
+{% block breadcrumbs %}
+{% if tournament %}
+<span class="nav-sep">/</span>
+<a href="{% url 'tournament_detail' tournament.pk %}">{{ tournament.name }}</a>
+{% endif %}
+{% endblock %}
+
 {% block content %}
 <h1>{% if tournament %}Edit{% else %}Create{% endif %} Tournament</h1>
 

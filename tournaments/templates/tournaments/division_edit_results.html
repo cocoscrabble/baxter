@@ -1,11 +1,10 @@
-{% extends "base.html" %}
+{% extends "tournaments/base_division.html" %}
 {% load static %}
 
 {% block title %}Edit Results - {{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
 
 {% block content %}
 <h1>Edit Results: {{ division.name }}</h1>
-<p><a href="{% url 'division_detail' division.pk %}">Back to division</a></p>
 
 <link rel="stylesheet" href="{% static 'tabulator-tables/dist/css/tabulator.min.css' %}">
 <script src="{% static 'tabulator-tables/dist/js/tabulator.min.js' %}"></script>

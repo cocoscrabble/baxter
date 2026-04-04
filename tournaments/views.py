@@ -105,6 +105,23 @@ class VisibleDivisionMixin:
         return obj
 
 
+class DivisionNavMixin:
+    """Adds active_tab and can_edit to context for the division navbar."""
+
+    active_tab = ""
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        division = self.object
+        user = self.request.user
+        if "can_edit" not in context:
+            context["can_edit"] = (
+                user.is_authenticated and division.tournament.can_edit(user)
+            )
+        context["active_tab"] = self.active_tab
+        return context
+
+
 class TournamentUpdateView(LoginRequiredMixin, CanEditTournamentMixin, UpdateView):
     model = Tournament
     form_class = TournamentForm
@@ -173,17 +190,13 @@ class DivisionRestoreView(LoginRequiredMixin, CanEditDivisionMixin, View):
         return redirect("tournament_detail", pk=tournament_pk)
 
 
-class DivisionDetailView(VisibleDivisionMixin, DetailView):
+class DivisionDetailView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
     model = Division
     template_name = "tournaments/division_detail.html"
     context_object_name = "division"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        user = self.request.user
-        context["can_edit"] = (
-            user.is_authenticated and self.object.tournament.can_edit(user)
-        )
         division = self.object
         max_round = division.max_round()
         context["max_round"] = max_round
@@ -198,22 +211,25 @@ class DivisionDetailView(VisibleDivisionMixin, DetailView):
         return context
 
 
-class DivisionAllResultsView(VisibleDivisionMixin, DetailView):
+class DivisionAllResultsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
     model = Division
     template_name = "tournaments/division_all_results.html"
     context_object_name = "division"
+    active_tab = "results"
 
 
-class DivisionEntrantsView(VisibleDivisionMixin, DetailView):
+class DivisionEntrantsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
     model = Division
     template_name = "tournaments/division_entrants.html"
     context_object_name = "division"
+    active_tab = "entrants"
 
 
-class DivisionStandingsView(VisibleDivisionMixin, DetailView):
+class DivisionStandingsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
     model = Division
     template_name = "tournaments/division_standings.html"
     context_object_name = "division"
+    active_tab = "standings"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -430,17 +446,16 @@ class RemoveFixedPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
         return redirect("division_pairings", pk=pk)
 
 
-class DivisionPairingsView(VisibleDivisionMixin, DetailView):
+class DivisionPairingsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
     model = Division
     template_name = "tournaments/division_pairings.html"
     context_object_name = "division"
+    active_tab = "pairings"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.update(_build_pairings_context(self.object))
-        user = self.request.user
-        can_edit = user.is_authenticated and self.object.tournament.can_edit(user)
-        context["can_edit"] = can_edit
+        can_edit = context["can_edit"]
         if can_edit:
             rounds = _available_rounds(self.object)
             if rounds:
@@ -454,10 +469,11 @@ class DivisionPairingsView(VisibleDivisionMixin, DetailView):
         return context
 
 
-class CompletedRoundPairingsView(VisibleDivisionMixin, DetailView):
+class CompletedRoundPairingsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
     model = Division
     template_name = "tournaments/division_pairings.html"
     context_object_name = "division"
+    active_tab = "pairings"
 
     def get(self, request, pk, round):
         self.object = self.get_object()
@@ -554,6 +570,8 @@ class DivisionSettingsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
             "formset": formset,
             "round_count_form": round_count_form,
             "strategy_types": STRATEGY_TYPES,
+            "active_tab": "settings",
+            "can_edit": True,
         }
         if is_datastar(request):
             return fragment_response(
@@ -604,6 +622,8 @@ class DivisionEntrantsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
             "division": division,
             "entrants_json": json.dumps(entrants_json),
             "players_json": json.dumps(players_json),
+            "active_tab": "edit_entrants",
+            "can_edit": True,
         })
 
     def post(self, request, pk):
@@ -725,6 +745,8 @@ class DivisionFixedPairingsEditView(LoginRequiredMixin, CanEditDivisionMixin, Vi
             "division": division,
             "entrant_values_json": json.dumps(entrant_values),
             "fixed_pairings_json": json.dumps(existing),
+            "active_tab": "fixed_pairings",
+            "can_edit": True,
         })
 
     def post(self, request, pk):
@@ -785,6 +807,8 @@ class DivisionFixedTablesEditView(LoginRequiredMixin, CanEditDivisionMixin, View
             "entrant_values_json": json.dumps(entrant_values),
             "fixed_tables_json": json.dumps(existing),
             "round_values_json": json.dumps(round_values),
+            "active_tab": "fixed_tables",
+            "can_edit": True,
         })
 
     def post(self, request, pk):
@@ -878,10 +902,15 @@ class ResultSlipCreateView(View):
                  "second_pk": s_pk, "second_name": s_name}
                 for p_pk, f_pk, f_name, s_pk, s_name in pairing_list
             ]
+        user = self.request.user
         context = {
             "form": form,
             "division": division,
             "pairings_json": json.dumps(pairings_json),
+            "active_tab": "add_result",
+            "can_edit": (
+                user.is_authenticated and division.tournament.can_edit(user)
+            ),
         }
         if success_message:
             context["success_message"] = success_message
@@ -945,6 +974,8 @@ class DivisionEditResultsView(LoginRequiredMixin, CanEditDivisionMixin, View):
             "division": division,
             "results_json": json.dumps(results_json),
             "entrants_json": json.dumps(entrants_json),
+            "active_tab": "edit_results",
+            "can_edit": True,
         })
 
     def post(self, request, pk):

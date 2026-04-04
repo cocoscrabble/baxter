@@ -2,6 +2,11 @@
 
 {% block title %}Delete Tournament - Baxter{% endblock %}
 
+{% block breadcrumbs %}
+<span class="nav-sep">/</span>
+<a href="{% url 'tournament_detail' tournament.pk %}">{{ tournament.name }}</a>
+{% endblock %}
+
 {% block content %}
 <h1>Delete Tournament</h1>
 

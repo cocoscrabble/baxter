@@ -1,26 +1,9 @@
-{% extends "base.html" %}
+{% extends "tournaments/base_division.html" %}
 
 {% block title %}{{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
 
 {% block content %}
 <h1>{{ division.name }}</h1>
-<p>Tournament: <a href="{% url 'tournament_detail' division.tournament.pk %}">{{ division.tournament.name }}</a></p>
-
-<p>
-    <a href="{% url 'division_entrants' division.pk %}">Entrants</a>
-    | <a href="{% url 'division_standings' division.pk %}">Standings</a>
-    | <a href="{% url 'division_pairings' division.pk %}">Pairings</a>
-    | <a href="{% url 'resultslip_create' division.pk %}">Add Result</a>
-</p>
-{% if can_edit %}
-<p>
-    <a href="{% url 'division_edit_results' division.pk %}">Edit Results</a>
-    | <a href="{% url 'division_entrants_edit' division.pk %}">Edit Entrants</a>
-    | <a href="{% url 'division_settings' division.pk %}">Settings</a>
-    | <a href="{% url 'division_fixed_pairings' division.pk %}">Edit Fixed Pairings</a>
-    | <a href="{% url 'division_fixed_tables' division.pk %}">Edit Fixed Tables</a>
-</p>
-{% endif %}
 
 <h2>Round {{ max_round }} Results</h2>
 {% if latest_results %}

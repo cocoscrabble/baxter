@@ -1,11 +1,9 @@
-{% extends "base.html" %}
+{% extends "tournaments/base_division.html" %}
 
 {% block title %}All Results - {{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
 
 {% block content %}
 <h1>All Results: {{ division.name }}</h1>
-<p>Tournament: <a href="{% url 'tournament_detail' division.tournament.pk %}">{{ division.tournament.name }}</a></p>
-<p><a href="{% url 'division_detail' division.pk %}">Back to division</a></p>
 
 {% if division.result_slips.all %}
 <table>
