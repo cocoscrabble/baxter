@@ -1,22 +1,66 @@
+/* ── Design Tokens ─────────────────────────────────────────── */
+:root {
+    /* Colors */
+    --color-primary: #531882;
+    --color-primary-hover: #3d1160;
+    --color-primary-light: #f3e8fb;
+    --color-danger: #c0392b;
+    --color-danger-hover: #a93226;
+    --color-success-bg: #d4edda;
+    --color-success-text: #155724;
+    --color-error-bg: #f8d7da;
+    --color-error-text: #721c24;
+    --color-muted: #666;
+    --color-muted-bg: #999;
+    --color-link: #0066cc;
+    --color-border: #ccc;
+    --color-bg-subtle: #f5f5f5;
+    --color-bg-form: #f8f9fa;
+    --color-bg-form-border: #dee2e6;
+    --color-bg-hover: #f0f0f0;
+    --color-test-bg: #fffde7;
+    --color-test-badge: #ffc107;
+    --color-deleted-bg: #fdecea;
+
+    /* Spacing */
+    --space-xs: 4px;
+    --space-sm: 8px;
+    --space-md: 16px;
+    --space-lg: 24px;
+    --space-xl: 32px;
+
+    /* Radii */
+    --radius-sm: 3px;
+    --radius: 4px;
+
+    /* Typography */
+    --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --line-height: 1.6;
+
+    /* Layout */
+    --max-width: 800px;
+}
+
+/* ── Base ──────────────────────────────────────────────────── */
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    max-width: 800px;
+    font-family: var(--font-family);
+    max-width: var(--max-width);
     margin: 0 auto;
     padding: 20px;
-    line-height: 1.6;
+    line-height: var(--line-height);
 }
 
 nav {
     margin-bottom: 20px;
     padding-bottom: 10px;
-    border-bottom: 1px solid #ccc;
+    border-bottom: 1px solid var(--color-border);
 }
 
 nav a,
 nav button {
     margin-right: 15px;
     text-decoration: none;
-    color: #0066cc;
+    color: var(--color-link);
     background: none;
     border: none;
     padding: 0;
@@ -29,6 +73,7 @@ nav button:hover {
     text-decoration: underline;
 }
 
+/* ── Messages ─────────────────────────────────────────────── */
 .messages {
     list-style: none;
     padding: 0;
@@ -37,19 +82,20 @@ nav button:hover {
 .messages li {
     padding: 10px;
     margin-bottom: 10px;
-    border-radius: 4px;
+    border-radius: var(--radius);
 }
 
 .messages .success {
-    background-color: #d4edda;
-    color: #155724;
+    background-color: var(--color-success-bg);
+    color: var(--color-success-text);
 }
 
 .messages .error {
-    background-color: #f8d7da;
-    color: #721c24;
+    background-color: var(--color-error-bg);
+    color: var(--color-error-text);
 }
 
+/* ── Forms ─────────────────────────────────────────────────── */
 form p {
     margin-bottom: 15px;
 }
@@ -66,9 +112,9 @@ input[type="password"],
 input[type="date"],
 textarea {
     width: 100%;
-    padding: 8px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
+    padding: var(--space-sm);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
     box-sizing: border-box;
 }
 
@@ -76,28 +122,75 @@ textarea {
     resize: vertical;
 }
 
-button,
-input[type="submit"] {
-    background-color: #531882;
-    color: white;
-    padding: 10px 20px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-button:hover,
-input[type="submit"]:hover {
-    background-color: #3d1160;
-}
-
 .errorlist {
-    color: #721c24;
+    color: var(--color-error-text);
     list-style: none;
     padding: 0;
     margin: 5px 0;
 }
 
+/* ── Buttons ──────────────────────────────────────────────── */
+button,
+input[type="submit"] {
+    background-color: var(--color-primary);
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+}
+
+button:hover,
+input[type="submit"]:hover {
+    background-color: var(--color-primary-hover);
+}
+
+.btn-secondary {
+    background-color: #fff;
+    color: var(--color-primary);
+    border: 1px solid var(--color-primary);
+    padding: 6px 14px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font: inherit;
+}
+
+.btn-secondary:hover {
+    background-color: var(--color-primary-light);
+}
+
+.btn-cancel {
+    background-color: #fff;
+    color: var(--color-muted);
+    border: 1px solid var(--color-border);
+    padding: 6px 14px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font: inherit;
+}
+
+.btn-cancel:hover {
+    background-color: var(--color-bg-subtle);
+}
+
+.btn-publish-needed {
+    background-color: var(--color-danger);
+}
+
+.btn-publish-needed:hover {
+    background-color: var(--color-danger-hover);
+}
+
+.btn-publish-current {
+    background-color: var(--color-muted-bg);
+    cursor: default;
+}
+
+.btn-publish-current:hover {
+    background-color: var(--color-muted-bg);
+}
+
+/* ── Tables ────────────────────────────────────────────────── */
 table {
     width: 100%;
     border-collapse: collapse;
@@ -108,19 +201,20 @@ th,
 td {
     padding: 10px;
     text-align: left;
-    border-bottom: 1px solid #ccc;
+    border-bottom: 1px solid var(--color-border);
 }
 
 th {
-    background-color: #f5f5f5;
+    background-color: var(--color-bg-subtle);
     font-weight: bold;
 }
 
 td a:hover {
-    background-color: #f0f0f0;
-    border-radius: 3px;
+    background-color: var(--color-bg-hover);
+    border-radius: var(--radius-sm);
 }
 
+/* ── Definition Lists ─────────────────────────────────────── */
 dl {
     margin-bottom: 20px;
 }
@@ -135,88 +229,44 @@ dd {
     margin-bottom: 5px;
 }
 
+/* ── Division Components ──────────────────────────────────── */
 .division-test {
-    background-color: #fffde7;
+    background-color: var(--color-test-bg);
 }
 
 .division-deleted {
-    background-color: #fdecea;
+    background-color: var(--color-deleted-bg);
 }
 
 .settings-controls {
     display: flex;
-    gap: 24px;
+    gap: var(--space-lg);
     align-items: baseline;
     flex-wrap: wrap;
-    margin-bottom: 16px;
+    margin-bottom: var(--space-md);
 }
 
 .division-toolbar {
     display: flex;
-    gap: 8px;
+    gap: var(--space-sm);
     margin-bottom: 12px;
-}
-
-.btn-secondary {
-    background-color: #fff;
-    color: #531882;
-    border: 1px solid #531882;
-    padding: 6px 14px;
-    border-radius: 4px;
-    cursor: pointer;
-    font: inherit;
-}
-
-.btn-secondary:hover {
-    background-color: #f3e8fb;
-}
-
-.btn-cancel {
-    background-color: #fff;
-    color: #666;
-    border: 1px solid #ccc;
-    padding: 6px 14px;
-    border-radius: 4px;
-    cursor: pointer;
-    font: inherit;
-}
-
-.btn-cancel:hover {
-    background-color: #f5f5f5;
-}
-
-.btn-publish-needed {
-    background-color: #c0392b;
-}
-
-.btn-publish-needed:hover {
-    background-color: #a93226;
-}
-
-.btn-publish-current {
-    background-color: #999;
-    cursor: default;
-}
-
-.btn-publish-current:hover {
-    background-color: #999;
 }
 
 .division-inline-form {
-    background-color: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
-    padding: 12px 16px;
+    background-color: var(--color-bg-form);
+    border: 1px solid var(--color-bg-form-border);
+    border-radius: var(--radius);
+    padding: 12px var(--space-md);
     margin-bottom: 12px;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-sm);
 }
 
 .division-inline-form form {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-sm);
     margin: 0;
 }
 
@@ -227,11 +277,11 @@ dd {
 
 .test-badge {
     display: inline-block;
-    background-color: #ffc107;
+    background-color: var(--color-test-badge);
     color: #333;
     font-size: 0.75em;
     font-weight: bold;
     padding: 1px 6px;
-    border-radius: 3px;
+    border-radius: var(--radius-sm);
     vertical-align: middle;
 }
