@@ -11,6 +11,7 @@
 <body data-signals="{_csrfToken: '{{ csrf_token }}'}">
     <nav class="navbar">
         <div class="nav-left">
+            <img src="{% static 'img/logo.png' %}" alt="COCO logo" class="nav-logo">
             <a href="{% url 'tournament_list' %}" class="nav-brand">Baxter</a>
             {% block breadcrumbs %}{% endblock %}
         </div>
@@ -25,7 +26,6 @@
                 <a href="{% url 'login' %}">Login</a>
                 <a href="{% url 'register' %}">Register</a>
             {% endif %}
-            <img src="{% static 'img/logo.png' %}" alt="COCO logo" class="nav-logo">
         </div>
     </nav>
 
