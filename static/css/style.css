@@ -165,6 +165,12 @@ body {
     background: none;
 }
 
+.nav-logo {
+    height: 28px;
+    width: auto;
+    vertical-align: middle;
+}
+
 /* ── Messages ─────────────────────────────────────────────── */
 .messages {
     list-style: none;
