@@ -60,6 +60,8 @@
 
 {% include "tournaments/_completed_pairings_content.html" %}
 
+{% include "tournaments/_in_progress_pairings_content.html" %}
+
 {% if can_edit %}
 <form method="post" action="{% url 'remove_fixed_pairings' division.pk %}">
 {% csrf_token %}

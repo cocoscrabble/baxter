@@ -1,0 +1,35 @@
+<div id="in-progress-pairings-content">
+{% if in_progress_rounds %}
+<p>In progress rounds:
+    {% for r in in_progress_rounds %}
+        {% if r == in_progress_round %}<strong>{{ r }}</strong>{% else %}<a href="#" data-on:click__prevent="@get('{% url 'in_progress_round_pairings' division.pk r %}')">{{ r }}</a>{% endif %}
+        {% if not forloop.last %} | {% endif %}
+    {% endfor %}
+</p>
+{% if in_progress_pairings %}
+<h2>Round {{ in_progress_round }}</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Table</th>
+            <th>First</th>
+            <th></th>
+            <th>Second</th>
+            <th>Result</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for entry in in_progress_pairings %}
+        <tr>
+            <td>{{ entry.pairing.table }}</td>
+            <td>{{ entry.pairing.first.name }}</td>
+            <td>{% if entry.is_fixed %}&#x1F512;{% endif %}</td>
+            <td>{{ entry.pairing.second.name }}</td>
+            <td>{{ entry.result }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+{% endif %}
+</div>

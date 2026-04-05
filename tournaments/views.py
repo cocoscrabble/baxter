@@ -330,13 +330,23 @@ def _completed_rounds(division):
     return sorted(r for r, s in status.items() if s == RoundStatus.Finished)
 
 
+def _in_progress_rounds(division):
+    """Return sorted list of in-progress round numbers."""
+    return sorted(
+        division.round_pairings_set
+        .filter(status=RoundPairings.IN_PROGRESS)
+        .values_list("round", flat=True)
+    )
+
+
 def _build_pairings_context(division):
     """Build pairings context dict for a division. Reads from the Pairing table."""
     context = {"division": division}
     context["completed_rounds"] = _completed_rounds(division)
+    context["in_progress_rounds"] = _in_progress_rounds(division)
     db_pairings, status, played, fixed_lookup = _pairings_common(division)
     if not db_pairings:
-        if not context["completed_rounds"]:
+        if not context["completed_rounds"] and not context["in_progress_rounds"]:
             context["pairings_message"] = "No pairings generated yet."
         return context
     # Rounds that are finished (either via RoundPairings status or round_status fallback).
@@ -347,9 +357,21 @@ def _build_pairings_context(division):
     )
     if not finished_rounds:
         finished_rounds = {r for r, s in status.items() if s == RoundStatus.Finished}
+    in_progress_set = set(context["in_progress_rounds"])
+    # Build in-progress round pairings (show latest by default).
+    if in_progress_set:
+        latest_ip = max(in_progress_set)
+        context["in_progress_round"] = latest_ip
+        for round_num, round_pairings in groupby(db_pairings, key=lambda p: p.round):
+            if round_num == latest_ip:
+                context["in_progress_pairings"] = _annotate_round(
+                    list(round_pairings), round_num, played, fixed_lookup
+                )
+                break
+    skip_rounds = finished_rounds | in_progress_set
     annotated = []
     for round_num, round_pairings in groupby(db_pairings, key=lambda p: p.round):
-        if round_num in finished_rounds:
+        if round_num in skip_rounds:
             continue
         round_annotated = _annotate_round(round_pairings, round_num, played, fixed_lookup)
         annotated.append((round_num, round_annotated))
@@ -360,6 +382,19 @@ def _build_pairings_context(division):
     context["has_published_rounds"] = division.round_pairings_set.exclude(
         status=RoundPairings.DRAFT
     ).exists()
+    return context
+
+
+def _build_in_progress_round_context(division, round_num):
+    """Build context for viewing a single in-progress round's pairings."""
+    context = {"division": division}
+    context["in_progress_rounds"] = _in_progress_rounds(division)
+    context["in_progress_round"] = round_num
+    db_pairings, status, played, fixed_lookup = _pairings_common(division)
+    round_pairings = [p for p in db_pairings if p.round == round_num]
+    context["in_progress_pairings"] = _annotate_round(
+        round_pairings, round_num, played, fixed_lookup
+    )
     return context
 
 
@@ -482,6 +517,23 @@ class CompletedRoundPairingsView(DivisionNavMixin, VisibleDivisionMixin, DetailV
         if is_datastar(request):
             return fragment_response(
                 "tournaments/_completed_pairings_content.html", context, request=request
+            )
+        return self.render_to_response(context)
+
+
+class InProgressRoundPairingsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
+    model = Division
+    template_name = "tournaments/division_pairings.html"
+    context_object_name = "division"
+    active_tab = "pairings"
+
+    def get(self, request, pk, round):
+        self.object = self.get_object()
+        context = self.get_context_data(object=self.object)
+        context.update(_build_in_progress_round_context(self.object, round))
+        if is_datastar(request):
+            return fragment_response(
+                "tournaments/_in_progress_pairings_content.html", context, request=request
             )
         return self.render_to_response(context)
 
