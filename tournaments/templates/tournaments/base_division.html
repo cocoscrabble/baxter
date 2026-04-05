@@ -7,7 +7,8 @@
 <a href="{% url 'division_detail' division.pk %}">{{ division.name }}</a>
 {% endblock %}
 
-{% block nav_tabs %}
+{% block nav_tabs_row %}
+<div class="nav-tabs">
 <a href="{% url 'division_entrants' division.pk %}" class="nav-tab{% if active_tab == 'entrants' %} active{% endif %}">Entrants</a>
 <a href="{% url 'division_standings' division.pk %}" class="nav-tab{% if active_tab == 'standings' %} active{% endif %}">Standings</a>
 <a href="{% url 'division_pairings' division.pk %}" class="nav-tab{% if active_tab == 'pairings' %} active{% endif %}">Pairings</a>
@@ -21,4 +22,5 @@
 <a href="{% url 'division_fixed_pairings' division.pk %}" class="nav-tab{% if active_tab == 'fixed_pairings' %} active{% endif %}">Fixed Pairings</a>
 <a href="{% url 'division_fixed_tables' division.pk %}" class="nav-tab{% if active_tab == 'fixed_tables' %} active{% endif %}">Fixed Tables</a>
 {% endif %}
+</div>
 {% endblock %}

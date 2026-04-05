@@ -53,13 +53,18 @@ body {
 /* ── Navbar ────────────────────────────────────────────────── */
 .navbar {
     display: flex;
-    align-items: center;
-    gap: var(--space-md);
+    flex-direction: column;
+    gap: var(--space-xs);
     padding: var(--space-sm) 0;
     margin-bottom: var(--space-md);
     border-bottom: 1px solid var(--color-border);
-    flex-wrap: wrap;
     font-size: 0.9em;
+}
+
+.nav-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
 .nav-left {
@@ -93,7 +98,7 @@ body {
     text-decoration: underline;
 }
 
-.nav-center {
+.nav-tabs {
     display: flex;
     align-items: center;
     gap: 2px;
@@ -131,7 +136,6 @@ body {
     display: flex;
     align-items: center;
     gap: var(--space-sm);
-    margin-left: auto;
     white-space: nowrap;
 }
 
