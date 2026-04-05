@@ -12,69 +12,35 @@
     {% csrf_token %}
     <button type="submit">{{ generate_label }}</button>
 </form>
-{% if pairings and entrants %}
-<button data-on:click="$showFixedPairing = !$showFixedPairing; $removeFixedPairing = false">Add Fixed Pairing</button>
-<button data-on:click="$removeFixedPairing = !$removeFixedPairing; $showFixedPairing = false">Remove Fixed Pairing</button>
-{% endif %}
-{% if pairings %}
+{% if has_draft_rounds %}
 <form method="post" action="{% url 'publish_pairings' division.pk %}" style="display:inline">
     {% csrf_token %}
-    <button type="submit" class="{% if has_draft_rounds %}btn-publish-needed{% else %}btn-publish-current{% endif %}">Publish Pairings</button>
+    <button type="submit" class="btn-publish-needed">Publish Pairings</button>
 </form>
 {% endif %}
 {% if has_published_rounds %}
 <a href="{% url 'published_pairings' division.pk %}">View published pairings page</a>
 {% endif %}
 </p>
-{% if pairings and entrants %}
-<div style="display:none" data-show="$showFixedPairing">
-    <form method="post" action="{% url 'add_fixed_pairing' division.pk %}">
-        {% csrf_token %}
-        <label>Round:
-        <select name="round">
-            {% for round_num, round_pairings in pairings %}
-            <option value="{{ round_num }}">{{ round_num }}</option>
-            {% endfor %}
-        </select>
-        </label>
-        <select name="entrant1">
-            {% for e in entrants %}
-            <option value="{{ e.pk }}">{{ e.player.name }}</option>
-            {% endfor %}
-        </select>
-        vs
-        <select name="entrant2">
-            {% for e in entrants %}
-            <option value="{{ e.pk }}">{{ e.player.name }}</option>
-            {% endfor %}
-        </select>
-        <button type="submit">Save</button>
-        <button type="button" data-on:click="$showFixedPairing = false">Cancel</button>
-    </form>
-</div>
-{% endif %}
 {% elif waiting_message %}
 <p>{{ waiting_message }}</p>
 {% endif %}
 {% endif %}
 
-{% include "tournaments/_completed_pairings_content.html" %}
-
-{% include "tournaments/_in_progress_pairings_content.html" %}
-
-{% if can_edit %}
-<form method="post" action="{% url 'remove_fixed_pairings' division.pk %}">
-{% csrf_token %}
-<div style="display:none" data-show="$removeFixedPairing">
-    <p>Uncheck the pairings you want to remove.
-        <button type="submit">Save</button>
-        <button type="button" data-on:click="$removeFixedPairing = false">Cancel</button>
-    </p>
+{% if round_tabs %}
+<div class="round-tabs">
+    {% for tab in round_tabs %}
+    <a href="#"
+       class="round-tab round-tab-{{ tab.status }}{% if tab.round == selected_round %} active{% endif %}"
+       data-on:click__prevent="@get('{% url 'round_pairings_tab' division.pk tab.round %}')">{{ tab.round }}</a>
+    {% endfor %}
 </div>
-{% include "tournaments/_pairings_content.html" %}
-</form>
-{% else %}
-{% include "tournaments/_pairings_content.html" %}
+{% endif %}
+
+{% include "tournaments/_round_tab_content.html" %}
+
+{% if pairings_message %}
+<p>{{ pairings_message }}</p>
 {% endif %}
 
 {% endblock %}

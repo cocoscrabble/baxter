@@ -1,0 +1,89 @@
+<div id="round-tab-content">
+{% if selected_round %}
+<h2>Round {{ selected_round }}
+    {% if selected_status == 'finished' %}<span class="round-status-badge badge-finished">Finished</span>
+    {% elif selected_status == 'in_progress' %}<span class="round-status-badge badge-in-progress">In Progress</span>
+    {% elif selected_status == 'pairable' %}<span class="round-status-badge badge-pairable">Pairable</span>
+    {% elif selected_status == 'future' %}<span class="round-status-badge badge-future">Future</span>
+    {% endif %}
+</h2>
+
+{% if selected_status == 'finished' or selected_status == 'in_progress' %}
+    {% if round_pairings %}
+    <table>
+        <thead>
+            <tr>
+                <th>Table</th>
+                <th>First</th>
+                <th></th>
+                <th>Second</th>
+                <th>Result</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in round_pairings %}
+            <tr>
+                {% if entry.from_slips %}
+                <td></td>
+                <td>{{ entry.first_name }}</td>
+                <td>{% if entry.is_fixed %}&#x1F512;{% endif %}</td>
+                <td>{{ entry.second_name }}</td>
+                <td>{{ entry.result }}</td>
+                {% else %}
+                <td>{{ entry.pairing.table }}</td>
+                <td>{{ entry.pairing.first.name }}</td>
+                <td>{% if entry.is_fixed %}&#x1F512;{% endif %}</td>
+                <td>{{ entry.pairing.second.name }}</td>
+                <td>{{ entry.result }}</td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No pairings data for this round.</p>
+    {% endif %}
+
+{% elif selected_status == 'pairable' %}
+    {% if round_pairings %}
+    <table>
+        <thead>
+            <tr>
+                <th>Table</th>
+                <th>First</th>
+                <th></th>
+                <th>Second</th>
+                <th>Repeats</th>
+                <th>{% if division.is_test %}<button type="button" data-on:click="@post('{% url 'simulate_round' division.pk %}', {headers: {'X-CSRFToken': $_csrfToken}, payload: {round: {{ selected_round }}}})">simulate all</button>{% endif %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in round_pairings %}
+            <tr>
+                <td>{{ entry.pairing.table }}</td>
+                <td>{{ entry.pairing.first.name }}</td>
+                <td>{% if entry.is_fixed %}&#x1F512;{% endif %}</td>
+                <td>{{ entry.pairing.second.name }}</td>
+                <td>{{ entry.pairing.repeats }}</td>
+                <td>
+                    {% if entry.result %}
+                        {{ entry.result }}
+                    {% elif division.is_test %}
+                        <button type="button" data-on:click="@post('{% url 'simulate_match' division.pk %}', {headers: {'X-CSRFToken': $_csrfToken}, payload: {round: {{ selected_round }}, first: '{{ entry.pairing.first.name }}', second: '{{ entry.pairing.second.name }}'}})">simulate</button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>Pairings not yet generated for this round.</p>
+    {% endif %}
+
+{% elif selected_status == 'future' %}
+    <p>{{ round_label }}</p>
+    <p>This round is waiting for earlier rounds to complete.</p>
+{% endif %}
+
+{% endif %}
+</div>

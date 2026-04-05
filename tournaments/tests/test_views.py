@@ -643,13 +643,17 @@ class DivisionPairingsViewTests(TestCase):
     def setUpTestData(cls):
         setUpTournament(cls)
 
-    def test_no_pairings_generated_shows_message(self):
+    def test_no_pairings_configured_shows_message(self):
         response = self.client.get(
             reverse("division_pairings", kwargs={"pk": self.division.pk})
         )
-        self.assertContains(response, "No pairings generated yet")
+        self.assertContains(response, "No round pairings configured")
 
     def test_with_pairings_in_db_shows_pairings(self):
+        DivisionSettings.objects.create(
+            division=self.division,
+            round_pairings=[{"round": 1, "pairing": "KotH", "start_round": 0}],
+        )
         Pairing.objects.create(
             division=self.division, round=1,
             first=self.entrant1, second=self.entrant2, repeats=0,
@@ -657,10 +661,7 @@ class DivisionPairingsViewTests(TestCase):
         response = self.client.get(
             reverse("division_pairings", kwargs={"pk": self.division.pk})
         )
-        pairings = response.context["pairings"]
-        self.assertEqual(len(pairings), 1)
-        round_num, round_pairings = pairings[0]
-        self.assertEqual(round_num, 1)
+        round_pairings = response.context["round_pairings"]
         self.assertEqual(len(round_pairings), 1)
         p = round_pairings[0]["pairing"]
         names = {p.first.name, p.second.name}
@@ -671,6 +672,13 @@ class DivisionPairingsViewTests(TestCase):
         self.assertContains(response, "Bob")
 
     def test_only_stored_pairings_shown(self):
+        DivisionSettings.objects.create(
+            division=self.division,
+            round_pairings=[
+                {"round": 1, "pairing": "KotH", "start_round": 0},
+                {"round": 2, "pairing": "KotH", "start_round": 1},
+            ],
+        )
         # Round 1 pairing in DB, round 2 not yet generated
         Pairing.objects.create(
             division=self.division, round=1,
@@ -679,9 +687,10 @@ class DivisionPairingsViewTests(TestCase):
         response = self.client.get(
             reverse("division_pairings", kwargs={"pk": self.division.pk})
         )
-        pairings = response.context["pairings"]
-        self.assertEqual(len(pairings), 1)
-        self.assertEqual(pairings[0][0], 1)
+        # Selected round should be round 1 (pairable)
+        self.assertEqual(response.context["selected_round"], 1)
+        round_pairings = response.context["round_pairings"]
+        self.assertEqual(len(round_pairings), 1)
 
     def test_generate_pairings_populates_db(self):
         DivisionSettings.objects.create(
