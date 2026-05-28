@@ -1,4 +1,11 @@
-import { TABLE_DEFAULTS, deleteColumn, buildLookup, wireSaveButton } from "./table_helpers.js";
+import {
+    TABLE_DEFAULTS,
+    buildLookup,
+    deleteColumn,
+    lookupColumn,
+    wireAddRowButton,
+    wireSaveButton,
+} from "./table_helpers.js";
 
 const entrantLookup = buildLookup(pageData.entrants);
 
@@ -13,13 +20,7 @@ const table = new Tabulator("#results-table", {
             editorParams: { min: 1 },
             width: 80,
         },
-        {
-            title: "Winner",
-            field: "winner",
-            editor: "list",
-            editorParams: { values: entrantLookup },
-            formatter: cell => entrantLookup[cell.getValue()] || "",
-        },
+        lookupColumn({ title: "Winner", field: "winner", lookup: entrantLookup }),
         {
             title: "W Score",
             field: "winner_score",
@@ -27,13 +28,7 @@ const table = new Tabulator("#results-table", {
             editorParams: { min: 0 },
             width: 90,
         },
-        {
-            title: "Opponent",
-            field: "loser",
-            editor: "list",
-            editorParams: { values: entrantLookup },
-            formatter: cell => entrantLookup[cell.getValue()] || "",
-        },
+        lookupColumn({ title: "Opponent", field: "loser", lookup: entrantLookup }),
         {
             title: "Opp Score",
             field: "loser_score",
@@ -57,16 +52,19 @@ const table = new Tabulator("#results-table", {
     ],
 });
 
-document.getElementById("add-row-btn").addEventListener("click", function() {
-    const maxRound = table.getData().reduce((m, r) => Math.max(m, r.round || 0), 0);
-    table.addRow({
-        round: maxRound + 1,
-        winner: null,
-        winner_score: null,
-        loser: null,
-        loser_score: null,
-        winner_started: true,
-    });
+wireAddRowButton({
+    table,
+    template: t => {
+        const maxRound = t.getData().reduce((m, r) => Math.max(m, r.round || 0), 0);
+        return {
+            round: maxRound + 1,
+            winner: null,
+            winner_score: null,
+            loser: null,
+            loser_score: null,
+            winner_started: true,
+        };
+    },
 });
 
 wireSaveButton({

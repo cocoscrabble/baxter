@@ -1,4 +1,11 @@
-import { TABLE_DEFAULTS, deleteColumn, buildLookup, editAndFocus, wireSaveButton } from "./table_helpers.js";
+import {
+    TABLE_DEFAULTS,
+    buildLookup,
+    deleteColumn,
+    lookupColumn,
+    wireAddRowButton,
+    wireSaveButton,
+} from "./table_helpers.js";
 
 const entrantLookup = buildLookup(pageData.entrantValues);
 const roundValues = Object.fromEntries(pageData.roundValues.map(r => [r.value, r.label]));
@@ -20,13 +27,7 @@ const table = new Tabulator("#fixed-tables-table", {
             width: 80,
             hozAlign: "center",
         },
-        {
-            title: "Player",
-            field: "entrant",
-            editor: "list",
-            editorParams: { values: entrantLookup, autocomplete: true, listOnEmpty: true },
-            formatter: cell => entrantLookup[cell.getValue()] || "",
-        },
+        lookupColumn({ title: "Player", field: "entrant", lookup: entrantLookup, autocomplete: true }),
         {
             title: "Table",
             field: "table_number",
@@ -39,9 +40,10 @@ const table = new Tabulator("#fixed-tables-table", {
     ],
 });
 
-document.getElementById("add-row-btn").addEventListener("click", function() {
-    table.addRow({ round_number: -1, entrant: null, table_number: null })
-        .then(row => editAndFocus(row, "round_number"));
+wireAddRowButton({
+    table,
+    template: { round_number: -1, entrant: null, table_number: null },
+    focusField: "round_number",
 });
 
 wireSaveButton({

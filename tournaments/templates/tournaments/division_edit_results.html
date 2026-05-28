@@ -6,9 +6,7 @@
 {% block content %}
 <h1>Edit Results: {{ division.name }}</h1>
 
-<link rel="stylesheet" href="{% static 'tabulator-tables/dist/css/tabulator.min.css' %}">
-<link rel="stylesheet" href="{% static 'tournaments/css/tabulator_overrides.css' %}">
-<script src="{% static 'tabulator-tables/dist/js/tabulator.min.js' %}"></script>
+{% include "tournaments/_tabulator_head.html" %}
 
 <div id="results-table"></div>
 

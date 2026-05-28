@@ -1,4 +1,9 @@
-import { TABLE_DEFAULTS, deleteColumn, editAndFocus, wireSaveButton } from "./table_helpers.js";
+import {
+    TABLE_DEFAULTS,
+    deleteColumn,
+    wireAddRowButton,
+    wireSaveButton,
+} from "./table_helpers.js";
 
 const table = new Tabulator("#board-table-map-table", {
     ...TABLE_DEFAULTS,
@@ -54,9 +59,13 @@ document.getElementById("generate-btn").addEventListener("click", function() {
     table.setData(generateMapping(singleTables, boardCount));
 });
 
-document.getElementById("add-row-btn").addEventListener("click", function() {
-    const maxBoard = table.getData().reduce((m, r) => Math.max(m, parseInt(r.board) || 0), 0);
-    table.addRow({ board: maxBoard + 1, table: null }).then(row => editAndFocus(row, "table"));
+wireAddRowButton({
+    table,
+    template: t => {
+        const maxBoard = t.getData().reduce((m, r) => Math.max(m, parseInt(r.board) || 0), 0);
+        return { board: maxBoard + 1, table: null };
+    },
+    focusField: "table",
 });
 
 wireSaveButton({

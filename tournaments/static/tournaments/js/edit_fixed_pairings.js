@@ -1,4 +1,11 @@
-import { TABLE_DEFAULTS, deleteColumn, buildLookup, editAndFocus, wireSaveButton } from "./table_helpers.js";
+import {
+    TABLE_DEFAULTS,
+    buildLookup,
+    deleteColumn,
+    lookupColumn,
+    wireAddRowButton,
+    wireSaveButton,
+} from "./table_helpers.js";
 
 const entrantLookup = buildLookup(pageData.entrantValues);
 
@@ -14,27 +21,16 @@ const table = new Tabulator("#fixed-pairings-table", {
             width: 80,
             hozAlign: "center",
         },
-        {
-            title: "Player 1",
-            field: "entrant1",
-            editor: "list",
-            editorParams: { values: entrantLookup, autocomplete: true, listOnEmpty: true },
-            formatter: cell => entrantLookup[cell.getValue()] || "",
-        },
-        {
-            title: "Player 2",
-            field: "entrant2",
-            editor: "list",
-            editorParams: { values: entrantLookup, autocomplete: true, listOnEmpty: true },
-            formatter: cell => entrantLookup[cell.getValue()] || "",
-        },
+        lookupColumn({ title: "Player 1", field: "entrant1", lookup: entrantLookup, autocomplete: true }),
+        lookupColumn({ title: "Player 2", field: "entrant2", lookup: entrantLookup, autocomplete: true }),
         deleteColumn(),
     ],
 });
 
-document.getElementById("add-row-btn").addEventListener("click", function() {
-    table.addRow({ round_number: null, entrant1: null, entrant2: null })
-        .then(row => editAndFocus(row, "round_number"));
+wireAddRowButton({
+    table,
+    template: { round_number: null, entrant1: null, entrant2: null },
+    focusField: "round_number",
 });
 
 wireSaveButton({

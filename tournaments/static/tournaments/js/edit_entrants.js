@@ -1,4 +1,11 @@
-import { TABLE_DEFAULTS, deleteColumn, buildLookup, editAndFocus, wireSaveButton } from "./table_helpers.js";
+import {
+    TABLE_DEFAULTS,
+    buildLookup,
+    deleteColumn,
+    lookupColumn,
+    wireAddRowButton,
+    wireSaveButton,
+} from "./table_helpers.js";
 
 const playerLookup = buildLookup(pageData.players);
 
@@ -16,21 +23,15 @@ const table = new Tabulator("#entrants-table", {
             width: 60,
             hozAlign: "center",
         },
-        {
-            title: "Player",
-            field: "player",
-            editor: "list",
-            editorParams: { values: playerLookup, autocomplete: true, listOnEmpty: true },
-            formatter: cell => playerLookup[cell.getValue()] || "",
-        },
+        lookupColumn({ title: "Player", field: "player", lookup: playerLookup, autocomplete: true }),
         deleteColumn(renumber),
     ],
 });
 
-document.getElementById("add-row-btn").addEventListener("click", function() {
-    const count = table.getDataCount();
-    table.addRow({ number: count + 1, player: null })
-        .then(row => editAndFocus(row, "player"));
+wireAddRowButton({
+    table,
+    template: t => ({ number: t.getDataCount() + 1, player: null }),
+    focusField: "player",
 });
 
 wireSaveButton({
