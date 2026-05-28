@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}Delete Division - Baxter{% endblock %}
+
+{% block breadcrumbs %}
+<span class="nav-sep">/</span>
+<a href="{% url 'tournament_detail' division.tournament.pk %}">{{ division.tournament.name }}</a>
+<span class="nav-sep">/</span>
+<a href="{% url 'division_detail' division.pk %}">{{ division.name }}</a>
+{% endblock %}
+
+{% block content %}
+<h1>Delete Division</h1>
+
+<p>Are you sure you want to delete "{{ division.name }}"? It can be restored from the tournament page.</p>
+
+<form method="post">
+    {% csrf_token %}
+    <button type="submit">Delete</button>
+    <a href="{% url 'tournament_detail' division.tournament.pk %}">Cancel</a>
+</form>
+{% endblock %}

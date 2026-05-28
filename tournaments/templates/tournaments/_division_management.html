@@ -41,9 +41,7 @@
             <td></td>
             <td></td>
             <td>
-                <form method="post" action="{% url 'division_delete' division.pk %}">
-                    {% csrf_token %}<button type="submit">Delete</button>
-                </form>
+                <a href="{% url 'division_delete' division.pk %}">Delete</a>
             </td>
         </tr>
         {% endfor %}
@@ -53,9 +51,7 @@
             <td><input type="checkbox" checked disabled></td>
             <td></td>
             <td>
-                <form method="post" action="{% url 'division_delete' division.pk %}">
-                    {% csrf_token %}<button type="submit">Delete</button>
-                </form>
+                <a href="{% url 'division_delete' division.pk %}">Delete</a>
             </td>
         </tr>
         {% endfor %}

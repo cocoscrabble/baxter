@@ -204,6 +204,12 @@ class DivisionCreateView(LoginRequiredMixin, View):
 
 
 class DivisionDeleteView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    template_name = "tournaments/division_confirm_delete.html"
+
+    def get(self, request, pk):
+        division = self.get_division()
+        return render(request, self.template_name, {"division": division})
+
     def post(self, request, pk):
         division = self.get_division()
         tournament_pk = division.tournament.pk
