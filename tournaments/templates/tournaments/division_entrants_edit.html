@@ -52,5 +52,5 @@ const pageData = {
     bulkImportUrl: "{% url 'bulk_import_entrants' division.pk %}",
 };
 </script>
-<script src="{% static 'tournaments/js/edit_entrants.js' %}"></script>
+<script type="module" src="{% static 'tournaments/js/edit_entrants.js' %}"></script>
 {% endblock %}

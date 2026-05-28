@@ -1,17 +1,10 @@
-"use strict";
+import { TABLE_DEFAULTS, deleteColumn, buildLookup, editAndFocus, wireSaveButton } from "./table_helpers.js";
 
-const entrantLookup = {};
-pageData.entrantValues.forEach(e => { entrantLookup[e.id] = e.label; });
-
-const entrantValues = {};
-pageData.entrantValues.forEach(e => { entrantValues[e.id] = e.label; });
+const entrantLookup = buildLookup(pageData.entrantValues);
 
 const table = new Tabulator("#fixed-pairings-table", {
+    ...TABLE_DEFAULTS,
     data: pageData.fixedPairings,
-    layout: "fitDataTable",
-    keybindings: true,
-    selectableRange: 1,
-    editTriggerEvent: "dblclick",
     columns: [
         {
             title: "Round",
@@ -25,72 +18,32 @@ const table = new Tabulator("#fixed-pairings-table", {
             title: "Player 1",
             field: "entrant1",
             editor: "list",
-            editorParams: { values: entrantValues, autocomplete: true, listOnEmpty: true },
-            formatter: function(cell) {
-                return entrantLookup[cell.getValue()] || "";
-            },
+            editorParams: { values: entrantLookup, autocomplete: true, listOnEmpty: true },
+            formatter: cell => entrantLookup[cell.getValue()] || "",
         },
         {
             title: "Player 2",
             field: "entrant2",
             editor: "list",
-            editorParams: { values: entrantValues, autocomplete: true, listOnEmpty: true },
-            formatter: function(cell) {
-                return entrantLookup[cell.getValue()] || "";
-            },
+            editorParams: { values: entrantLookup, autocomplete: true, listOnEmpty: true },
+            formatter: cell => entrantLookup[cell.getValue()] || "",
         },
-        {
-            title: "",
-            formatter: function() { return "<button type='button' class='row-delete-btn' aria-label='Delete row'>×</button>"; },
-            width: 50,
-            hozAlign: "center",
-            headerSort: false,
-            cellClick: function(e, cell) {
-                cell.getRow().delete();
-            },
-        },
+        deleteColumn(),
     ],
 });
 
 document.getElementById("add-row-btn").addEventListener("click", function() {
-    table.addRow({ round_number: null, entrant1: null, entrant2: null }).then(function(row) {
-        const cell = row.getCell("round_number");
-        cell.edit();
-        setTimeout(() => {
-            const input = cell.getElement().querySelector("input");
-            if (input) input.focus();
-        }, 0);
-    });
+    table.addRow({ round_number: null, entrant1: null, entrant2: null })
+        .then(row => editAndFocus(row, "round_number"));
 });
 
-document.getElementById("save-btn").addEventListener("click", function() {
-    const data = table.getData();
-    const rows = data.map(r => ({
+wireSaveButton({
+    table,
+    csrfToken: pageData.csrfToken,
+    payloadKey: "pairings",
+    serializeRow: r => ({
         round_number: parseInt(r.round_number) || null,
         entrant1: parseInt(r.entrant1) || null,
         entrant2: parseInt(r.entrant2) || null,
-    }));
-
-    const statusEl = document.getElementById("save-status");
-    statusEl.textContent = "Saving...";
-
-    fetch("", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "X-CSRFToken": pageData.csrfToken,
-        },
-        body: JSON.stringify({ pairings: rows }),
-    })
-    .then(resp => resp.json().then(body => ({ ok: resp.ok, body })))
-    .then(({ ok, body }) => {
-        if (ok && body.ok) {
-            statusEl.textContent = "Saved!";
-        } else {
-            statusEl.textContent = "Error: " + (body.errors || []).join("; ");
-        }
-    })
-    .catch(() => {
-        statusEl.textContent = "Network error.";
-    });
+    }),
 });

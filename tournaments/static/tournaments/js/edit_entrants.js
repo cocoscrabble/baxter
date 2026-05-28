@@ -1,17 +1,14 @@
-"use strict";
+import { TABLE_DEFAULTS, deleteColumn, buildLookup, editAndFocus, wireSaveButton } from "./table_helpers.js";
 
-const playerLookup = {};
-pageData.players.forEach(p => { playerLookup[p.id] = p.label; });
+const playerLookup = buildLookup(pageData.players);
 
-const playerValues = {};
-pageData.players.forEach(p => { playerValues[p.id] = p.label; });
+function renumber() {
+    table.getRows().forEach((row, i) => row.update({ number: i + 1 }));
+}
 
 const table = new Tabulator("#entrants-table", {
+    ...TABLE_DEFAULTS,
     data: pageData.entrants,
-    layout: "fitDataTable",
-    keybindings: true,
-    selectableRange: 1,
-    editTriggerEvent: "dblclick",
     columns: [
         {
             title: "#",
@@ -23,80 +20,33 @@ const table = new Tabulator("#entrants-table", {
             title: "Player",
             field: "player",
             editor: "list",
-            editorParams: { values: playerValues, autocomplete: true, listOnEmpty: true },
-            formatter: function(cell) {
-                return playerLookup[cell.getValue()] || "";
-            },
+            editorParams: { values: playerLookup, autocomplete: true, listOnEmpty: true },
+            formatter: cell => playerLookup[cell.getValue()] || "",
         },
-        {
-            title: "",
-            formatter: function() { return "<button type='button' class='row-delete-btn' aria-label='Delete row'>×</button>"; },
-            width: 50,
-            hozAlign: "center",
-            headerSort: false,
-            cellClick: function(e, cell) {
-                cell.getRow().delete();
-                renumber();
-            },
-        },
+        deleteColumn(renumber),
     ],
 });
 
-function renumber() {
-    const rows = table.getRows();
-    rows.forEach((row, i) => {
-        row.update({ number: i + 1 });
-    });
-}
-
 document.getElementById("add-row-btn").addEventListener("click", function() {
     const count = table.getDataCount();
-    table.addRow({ number: count + 1, player: null }).then(function(row) {
-        const cell = row.getCell("player");
-        cell.edit();
-        setTimeout(() => {
-            const input = cell.getElement().querySelector("input");
-            if (input) input.focus();
-        }, 0);
-    });
+    table.addRow({ number: count + 1, player: null })
+        .then(row => editAndFocus(row, "player"));
 });
 
-document.getElementById("save-btn").addEventListener("click", function() {
-    renumber();
-    const data = table.getData();
-    const rows = data.map(r => ({
+wireSaveButton({
+    table,
+    csrfToken: pageData.csrfToken,
+    payloadKey: "entrants",
+    beforeSave: renumber,
+    serializeRow: r => ({
         number: r.number,
         player: parseInt(r.player) || null,
-    }));
-
-    const statusEl = document.getElementById("save-status");
-    statusEl.textContent = "Saving...";
-
-    fetch("", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "X-CSRFToken": pageData.csrfToken,
-        },
-        body: JSON.stringify({ entrants: rows }),
-    })
-    .then(resp => resp.json().then(body => ({ ok: resp.ok, body })))
-    .then(({ ok, body }) => {
-        if (ok && body.ok) {
-            statusEl.textContent = "Saved!";
-        } else {
-            statusEl.textContent = "Error: " + (body.errors || []).join("; ");
-        }
-    })
-    .catch(err => {
-        statusEl.textContent = "Network error.";
-    });
+    }),
 });
 
 // -- Create New Player (form toggle handled by datastar data-show) --
 
 document.getElementById("create-player-btn").addEventListener("click", function() {
-    // Read values from datastar-bound inputs.
     const nameInput = document.querySelector("[data-bind='newPlayerName']");
     const ratingInput = document.querySelector("[data-bind='newPlayerRating']");
     const statusEl = document.getElementById("new-player-status");
@@ -124,10 +74,8 @@ document.getElementById("create-player-btn").addEventListener("click", function(
     .then(({ ok, body }) => {
         if (ok && body.ok) {
             playerLookup[body.id] = body.label;
-            playerValues[body.id] = body.label;
             const count = table.getDataCount();
             table.addRow({ number: count + 1, player: body.id });
-            // Reset form and hide via datastar signal.
             nameInput.value = "";
             ratingInput.value = "0";
             statusEl.textContent = "";
@@ -138,7 +86,7 @@ document.getElementById("create-player-btn").addEventListener("click", function(
             statusEl.textContent = body.error || "Error creating player.";
         }
     })
-    .catch(err => {
+    .catch(() => {
         statusEl.textContent = "Network error.";
     });
 });
@@ -182,7 +130,7 @@ document.getElementById("bulk-import-form").addEventListener("submit", function(
                 (body.errors || []).join("<br>");
         }
     })
-    .catch(err => {
+    .catch(() => {
         statusEl.textContent = "Network error.";
     });
 });

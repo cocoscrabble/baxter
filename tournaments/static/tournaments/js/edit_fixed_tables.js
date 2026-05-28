@@ -1,26 +1,17 @@
-"use strict";
+import { TABLE_DEFAULTS, deleteColumn, buildLookup, editAndFocus, wireSaveButton } from "./table_helpers.js";
 
-const entrantLookup = {};
-pageData.entrantValues.forEach(e => { entrantLookup[e.id] = e.label; });
-
-const entrantValues = {};
-pageData.entrantValues.forEach(e => { entrantValues[e.id] = e.label; });
+const entrantLookup = buildLookup(pageData.entrantValues);
+const roundValues = Object.fromEntries(pageData.roundValues.map(r => [r.value, r.label]));
 
 const table = new Tabulator("#fixed-tables-table", {
+    ...TABLE_DEFAULTS,
     data: pageData.fixedTables,
-    layout: "fitDataTable",
-    keybindings: true,
-    selectableRange: 1,
-    editTriggerEvent: "dblclick",
     columns: [
         {
             title: "Round",
             field: "round_number",
             editor: "list",
-            editorParams: {
-                values: Object.fromEntries(pageData.roundValues.map(r => [r.value, r.label])),
-                listOnEmpty: true,
-            },
+            editorParams: { values: roundValues, listOnEmpty: true },
             formatter: function(cell) {
                 const v = cell.getValue();
                 if (v === -1 || v === "-1") return "All";
@@ -33,10 +24,8 @@ const table = new Tabulator("#fixed-tables-table", {
             title: "Player",
             field: "entrant",
             editor: "list",
-            editorParams: { values: entrantValues, autocomplete: true, listOnEmpty: true },
-            formatter: function(cell) {
-                return entrantLookup[cell.getValue()] || "";
-            },
+            editorParams: { values: entrantLookup, autocomplete: true, listOnEmpty: true },
+            formatter: cell => entrantLookup[cell.getValue()] || "",
         },
         {
             title: "Table",
@@ -46,58 +35,22 @@ const table = new Tabulator("#fixed-tables-table", {
             width: 80,
             hozAlign: "center",
         },
-        {
-            title: "",
-            formatter: function() { return "<button type='button' class='row-delete-btn' aria-label='Delete row'>×</button>"; },
-            width: 50,
-            hozAlign: "center",
-            headerSort: false,
-            cellClick: function(e, cell) {
-                cell.getRow().delete();
-            },
-        },
+        deleteColumn(),
     ],
 });
 
 document.getElementById("add-row-btn").addEventListener("click", function() {
-    table.addRow({ round_number: -1, entrant: null, table_number: null }).then(function(row) {
-        const cell = row.getCell("round_number");
-        cell.edit();
-        setTimeout(() => {
-            const input = cell.getElement().querySelector("input");
-            if (input) input.focus();
-        }, 0);
-    });
+    table.addRow({ round_number: -1, entrant: null, table_number: null })
+        .then(row => editAndFocus(row, "round_number"));
 });
 
-document.getElementById("save-btn").addEventListener("click", function() {
-    const data = table.getData();
-    const rows = data.map(r => ({
+wireSaveButton({
+    table,
+    csrfToken: pageData.csrfToken,
+    payloadKey: "tables",
+    serializeRow: r => ({
         round_number: r.round_number != null ? parseInt(r.round_number) : null,
         entrant: parseInt(r.entrant) || null,
         table_number: parseInt(r.table_number) || null,
-    }));
-
-    const statusEl = document.getElementById("save-status");
-    statusEl.textContent = "Saving...";
-
-    fetch("", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "X-CSRFToken": pageData.csrfToken,
-        },
-        body: JSON.stringify({ tables: rows }),
-    })
-    .then(resp => resp.json().then(body => ({ ok: resp.ok, body })))
-    .then(({ ok, body }) => {
-        if (ok && body.ok) {
-            statusEl.textContent = "Saved!";
-        } else {
-            statusEl.textContent = "Error: " + (body.errors || []).join("; ");
-        }
-    })
-    .catch(() => {
-        statusEl.textContent = "Network error.";
-    });
+    }),
 });

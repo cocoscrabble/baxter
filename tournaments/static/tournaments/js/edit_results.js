@@ -1,17 +1,10 @@
-"use strict";
+import { TABLE_DEFAULTS, deleteColumn, buildLookup, wireSaveButton } from "./table_helpers.js";
 
-const entrantLookup = {};
-pageData.entrants.forEach(e => { entrantLookup[e.id] = e.label; });
-
-const entrantValues = {};
-pageData.entrants.forEach(e => { entrantValues[e.id] = e.label; });
+const entrantLookup = buildLookup(pageData.entrants);
 
 const table = new Tabulator("#results-table", {
+    ...TABLE_DEFAULTS,
     data: pageData.results,
-    layout: "fitDataTable",
-    keybindings: true,
-    selectableRange: 1,
-    editTriggerEvent: "dblclick",
     columns: [
         {
             title: "Round",
@@ -24,10 +17,8 @@ const table = new Tabulator("#results-table", {
             title: "Winner",
             field: "winner",
             editor: "list",
-            editorParams: { values: entrantValues },
-            formatter: function(cell) {
-                return entrantLookup[cell.getValue()] || "";
-            },
+            editorParams: { values: entrantLookup },
+            formatter: cell => entrantLookup[cell.getValue()] || "",
         },
         {
             title: "W Score",
@@ -40,10 +31,8 @@ const table = new Tabulator("#results-table", {
             title: "Opponent",
             field: "loser",
             editor: "list",
-            editorParams: { values: entrantValues },
-            formatter: function(cell) {
-                return entrantLookup[cell.getValue()] || "";
-            },
+            editorParams: { values: entrantLookup },
+            formatter: cell => entrantLookup[cell.getValue()] || "",
         },
         {
             title: "Opp Score",
@@ -64,23 +53,12 @@ const table = new Tabulator("#results-table", {
                 return "";
             },
         },
-        {
-            title: "",
-            formatter: function() { return "<button type='button' class='row-delete-btn' aria-label='Delete row'>×</button>"; },
-            width: 50,
-            hozAlign: "center",
-            headerSort: false,
-            cellClick: function(e, cell) {
-                cell.getRow().delete();
-            },
-        },
+        deleteColumn(),
     ],
 });
 
 document.getElementById("add-row-btn").addEventListener("click", function() {
-    const data = table.getData();
-    let maxRound = 0;
-    data.forEach(r => { if (r.round > maxRound) maxRound = r.round; });
+    const maxRound = table.getData().reduce((m, r) => Math.max(m, r.round || 0), 0);
     table.addRow({
         round: maxRound + 1,
         winner: null,
@@ -91,37 +69,16 @@ document.getElementById("add-row-btn").addEventListener("click", function() {
     });
 });
 
-document.getElementById("save-btn").addEventListener("click", function() {
-    const data = table.getData();
-    const rows = data.map(r => ({
+wireSaveButton({
+    table,
+    csrfToken: pageData.csrfToken,
+    payloadKey: "results",
+    serializeRow: r => ({
         round: parseInt(r.round) || null,
         winner: parseInt(r.winner) || null,
         winner_score: parseInt(r.winner_score) || null,
         loser: parseInt(r.loser) || null,
         loser_score: parseInt(r.loser_score) || null,
         winner_started: r.winner_started === true || r.winner_started === "true",
-    }));
-
-    const statusEl = document.getElementById("save-status");
-    statusEl.textContent = "Saving...";
-
-    fetch("", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "X-CSRFToken": pageData.csrfToken,
-        },
-        body: JSON.stringify({ results: rows }),
-    })
-    .then(resp => resp.json().then(body => ({ ok: resp.ok, body })))
-    .then(({ ok, body }) => {
-        if (ok && body.ok) {
-            statusEl.textContent = "Saved!";
-        } else {
-            statusEl.textContent = "Error: " + (body.errors || []).join("; ");
-        }
-    })
-    .catch(err => {
-        statusEl.textContent = "Network error.";
-    });
+    }),
 });
