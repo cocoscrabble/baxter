@@ -25,6 +25,6 @@
     </tbody>
 </table>
 {% else %}
-<p>No entrants yet.</p>
+{% include "tournaments/_empty_state.html" with message="No entrants yet." %}
 {% endif %}
 {% endblock %}
