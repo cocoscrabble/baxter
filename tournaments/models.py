@@ -35,7 +35,9 @@ class Tournament(models.Model):
         return reverse("tournament_detail", kwargs={"pk": self.pk})
 
     def can_edit(self, user):
-        """Check if user can edit this tournament."""
+        """Check if user can edit this tournament. Anonymous users always return False."""
+        if not user.is_authenticated:
+            return False
         return user == self.owner or self.editors.filter(pk=user.pk).exists()
 
     def division_buckets(self):
