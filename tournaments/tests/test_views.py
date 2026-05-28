@@ -800,8 +800,11 @@ class DivisionPairingsRoundContentTests(TestCase):
         )
         self._create_slip(1, pairings[0], self.entrant1, self.entrant2, 450, 380)
 
+        # Navigate directly to round 1: round 2 is now pairable (its prereq
+        # round 1 has lifecycle status FINISHED), so default selection would
+        # land on round 2 instead.
         response = self.client.get(
-            reverse("division_pairings", kwargs={"pk": self.division.pk})
+            reverse("round_pairings_tab", kwargs={"pk": self.division.pk, "round": 1})
         )
         self.assertEqual(response.context["selected_status"], "finished")
         round_pairings = response.context["round_pairings"]

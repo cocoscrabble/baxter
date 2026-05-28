@@ -4,6 +4,10 @@ Owns a single ``PairingData`` per render, caches the derived querysets,
 and exposes the context fields needed by ``DivisionPairingsView``, the
 Datastar fragment endpoint ``RoundPairingsTabView``, and the public
 ``PublishedPairingsView``.
+
+Tab status is read from ``RoundPairings.status`` (the DB lifecycle field);
+result slips are only consulted to decorate per-pairing rows, never to
+infer round-level state.
 """
 
 from dataclasses import dataclass
@@ -12,8 +16,8 @@ from functools import cached_property
 from itertools import groupby
 
 from .models import Pairing, RoundPairings
-from .pairing.base import PairingData, RoundStatus
-from .pairing.pair import can_pair, round_status
+from .pairing.base import PairingData
+from .pairing.round_pairing import RP
 
 
 @dataclass(frozen=True)
@@ -93,16 +97,35 @@ class PairingsPresenter:
         return PairingData.for_division(self.division)
 
     @cached_property
-    def round_statuses(self) -> dict[int, RoundStatus]:
-        return round_status(self.pd)
-
-    @cached_property
     def db_status_map(self) -> dict[int, str]:
         return dict(self.division.round_pairings_set.values_list("round", "status"))
+
+    def _can_pair(self, rp) -> bool:
+        """Whether the settings entry's round can currently be (re)paired.
+
+        Mirrors ``pairing.pair.can_pair`` but reads the DB lifecycle status
+        from ``db_status_map`` instead of inferring from result slips.
+        """
+        db_status = self.db_status_map.get(rp.round)
+        if db_status in (
+            RoundPairings.PUBLISHED,
+            RoundPairings.IN_PROGRESS,
+            RoundPairings.FINISHED,
+        ):
+            return False
+        if RP.is_round_robin(rp.pairing):
+            return True
+        if rp.start_round == 0:
+            return True
+        return self.db_status_map.get(rp.start_round) == RoundPairings.FINISHED
 
     @cached_property
     def rounds_with_pairings(self) -> set[int]:
         return set(self.division.pairings.values_list("round", flat=True).distinct())
+
+    @cached_property
+    def rounds_with_results(self) -> set[int]:
+        return set(self.division.result_slips.values_list("round", flat=True).distinct())
 
     @cached_property
     def db_pairings(self):
@@ -153,17 +176,14 @@ class PairingsPresenter:
             tab_status = RoundTabStatus.IN_PROGRESS
         elif db_status == RoundPairings.PUBLISHED:
             tab_status = RoundTabStatus.PUBLISHED
-        elif self.round_statuses.get(r) == RoundStatus.Finished:
-            tab_status = RoundTabStatus.FINISHED
-        elif self.round_statuses.get(r) == RoundStatus.Partial:
-            tab_status = RoundTabStatus.IN_PROGRESS
-        elif can_pair(rp, self.round_statuses):
+        elif self._can_pair(rp):
             tab_status = RoundTabStatus.PAIRABLE
         else:
             tab_status = RoundTabStatus.FUTURE
-        # In-progress with no Pairing records can't render properly — we have
-        # results but don't know the unplayed pairings.
-        if tab_status == RoundTabStatus.IN_PROGRESS and r not in self.rounds_with_pairings:
+        # Defensive: any round with slips but no Pairings is in a broken state.
+        # Post edit-results validation, this only happens via direct DB writes
+        # (e.g. the import_results management command, or shell sessions).
+        if r in self.rounds_with_results and r not in self.rounds_with_pairings:
             tab_status = RoundTabStatus.ERROR_NO_PAIRINGS
         label = rp.pairing
         if rp.start_round:
@@ -235,26 +255,17 @@ class PairingsPresenter:
 
     @cached_property
     def available_rounds(self):
-        if not self.pd.round_pairings:
-            return []
-        locked = {
-            rp.round for rp in self.pd.round_pairings
-            if self.db_status_map.get(rp.round, RoundPairings.DRAFT) != RoundPairings.DRAFT
-        }
-        return [
-            rp.round for rp in self.pd.round_pairings
-            if can_pair(rp, self.round_statuses) and rp.round not in locked
-        ]
+        return [rp.round for rp in self.pd.round_pairings if self._can_pair(rp)]
 
     @cached_property
     def waiting_message(self) -> str | None:
         if not self.pd.round_pairings:
             return "No round pairings configured."
         for rp in self.pd.round_pairings:
-            stat = self.round_statuses[rp.round]
-            if stat in (RoundStatus.Finished, RoundStatus.Partial):
+            db_status = self.db_status_map.get(rp.round)
+            if db_status in (RoundPairings.FINISHED, RoundPairings.IN_PROGRESS):
                 continue
-            if rp.start_round and self.round_statuses[rp.start_round] != RoundStatus.Finished:
+            if rp.start_round and self.db_status_map.get(rp.start_round) != RoundPairings.FINISHED:
                 return f"Round {rp.round} is waiting for round {rp.start_round} results."
             return None
         return "All rounds are finished."
