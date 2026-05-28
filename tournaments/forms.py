@@ -163,8 +163,7 @@ class ResultSlipForm(forms.Form):
     def save(self):
         pairing = self.cleaned_data["pairing"]
         winner = self.cleaned_data["winner"]
-        loser_id = pairing.first_id if winner.pk == pairing.second_id else pairing.second_id
-        loser = Entrant.objects.get(pk=loser_id)
+        loser = pairing.first if winner.pk == pairing.second_id else pairing.second
         rp = pairing.round_pairings
         return ResultSlip.objects.create(
             division=rp.division,
