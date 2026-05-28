@@ -8,7 +8,7 @@ pageData.players.forEach(p => { playerValues[p.id] = p.label; });
 
 const table = new Tabulator("#entrants-table", {
     data: pageData.entrants,
-    layout: "fitColumns",
+    layout: "fitDataTable",
     keybindings: true,
     selectableRange: 1,
     editTriggerEvent: "dblclick",
@@ -30,7 +30,7 @@ const table = new Tabulator("#entrants-table", {
         },
         {
             title: "",
-            formatter: function() { return "<button type='button'>X</button>"; },
+            formatter: function() { return "<button type='button' class='row-delete-btn' aria-label='Delete row'>×</button>"; },
             width: 50,
             hozAlign: "center",
             headerSort: false,

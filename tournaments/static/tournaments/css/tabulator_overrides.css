@@ -1,0 +1,55 @@
+/* Shared overrides for Tabulator tables used across edit views. */
+
+.tabulator {
+    font-size: 13px;
+}
+
+.tabulator .tabulator-header .tabulator-col,
+.tabulator .tabulator-header .tabulator-col-content {
+    padding: 4px 8px;
+}
+
+.tabulator .tabulator-row {
+    min-height: 26px;
+}
+
+.tabulator .tabulator-row .tabulator-cell {
+    padding: 3px 8px;
+    height: 26px;
+}
+
+.tabulator .tabulator-row .tabulator-cell input,
+.tabulator .tabulator-row .tabulator-cell select {
+    padding: 1px 4px;
+    height: 22px;
+    font-size: 13px;
+    box-sizing: border-box;
+}
+
+.row-delete-btn {
+    background: transparent;
+    border: none;
+    color: #bbb;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border-radius: 50%;
+    transition: background-color 0.12s ease, color 0.12s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    vertical-align: middle;
+}
+
+.row-delete-btn:hover {
+    background-color: #fdecea;
+    color: #c0392b;
+}
+
+.row-delete-btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(192, 57, 43, 0.25);
+}

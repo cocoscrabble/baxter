@@ -25,7 +25,7 @@ const table = new Tabulator("#board-table-map-table", {
         },
         {
             title: "",
-            formatter: function() { return "<button type='button'>X</button>"; },
+            formatter: function() { return "<button type='button' class='row-delete-btn' aria-label='Delete row'>×</button>"; },
             width: 50,
             hozAlign: "center",
             headerSort: false,
