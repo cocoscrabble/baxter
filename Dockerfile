@@ -18,6 +18,12 @@ RUN uv sync --no-dev --no-install-project
 COPY package.json package-lock.json ./
 RUN npm install --omit=dev
 
+# Strip sourceMappingURL comments from third-party CSS and JS so the manifest
+# static-files post-processor doesn't choke on missing .map files.
+RUN find node_modules \( -name "*.css" -o -name "*.js" \) \
+    -exec sed -i -e 's|/\*# sourceMappingURL=.*\*/||g' \
+                 -e 's|^//# sourceMappingURL=.*$||g' {} +
+
 # Copy source.
 COPY . .
 
