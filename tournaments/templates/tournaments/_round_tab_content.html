@@ -12,13 +12,7 @@
 <div id="round-tab-content">
 {% if selected_round %}
 <h2>Round {{ selected_round }}
-    {% if selected_status == 'finished' %}<span class="round-status-badge badge-finished">Finished</span>
-    {% elif selected_status == 'in_progress' %}<span class="round-status-badge badge-in-progress">In Progress</span>
-    {% elif selected_status == 'published' %}<span class="round-status-badge badge-published">Published</span>
-    {% elif selected_status == 'pairable' %}<span class="round-status-badge badge-pairable">Pairable</span>
-    {% elif selected_status == 'future' %}<span class="round-status-badge badge-future">Future</span>
-    {% elif selected_status == 'error_no_pairings' %}<span class="round-status-badge badge-error">error: results but no pairing</span>
-    {% endif %}
+    {% if selected_status %}<span class="round-status-badge {{ selected_status_badge_class }}">{{ selected_status_badge_label }}</span>{% endif %}
 </h2>
 
 {% if selected_status == 'finished' or selected_status == 'in_progress' %}
