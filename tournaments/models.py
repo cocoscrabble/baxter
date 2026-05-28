@@ -94,6 +94,13 @@ class Division(models.Model):
             max_round=models.Max("round")
         )["max_round"] or 0
 
+    def pairings_by_round_pair(self):
+        """Return {(round, frozenset({first_id, second_id})): Pairing} for all pairings."""
+        return {
+            (p.round, frozenset({p.first_id, p.second_id})): p
+            for p in self.pairings.all()
+        }
+
 
 class DivisionSettings(models.Model):
     """Settings for a division."""
