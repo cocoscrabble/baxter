@@ -25,6 +25,7 @@ from .forms import (
     TournamentForm,
 )
 from .dto import EntrantDTO, FixedPairingDTO, FixedTableDTO, ResultSlipDTO, parse_rows
+from .fixed_pairings import add_fixed_pairing, remove_fixed_pairings
 from .match_simulation import simulate_match, simulate_round
 from .models import Division, DivisionSettings, Entrant, FixedPairing, FixedTable, Pairing, Player, ResultSlip, RoundPairings, Tournament, next_player_number
 from .generate_pairings import regenerate_pairings
@@ -507,62 +508,15 @@ class PublishPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
         return redirect("division_pairings", pk=pk)
 
 
-def _rounds_with_results(division, round_numbers):
-    """Return the subset of round_numbers that already have result slips."""
-    if not round_numbers:
-        return set()
-    return set(
-        division.result_slips
-        .filter(round__in=round_numbers)
-        .values_list("round", flat=True)
-        .distinct()
-    )
-
-
-def _revert_published_rounds_to_draft(division, round_numbers):
-    """Move PUBLISHED rounds back to DRAFT so regenerate_pairings can rebuild them.
-
-    Caller is responsible for confirming none of these rounds have results.
-    """
-    if not round_numbers:
-        return
-    division.round_pairings_set.filter(
-        round__in=round_numbers, status=RoundPairings.PUBLISHED,
-    ).update(status=RoundPairings.DRAFT)
-
-
 class AddFixedPairingView(LoginRequiredMixin, CanEditDivisionMixin, View):
     def post(self, request, pk):
         division = self.get_division()
         round_number = int(request.POST["round"])
         entrant1_id = int(request.POST["entrant1"])
         entrant2_id = int(request.POST["entrant2"])
-        valid_ids = set(division.entrants.values_list("pk", flat=True))
-        if entrant1_id not in valid_ids or entrant2_id not in valid_ids or entrant1_id == entrant2_id:
-            return redirect("division_pairings", pk=pk)
-        # Block edits to rounds that already have results.
-        if _rounds_with_results(division, [round_number]):
-            messages.error(request, f"Round {round_number} already has results — fixed pairings cannot be changed.")
-            return redirect("division_pairings", pk=pk)
-        # Check that neither player already has a fixed pairing for this round.
-        already_fixed = set()
-        for fp in division.fixed_pairings.filter(round_number=round_number):
-            already_fixed.update([fp.entrant1_id, fp.entrant2_id])
-        if entrant1_id in already_fixed or entrant2_id in already_fixed:
-            messages.error(request, "One or both players already have a fixed pairing for this round.")
-            return redirect("division_pairings", pk=pk)
-        fp = FixedPairing.objects.create(
-            division=division,
-            round_number=round_number,
-            entrant1_id=entrant1_id,
-            entrant2_id=entrant2_id,
-        )
-        _revert_published_rounds_to_draft(division, [round_number])
-        try:
-            regenerate_pairings(division)
-        except Exception:
-            fp.delete()
-            messages.error(request, "Could not regenerate pairings with this fixed pairing.")
+        _, error = add_fixed_pairing(division, round_number, entrant1_id, entrant2_id)
+        if error:
+            messages.error(request, error)
         return redirect("division_pairings", pk=pk)
 
 
@@ -570,18 +524,9 @@ class RemoveFixedPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
     def post(self, request, pk):
         division = self.get_division()
         keep_ids = set(request.POST.getlist("keep"))
-        to_remove = division.fixed_pairings.exclude(pk__in=keep_ids)
-        affected_rounds = set(to_remove.values_list("round_number", flat=True))
-        locked = _rounds_with_results(division, affected_rounds)
-        if locked:
-            messages.error(
-                request,
-                f"Cannot remove fixed pairings — rounds with results: {', '.join(str(r) for r in sorted(locked))}.",
-            )
-            return redirect("division_pairings", pk=pk)
-        to_remove.delete()
-        _revert_published_rounds_to_draft(division, affected_rounds)
-        regenerate_pairings(division)
+        error = remove_fixed_pairings(division, keep_ids)
+        if error:
+            messages.error(request, error)
         return redirect("division_pairings", pk=pk)
 
 
