@@ -622,9 +622,6 @@ class PublishedPairingsView(VisibleDivisionMixin, DetailView):
 class DivisionSettingsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
     template_name = "tournaments/division_settings_edit.html"
 
-    def get_division(self):
-        return get_object_or_404(Division, pk=self.kwargs["pk"])
-
     def _existing_initial(self, division):
         try:
             if division.settings.round_pairings:
@@ -696,9 +693,6 @@ class DivisionSettingsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
 
 class DivisionEntrantsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
     template_name = "tournaments/division_entrants_edit.html"
-
-    def get_division(self):
-        return get_object_or_404(Division, pk=self.kwargs["pk"])
 
     def get(self, request, pk):
         division = self.get_division()
@@ -812,9 +806,6 @@ class BulkImportEntrantsView(LoginRequiredMixin, CanEditDivisionMixin, View):
 class DivisionFixedPairingsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
     template_name = "tournaments/division_fixed_pairings_edit.html"
 
-    def get_division(self):
-        return get_object_or_404(Division, pk=self.kwargs["pk"])
-
     def get(self, request, pk):
         division = self.get_division()
         entrants = division.entrants.select_related("player").order_by("number")
@@ -855,9 +846,6 @@ class DivisionFixedPairingsEditView(LoginRequiredMixin, CanEditDivisionMixin, Vi
 
 class DivisionFixedTablesEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
     template_name = "tournaments/division_fixed_tables_edit.html"
-
-    def get_division(self):
-        return get_object_or_404(Division, pk=self.kwargs["pk"])
 
     def get(self, request, pk):
         division = self.get_division()
@@ -906,9 +894,6 @@ class DivisionFixedTablesEditView(LoginRequiredMixin, CanEditDivisionMixin, View
 
 class DivisionBoardTableMapEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
     template_name = "tournaments/division_board_table_map_edit.html"
-
-    def get_division(self):
-        return get_object_or_404(Division, pk=self.kwargs["pk"])
 
     def get(self, request, pk):
         division = self.get_division()
@@ -1074,9 +1059,6 @@ class ResultSlipCreateView(View):
 class DivisionEditResultsView(LoginRequiredMixin, CanEditDivisionMixin, View):
     template_name = "tournaments/division_edit_results.html"
 
-    def get_division(self):
-        return get_object_or_404(Division, pk=self.kwargs["pk"])
-
     def get(self, request, pk):
         division = self.get_division()
         results = division.result_slips.select_related(
@@ -1158,9 +1140,6 @@ def _simulation_response(request, division):
 class SimulateMatchView(LoginRequiredMixin, CanEditDivisionMixin, View):
     """Simulate a single match for a test division and create a result slip."""
 
-    def get_division(self):
-        return get_object_or_404(Division, pk=self.kwargs["pk"])
-
     def post(self, request, pk):
         division = self.get_division()
         if not division.is_test:
@@ -1197,9 +1176,6 @@ class SimulateMatchView(LoginRequiredMixin, CanEditDivisionMixin, View):
 
 class SimulateRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
     """Simulate all remaining matches in a round for a test division."""
-
-    def get_division(self):
-        return get_object_or_404(Division, pk=self.kwargs["pk"])
 
     def post(self, request, pk):
         division = self.get_division()
