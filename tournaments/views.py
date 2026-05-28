@@ -1,5 +1,4 @@
 import json
-import random
 from itertools import groupby
 
 from django.contrib import messages
@@ -26,6 +25,7 @@ from .forms import (
     TournamentForm,
 )
 from .dto import EntrantDTO, FixedPairingDTO, FixedTableDTO, ResultSlipDTO, parse_rows
+from .match_simulation import simulate_match, simulate_round
 from .models import Division, DivisionSettings, Entrant, FixedPairing, FixedTable, Pairing, Player, ResultSlip, RoundPairings, Tournament, next_player_number
 from .generate_pairings import regenerate_pairings
 from .pairing.base import PairingData, RoundStatus, standings_after_round
@@ -1191,6 +1191,25 @@ class DivisionEditResultsView(LoginRequiredMixin, CanEditDivisionMixin, View):
         return JsonResponse({"ok": True})
 
 
+def _read_request_data(request):
+    """Parse request body as JSON (or datastar signals). Returns (data, error_response)."""
+    if is_datastar(request):
+        return read_signals(request) or {}, None
+    try:
+        return json.loads(request.body), None
+    except json.JSONDecodeError:
+        return None, JsonResponse({"error": "Invalid JSON."}, status=400)
+
+
+def _simulation_response(request, division):
+    if is_datastar(request):
+        context = _build_pairings_context(division)
+        return fragment_response(
+            "tournaments/_round_tab_content.html", context, request=request
+        )
+    return JsonResponse({"ok": True})
+
+
 class SimulateMatchView(LoginRequiredMixin, CanEditDivisionMixin, View):
     """Simulate a single match for a test division and create a result slip."""
 
@@ -1205,13 +1224,9 @@ class SimulateMatchView(LoginRequiredMixin, CanEditDivisionMixin, View):
                 status=403,
             )
 
-        if is_datastar(request):
-            data = read_signals(request) or {}
-        else:
-            try:
-                data = json.loads(request.body)
-            except json.JSONDecodeError:
-                return JsonResponse({"error": "Invalid JSON."}, status=400)
+        data, error = _read_request_data(request)
+        if error:
+            return error
 
         round_num = data.get("round")
         first_name = data.get("first")
@@ -1228,47 +1243,11 @@ class SimulateMatchView(LoginRequiredMixin, CanEditDivisionMixin, View):
         if not first_entrant or not second_entrant:
             return JsonResponse({"error": "Entrant not found."}, status=400)
 
-        r1 = first_entrant.player.rating
-        r2 = second_entrant.player.rating
-        first_wins = random.random() < r1 / (r1 + r2)
+        slip = simulate_match(division, round_num, first_entrant, second_entrant)
+        if slip.pairing and slip.pairing.round_pairings:
+            slip.pairing.round_pairings.update_status()
 
-        loser_score = random.randint(200, 450)
-        winner_score = random.randint(loser_score, 600)
-
-        if first_wins:
-            winner, loser = first_entrant, second_entrant
-            winner_started = True
-        else:
-            winner, loser = second_entrant, first_entrant
-            winner_started = False
-
-        # Find the matching Pairing object to link via FK.
-        pairing_obj = division.pairings.filter(
-            round=round_num,
-        ).filter(
-            models.Q(first=first_entrant, second=second_entrant) |
-            models.Q(first=second_entrant, second=first_entrant)
-        ).first()
-
-        ResultSlip.objects.create(
-            division=division,
-            round=round_num,
-            pairing=pairing_obj,
-            winner=winner,
-            winner_score=winner_score,
-            loser=loser,
-            loser_score=loser_score,
-            winner_started=winner_started,
-        )
-        if pairing_obj and pairing_obj.round_pairings:
-            pairing_obj.round_pairings.update_status()
-
-        if is_datastar(request):
-            context = _build_pairings_context(division)
-            return fragment_response(
-                "tournaments/_round_tab_content.html", context, request=request
-            )
-        return JsonResponse({"ok": True})
+        return _simulation_response(request, division)
 
 
 class SimulateRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
@@ -1285,60 +1264,13 @@ class SimulateRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
                 status=403,
             )
 
-        if is_datastar(request):
-            data = read_signals(request) or {}
-        else:
-            try:
-                data = json.loads(request.body)
-            except json.JSONDecodeError:
-                return JsonResponse({"error": "Invalid JSON."}, status=400)
+        data, error = _read_request_data(request)
+        if error:
+            return error
 
         round_num = data.get("round")
         if not round_num:
             return JsonResponse({"error": "Missing required fields."}, status=400)
 
-        played = frozenset(
-            frozenset({slip.winner_id, slip.loser_id})
-            for slip in division.result_slips.filter(round=round_num)
-        )
-
-        pairings = division.pairings.filter(round=round_num).select_related(
-            "first__player", "second__player"
-        )
-
-        for pairing in pairings:
-            if frozenset({pairing.first_id, pairing.second_id}) in played:
-                continue
-            r1 = pairing.first.player.rating
-            r2 = pairing.second.player.rating
-            first_wins = random.random() < r1 / (r1 + r2)
-            loser_score = random.randint(200, 450)
-            winner_score = random.randint(loser_score, 600)
-            if first_wins:
-                winner, loser = pairing.first, pairing.second
-                winner_started = True
-            else:
-                winner, loser = pairing.second, pairing.first
-                winner_started = False
-            ResultSlip.objects.create(
-                division=division,
-                round=round_num,
-                pairing=pairing,
-                winner=winner,
-                winner_score=winner_score,
-                loser=loser,
-                loser_score=loser_score,
-                winner_started=winner_started,
-            )
-
-        # Update round status after all results are created.
-        rp_obj = division.round_pairings_set.filter(round=round_num).first()
-        if rp_obj:
-            rp_obj.update_status()
-
-        if is_datastar(request):
-            context = _build_pairings_context(division)
-            return fragment_response(
-                "tournaments/_round_tab_content.html", context, request=request
-            )
-        return JsonResponse({"ok": True})
+        simulate_round(division, round_num)
+        return _simulation_response(request, division)
