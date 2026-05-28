@@ -47,7 +47,7 @@ class TournamentDetailView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
-        can_edit = user.is_authenticated and self.object.can_edit(user)
+        can_edit = self.object.can_edit(user)
         context["can_edit"] = can_edit
         if can_edit:
             context.update(self.object.division_buckets())
@@ -92,9 +92,8 @@ class CanEditDivisionMixin(UserPassesTestMixin):
 
 def _ensure_visible_division(division, user):
     """Raise Http404 if this is a test division the user is not allowed to see."""
-    if division.is_test:
-        if not (user.is_authenticated and division.tournament.can_edit(user)):
-            raise Http404
+    if division.is_test and not division.tournament.can_edit(user):
+        raise Http404
 
 
 class VisibleDivisionMixin:
@@ -116,9 +115,7 @@ class DivisionNavMixin:
         division = self.object
         user = self.request.user
         if "can_edit" not in context:
-            context["can_edit"] = (
-                user.is_authenticated and division.tournament.can_edit(user)
-            )
+            context["can_edit"] = division.tournament.can_edit(user)
         context["active_tab"] = self.active_tab
         return context
 
@@ -997,15 +994,12 @@ class ResultSlipCreateView(View):
                  "second_pk": s_pk, "second_name": s_name}
                 for p_pk, f_pk, f_name, s_pk, s_name in pairing_list
             ]
-        user = self.request.user
         context = {
             "form": form,
             "division": division,
             "pairings_json": json.dumps(pairings_json),
             "active_tab": "add_result",
-            "can_edit": (
-                user.is_authenticated and division.tournament.can_edit(user)
-            ),
+            "can_edit": division.tournament.can_edit(self.request.user),
         }
         if success_message:
             context["success_message"] = success_message
