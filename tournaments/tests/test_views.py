@@ -663,10 +663,10 @@ class DivisionPairingsViewTests(TestCase):
         )
         round_pairings = response.context["round_pairings"]
         self.assertEqual(len(round_pairings), 1)
-        p = round_pairings[0]["pairing"]
+        p = round_pairings[0].pairing
         names = {p.first.name, p.second.name}
         self.assertEqual(names, {"Alice", "Bob"})
-        self.assertEqual(round_pairings[0]["result"], "")
+        self.assertEqual(round_pairings[0].result, "")
         self.assertContains(response, "Round 1")
         self.assertContains(response, "Alice")
         self.assertContains(response, "Bob")
@@ -769,9 +769,9 @@ class DivisionPairingsRoundContentTests(TestCase):
         self.assertEqual(response.context["selected_status"], "in_progress")
         round_pairings = response.context["round_pairings"]
         self.assertEqual(len(round_pairings), 2)
-        by_table = {e["pairing"].table: e for e in round_pairings}
-        self.assertEqual(by_table[1]["result"], "450 - 380")
-        self.assertEqual(by_table[2]["result"], "")
+        by_table = {e.pairing.table: e for e in round_pairings}
+        self.assertEqual(by_table[1].result, "450 - 380")
+        self.assertEqual(by_table[2].result, "")
 
     def test_finished_round_shows_all_pairings_with_results(self):
         _, pairings = self._create_round(
@@ -789,7 +789,7 @@ class DivisionPairingsRoundContentTests(TestCase):
         self.assertEqual(response.context["selected_status"], "finished")
         round_pairings = response.context["round_pairings"]
         self.assertEqual(len(round_pairings), 2)
-        results = sorted(e["result"] for e in round_pairings)
+        results = sorted(e.result for e in round_pairings)
         self.assertEqual(results, ["450 - 380", "500 - 400"])
 
     def test_finished_round_with_unplayed_pairing_still_lists_it(self):
@@ -806,9 +806,9 @@ class DivisionPairingsRoundContentTests(TestCase):
         self.assertEqual(response.context["selected_status"], "finished")
         round_pairings = response.context["round_pairings"]
         self.assertEqual(len(round_pairings), 2)
-        by_table = {e["pairing"].table: e for e in round_pairings}
-        self.assertEqual(by_table[1]["result"], "450 - 380")
-        self.assertEqual(by_table[2]["result"], "")
+        by_table = {e.pairing.table: e for e in round_pairings}
+        self.assertEqual(by_table[1].result, "450 - 380")
+        self.assertEqual(by_table[2].result, "")
 
     def test_error_status_when_results_but_no_pairing_records(self):
         """Partial slips with no Pairing rows surfaces as error_no_pairings, not in_progress."""
@@ -963,9 +963,9 @@ class DivisionPairingsRoundContentTests(TestCase):
         self.assertEqual(response.context["selected_status"], "in_progress")
         round_pairings = response.context["round_pairings"]
         self.assertEqual(len(round_pairings), 2)
-        by_table = {e["pairing"].table: e for e in round_pairings}
-        self.assertEqual(by_table[1]["result"], "420 - 410")
-        self.assertEqual(by_table[2]["result"], "")
+        by_table = {e.pairing.table: e for e in round_pairings}
+        self.assertEqual(by_table[1].result, "420 - 410")
+        self.assertEqual(by_table[2].result, "")
 
 
 @tag("slow")

@@ -6,13 +6,23 @@ Datastar fragment endpoint ``RoundPairingsTabView``, and the public
 ``PublishedPairingsView``.
 """
 
+from dataclasses import dataclass
 from enum import Enum
 from functools import cached_property
 from itertools import groupby
 
-from .models import RoundPairings
+from .models import Pairing, RoundPairings
 from .pairing.base import PairingData, RoundStatus
 from .pairing.pair import can_pair, round_status
+
+
+@dataclass(frozen=True)
+class AnnotatedPairing:
+    """A division Pairing decorated with its result and fixed-status flags."""
+
+    pairing: Pairing
+    result: str = ""
+    is_fixed: bool = False
 
 
 class RoundTabStatus(Enum):
@@ -112,7 +122,7 @@ class PairingsPresenter:
     @cached_property
     def fixed_lookup(self):
         return {
-            (fp.round_number, frozenset({fp.entrant1_id, fp.entrant2_id})): fp.pk
+            (fp.round_number, frozenset({fp.entrant1_id, fp.entrant2_id}))
             for fp in self.division.fixed_pairings.all()
         }
 
@@ -201,13 +211,11 @@ class PairingsPresenter:
                 result = f"{scores[p.first_id]} - {scores[p.second_id]}"
             else:
                 result = ""
-            fixed_id = self.fixed_lookup.get(key)
-            rows.append({
-                "pairing": p,
-                "result": result,
-                "is_fixed": bool(fixed_id),
-                "fixed_id": fixed_id,
-            })
+            rows.append(AnnotatedPairing(
+                pairing=p,
+                result=result,
+                is_fixed=key in self.fixed_lookup,
+            ))
         return rows
 
     def _rows_for_selected(self):
@@ -311,6 +319,8 @@ class PublishedPairingsPresenter:
             return context
         annotated = []
         for round_num, round_pairings in groupby(db_pairings, key=lambda p: p.round):
-            annotated.append((round_num, [{"pairing": p} for p in round_pairings]))
+            annotated.append(
+                (round_num, [AnnotatedPairing(pairing=p) for p in round_pairings])
+            )
         context["pairings"] = annotated
         return context
