@@ -27,7 +27,7 @@ from .forms import (
 from .dto import EntrantDTO, FixedPairingDTO, FixedTableDTO, ResultSlipDTO, parse_rows
 from .fixed_pairings import add_fixed_pairing, remove_fixed_pairings
 from .match_simulation import simulate_match, simulate_round
-from .models import Division, DivisionSettings, Entrant, FixedPairing, FixedTable, Pairing, Player, ResultSlip, RoundPairings, Tournament, next_player_number
+from .models import Division, DivisionSettings, Entrant, FixedPairing, FixedTable, Pairing, Player, ResultSlip, RoundPairings, Tournament
 from .generate_pairings import regenerate_pairings
 from .pairing.base import PairingData, RoundStatus, standings_after_round
 from .pairing.pair import can_pair, round_status, STRATEGY_TYPES
@@ -737,28 +737,11 @@ class CreatePlayerView(LoginRequiredMixin, View):
         except json.JSONDecodeError:
             return JsonResponse({"error": "Invalid JSON."}, status=400)
 
-        name = (data.get("name") or "").strip()
-        if not name:
-            return JsonResponse({"error": "Name is required."}, status=400)
-
-        # Case-insensitive uniqueness check.
-        if Player.objects.filter(name__iexact=name).exists():
-            return JsonResponse(
-                {"error": f"A player named '{name}' already exists."},
-                status=400,
-            )
-
-        rating = data.get("rating", 0)
-        try:
-            rating = int(rating)
-        except (ValueError, TypeError):
-            rating = 0
-
-        player = Player.objects.create(
-            name=name,
-            player_number=next_player_number(),
-            rating=rating,
+        player, error = Player.create_unique(
+            name=data.get("name"), rating=data.get("rating", 0)
         )
+        if error:
+            return JsonResponse({"error": error}, status=400)
         return JsonResponse({
             "ok": True,
             "id": player.pk,

@@ -158,6 +158,28 @@ class Player(models.Model):
     def __str__(self):
         return self.name
 
+    @classmethod
+    def create_unique(cls, name, rating=0):
+        """Create a Player with case-insensitive name uniqueness and auto-assigned number.
+
+        Returns (player, error_message). On conflict or invalid input, player is None.
+        """
+        name = (name or "").strip()
+        if not name:
+            return None, "Name is required."
+        if cls.objects.filter(name__iexact=name).exists():
+            return None, f"A player named '{name}' already exists."
+        try:
+            rating = int(rating)
+        except (ValueError, TypeError):
+            rating = 0
+        player = cls.objects.create(
+            name=name,
+            player_number=next_player_number(),
+            rating=rating,
+        )
+        return player, None
+
 
 class Entrant(models.Model):
     """A player entered in a division."""
