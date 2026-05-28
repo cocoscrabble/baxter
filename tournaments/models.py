@@ -101,6 +101,14 @@ class Division(models.Model):
             for p in self.pairings.all()
         }
 
+    def configured_round_numbers(self, default=range(1, 16)):
+        """Return sorted round numbers configured in DivisionSettings, or a default range."""
+        try:
+            rps = self.settings.round_pairings
+            return sorted({rp["round"] for rp in rps})
+        except (AttributeError, KeyError, TypeError, DivisionSettings.DoesNotExist):
+            return list(default)
+
 
 class DivisionSettings(models.Model):
     """Settings for a division."""
