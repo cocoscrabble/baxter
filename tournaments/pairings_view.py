@@ -210,43 +210,18 @@ class PairingsPresenter:
             })
         return rows
 
-    def _legacy_slip_rows(self, round_num):
-        slips = list(
-            self.division.result_slips
-            .filter(round=round_num)
-            .select_related("winner__player", "loser__player")
-            .order_by("pk")
-        )
-        fp_lookup = {
-            frozenset({fp.entrant1_id, fp.entrant2_id})
-            for fp in self.division.fixed_pairings.filter(round_number=round_num)
-        }
-        return [
-            {
-                "first_name": slip.winner.player.name,
-                "second_name": slip.loser.player.name,
-                "result": f"{slip.winner_score} - {slip.loser_score}",
-                "is_fixed": frozenset({slip.winner_id, slip.loser_id}) in fp_lookup,
-                "from_slips": True,
-            }
-            for slip in slips
-        ]
-
     def _rows_for_selected(self):
         tab = self.selected_tab
         if tab is None:
             return None
         round_num = tab["round"]
         status = tab["status"]
+        if status not in ("finished", "in_progress", "pairable", "published"):
+            return None  # 'future' or 'error_no_pairings' — body shows a message.
         round_pairings = [p for p in self.db_pairings if p.round == round_num]
-        if status in ("finished", "in_progress", "error_no_pairings"):
-            if round_pairings:
-                return self._annotate(round_pairings, round_num)
-            return self._legacy_slip_rows(round_num)
-        if status in ("pairable", "published"):
-            if round_pairings:
-                return self._annotate(round_pairings, round_num)
-        return None  # 'future' — template shows settings text instead.
+        if not round_pairings:
+            return None
+        return self._annotate(round_pairings, round_num)
 
     # --- Edit-only fields ---
 
