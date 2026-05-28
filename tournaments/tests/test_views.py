@@ -4,7 +4,7 @@ from datetime import date
 from django.test import TestCase, tag
 from django.urls import reverse
 
-from tournaments.models import Division, DivisionSettings, Entrant, FixedTable, Pairing, Player, ResultSlip, RoundPairings, Tournament
+from tournaments.models import Division, DivisionSettings, Entrant, FixedPairing, FixedTable, Pairing, Player, ResultSlip, RoundPairings, Tournament
 from users.models import User
 
 
@@ -823,6 +823,125 @@ class DivisionPairingsRoundContentTests(TestCase):
         tabs_by_round = {t["round"]: t for t in response.context["round_tabs"]}
         self.assertEqual(tabs_by_round[1]["status"], "error_no_pairings")
         self.assertEqual(response.context["selected_status"], "error_no_pairings")
+
+    def test_published_pairings_page_excludes_finished_rounds(self):
+        _, r1_pairings = self._create_round(
+            1, RoundPairings.FINISHED,
+            [(self.entrant1, self.entrant2), (self.entrant3, self.entrant4)],
+        )
+        self._create_slip(1, r1_pairings[0], self.entrant1, self.entrant2, 450, 380)
+        self._create_slip(1, r1_pairings[1], self.entrant3, self.entrant4, 500, 400)
+        self._create_round(
+            2, RoundPairings.PUBLISHED,
+            [(self.entrant1, self.entrant3), (self.entrant2, self.entrant4)],
+        )
+
+        response = self.client.get(
+            reverse("published_pairings", kwargs={"pk": self.division.pk})
+        )
+        rounds_shown = [r for r, _ in response.context["pairings"]]
+        self.assertEqual(rounds_shown, [2])
+
+    def test_published_round_shows_published_tab_status(self):
+        self._create_round(
+            1, RoundPairings.PUBLISHED,
+            [(self.entrant1, self.entrant2), (self.entrant3, self.entrant4)],
+        )
+        response = self.client.get(
+            reverse("division_pairings", kwargs={"pk": self.division.pk})
+        )
+        tabs_by_round = {t["round"]: t for t in response.context["round_tabs"]}
+        self.assertEqual(tabs_by_round[1]["status"], "published")
+        self.assertEqual(response.context["selected_status"], "published")
+
+    def test_generate_button_hidden_when_round_is_published(self):
+        self._create_round(
+            1, RoundPairings.PUBLISHED,
+            [(self.entrant1, self.entrant2), (self.entrant3, self.entrant4)],
+        )
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(
+            reverse("division_pairings", kwargs={"pk": self.division.pk})
+        )
+        # Round 1 is published, so it should NOT be in the generate label.
+        # Round 2 is pairable only once round 1 is finished, so generate_label
+        # should be empty (round 2 has start_round=1 and round 1 isn't finished).
+        self.assertNotIn("generate_label", response.context)
+
+    def test_add_fixed_pairing_redrafts_published_round(self):
+        _, pairings = self._create_round(
+            1, RoundPairings.PUBLISHED,
+            [(self.entrant1, self.entrant2), (self.entrant3, self.entrant4)],
+        )
+        original_pks = sorted(p.pk for p in pairings)
+
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.post(
+            reverse("add_fixed_pairing", kwargs={"pk": self.division.pk}),
+            {"round": 1, "entrant1": self.entrant1.pk, "entrant2": self.entrant3.pk},
+        )
+        self.assertEqual(response.status_code, 302)
+
+        rp = self.division.round_pairings_set.get(round=1)
+        self.assertEqual(rp.status, RoundPairings.DRAFT)
+        new_pks = sorted(p.pk for p in self.division.pairings.filter(round=1))
+        self.assertNotEqual(new_pks, original_pks)
+        fp = self.division.fixed_pairings.get(round_number=1)
+        self.assertEqual(
+            {fp.entrant1_id, fp.entrant2_id},
+            {self.entrant1.pk, self.entrant3.pk},
+        )
+        new_pair = self.division.pairings.filter(round=1).filter(
+            first__in=[self.entrant1, self.entrant3],
+            second__in=[self.entrant1, self.entrant3],
+        )
+        self.assertEqual(new_pair.count(), 1)
+
+    def test_add_fixed_pairing_blocked_when_round_has_results(self):
+        _, pairings = self._create_round(
+            1, RoundPairings.IN_PROGRESS,
+            [(self.entrant1, self.entrant2), (self.entrant3, self.entrant4)],
+        )
+        self._create_slip(1, pairings[0], self.entrant1, self.entrant2, 450, 380)
+
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.post(
+            reverse("add_fixed_pairing", kwargs={"pk": self.division.pk}),
+            {"round": 1, "entrant1": self.entrant3.pk, "entrant2": self.entrant4.pk},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(self.division.fixed_pairings.exists())
+
+    def test_remove_fixed_pairing_blocked_when_affected_round_has_results(self):
+        _, pairings = self._create_round(
+            1, RoundPairings.IN_PROGRESS,
+            [(self.entrant1, self.entrant2), (self.entrant3, self.entrant4)],
+        )
+        self._create_slip(1, pairings[0], self.entrant1, self.entrant2, 450, 380)
+        fp = FixedPairing.objects.create(
+            division=self.division, round_number=1,
+            entrant1=self.entrant3, entrant2=self.entrant4,
+        )
+
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.post(
+            reverse("remove_fixed_pairings", kwargs={"pk": self.division.pk}),
+            {"keep": []},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(self.division.fixed_pairings.filter(pk=fp.pk).exists())
+
+    def test_has_published_rounds_false_when_only_finished(self):
+        _, pairings = self._create_round(
+            1, RoundPairings.FINISHED,
+            [(self.entrant1, self.entrant2), (self.entrant3, self.entrant4)],
+        )
+        self._create_slip(1, pairings[0], self.entrant1, self.entrant2, 450, 380)
+        self._create_slip(1, pairings[1], self.entrant3, self.entrant4, 500, 400)
+        response = self.client.get(
+            reverse("division_pairings", kwargs={"pk": self.division.pk})
+        )
+        self.assertFalse(response.context["has_published_rounds"])
 
     def test_in_progress_round_selected_when_earlier_round_finished(self):
         _, r1_pairings = self._create_round(

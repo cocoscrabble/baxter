@@ -14,6 +14,7 @@
 <h2>Round {{ selected_round }}
     {% if selected_status == 'finished' %}<span class="round-status-badge badge-finished">Finished</span>
     {% elif selected_status == 'in_progress' %}<span class="round-status-badge badge-in-progress">In Progress</span>
+    {% elif selected_status == 'published' %}<span class="round-status-badge badge-published">Published</span>
     {% elif selected_status == 'pairable' %}<span class="round-status-badge badge-pairable">Pairable</span>
     {% elif selected_status == 'future' %}<span class="round-status-badge badge-future">Future</span>
     {% elif selected_status == 'error_no_pairings' %}<span class="round-status-badge badge-error">error: results but no pairing</span>
@@ -62,7 +63,7 @@
     <p>No pairings data for this round.</p>
     {% endif %}
 
-{% elif selected_status == 'pairable' %}
+{% elif selected_status == 'pairable' or selected_status == 'published' %}
     {% if round_pairings %}
     <table>
         <thead>

@@ -434,6 +434,11 @@ dd {
     color: var(--color-pairable);
 }
 
+.round-tab-published {
+    background-color: var(--color-pairable-light);
+    color: var(--color-pairable);
+}
+
 .round-tab-future {
     background-color: var(--color-future-light);
     color: var(--color-future);
@@ -460,6 +465,7 @@ dd {
 .round-tab-finished.active { background-color: var(--color-finished); color: white; border-bottom-color: var(--color-finished); }
 .round-tab-in_progress.active { background-color: var(--color-in-progress); color: white; border-bottom-color: var(--color-in-progress); }
 .round-tab-pairable.active { background-color: var(--color-pairable); color: white; border-bottom-color: var(--color-pairable); }
+.round-tab-published.active { background-color: var(--color-pairable); color: white; border-bottom-color: var(--color-pairable); }
 .round-tab-future.active { background-color: var(--color-future); color: white; border-bottom-color: var(--color-future); }
 .round-tab-error_no_pairings.active { background-color: #b3261e; color: white; border-bottom-color: #b3261e; }
 
@@ -483,5 +489,6 @@ dd {
 .badge-finished { background-color: var(--color-finished-light); color: var(--color-finished); }
 .badge-in-progress { background-color: var(--color-in-progress-light); color: var(--color-in-progress); }
 .badge-pairable { background-color: var(--color-pairable-light); color: var(--color-pairable); }
+.badge-published { background-color: var(--color-pairable-light); color: var(--color-pairable); }
 .badge-future { background-color: var(--color-future-light); color: var(--color-future); }
 .badge-error { background-color: #fdecea; color: #b3261e; }

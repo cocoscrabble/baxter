@@ -253,12 +253,25 @@ class DivisionStandingsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
 
 
 def _available_rounds(division):
-    """Return list of round numbers that can currently be paired."""
+    """Return list of round numbers that can currently be (re)paired.
+
+    A round is available if it can be paired based on results AND its
+    persisted RoundPairings status is DRAFT (or absent). Published,
+    in-progress, and finished rounds are locked.
+    """
     pd = PairingData.for_division(division)
     if not pd.round_pairings:
         return []
     status = round_status(pd)
-    return [rp.round for rp in pd.round_pairings if can_pair(rp, status)]
+    locked_rounds = set(
+        division.round_pairings_set
+        .exclude(status=RoundPairings.DRAFT)
+        .values_list("round", flat=True)
+    )
+    return [
+        rp.round for rp in pd.round_pairings
+        if can_pair(rp, status) and rp.round not in locked_rounds
+    ]
 
 
 def _waiting_message(division):
@@ -318,7 +331,8 @@ def _round_tabs(division):
     """Build a list of round tab dicts with status for the pairings tab bar.
 
     Each tab has: round (int), status (str), label (str for future rounds).
-    Statuses: 'finished', 'in_progress', 'pairable', 'future', 'error_no_pairings'.
+    Statuses: 'finished', 'in_progress', 'published', 'pairable', 'future',
+    'error_no_pairings'.
     """
     pd = PairingData.for_division(division)
     if not pd.round_pairings:
@@ -342,6 +356,8 @@ def _round_tabs(division):
             tab_status = "finished"
         elif db_status == RoundPairings.IN_PROGRESS:
             tab_status = "in_progress"
+        elif db_status == RoundPairings.PUBLISHED:
+            tab_status = "published"
         elif statuses.get(r) == RoundStatus.Finished:
             tab_status = "finished"
         elif statuses.get(r) == RoundStatus.Partial:
@@ -375,9 +391,10 @@ def _build_pairings_context(division):
 
     db_pairings, status, played, fixed_lookup = _pairings_common(division)
 
-    # Default selected round: first in-progress, then first pairable, then first finished (latest), else first.
+    # Default selected round: first in-progress, then published, then pairable,
+    # then first finished (latest), else first.
     selected = None
-    for preference in ("in_progress", "pairable"):
+    for preference in ("in_progress", "published", "pairable"):
         for tab in tabs:
             if tab["status"] == preference:
                 selected = tab["round"]
@@ -400,8 +417,8 @@ def _build_pairings_context(division):
     context["has_draft_rounds"] = division.round_pairings_set.filter(
         status=RoundPairings.DRAFT
     ).exists()
-    context["has_published_rounds"] = division.round_pairings_set.exclude(
-        status=RoundPairings.DRAFT
+    context["has_published_rounds"] = division.round_pairings_set.filter(
+        status__in=[RoundPairings.PUBLISHED, RoundPairings.IN_PROGRESS]
     ).exists()
     return context
 
@@ -445,8 +462,8 @@ def _build_round_content(division, round_num, tabs, db_pairings, played, fixed_l
                 }
                 for slip in slips
             ]
-    elif tab["status"] == "pairable":
-        # Show pairings if generated (draft/published), plus generate/publish controls.
+    elif tab["status"] in ("pairable", "published"):
+        # Show pairings if generated, plus generate/publish controls.
         round_pairings = [p for p in db_pairings if p.round == round_num]
         if round_pairings:
             context["round_pairings"] = _annotate_round(
@@ -468,8 +485,8 @@ def _build_single_round_context(division, round_num):
     context["has_draft_rounds"] = division.round_pairings_set.filter(
         status=RoundPairings.DRAFT
     ).exists()
-    context["has_published_rounds"] = division.round_pairings_set.exclude(
-        status=RoundPairings.DRAFT
+    context["has_published_rounds"] = division.round_pairings_set.filter(
+        status__in=[RoundPairings.PUBLISHED, RoundPairings.IN_PROGRESS]
     ).exists()
     return context
 
@@ -490,6 +507,30 @@ class PublishPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
         return redirect("division_pairings", pk=pk)
 
 
+def _rounds_with_results(division, round_numbers):
+    """Return the subset of round_numbers that already have result slips."""
+    if not round_numbers:
+        return set()
+    return set(
+        division.result_slips
+        .filter(round__in=round_numbers)
+        .values_list("round", flat=True)
+        .distinct()
+    )
+
+
+def _revert_published_rounds_to_draft(division, round_numbers):
+    """Move PUBLISHED rounds back to DRAFT so regenerate_pairings can rebuild them.
+
+    Caller is responsible for confirming none of these rounds have results.
+    """
+    if not round_numbers:
+        return
+    division.round_pairings_set.filter(
+        round__in=round_numbers, status=RoundPairings.PUBLISHED,
+    ).update(status=RoundPairings.DRAFT)
+
+
 class AddFixedPairingView(LoginRequiredMixin, CanEditDivisionMixin, View):
     def post(self, request, pk):
         division = self.get_division()
@@ -498,6 +539,10 @@ class AddFixedPairingView(LoginRequiredMixin, CanEditDivisionMixin, View):
         entrant2_id = int(request.POST["entrant2"])
         valid_ids = set(division.entrants.values_list("pk", flat=True))
         if entrant1_id not in valid_ids or entrant2_id not in valid_ids or entrant1_id == entrant2_id:
+            return redirect("division_pairings", pk=pk)
+        # Block edits to rounds that already have results.
+        if _rounds_with_results(division, [round_number]):
+            messages.error(request, f"Round {round_number} already has results — fixed pairings cannot be changed.")
             return redirect("division_pairings", pk=pk)
         # Check that neither player already has a fixed pairing for this round.
         already_fixed = set()
@@ -512,6 +557,7 @@ class AddFixedPairingView(LoginRequiredMixin, CanEditDivisionMixin, View):
             entrant1_id=entrant1_id,
             entrant2_id=entrant2_id,
         )
+        _revert_published_rounds_to_draft(division, [round_number])
         try:
             regenerate_pairings(division)
         except Exception:
@@ -524,7 +570,17 @@ class RemoveFixedPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
     def post(self, request, pk):
         division = self.get_division()
         keep_ids = set(request.POST.getlist("keep"))
-        division.fixed_pairings.exclude(pk__in=keep_ids).delete()
+        to_remove = division.fixed_pairings.exclude(pk__in=keep_ids)
+        affected_rounds = set(to_remove.values_list("round_number", flat=True))
+        locked = _rounds_with_results(division, affected_rounds)
+        if locked:
+            messages.error(
+                request,
+                f"Cannot remove fixed pairings — rounds with results: {', '.join(str(r) for r in sorted(locked))}.",
+            )
+            return redirect("division_pairings", pk=pk)
+        to_remove.delete()
+        _revert_published_rounds_to_draft(division, affected_rounds)
         regenerate_pairings(division)
         return redirect("division_pairings", pk=pk)
 
@@ -576,12 +632,15 @@ class RoundPairingsTabView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
 
 
 def _build_published_pairings_context(division):
-    """Build context for the published pairings page (non-draft rounds)."""
+    """Build context for the published pairings page.
+
+    Shows rounds that are published or in-progress. Finished rounds are
+    dropped — their results live on the results/standings pages.
+    """
     context = {"division": division}
-    # Published rounds = anything not draft (published, in_progress, finished).
     published_rounds = set(
         division.round_pairings_set
-        .exclude(status=RoundPairings.DRAFT)
+        .filter(status__in=[RoundPairings.PUBLISHED, RoundPairings.IN_PROGRESS])
         .values_list("round", flat=True)
     )
     if not published_rounds:

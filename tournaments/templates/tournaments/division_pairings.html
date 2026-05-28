@@ -6,12 +6,13 @@
 <h1>Pairings: {{ division.name }}</h1>
 
 {% if can_edit %}
-{% if generate_label %}
 <p>
+{% if generate_label %}
 <form method="post" action="{% url 'generate_pairings' division.pk %}" style="display:inline">
     {% csrf_token %}
     <button type="submit">{{ generate_label }}</button>
 </form>
+{% endif %}
 {% if has_draft_rounds %}
 <form method="post" action="{% url 'publish_pairings' division.pk %}" style="display:inline">
     {% csrf_token %}
@@ -22,7 +23,7 @@
 <a href="{% url 'published_pairings' division.pk %}">View published pairings page</a>
 {% endif %}
 </p>
-{% elif waiting_message %}
+{% if not generate_label and waiting_message %}
 <p>{{ waiting_message }}</p>
 {% endif %}
 {% endif %}
