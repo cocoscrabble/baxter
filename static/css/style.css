@@ -406,7 +406,12 @@ dd {
     margin-bottom: 0;
 }
 
+/* Each round-tab status class sets --tab-color and --tab-bg; the base
+   .round-tab rules then plug those into resting / active states. */
 .round-tab {
+    --tab-color: var(--color-future);
+    --tab-bg: var(--color-future-light);
+
     display: inline-block;
     padding: var(--space-xs) var(--space-md);
     text-decoration: none;
@@ -417,57 +422,31 @@ dd {
     border: 1px solid transparent;
     border-bottom: none;
     margin-bottom: -2px;
+    background-color: var(--tab-bg);
+    color: var(--tab-color);
 }
 
-.round-tab-finished {
-    background-color: var(--color-finished-light);
-    color: var(--color-finished);
-}
-
-.round-tab-in_progress {
-    background-color: var(--color-in-progress-light);
-    color: var(--color-in-progress);
-}
-
-.round-tab-pairable {
-    background-color: var(--color-pairable-light);
-    color: var(--color-pairable);
-}
-
-.round-tab-published {
-    background-color: var(--color-pairable-light);
-    color: var(--color-pairable);
-}
-
-.round-tab-future {
-    background-color: var(--color-future-light);
-    color: var(--color-future);
-}
-
-.round-tab-error_no_pairings {
-    background-color: #fdecea;
-    color: #b3261e;
-}
+.round-tab-finished     { --tab-color: var(--color-finished);    --tab-bg: var(--color-finished-light); }
+.round-tab-in_progress  { --tab-color: var(--color-in-progress); --tab-bg: var(--color-in-progress-light); }
+.round-tab-pairable     { --tab-color: var(--color-pairable);    --tab-bg: var(--color-pairable-light); }
+.round-tab-published    { --tab-color: var(--color-pairable);    --tab-bg: var(--color-pairable-light); }
+.round-tab-future       { --tab-color: var(--color-future);      --tab-bg: var(--color-future-light); }
+.round-tab-error_no_pairings { --tab-color: #b3261e; --tab-bg: #fdecea; }
 
 .round-tab:hover {
     filter: brightness(0.95);
 }
 
 .round-tab.active {
+    background-color: var(--tab-color);
+    color: white;
     border-color: var(--color-border);
-    border-bottom: 2px solid white;
+    border-bottom: 2px solid var(--tab-color);
     position: relative;
     z-index: 1;
     box-shadow: inset 0 3px 0 0 currentColor;
     padding-top: calc(var(--space-xs) + 2px);
 }
-
-.round-tab-finished.active { background-color: var(--color-finished); color: white; border-bottom-color: var(--color-finished); }
-.round-tab-in_progress.active { background-color: var(--color-in-progress); color: white; border-bottom-color: var(--color-in-progress); }
-.round-tab-pairable.active { background-color: var(--color-pairable); color: white; border-bottom-color: var(--color-pairable); }
-.round-tab-published.active { background-color: var(--color-pairable); color: white; border-bottom-color: var(--color-pairable); }
-.round-tab-future.active { background-color: var(--color-future); color: white; border-bottom-color: var(--color-future); }
-.round-tab-error_no_pairings.active { background-color: #b3261e; color: white; border-bottom-color: #b3261e; }
 
 #round-tab-content {
     border: 1px solid var(--color-border);
