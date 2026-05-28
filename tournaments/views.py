@@ -96,6 +96,44 @@ def _ensure_visible_division(division, user):
         raise Http404
 
 
+class BulkReplaceDivisionRowsMixin:
+    """Handle 'wipe-and-recreate' JSON endpoints for division child collections.
+
+    Subclasses set ``data_key``, ``dto_class``, ``target_relation``, and
+    ``target_model``, and override ``validate_args(division)`` to supply the
+    extra positional args needed by the DTO's validate() method.
+    """
+
+    data_key: str = ""
+    dto_class: type
+    target_relation: str = ""
+    target_model: type
+
+    def validate_args(self, division):
+        return ()
+
+    def post(self, request, pk):
+        division = self.get_division()
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({"errors": ["Invalid JSON."]}, status=400)
+
+        rows = data.get(self.data_key, [])
+        validated, errors = parse_rows(
+            self.dto_class, rows, *self.validate_args(division)
+        )
+        if errors:
+            return JsonResponse({"errors": errors}, status=400)
+
+        getattr(division, self.target_relation).all().delete()
+        for dto in validated:
+            self.target_model.objects.create(
+                division=division, **dto.to_db_kwargs()
+            )
+        return JsonResponse({"ok": True})
+
+
 class VisibleDivisionMixin:
     """Mixin that raises 404 for test divisions when user is not an editor."""
 
@@ -684,8 +722,17 @@ class DivisionSettingsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
         })
 
 
-class DivisionEntrantsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
+class DivisionEntrantsEditView(
+    LoginRequiredMixin, CanEditDivisionMixin, BulkReplaceDivisionRowsMixin, View
+):
     template_name = "tournaments/division_entrants_edit.html"
+    data_key = "entrants"
+    dto_class = EntrantDTO
+    target_relation = "entrants"
+    target_model = Entrant
+
+    def validate_args(self, division):
+        return (set(Player.objects.values_list("pk", flat=True)), set())
 
     def get(self, request, pk):
         division = self.get_division()
@@ -705,27 +752,6 @@ class DivisionEntrantsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
             "active_tab": "edit_entrants",
             "can_edit": True,
         })
-
-    def post(self, request, pk):
-        division = self.get_division()
-        try:
-            data = json.loads(request.body)
-        except json.JSONDecodeError:
-            return JsonResponse({"errors": ["Invalid JSON."]}, status=400)
-
-        rows = data.get("entrants", [])
-        valid_player_ids = set(Player.objects.values_list("pk", flat=True))
-        seen_players: set[int] = set()
-        validated, errors = parse_rows(
-            EntrantDTO, rows, valid_player_ids, seen_players
-        )
-        if errors:
-            return JsonResponse({"errors": errors}, status=400)
-
-        division.entrants.all().delete()
-        for entrant in validated:
-            Entrant.objects.create(division=division, **entrant.to_db_kwargs())
-        return JsonResponse({"ok": True})
 
 
 class CreatePlayerView(LoginRequiredMixin, View):
@@ -779,8 +805,17 @@ class BulkImportEntrantsView(LoginRequiredMixin, CanEditDivisionMixin, View):
         })
 
 
-class DivisionFixedPairingsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
+class DivisionFixedPairingsEditView(
+    LoginRequiredMixin, CanEditDivisionMixin, BulkReplaceDivisionRowsMixin, View
+):
     template_name = "tournaments/division_fixed_pairings_edit.html"
+    data_key = "pairings"
+    dto_class = FixedPairingDTO
+    target_relation = "fixed_pairings"
+    target_model = FixedPairing
+
+    def validate_args(self, division):
+        return (set(division.entrants.values_list("pk", flat=True)), {})
 
     def get(self, request, pk):
         division = self.get_division()
@@ -798,30 +833,18 @@ class DivisionFixedPairingsEditView(LoginRequiredMixin, CanEditDivisionMixin, Vi
             "can_edit": True,
         })
 
-    def post(self, request, pk):
-        division = self.get_division()
-        try:
-            data = json.loads(request.body)
-        except json.JSONDecodeError:
-            return JsonResponse({"errors": ["Invalid JSON."]}, status=400)
 
-        rows = data.get("pairings", [])
-        valid_entrant_ids = set(division.entrants.values_list("pk", flat=True))
-        seen_per_round: dict[int, set[int]] = {}
-        validated, errors = parse_rows(
-            FixedPairingDTO, rows, valid_entrant_ids, seen_per_round
-        )
-        if errors:
-            return JsonResponse({"errors": errors}, status=400)
-
-        division.fixed_pairings.all().delete()
-        for fp in validated:
-            FixedPairing.objects.create(division=division, **fp.to_db_kwargs())
-        return JsonResponse({"ok": True})
-
-
-class DivisionFixedTablesEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
+class DivisionFixedTablesEditView(
+    LoginRequiredMixin, CanEditDivisionMixin, BulkReplaceDivisionRowsMixin, View
+):
     template_name = "tournaments/division_fixed_tables_edit.html"
+    data_key = "tables"
+    dto_class = FixedTableDTO
+    target_relation = "fixed_tables"
+    target_model = FixedTable
+
+    def validate_args(self, division):
+        return (set(division.entrants.values_list("pk", flat=True)), {})
 
     def get(self, request, pk):
         division = self.get_division()
@@ -841,27 +864,6 @@ class DivisionFixedTablesEditView(LoginRequiredMixin, CanEditDivisionMixin, View
             "active_tab": "fixed_tables",
             "can_edit": True,
         })
-
-    def post(self, request, pk):
-        division = self.get_division()
-        try:
-            data = json.loads(request.body)
-        except json.JSONDecodeError:
-            return JsonResponse({"errors": ["Invalid JSON."]}, status=400)
-
-        rows = data.get("tables", [])
-        valid_entrant_ids = set(division.entrants.values_list("pk", flat=True))
-        seen_per_round: dict[int, set[int]] = {}
-        validated, errors = parse_rows(
-            FixedTableDTO, rows, valid_entrant_ids, seen_per_round
-        )
-        if errors:
-            return JsonResponse({"errors": errors}, status=400)
-
-        division.fixed_tables.all().delete()
-        for ft in validated:
-            FixedTable.objects.create(division=division, **ft.to_db_kwargs())
-        return JsonResponse({"ok": True})
 
 
 class DivisionBoardTableMapEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
