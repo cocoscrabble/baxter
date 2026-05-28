@@ -38,6 +38,16 @@ class Tournament(models.Model):
         """Check if user can edit this tournament."""
         return user == self.owner or self.editors.filter(pk=user.pk).exists()
 
+    def division_buckets(self):
+        """Return divisions grouped into regular, test, and deleted lists."""
+        return {
+            "regular_divisions": self.divisions.filter(is_test=False),
+            "test_divisions": self.divisions.filter(is_test=True),
+            "deleted_divisions": Division.all_objects.filter(
+                tournament=self, is_deleted=True
+            ),
+        }
+
 
 class ActiveDivisionManager(models.Manager):
     def get_queryset(self):

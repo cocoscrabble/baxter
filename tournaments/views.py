@@ -50,11 +50,7 @@ class TournamentDetailView(DetailView):
         can_edit = user.is_authenticated and self.object.can_edit(user)
         context["can_edit"] = can_edit
         if can_edit:
-            context["regular_divisions"] = self.object.divisions.filter(is_test=False)
-            context["test_divisions"] = self.object.divisions.filter(is_test=True)
-            context["deleted_divisions"] = Division.all_objects.filter(
-                tournament=self.object, is_deleted=True
-            )
+            context.update(self.object.division_buckets())
         else:
             context["divisions"] = self.object.divisions.filter(is_test=False)
         return context
@@ -135,11 +131,7 @@ class TournamentUpdateView(LoginRequiredMixin, CanEditTournamentMixin, UpdateVie
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["regular_divisions"] = self.object.divisions.filter(is_test=False)
-        context["test_divisions"] = self.object.divisions.filter(is_test=True)
-        context["deleted_divisions"] = Division.all_objects.filter(
-            tournament=self.object, is_deleted=True
-        )
+        context.update(self.object.division_buckets())
         return context
 
     def get_success_url(self):
