@@ -1078,11 +1078,7 @@ class DivisionEditResultsView(LoginRequiredMixin, CanEditDivisionMixin, View):
         if errors:
             return JsonResponse({"errors": errors}, status=400)
 
-        # Build a lookup from (round, {entrant1_id, entrant2_id}) -> Pairing for FK linking.
-        pairing_lookup = {}
-        for p in division.pairings.all():
-            key = (p.round, frozenset({p.first_id, p.second_id}))
-            pairing_lookup[key] = p
+        pairing_lookup = division.pairings_by_round_pair()
 
         # Track which RoundPairings are affected for status updates.
         affected_rounds = set(

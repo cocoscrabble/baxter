@@ -6,9 +6,7 @@ The pure (DB-free) simulator lives in ``simulate.py``.
 
 import random
 
-from django.db.models import Q
-
-from .models import Pairing, ResultSlip
+from .models import ResultSlip
 
 
 def _random_outcome(r1: int, r2: int) -> tuple[bool, int, int]:
@@ -22,23 +20,7 @@ def _random_outcome(r1: int, r2: int) -> tuple[bool, int, int]:
     return first_wins, winner_score, loser_score
 
 
-def _find_pairing(division, round_num, first_entrant, second_entrant) -> Pairing | None:
-    return (
-        division.pairings.filter(round=round_num)
-        .filter(
-            Q(first=first_entrant, second=second_entrant)
-            | Q(first=second_entrant, second=first_entrant)
-        )
-        .first()
-    )
-
-
-def simulate_match(division, round_num, first_entrant, second_entrant) -> ResultSlip:
-    """Simulate one match and persist a ResultSlip.
-
-    Looks up the matching Pairing object (if any) and links the slip to it.
-    Caller is responsible for calling ``update_status`` on the round.
-    """
+def _build_slip(division, round_num, first_entrant, second_entrant, pairing_obj) -> ResultSlip:
     first_wins, winner_score, loser_score = _random_outcome(
         first_entrant.player.rating, second_entrant.player.rating
     )
@@ -48,8 +30,6 @@ def simulate_match(division, round_num, first_entrant, second_entrant) -> Result
     else:
         winner, loser = second_entrant, first_entrant
         winner_started = False
-
-    pairing_obj = _find_pairing(division, round_num, first_entrant, second_entrant)
     return ResultSlip.objects.create(
         division=division,
         round=round_num,
@@ -60,6 +40,18 @@ def simulate_match(division, round_num, first_entrant, second_entrant) -> Result
         loser_score=loser_score,
         winner_started=winner_started,
     )
+
+
+def simulate_match(division, round_num, first_entrant, second_entrant) -> ResultSlip:
+    """Simulate one match and persist a ResultSlip.
+
+    Looks up the matching Pairing object (if any) and links the slip to it.
+    Caller is responsible for calling ``update_status`` on the round.
+    """
+    pairing_obj = division.pairings_by_round_pair().get(
+        (round_num, frozenset({first_entrant.pk, second_entrant.pk}))
+    )
+    return _build_slip(division, round_num, first_entrant, second_entrant, pairing_obj)
 
 
 def simulate_round(division, round_num) -> int:
@@ -75,7 +67,7 @@ def simulate_round(division, round_num) -> int:
     for pairing in pairings:
         if frozenset({pairing.first_id, pairing.second_id}) in played:
             continue
-        simulate_match(division, round_num, pairing.first, pairing.second)
+        _build_slip(division, round_num, pairing.first, pairing.second, pairing)
         created += 1
 
     rp_obj = division.round_pairings_set.filter(round=round_num).first()
