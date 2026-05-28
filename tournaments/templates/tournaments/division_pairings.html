@@ -8,13 +8,13 @@
 {% if can_edit %}
 <p>
 {% if generate_label %}
-<form method="post" action="{% url 'generate_pairings' division.pk %}" style="display:inline">
+<form method="post" action="{% url 'generate_pairings' division.pk %}" class="inline">
     {% csrf_token %}
     <button type="submit">{{ generate_label }}</button>
 </form>
 {% endif %}
 {% if has_draft_rounds %}
-<form method="post" action="{% url 'publish_pairings' division.pk %}" style="display:inline">
+<form method="post" action="{% url 'publish_pairings' division.pk %}" class="inline">
     {% csrf_token %}
     <button type="submit" class="btn-publish-needed">Publish Pairings</button>
 </form>

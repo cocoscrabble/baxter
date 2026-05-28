@@ -10,15 +10,15 @@
 <link rel="stylesheet" href="{% static 'tournaments/css/tabulator_overrides.css' %}">
 <script src="{% static 'tabulator-tables/dist/js/tabulator.min.js' %}"></script>
 
-<div class="generate-form" style="margin-bottom: 1em; display: flex; align-items: center; gap: 1em;">
-    <label>Single tables: <input type="number" id="single-tables" min="0" value="0" style="width: 5em;"></label>
-    <label>Total boards: <input type="number" id="board-count" min="1" value="{{ default_board_count }}" style="width: 5em;"></label>
+<div class="toolbar">
+    <label>Single tables: <input type="number" id="single-tables" min="0" value="0" class="input-narrow"></label>
+    <label>Total boards: <input type="number" id="board-count" min="1" value="{{ default_board_count }}" class="input-narrow"></label>
     <button id="generate-btn" type="button">Generate</button>
 </div>
 
 <div id="board-table-map-table"></div>
 
-<p style="margin-top: 1em;">
+<p class="mt-md">
     <button id="add-row-btn" type="button">Add Row</button>
     <button id="save-btn" type="button">Save</button>
     <span id="save-status"></span>
