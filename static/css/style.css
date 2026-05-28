@@ -493,3 +493,9 @@ dd {
     align-items: center;
     gap: var(--space-md);
 }
+
+.empty-state {
+    color: var(--color-muted);
+    font-style: italic;
+    margin: var(--space-md) 0;
+}

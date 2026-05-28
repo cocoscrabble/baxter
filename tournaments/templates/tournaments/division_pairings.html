@@ -31,7 +31,7 @@
 {% include "tournaments/_round_tab_content.html" %}
 
 {% if pairings_message %}
-<p>{{ pairings_message }}</p>
+{% include "tournaments/_empty_state.html" with message=pairings_message %}
 {% endif %}
 
 {% endblock %}

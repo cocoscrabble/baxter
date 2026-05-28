@@ -1,5 +1,5 @@
 {% if pairings_message %}
-<p>{{ pairings_message }}</p>
+{% include "tournaments/_empty_state.html" with message=pairings_message %}
 {% elif pairings %}
 {% for round_num, round_pairings in pairings %}
 <h2>Round {{ round_num }}</h2>
