@@ -265,6 +265,21 @@ class ResultSlip(models.Model):
         return f"R{self.round}: {self.winner_name} {self.winner_score}-{self.loser_score} {self.loser_name}"
 
 
+class RoundPairingsQuerySet(models.QuerySet):
+    def revert_published_to_draft(self, round_numbers=None):
+        """Move PUBLISHED rounds back to DRAFT so they can be regenerated.
+
+        If ``round_numbers`` is provided, the change is scoped to those rounds.
+        Caller is responsible for confirming none of these rounds have results.
+        """
+        qs = self.filter(status=RoundPairings.PUBLISHED)
+        if round_numbers is not None:
+            if not round_numbers:
+                return 0
+            qs = qs.filter(round__in=round_numbers)
+        return qs.update(status=RoundPairings.DRAFT)
+
+
 class RoundPairings(models.Model):
     """Lifecycle container for all pairings in a division round."""
 
@@ -287,6 +302,8 @@ class RoundPairings(models.Model):
     round = models.IntegerField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=DRAFT)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = RoundPairingsQuerySet.as_manager()
 
     class Meta:
         unique_together = ["division", "round"]

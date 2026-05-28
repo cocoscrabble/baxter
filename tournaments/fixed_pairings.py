@@ -5,7 +5,7 @@ round drops the round back to draft so regenerate_pairings can rebuild it.
 """
 
 from .generate_pairings import regenerate_pairings
-from .models import FixedPairing, RoundPairings
+from .models import FixedPairing
 
 
 def rounds_with_results(division, round_numbers) -> set[int]:
@@ -18,18 +18,6 @@ def rounds_with_results(division, round_numbers) -> set[int]:
         .values_list("round", flat=True)
         .distinct()
     )
-
-
-def revert_published_rounds_to_draft(division, round_numbers) -> None:
-    """Move PUBLISHED rounds back to DRAFT so regenerate_pairings can rebuild them.
-
-    Caller is responsible for confirming none of these rounds have results.
-    """
-    if not round_numbers:
-        return
-    division.round_pairings_set.filter(
-        round__in=round_numbers, status=RoundPairings.PUBLISHED,
-    ).update(status=RoundPairings.DRAFT)
 
 
 def add_fixed_pairing(division, round_number, entrant1_id, entrant2_id) -> tuple[bool, str | None]:
@@ -60,7 +48,7 @@ def add_fixed_pairing(division, round_number, entrant1_id, entrant2_id) -> tuple
         entrant1_id=entrant1_id,
         entrant2_id=entrant2_id,
     )
-    revert_published_rounds_to_draft(division, [round_number])
+    division.round_pairings_set.revert_published_to_draft([round_number])
     try:
         regenerate_pairings(division)
     except Exception:
@@ -80,6 +68,6 @@ def remove_fixed_pairings(division, keep_ids) -> str | None:
             f"{', '.join(str(r) for r in sorted(locked))}."
         )
     to_remove.delete()
-    revert_published_rounds_to_draft(division, affected_rounds)
+    division.round_pairings_set.revert_published_to_draft(affected_rounds)
     regenerate_pairings(division)
     return None
