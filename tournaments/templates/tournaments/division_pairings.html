@@ -20,7 +20,7 @@
 </form>
 {% endif %}
 {% if has_published_rounds %}
-<a href="{% url 'published_pairings' division.pk %}">View published pairings page</a>
+<a href="{% url 'published_pairings' division.pk %}" target="_blank" rel="noopener">View published pairings page</a>
 {% endif %}
 </p>
 {% if not generate_label and waiting_message %}
