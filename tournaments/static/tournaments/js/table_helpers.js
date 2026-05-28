@@ -75,3 +75,29 @@ export function wireSaveButton({ table, csrfToken, payloadKey, serializeRow, bef
         });
     });
 }
+
+// Wire the Add Row button. `template` is a row dict, or a function (table) => dict
+// to compute one from current data. If `focusField` is set, the new row's cell
+// for that field is opened in edit mode.
+export function wireAddRowButton({ table, template, focusField }) {
+    document.getElementById("add-row-btn").addEventListener("click", function() {
+        const row = typeof template === "function" ? template(table) : { ...template };
+        const promise = table.addRow(row);
+        if (focusField) {
+            promise.then(r => editAndFocus(r, focusField));
+        }
+    });
+}
+
+// Factory for a Tabulator column backed by an id -> label lookup.
+// Renders the label, edits with a `list` editor over the same values.
+export function lookupColumn({ title, field, lookup, autocomplete = false, ...extra }) {
+    return {
+        title,
+        field,
+        editor: "list",
+        editorParams: { values: lookup, autocomplete, listOnEmpty: autocomplete },
+        formatter: cell => lookup[cell.getValue()] || "",
+        ...extra,
+    };
+}
