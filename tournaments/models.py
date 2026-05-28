@@ -92,6 +92,7 @@ class DivisionSettings(models.Model):
         related_name="settings",
     )
     round_pairings = models.JSONField(default=list)
+    board_table_map = models.JSONField(default=list)
 
     def __str__(self):
         return f"Settings for {self.division}"

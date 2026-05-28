@@ -925,6 +925,63 @@ class DivisionFixedTablesEditView(LoginRequiredMixin, CanEditDivisionMixin, View
         return JsonResponse({"ok": True})
 
 
+class DivisionBoardTableMapEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    template_name = "tournaments/division_board_table_map_edit.html"
+
+    def get_division(self):
+        return get_object_or_404(Division, pk=self.kwargs["pk"])
+
+    def get(self, request, pk):
+        division = self.get_division()
+        settings_obj, _ = DivisionSettings.objects.get_or_create(division=division)
+        existing = settings_obj.board_table_map or []
+        n_entrants = division.entrants.count()
+        default_board_count = (n_entrants + 1) // 2
+        return render(request, self.template_name, {
+            "division": division,
+            "board_table_map_json": json.dumps(existing),
+            "default_board_count": default_board_count,
+            "active_tab": "board_tables",
+            "can_edit": True,
+        })
+
+    def post(self, request, pk):
+        division = self.get_division()
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({"errors": ["Invalid JSON."]}, status=400)
+
+        rows = data.get("rows", [])
+        errors = []
+        seen_boards = set()
+        validated = []
+        for i, row in enumerate(rows):
+            try:
+                board = int(row["board"])
+                table = int(row["table"])
+            except (KeyError, TypeError, ValueError):
+                errors.append(f"Row {i+1}: board and table must be integers.")
+                continue
+            if board < 1 or table < 1:
+                errors.append(f"Row {i+1}: board and table must be positive.")
+                continue
+            if board in seen_boards:
+                errors.append(f"Row {i+1}: duplicate board {board}.")
+                continue
+            seen_boards.add(board)
+            validated.append({"board": board, "table": table})
+
+        if errors:
+            return JsonResponse({"errors": errors}, status=400)
+
+        validated.sort(key=lambda r: r["board"])
+        settings_obj, _ = DivisionSettings.objects.get_or_create(division=division)
+        settings_obj.board_table_map = validated
+        settings_obj.save(update_fields=["board_table_map"])
+        return JsonResponse({"ok": True})
+
+
 def _pairings_by_round(division):
     """Build pairings data grouped by round for the ResultSlipForm.
 

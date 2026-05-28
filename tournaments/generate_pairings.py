@@ -4,7 +4,8 @@ Generates pairings from the pairing algorithm, resolves fixed table assignments,
 assigns table numbers, and persists RoundPairings + Pairing records.
 """
 
-from .models import Pairing, RoundPairings
+from .assign_tables import assign_tables, parse_board_table_map
+from .models import DivisionSettings, Pairing, RoundPairings
 from .pairing.base import PairingData, standings_after_round
 from .pairing.pair import pair
 
@@ -78,6 +79,11 @@ def regenerate_pairings(division):
         (ft.entrant_id, ft.round_number): ft.table_number
         for ft in division.fixed_tables.all()
     }
+    try:
+        raw_btm = division.settings.board_table_map
+    except DivisionSettings.DoesNotExist:
+        raw_btm = []
+    board_table_map = parse_board_table_map(raw_btm)
     # Only delete draft rounds (cascades to their Pairing objects).
     # Also clean up any legacy pairings not linked to a RoundPairings.
     division.round_pairings_set.filter(status=RoundPairings.DRAFT).delete()
@@ -121,19 +127,17 @@ def regenerate_pairings(division):
                 effective = None
             resolved.append((p, first_entrant, second_entrant, effective))
 
-        # Assign table numbers: fixed pairings keep their numbers, free pairings
-        # are sorted by standings and fill the remaining slots.
-        n = len(resolved)
-        used = {eff for _, _, _, eff in resolved if eff is not None}
-        available = [i for i in range(1, n + 1) if i not in used]
-        free = sorted(
-            [(p, fe, se) for p, fe, se, eff in resolved if eff is None],
-            key=lambda x: min(rank[x[0].first.name], rank[x[0].second.name]),
+        # Order pairings by min standings rank so the top game claims the
+        # first board. Fixed-table pairings are placed at their forced table;
+        # the rest fill remaining boards in this order.
+        resolved.sort(
+            key=lambda r: min(rank[r[0].first.name], rank[r[0].second.name])
         )
-        free_table = dict(zip((id(p) for p, _, _ in free), available))
+        ids = list(range(len(resolved)))
+        fixed_by_id = {i: r[3] for i, r in enumerate(resolved) if r[3] is not None}
+        table_by_id = assign_tables(ids, fixed_by_id, board_table_map)
 
-        for p, first_entrant, second_entrant, effective in resolved:
-            table_num = effective if effective is not None else free_table[id(p)]
+        for i, (p, first_entrant, second_entrant, _) in enumerate(resolved):
             Pairing.objects.create(
                 division=division,
                 round=round_num,
@@ -141,5 +145,5 @@ def regenerate_pairings(division):
                 first=first_entrant,
                 second=second_entrant,
                 repeats=p.repeats,
-                table=table_num,
+                table=table_by_id[i],
             )

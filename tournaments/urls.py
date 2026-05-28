@@ -12,6 +12,7 @@ from .views import (
     DivisionEditResultsView,
     DivisionEntrantsEditView,
     DivisionEntrantsView,
+    DivisionBoardTableMapEditView,
     DivisionFixedPairingsEditView,
     DivisionFixedTablesEditView,
     DivisionPairingsView,
@@ -61,6 +62,7 @@ urlpatterns = [
     path("division/<int:pk>/restore/", DivisionRestoreView.as_view(), name="division_restore"),
     path("division/<int:pk>/fixed-pairings/", DivisionFixedPairingsEditView.as_view(), name="division_fixed_pairings"),
     path("division/<int:pk>/fixed-tables/", DivisionFixedTablesEditView.as_view(), name="division_fixed_tables"),
+    path("division/<int:pk>/board-tables/", DivisionBoardTableMapEditView.as_view(), name="division_board_tables"),
     path("division/<int:pk>/bulk-import/", BulkImportEntrantsView.as_view(), name="bulk_import_entrants"),
     path("create-player/", CreatePlayerView.as_view(), name="create_player"),
 ]

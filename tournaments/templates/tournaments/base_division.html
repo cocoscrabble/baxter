@@ -21,6 +21,7 @@
 <a href="{% url 'division_settings' division.pk %}" class="nav-tab{% if active_tab == 'settings' %} active{% endif %}">Settings</a>
 <a href="{% url 'division_fixed_pairings' division.pk %}" class="nav-tab{% if active_tab == 'fixed_pairings' %} active{% endif %}">Fixed Pairings</a>
 <a href="{% url 'division_fixed_tables' division.pk %}" class="nav-tab{% if active_tab == 'fixed_tables' %} active{% endif %}">Fixed Tables</a>
+<a href="{% url 'division_board_tables' division.pk %}" class="nav-tab{% if active_tab == 'board_tables' %} active{% endif %}">Board Tables</a>
 {% endif %}
 </div>
 {% endblock %}

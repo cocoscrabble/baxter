@@ -1012,6 +1012,82 @@ class DivisionFixedTablesEditViewTests(TestCase):
 
 
 @tag("slow")
+class DivisionBoardTableMapEditViewTests(TestCase):
+    def setUp(self):
+        setUpTournament(self)
+        self.url = reverse("division_board_tables", kwargs={"pk": self.division.pk})
+
+    def test_editor_can_access(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+
+    def test_non_editor_forbidden(self):
+        self.client.login(username="other", password="testpass123")
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_returns_existing_map(self):
+        settings_obj = DivisionSettings.objects.create(
+            division=self.division,
+            board_table_map=[{"board": 1, "table": 1}, {"board": 2, "table": 1}],
+        )
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(self.url)
+        rows = json.loads(response.context["board_table_map_json"])
+        self.assertEqual(rows, [{"board": 1, "table": 1}, {"board": 2, "table": 1}])
+        del settings_obj
+
+    def test_get_default_board_count_derived_from_entrants(self):
+        # setUpTournament creates 2 entrants -> 1 board (ceil(2/2))
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(self.url)
+        self.assertEqual(response.context["default_board_count"], 1)
+
+    def test_post_saves_map(self):
+        self.client.login(username="owner", password="testpass123")
+        payload = {"rows": [
+            {"board": 1, "table": 1},
+            {"board": 2, "table": 1},
+            {"board": 3, "table": 2},
+        ]}
+        response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["ok"])
+        self.division.refresh_from_db()
+        self.assertEqual(
+            self.division.settings.board_table_map,
+            [{"board": 1, "table": 1}, {"board": 2, "table": 1}, {"board": 3, "table": 2}],
+        )
+
+    def test_post_sorts_by_board(self):
+        self.client.login(username="owner", password="testpass123")
+        payload = {"rows": [
+            {"board": 3, "table": 2},
+            {"board": 1, "table": 1},
+        ]}
+        response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        boards = [r["board"] for r in self.division.settings.board_table_map]
+        self.assertEqual(boards, [1, 3])
+
+    def test_post_rejects_duplicate_boards(self):
+        self.client.login(username="owner", password="testpass123")
+        payload = {"rows": [
+            {"board": 1, "table": 1},
+            {"board": 1, "table": 2},
+        ]}
+        response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+
+    def test_post_rejects_non_positive(self):
+        self.client.login(username="owner", password="testpass123")
+        payload = {"rows": [{"board": 0, "table": 1}]}
+        response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+
+
+@tag("slow")
 class SimulateMatchViewTests(TestCase):
     def setUp(self):
         setUpTournament(self)
