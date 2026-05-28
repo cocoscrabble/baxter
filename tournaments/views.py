@@ -794,6 +794,18 @@ class DivisionEditResultsView(LoginRequiredMixin, CanEditDivisionMixin, View):
 
         pairing_lookup = division.pairings_by_round_pair()
 
+        # Every row must correspond to an existing Pairing — results for
+        # unpaired matches are not allowed via this flow.
+        missing = []
+        for i, slip in enumerate(validated):
+            key = (slip.round, frozenset({slip.winner, slip.loser}))
+            if key not in pairing_lookup:
+                missing.append(
+                    f"Row {i + 1}: no pairing for that match in round {slip.round}."
+                )
+        if missing:
+            return JsonResponse({"errors": missing}, status=400)
+
         # Track which RoundPairings are affected for status updates.
         affected_rounds = set(
             division.result_slips.values_list("round", flat=True)
@@ -802,13 +814,12 @@ class DivisionEditResultsView(LoginRequiredMixin, CanEditDivisionMixin, View):
         division.result_slips.all().delete()
         for slip in validated:
             db_kwargs = slip.to_db_kwargs()
-            # Match to Pairing object by round + entrant pair.
             key = (db_kwargs["round"], frozenset({db_kwargs["winner_id"], db_kwargs["loser_id"]}))
-            pairing_obj = pairing_lookup.get(key)
-            ResultSlip.objects.create(division=division, pairing=pairing_obj, **db_kwargs)
+            ResultSlip.objects.create(
+                division=division, pairing=pairing_lookup[key], **db_kwargs
+            )
             affected_rounds.add(db_kwargs["round"])
 
-        # Update status for all affected rounds.
         for rp in division.round_pairings_set.filter(round__in=affected_rounds):
             rp.update_status()
 

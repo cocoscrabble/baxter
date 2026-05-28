@@ -1001,7 +1001,14 @@ class DivisionEditResultsViewTests(TestCase):
         labels = {e["label"] for e in entrants}
         self.assertEqual(labels, {"Alice", "Bob"})
 
+    def _make_pairing(self, round_num, first, second, table=1):
+        return Pairing.objects.create(
+            division=self.division, round=round_num,
+            first=first, second=second, table=table,
+        )
+
     def test_post_saves_results(self):
+        self._make_pairing(1, self.entrant1, self.entrant2)
         self.client.login(username="owner", password="testpass123")
         payload = {
             "results": [
@@ -1028,6 +1035,7 @@ class DivisionEditResultsViewTests(TestCase):
         self.assertEqual(slip.winner_score, 450)
 
     def test_post_replaces_existing_results(self):
+        self._make_pairing(2, self.entrant1, self.entrant2)
         ResultSlip.objects.create(
             division=self.division, round=1, winner=self.entrant1,
             winner_score=400, loser=self.entrant2, loser_score=350, winner_started=True,
@@ -1055,6 +1063,30 @@ class DivisionEditResultsViewTests(TestCase):
         slip = self.division.result_slips.first()
         self.assertEqual(slip.round, 2)
         self.assertEqual(slip.winner, self.entrant2)
+
+    def test_post_rejects_result_without_pairing(self):
+        self.client.login(username="owner", password="testpass123")
+        payload = {
+            "results": [
+                {
+                    "round": 1,
+                    "winner": self.entrant1.pk,
+                    "winner_score": 450,
+                    "loser": self.entrant2.pk,
+                    "loser_score": 380,
+                    "winner_started": True,
+                },
+            ]
+        }
+        response = self.client.post(
+            self.url,
+            json.dumps(payload),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        body = response.json()
+        self.assertTrue(any("no pairing" in e for e in body["errors"]))
+        self.assertEqual(self.division.result_slips.count(), 0)
 
     def test_post_same_winner_loser_returns_error(self):
         self.client.login(username="owner", password="testpass123")
