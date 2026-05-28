@@ -35,9 +35,22 @@ class RoundTabStatus(Enum):
         return self.value
 
     @property
+    def badge_class(self) -> str:
+        return _BADGE_CLASSES[self]
+
+    @property
     def badge_label(self) -> str:
         return _BADGE_LABELS[self]
 
+
+_BADGE_CLASSES = {
+    RoundTabStatus.FINISHED: "badge-finished",
+    RoundTabStatus.IN_PROGRESS: "badge-in-progress",
+    RoundTabStatus.PUBLISHED: "badge-published",
+    RoundTabStatus.PAIRABLE: "badge-pairable",
+    RoundTabStatus.FUTURE: "badge-future",
+    RoundTabStatus.ERROR_NO_PAIRINGS: "badge-error",
+}
 
 _BADGE_LABELS = {
     RoundTabStatus.FINISHED: "Finished",
@@ -145,7 +158,12 @@ class PairingsPresenter:
         label = rp.pairing
         if rp.start_round:
             label += f" (from round {rp.start_round})"
-        return {"round": r, "status": tab_status.value, "label": label}
+        return {
+            "round": r,
+            "status": tab_status.value,
+            "label": label,
+            "_enum": tab_status,
+        }
 
     # --- Selected round ---
 
@@ -269,7 +287,10 @@ class PairingsPresenter:
 
     def as_context(self) -> dict:
         """Context dict for the full page and the round-tab fragment."""
-        context = {"division": self.division, "round_tabs": self.tabs}
+        public_tabs = [
+            {k: v for k, v in t.items() if not k.startswith("_")} for t in self.tabs
+        ]
+        context = {"division": self.division, "round_tabs": public_tabs}
         if not self.tabs:
             context["pairings_message"] = "No round pairings configured."
             return context
@@ -277,6 +298,8 @@ class PairingsPresenter:
         sel = self.selected_tab
         if sel:
             context["selected_status"] = sel["status"]
+            context["selected_status_badge_class"] = sel["_enum"].badge_class
+            context["selected_status_badge_label"] = sel["_enum"].badge_label
             context["round_label"] = sel["label"]
         rows = self._rows_for_selected()
         if rows is not None:
