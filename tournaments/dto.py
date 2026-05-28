@@ -5,6 +5,29 @@ from dataclasses import dataclass, fields
 from dataclasses_json import DataClassJsonMixin
 
 
+def parse_rows(dto_cls, rows, *validate_args):
+    """Parse and validate a list of row dicts via a DTO class.
+
+    The DTO must provide a ``from_json(row)`` classmethod returning None for
+    missing/invalid input, and a ``validate(*args)`` method returning a list
+    of error strings. Returns ``(validated, errors)`` with errors prefixed by
+    row number.
+    """
+    errors = []
+    validated = []
+    for i, row in enumerate(rows):
+        dto = dto_cls.from_json(row)
+        if dto is None:
+            errors.append(f"Row {i + 1}: all fields are required.")
+            continue
+        row_errors = dto.validate(*validate_args)
+        if row_errors:
+            errors.extend(f"Row {i + 1}: {e}" for e in row_errors)
+        else:
+            validated.append(dto)
+    return validated, errors
+
+
 @dataclass
 class ResultSlipDTO(DataClassJsonMixin):
     round: int

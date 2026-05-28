@@ -25,7 +25,7 @@ from .forms import (
     RoundPairingFormSet,
     TournamentForm,
 )
-from .dto import EntrantDTO, FixedPairingDTO, FixedTableDTO, ResultSlipDTO
+from .dto import EntrantDTO, FixedPairingDTO, FixedTableDTO, ResultSlipDTO, parse_rows
 from .models import Division, DivisionSettings, Entrant, FixedPairing, FixedTable, Pairing, Player, ResultSlip, RoundPairings, Tournament, next_player_number
 from .generate_pairings import regenerate_pairings
 from .pairing.base import PairingData, RoundStatus, standings_after_round
@@ -783,21 +783,10 @@ class DivisionEntrantsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
 
         rows = data.get("entrants", [])
         valid_player_ids = set(Player.objects.values_list("pk", flat=True))
-        errors = []
-        seen_players = set()
-        validated = []
-
-        for i, row in enumerate(rows):
-            entrant = EntrantDTO.from_json(row)
-            if entrant is None:
-                errors.append(f"Row {i+1}: all fields are required.")
-                continue
-            row_errors = entrant.validate(valid_player_ids, seen_players)
-            if row_errors:
-                errors.extend(f"Row {i+1}: {e}" for e in row_errors)
-            else:
-                validated.append(entrant)
-
+        seen_players: set[int] = set()
+        validated, errors = parse_rows(
+            EntrantDTO, rows, valid_player_ids, seen_players
+        )
         if errors:
             return JsonResponse({"errors": errors}, status=400)
 
@@ -906,21 +895,10 @@ class DivisionFixedPairingsEditView(LoginRequiredMixin, CanEditDivisionMixin, Vi
 
         rows = data.get("pairings", [])
         valid_entrant_ids = set(division.entrants.values_list("pk", flat=True))
-        errors = []
         seen_per_round: dict[int, set[int]] = {}
-        validated = []
-
-        for i, row in enumerate(rows):
-            fp = FixedPairingDTO.from_json(row)
-            if fp is None:
-                errors.append(f"Row {i+1}: all fields are required.")
-                continue
-            row_errors = fp.validate(valid_entrant_ids, seen_per_round)
-            if row_errors:
-                errors.extend(f"Row {i+1}: {e}" for e in row_errors)
-            else:
-                validated.append(fp)
-
+        validated, errors = parse_rows(
+            FixedPairingDTO, rows, valid_entrant_ids, seen_per_round
+        )
         if errors:
             return JsonResponse({"errors": errors}, status=400)
 
@@ -968,21 +946,10 @@ class DivisionFixedTablesEditView(LoginRequiredMixin, CanEditDivisionMixin, View
 
         rows = data.get("tables", [])
         valid_entrant_ids = set(division.entrants.values_list("pk", flat=True))
-        errors = []
         seen_per_round: dict[int, set[int]] = {}
-        validated = []
-
-        for i, row in enumerate(rows):
-            ft = FixedTableDTO.from_json(row)
-            if ft is None:
-                errors.append(f"Row {i+1}: all fields are required.")
-                continue
-            row_errors = ft.validate(valid_entrant_ids, seen_per_round)
-            if row_errors:
-                errors.extend(f"Row {i+1}: {e}" for e in row_errors)
-            else:
-                validated.append(ft)
-
+        validated, errors = parse_rows(
+            FixedTableDTO, rows, valid_entrant_ids, seen_per_round
+        )
         if errors:
             return JsonResponse({"errors": errors}, status=400)
 
@@ -1193,19 +1160,7 @@ class DivisionEditResultsView(LoginRequiredMixin, CanEditDivisionMixin, View):
 
         rows = data if isinstance(data, list) else data.get("results", [])
         entrant_ids = set(division.entrants.values_list("pk", flat=True))
-        errors = []
-        validated = []
-        for i, row in enumerate(rows):
-            slip = ResultSlipDTO.from_json(row)
-            if slip is None:
-                errors.append(f"Row {i+1}: all fields are required.")
-                continue
-            row_errors = slip.validate(entrant_ids)
-            if row_errors:
-                errors.extend(f"Row {i+1}: {e}" for e in row_errors)
-            else:
-                validated.append(slip)
-
+        validated, errors = parse_rows(ResultSlipDTO, rows, entrant_ids)
         if errors:
             return JsonResponse({"errors": errors}, status=400)
 
