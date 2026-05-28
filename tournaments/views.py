@@ -1,5 +1,4 @@
 import json
-from itertools import groupby
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
@@ -29,8 +28,9 @@ from .fixed_pairings import add_fixed_pairing, remove_fixed_pairings
 from .match_simulation import simulate_match, simulate_round
 from .models import Division, DivisionSettings, Entrant, FixedPairing, FixedTable, Pairing, Player, ResultSlip, RoundPairings, Tournament
 from .generate_pairings import regenerate_pairings
-from .pairing.base import PairingData, RoundStatus, standings_after_round
-from .pairing.pair import can_pair, round_status, STRATEGY_TYPES
+from .pairing.base import PairingData, standings_after_round
+from .pairing.pair import STRATEGY_TYPES
+from .pairings_view import PairingsPresenter, PublishedPairingsPresenter
 
 
 class TournamentListView(ListView):
@@ -284,243 +284,6 @@ class DivisionStandingsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
         return self.render_to_response(context)
 
 
-def _available_rounds(division):
-    """Return list of round numbers that can currently be (re)paired.
-
-    A round is available if it can be paired based on results AND its
-    persisted RoundPairings status is DRAFT (or absent). Published,
-    in-progress, and finished rounds are locked.
-    """
-    pd = PairingData.for_division(division)
-    if not pd.round_pairings:
-        return []
-    status = round_status(pd)
-    locked_rounds = set(
-        division.round_pairings_set
-        .exclude(status=RoundPairings.DRAFT)
-        .values_list("round", flat=True)
-    )
-    return [
-        rp.round for rp in pd.round_pairings
-        if can_pair(rp, status) and rp.round not in locked_rounds
-    ]
-
-
-def _waiting_message(division):
-    """Return a message describing why no rounds can be paired, or None."""
-    pd = PairingData.for_division(division)
-    if not pd.round_pairings:
-        return "No round pairings configured."
-    status = round_status(pd)
-    for rp in pd.round_pairings:
-        stat = status[rp.round]
-        if stat in (RoundStatus.Finished, RoundStatus.Partial):
-            continue
-        # This is the next round that needs pairing.
-        if rp.start_round and status[rp.start_round] != RoundStatus.Finished:
-            return f"Round {rp.round} is waiting for round {rp.start_round} results."
-        return None
-    return "All rounds are finished."
-
-
-
-def _pairings_common(division):
-    """Load pairings, result slips, fixed pairings, and round statuses for a division."""
-    db_pairings = list(
-        division.pairings
-        .select_related("first", "first__player", "second", "second__player")
-        .order_by("round", "table")
-    )
-    pd = PairingData.for_division(division)
-    status = round_status(pd)
-    played = {}
-    for slip in division.result_slips.all():
-        key = (slip.round, frozenset({slip.winner_id, slip.loser_id}))
-        played[key] = slip
-    fixed_lookup = {}
-    for fp in division.fixed_pairings.all():
-        fixed_lookup[(fp.round_number, frozenset({fp.entrant1_id, fp.entrant2_id}))] = fp.pk
-    return db_pairings, status, played, fixed_lookup
-
-
-def _annotate_round(round_pairings, round_num, played, fixed_lookup):
-    """Build annotated pairing list for a single round."""
-    annotated = []
-    for p in round_pairings:
-        key = (round_num, frozenset({p.first_id, p.second_id}))
-        slip = played.get(key)
-        if slip:
-            scores = {slip.winner_id: slip.winner_score, slip.loser_id: slip.loser_score}
-            result = f"{scores[p.first_id]} - {scores[p.second_id]}"
-        else:
-            result = ""
-        fixed_id = fixed_lookup.get(key)
-        annotated.append({"pairing": p, "result": result, "is_fixed": bool(fixed_id), "fixed_id": fixed_id})
-    return annotated
-
-
-def _round_tabs(division):
-    """Build a list of round tab dicts with status for the pairings tab bar.
-
-    Each tab has: round (int), status (str), label (str for future rounds).
-    Statuses: 'finished', 'in_progress', 'published', 'pairable', 'future',
-    'error_no_pairings'.
-    """
-    pd = PairingData.for_division(division)
-    if not pd.round_pairings:
-        return []
-
-    statuses = round_status(pd)
-    rp_status_map = dict(
-        division.round_pairings_set.values_list("round", "status")
-    )
-    rounds_with_pairings = set(
-        division.pairings.values_list("round", flat=True).distinct()
-    )
-    # Build settings lookup for future round descriptions.
-    settings_lookup = {rp.round: rp for rp in pd.round_pairings}
-
-    tabs = []
-    for rp in pd.round_pairings:
-        r = rp.round
-        db_status = rp_status_map.get(r)
-        if db_status == RoundPairings.FINISHED:
-            tab_status = "finished"
-        elif db_status == RoundPairings.IN_PROGRESS:
-            tab_status = "in_progress"
-        elif db_status == RoundPairings.PUBLISHED:
-            tab_status = "published"
-        elif statuses.get(r) == RoundStatus.Finished:
-            tab_status = "finished"
-        elif statuses.get(r) == RoundStatus.Partial:
-            tab_status = "in_progress"
-        elif can_pair(rp, statuses):
-            tab_status = "pairable"
-        else:
-            tab_status = "future"
-        # An in-progress round with no Pairing records can't render properly —
-        # we have results but don't know the unplayed pairings.
-        if tab_status == "in_progress" and r not in rounds_with_pairings:
-            tab_status = "error_no_pairings"
-        setting = settings_lookup.get(r)
-        label = ""
-        if setting:
-            label = setting.pairing
-            if setting.start_round:
-                label += f" (from round {setting.start_round})"
-        tabs.append({"round": r, "status": tab_status, "label": label})
-    return tabs
-
-
-def _build_pairings_context(division):
-    """Build pairings context dict for a division with tabbed round view."""
-    context = {"division": division}
-    tabs = _round_tabs(division)
-    context["round_tabs"] = tabs
-    if not tabs:
-        context["pairings_message"] = "No round pairings configured."
-        return context
-
-    db_pairings, status, played, fixed_lookup = _pairings_common(division)
-
-    # Default selected round: first in-progress, then published, then pairable,
-    # then first finished (latest), else first.
-    selected = None
-    for preference in ("in_progress", "published", "pairable"):
-        for tab in tabs:
-            if tab["status"] == preference:
-                selected = tab["round"]
-                break
-        if selected:
-            break
-    if not selected:
-        finished = [t for t in tabs if t["status"] == "finished"]
-        if finished:
-            selected = finished[-1]["round"]
-        else:
-            selected = tabs[0]["round"]
-    context["selected_round"] = selected
-
-    # Build content for the selected round.
-    context.update(_build_round_content(
-        division, selected, tabs, db_pairings, played, fixed_lookup
-    ))
-
-    context["has_draft_rounds"] = division.round_pairings_set.filter(
-        status=RoundPairings.DRAFT
-    ).exists()
-    context["has_published_rounds"] = division.round_pairings_set.filter(
-        status__in=[RoundPairings.PUBLISHED, RoundPairings.IN_PROGRESS]
-    ).exists()
-    return context
-
-
-def _build_round_content(division, round_num, tabs, db_pairings, played, fixed_lookup):
-    """Build the content context for a single round tab."""
-    context = {}
-    tab = next((t for t in tabs if t["round"] == round_num), None)
-    if not tab:
-        return context
-    context["selected_round"] = round_num
-    context["selected_status"] = tab["status"]
-    context["round_label"] = tab["label"]
-
-    if tab["status"] in ("finished", "in_progress", "error_no_pairings"):
-        # Show pairings with results.
-        round_pairings = [p for p in db_pairings if p.round == round_num]
-        if round_pairings:
-            context["round_pairings"] = _annotate_round(
-                round_pairings, round_num, played, fixed_lookup
-            )
-        else:
-            # Fallback: build from result slips when no Pairing objects exist
-            # (e.g. legacy data or simulation-seeded slips).
-            slips = list(
-                division.result_slips
-                .filter(round=round_num)
-                .select_related("winner__player", "loser__player")
-                .order_by("pk")
-            )
-            fp_lookup = {}
-            for fp in division.fixed_pairings.filter(round_number=round_num):
-                fp_lookup[frozenset({fp.entrant1_id, fp.entrant2_id})] = fp.pk
-            context["round_pairings"] = [
-                {
-                    "first_name": slip.winner.player.name,
-                    "second_name": slip.loser.player.name,
-                    "result": f"{slip.winner_score} - {slip.loser_score}",
-                    "is_fixed": frozenset({slip.winner_id, slip.loser_id}) in fp_lookup,
-                    "from_slips": True,
-                }
-                for slip in slips
-            ]
-    elif tab["status"] in ("pairable", "published"):
-        # Show pairings if generated, plus generate/publish controls.
-        round_pairings = [p for p in db_pairings if p.round == round_num]
-        if round_pairings:
-            context["round_pairings"] = _annotate_round(
-                round_pairings, round_num, played, fixed_lookup
-            )
-    # For 'future' status, round_label is already set — template shows settings text.
-    return context
-
-
-def _build_single_round_context(division, round_num):
-    """Build context for a Datastar fragment request for a single round."""
-    context = {"division": division}
-    tabs = _round_tabs(division)
-    context["round_tabs"] = tabs
-    db_pairings, status, played, fixed_lookup = _pairings_common(division)
-    context.update(_build_round_content(
-        division, round_num, tabs, db_pairings, played, fixed_lookup
-    ))
-    context["has_draft_rounds"] = division.round_pairings_set.filter(
-        status=RoundPairings.DRAFT
-    ).exists()
-    context["has_published_rounds"] = division.round_pairings_set.filter(
-        status__in=[RoundPairings.PUBLISHED, RoundPairings.IN_PROGRESS]
-    ).exists()
-    return context
 
 
 class GeneratePairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
@@ -561,6 +324,12 @@ class RemoveFixedPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
         return redirect("division_pairings", pk=pk)
 
 
+def _entrants_for_editing(division):
+    return list(
+        division.entrants.select_related("player").order_by("player__name")
+    )
+
+
 class DivisionPairingsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
     model = Division
     template_name = "tournaments/division_pairings.html"
@@ -569,18 +338,17 @@ class DivisionPairingsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context.update(_build_pairings_context(self.object))
-        can_edit = context["can_edit"]
-        if can_edit:
-            rounds = _available_rounds(self.object)
-            if rounds:
-                plural = "rounds" if len(rounds) > 1 else "round"
-                context["generate_label"] = f"Generate Pairings ({plural} {', '.join(str(r) for r in rounds)})"
+        presenter = PairingsPresenter(self.object)
+        context.update(presenter.as_context())
+        if context["can_edit"]:
+            label = presenter.generate_label()
+            if label:
+                context["generate_label"] = label
             else:
-                context["waiting_message"] = _waiting_message(self.object)
-            context["entrants"] = list(
-                self.object.entrants.select_related("player").order_by("player__name")
-            )
+                msg = presenter.waiting_message
+                if msg:
+                    context["waiting_message"] = msg
+            context["entrants"] = _entrants_for_editing(self.object)
         return context
 
 
@@ -594,49 +362,14 @@ class RoundPairingsTabView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
     def get(self, request, pk, round):
         self.object = self.get_object()
         context = self.get_context_data(object=self.object)
-        context.update(_build_single_round_context(self.object, round))
-        can_edit = context.get("can_edit", False)
-        if can_edit:
-            context["entrants"] = list(
-                self.object.entrants.select_related("player").order_by("player__name")
-            )
+        context.update(PairingsPresenter(self.object).select(round).as_context())
+        if context.get("can_edit"):
+            context["entrants"] = _entrants_for_editing(self.object)
         if is_datastar(request):
             return fragment_response(
                 "tournaments/_round_tab_content.html", context, request=request
             )
         return self.render_to_response(context)
-
-
-def _build_published_pairings_context(division):
-    """Build context for the published pairings page.
-
-    Shows rounds that are published or in-progress. Finished rounds are
-    dropped — their results live on the results/standings pages.
-    """
-    context = {"division": division}
-    published_rounds = set(
-        division.round_pairings_set
-        .filter(status__in=[RoundPairings.PUBLISHED, RoundPairings.IN_PROGRESS])
-        .values_list("round", flat=True)
-    )
-    if not published_rounds:
-        context["pairings_message"] = "No pairings published yet."
-        return context
-    db_pairings = list(
-        division.pairings
-        .filter(round__in=published_rounds)
-        .select_related("first", "first__player", "second", "second__player")
-        .order_by("round", "table")
-    )
-    if not db_pairings:
-        context["pairings_message"] = "No pairings published yet."
-        return context
-    annotated = []
-    for round_num, round_pairings in groupby(db_pairings, key=lambda p: p.round):
-        round_annotated = [{"pairing": p} for p in round_pairings]
-        annotated.append((round_num, round_annotated))
-    context["pairings"] = annotated
-    return context
 
 
 class PublishedPairingsView(VisibleDivisionMixin, DetailView):
@@ -646,7 +379,7 @@ class PublishedPairingsView(VisibleDivisionMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context.update(_build_published_pairings_context(self.object))
+        context.update(PublishedPairingsPresenter(self.object).as_context())
         return context
 
 
@@ -1094,7 +827,7 @@ def _read_request_data(request):
 
 def _simulation_response(request, division):
     if is_datastar(request):
-        context = _build_pairings_context(division)
+        context = PairingsPresenter(division).as_context()
         return fragment_response(
             "tournaments/_round_tab_content.html", context, request=request
         )
