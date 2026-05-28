@@ -1,3 +1,14 @@
+<div id="pairings-area">
+{% if round_tabs %}
+<div class="round-tabs">
+    {% for tab in round_tabs %}
+    <a href="#"
+       class="round-tab round-tab-{{ tab.status }}{% if tab.round == selected_round %} active{% endif %}"
+       data-on:click__prevent="@get('{% url 'round_pairings_tab' division.pk tab.round %}')">{{ tab.round }}</a>
+    {% endfor %}
+</div>
+{% endif %}
+
 <div id="round-tab-content">
 {% if selected_round %}
 <h2>Round {{ selected_round }}
@@ -93,4 +104,5 @@
 {% endif %}
 
 {% endif %}
+</div>
 </div>

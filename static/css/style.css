@@ -453,6 +453,8 @@ dd {
     border-bottom: 2px solid white;
     position: relative;
     z-index: 1;
+    box-shadow: inset 0 3px 0 0 currentColor;
+    padding-top: calc(var(--space-xs) + 2px);
 }
 
 .round-tab-finished.active { background-color: var(--color-finished); color: white; border-bottom-color: var(--color-finished); }
