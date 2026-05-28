@@ -246,6 +246,20 @@ class RoundPairings(models.Model):
     def __str__(self):
         return f"R{self.round} ({self.get_status_display()}) - {self.division}"
 
+    def update_status(self):
+        """Recompute lifecycle status from the current count of results."""
+        total = self.pairings.count()
+        with_results = self.pairings.filter(result__isnull=False).count()
+        if with_results == 0 and self.status == RoundPairings.IN_PROGRESS:
+            self.status = RoundPairings.PUBLISHED
+            self.save(update_fields=["status"])
+        elif 0 < with_results < total and self.status == RoundPairings.PUBLISHED:
+            self.status = RoundPairings.IN_PROGRESS
+            self.save(update_fields=["status"])
+        elif with_results == total and self.status in (RoundPairings.PUBLISHED, RoundPairings.IN_PROGRESS):
+            self.status = RoundPairings.FINISHED
+            self.save(update_fields=["status"])
+
 
 class Pairing(models.Model):
     """A generated pairing for a division round."""

@@ -786,8 +786,7 @@ class RoundPairingsLifecycleTests(PairingDBTestBase):
             loser=self.entrants[1], loser_score=380,
             winner_started=True,
         )
-        from tournaments.generate_pairings import update_round_status
-        update_round_status(pairing)
+        pairing.round_pairings.update_status()
         rp.refresh_from_db()
         self.assertEqual(rp.status, RoundPairings.IN_PROGRESS)
 
@@ -810,8 +809,7 @@ class RoundPairingsLifecycleTests(PairingDBTestBase):
             loser=pairings[1].second, loser_score=350,
             winner_started=True,
         )
-        from tournaments.generate_pairings import update_round_status
-        update_round_status(pairings[0])
+        pairings[0].round_pairings.update_status()
         rp.refresh_from_db()
         self.assertEqual(rp.status, RoundPairings.FINISHED)
 
@@ -828,12 +826,11 @@ class RoundPairingsLifecycleTests(PairingDBTestBase):
             loser=self.entrants[1], loser_score=380,
             winner_started=True,
         )
-        from tournaments.generate_pairings import update_round_status
-        update_round_status(pairing)
+        pairing.round_pairings.update_status()
         rp.refresh_from_db()
         self.assertEqual(rp.status, RoundPairings.IN_PROGRESS)
         # Delete the result — status should revert.
         rs.delete()
-        update_round_status(pairing)
+        pairing.round_pairings.update_status()
         rp.refresh_from_db()
         self.assertEqual(rp.status, RoundPairings.PUBLISHED)

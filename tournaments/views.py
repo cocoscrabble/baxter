@@ -27,7 +27,7 @@ from .forms import (
 )
 from .dto import EntrantDTO, FixedPairingDTO, FixedTableDTO, ResultSlipDTO
 from .models import Division, DivisionSettings, Entrant, FixedPairing, FixedTable, Pairing, Player, ResultSlip, RoundPairings, Tournament, next_player_number
-from .generate_pairings import regenerate_pairings, update_round_status
+from .generate_pairings import regenerate_pairings
 from .pairing.base import PairingData, RoundStatus, standings_after_round
 from .pairing.pair import can_pair, round_status, STRATEGY_TYPES
 
@@ -1138,7 +1138,8 @@ class ResultSlipCreateView(View):
         form = ResultSlipForm(data, division=division, pairings_by_round=pbr)
         if form.is_valid():
             rs = form.save()
-            update_round_status(rs.pairing)
+            if rs.pairing and rs.pairing.round_pairings:
+                rs.pairing.round_pairings.update_status()
             fresh_pbr = _pairings_by_round(division)
             fresh_form = ResultSlipForm(division=division, pairings_by_round=fresh_pbr)
             context = self._form_context(
@@ -1230,9 +1231,7 @@ class DivisionEditResultsView(LoginRequiredMixin, CanEditDivisionMixin, View):
 
         # Update status for all affected rounds.
         for rp in division.round_pairings_set.filter(round__in=affected_rounds):
-            first_pairing = rp.pairings.first()
-            if first_pairing:
-                update_round_status(first_pairing)
+            rp.update_status()
 
         return JsonResponse({"ok": True})
 
@@ -1306,7 +1305,8 @@ class SimulateMatchView(LoginRequiredMixin, CanEditDivisionMixin, View):
             loser_score=loser_score,
             winner_started=winner_started,
         )
-        update_round_status(pairing_obj)
+        if pairing_obj and pairing_obj.round_pairings:
+            pairing_obj.round_pairings.update_status()
 
         if is_datastar(request):
             context = _build_pairings_context(division)
@@ -1379,9 +1379,7 @@ class SimulateRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
         # Update round status after all results are created.
         rp_obj = division.round_pairings_set.filter(round=round_num).first()
         if rp_obj:
-            # Use the first pairing to trigger status check.
-            first_pairing = rp_obj.pairings.first()
-            update_round_status(first_pairing)
+            rp_obj.update_status()
 
         if is_datastar(request):
             context = _build_pairings_context(division)

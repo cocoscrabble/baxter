@@ -37,27 +37,6 @@ def resolve_fixed_table(first_ft, second_ft, first_rank, second_rank):
     return first_ft[0] if first_rank < second_rank else second_ft[0]
 
 
-def update_round_status(pairing_obj):
-    """Update RoundPairings status after a result is added or removed.
-
-    Called after creating/deleting a ResultSlip linked to a Pairing.
-    """
-    if not pairing_obj or not pairing_obj.round_pairings:
-        return
-    rp = pairing_obj.round_pairings
-    total = rp.pairings.count()
-    with_results = rp.pairings.filter(result__isnull=False).count()
-    if with_results == 0 and rp.status == RoundPairings.IN_PROGRESS:
-        rp.status = RoundPairings.PUBLISHED
-        rp.save(update_fields=["status"])
-    elif 0 < with_results < total and rp.status == RoundPairings.PUBLISHED:
-        rp.status = RoundPairings.IN_PROGRESS
-        rp.save(update_fields=["status"])
-    elif with_results == total and rp.status in (RoundPairings.PUBLISHED, RoundPairings.IN_PROGRESS):
-        rp.status = RoundPairings.FINISHED
-        rp.save(update_fields=["status"])
-
-
 def regenerate_pairings(division):
     """Run the pairing algorithm and save results to the Pairing table.
 
