@@ -318,7 +318,7 @@ def _round_tabs(division):
     """Build a list of round tab dicts with status for the pairings tab bar.
 
     Each tab has: round (int), status (str), label (str for future rounds).
-    Statuses: 'finished', 'in_progress', 'pairable', 'future'.
+    Statuses: 'finished', 'in_progress', 'pairable', 'future', 'error_no_pairings'.
     """
     pd = PairingData.for_division(division)
     if not pd.round_pairings:
@@ -327,6 +327,9 @@ def _round_tabs(division):
     statuses = round_status(pd)
     rp_status_map = dict(
         division.round_pairings_set.values_list("round", "status")
+    )
+    rounds_with_pairings = set(
+        division.pairings.values_list("round", flat=True).distinct()
     )
     # Build settings lookup for future round descriptions.
     settings_lookup = {rp.round: rp for rp in pd.round_pairings}
@@ -347,6 +350,10 @@ def _round_tabs(division):
             tab_status = "pairable"
         else:
             tab_status = "future"
+        # An in-progress round with no Pairing records can't render properly —
+        # we have results but don't know the unplayed pairings.
+        if tab_status == "in_progress" and r not in rounds_with_pairings:
+            tab_status = "error_no_pairings"
         setting = settings_lookup.get(r)
         label = ""
         if setting:
@@ -409,15 +416,16 @@ def _build_round_content(division, round_num, tabs, db_pairings, played, fixed_l
     context["selected_status"] = tab["status"]
     context["round_label"] = tab["label"]
 
-    if tab["status"] in ("finished", "in_progress"):
+    if tab["status"] in ("finished", "in_progress", "error_no_pairings"):
         # Show pairings with results.
         round_pairings = [p for p in db_pairings if p.round == round_num]
         if round_pairings:
             context["round_pairings"] = _annotate_round(
                 round_pairings, round_num, played, fixed_lookup
             )
-        elif tab["status"] == "finished":
-            # Fallback: build from result slips for finished rounds without Pairing objects.
+        else:
+            # Fallback: build from result slips when no Pairing objects exist
+            # (e.g. legacy data or simulation-seeded slips).
             slips = list(
                 division.result_slips
                 .filter(round=round_num)

@@ -439,6 +439,11 @@ dd {
     color: var(--color-future);
 }
 
+.round-tab-error_no_pairings {
+    background-color: #fdecea;
+    color: #b3261e;
+}
+
 .round-tab:hover {
     filter: brightness(0.95);
 }
@@ -454,6 +459,7 @@ dd {
 .round-tab-in_progress.active { background-color: var(--color-in-progress); color: white; border-bottom-color: var(--color-in-progress); }
 .round-tab-pairable.active { background-color: var(--color-pairable); color: white; border-bottom-color: var(--color-pairable); }
 .round-tab-future.active { background-color: var(--color-future); color: white; border-bottom-color: var(--color-future); }
+.round-tab-error_no_pairings.active { background-color: #b3261e; color: white; border-bottom-color: #b3261e; }
 
 #round-tab-content {
     border: 1px solid var(--color-border);
@@ -476,3 +482,4 @@ dd {
 .badge-in-progress { background-color: var(--color-in-progress-light); color: var(--color-in-progress); }
 .badge-pairable { background-color: var(--color-pairable-light); color: var(--color-pairable); }
 .badge-future { background-color: var(--color-future-light); color: var(--color-future); }
+.badge-error { background-color: #fdecea; color: #b3261e; }

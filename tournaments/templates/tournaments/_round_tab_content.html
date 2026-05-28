@@ -5,6 +5,7 @@
     {% elif selected_status == 'in_progress' %}<span class="round-status-badge badge-in-progress">In Progress</span>
     {% elif selected_status == 'pairable' %}<span class="round-status-badge badge-pairable">Pairable</span>
     {% elif selected_status == 'future' %}<span class="round-status-badge badge-future">Future</span>
+    {% elif selected_status == 'error_no_pairings' %}<span class="round-status-badge badge-error">error: results but no pairing</span>
     {% endif %}
 </h2>
 
@@ -34,7 +35,13 @@
                 <td>{{ entry.pairing.first.name }}</td>
                 <td>{% if entry.is_fixed %}&#x1F512;{% endif %}</td>
                 <td>{{ entry.pairing.second.name }}</td>
-                <td>{{ entry.result }}</td>
+                <td>
+                    {% if entry.result %}
+                        {{ entry.result }}
+                    {% elif division.is_test %}
+                        <button type="button" data-on:click="@post('{% url 'simulate_match' division.pk %}', {headers: {'X-CSRFToken': $_csrfToken}, payload: {round: {{ selected_round }}, first: '{{ entry.pairing.first.name }}', second: '{{ entry.pairing.second.name }}'}})">simulate</button>
+                    {% endif %}
+                </td>
                 {% endif %}
             </tr>
             {% endfor %}

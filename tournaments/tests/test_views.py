@@ -712,6 +712,144 @@ class DivisionPairingsViewTests(TestCase):
 
 
 @tag("slow")
+class DivisionPairingsRoundContentTests(TestCase):
+    """Verify the pairings view returns the full pairings table for each round,
+    including unplayed matches alongside played ones for in-progress rounds."""
+
+    @classmethod
+    def setUpTestData(cls):
+        setUpTournament(cls)
+        cls.player3 = Player.objects.create(name="Carol", player_number="003", rating=1400)
+        cls.player4 = Player.objects.create(name="Dave", player_number="004", rating=1300)
+        cls.entrant3 = Entrant.objects.create(
+            division=cls.division, player=cls.player3, number=3
+        )
+        cls.entrant4 = Entrant.objects.create(
+            division=cls.division, player=cls.player4, number=4
+        )
+        DivisionSettings.objects.create(
+            division=cls.division,
+            round_pairings=[
+                {"round": 1, "pairing": "KotH", "start_round": 0},
+                {"round": 2, "pairing": "KotH", "start_round": 1},
+            ],
+        )
+
+    def _create_round(self, round_num, status, pairs):
+        """Create a RoundPairings with two Pairing rows for the given round."""
+        rp = RoundPairings.objects.create(
+            division=self.division, round=round_num, status=status,
+        )
+        pairings = []
+        for table, (first, second) in enumerate(pairs, start=1):
+            pairings.append(Pairing.objects.create(
+                division=self.division, round=round_num, round_pairings=rp,
+                first=first, second=second, table=table,
+            ))
+        return rp, pairings
+
+    def _create_slip(self, round_num, pairing, winner, loser, winner_score, loser_score):
+        return ResultSlip.objects.create(
+            division=self.division, round=round_num, pairing=pairing,
+            winner=winner, winner_score=winner_score,
+            loser=loser, loser_score=loser_score, winner_started=True,
+        )
+
+    def test_in_progress_round_shows_played_and_unplayed_pairings(self):
+        _, pairings = self._create_round(
+            1, RoundPairings.IN_PROGRESS,
+            [(self.entrant1, self.entrant2), (self.entrant3, self.entrant4)],
+        )
+        self._create_slip(1, pairings[0], self.entrant1, self.entrant2, 450, 380)
+
+        response = self.client.get(
+            reverse("division_pairings", kwargs={"pk": self.division.pk})
+        )
+        self.assertEqual(response.context["selected_round"], 1)
+        self.assertEqual(response.context["selected_status"], "in_progress")
+        round_pairings = response.context["round_pairings"]
+        self.assertEqual(len(round_pairings), 2)
+        by_table = {e["pairing"].table: e for e in round_pairings}
+        self.assertEqual(by_table[1]["result"], "450 - 380")
+        self.assertEqual(by_table[2]["result"], "")
+
+    def test_finished_round_shows_all_pairings_with_results(self):
+        _, pairings = self._create_round(
+            1, RoundPairings.FINISHED,
+            [(self.entrant1, self.entrant2), (self.entrant3, self.entrant4)],
+        )
+        self._create_slip(1, pairings[0], self.entrant1, self.entrant2, 450, 380)
+        self._create_slip(1, pairings[1], self.entrant3, self.entrant4, 500, 400)
+
+        # Navigate directly to round 1 so we don't get auto-routed to a pairable later round.
+        response = self.client.get(
+            reverse("round_pairings_tab", kwargs={"pk": self.division.pk, "round": 1})
+        )
+        self.assertEqual(response.context["selected_round"], 1)
+        self.assertEqual(response.context["selected_status"], "finished")
+        round_pairings = response.context["round_pairings"]
+        self.assertEqual(len(round_pairings), 2)
+        results = sorted(e["result"] for e in round_pairings)
+        self.assertEqual(results, ["450 - 380", "500 - 400"])
+
+    def test_finished_round_with_unplayed_pairing_still_lists_it(self):
+        """All Pairing rows must appear even if a slip is missing for one."""
+        _, pairings = self._create_round(
+            1, RoundPairings.FINISHED,
+            [(self.entrant1, self.entrant2), (self.entrant3, self.entrant4)],
+        )
+        self._create_slip(1, pairings[0], self.entrant1, self.entrant2, 450, 380)
+
+        response = self.client.get(
+            reverse("division_pairings", kwargs={"pk": self.division.pk})
+        )
+        self.assertEqual(response.context["selected_status"], "finished")
+        round_pairings = response.context["round_pairings"]
+        self.assertEqual(len(round_pairings), 2)
+        by_table = {e["pairing"].table: e for e in round_pairings}
+        self.assertEqual(by_table[1]["result"], "450 - 380")
+        self.assertEqual(by_table[2]["result"], "")
+
+    def test_error_status_when_results_but_no_pairing_records(self):
+        """Partial slips with no Pairing rows surfaces as error_no_pairings, not in_progress."""
+        ResultSlip.objects.create(
+            division=self.division, round=1, pairing=None,
+            winner=self.entrant1, winner_score=450,
+            loser=self.entrant2, loser_score=380, winner_started=True,
+        )
+        response = self.client.get(
+            reverse("round_pairings_tab", kwargs={"pk": self.division.pk, "round": 1})
+        )
+        tabs_by_round = {t["round"]: t for t in response.context["round_tabs"]}
+        self.assertEqual(tabs_by_round[1]["status"], "error_no_pairings")
+        self.assertEqual(response.context["selected_status"], "error_no_pairings")
+
+    def test_in_progress_round_selected_when_earlier_round_finished(self):
+        _, r1_pairings = self._create_round(
+            1, RoundPairings.FINISHED,
+            [(self.entrant1, self.entrant2), (self.entrant3, self.entrant4)],
+        )
+        self._create_slip(1, r1_pairings[0], self.entrant1, self.entrant2, 450, 380)
+        self._create_slip(1, r1_pairings[1], self.entrant3, self.entrant4, 500, 400)
+        _, r2_pairings = self._create_round(
+            2, RoundPairings.IN_PROGRESS,
+            [(self.entrant1, self.entrant3), (self.entrant2, self.entrant4)],
+        )
+        self._create_slip(2, r2_pairings[0], self.entrant1, self.entrant3, 420, 410)
+
+        response = self.client.get(
+            reverse("division_pairings", kwargs={"pk": self.division.pk})
+        )
+        self.assertEqual(response.context["selected_round"], 2)
+        self.assertEqual(response.context["selected_status"], "in_progress")
+        round_pairings = response.context["round_pairings"]
+        self.assertEqual(len(round_pairings), 2)
+        by_table = {e["pairing"].table: e for e in round_pairings}
+        self.assertEqual(by_table[1]["result"], "420 - 410")
+        self.assertEqual(by_table[2]["result"], "")
+
+
+@tag("slow")
 class DivisionEditResultsViewTests(TestCase):
     def setUp(self):
         setUpTournament(self)
