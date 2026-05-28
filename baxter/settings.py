@@ -138,6 +138,9 @@ if not DEBUG:
             "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
         },
     }
+    # Tolerate missing referenced assets (e.g. sourceMappingURL comments in
+    # third-party CSS) — log a warning instead of failing collectstatic.
+    WHITENOISE_MANIFEST_STRICT = False
 NODE_PACKAGE_JSON = BASE_DIR / "package.json"
 NODE_MODULES_ROOT = BASE_DIR / "node_modules"
 
