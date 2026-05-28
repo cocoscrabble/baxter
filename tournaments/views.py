@@ -94,15 +94,19 @@ class CanEditDivisionMixin(UserPassesTestMixin):
         return get_object_or_404(Division, pk=self.kwargs["pk"])
 
 
+def _ensure_visible_division(division, user):
+    """Raise Http404 if this is a test division the user is not allowed to see."""
+    if division.is_test:
+        if not (user.is_authenticated and division.tournament.can_edit(user)):
+            raise Http404
+
+
 class VisibleDivisionMixin:
     """Mixin that raises 404 for test divisions when user is not an editor."""
 
     def get_object(self, queryset=None):
         obj = super().get_object(queryset)
-        if obj.is_test:
-            user = self.request.user
-            if not (user.is_authenticated and obj.tournament.can_edit(user)):
-                raise Http404
+        _ensure_visible_division(obj, self.request.user)
         return obj
 
 
@@ -988,10 +992,7 @@ class ResultSlipCreateView(View):
 
     def get_division(self):
         division = get_object_or_404(Division, pk=self.kwargs["pk"])
-        if division.is_test:
-            user = self.request.user
-            if not (user.is_authenticated and division.tournament.can_edit(user)):
-                raise Http404
+        _ensure_visible_division(division, self.request.user)
         return division
 
     def _form_context(self, division, form, success_message=None):
