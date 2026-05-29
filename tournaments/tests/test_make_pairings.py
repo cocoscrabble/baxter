@@ -1,6 +1,10 @@
 from unittest import TestCase
 
-from tournaments.pairing.round_pairing import make_pairings
+from tournaments.pairing.round_pairing import (
+    RoundPairing,
+    make_pairings,
+    normalize_round_robin_start_rounds,
+)
 
 
 class MakePairingsTests(TestCase):
@@ -118,3 +122,37 @@ class MakePairingsTests(TestCase):
                 {"round": 3, "start_round": 0, "pairing": "Sixes"},
             ],
         )
+
+
+class NormalizeRoundRobinStartRoundsTests(TestCase):
+    def _rps(self, rows):
+        return [RoundPairing(**r) for r in rows]
+
+    def test_per_round_start_rounds_collapse_to_block_first(self):
+        # The settings editor stores start_round=round-1; round robin needs them
+        # all pointing at the block's first round.
+        rps = self._rps([
+            {"round": 1, "start_round": 0, "pairing": "RoundRobin"},
+            {"round": 2, "start_round": 1, "pairing": "RoundRobin"},
+            {"round": 3, "start_round": 2, "pairing": "RoundRobin"},
+        ])
+        normalize_round_robin_start_rounds(rps)
+        self.assertEqual([r.start_round for r in rps], [1, 1, 1])
+
+    def test_non_round_robin_rounds_are_untouched(self):
+        rps = self._rps([
+            {"round": 1, "start_round": 0, "pairing": "Swiss"},
+            {"round": 2, "start_round": 1, "pairing": "Swiss"},
+        ])
+        normalize_round_robin_start_rounds(rps)
+        self.assertEqual([r.start_round for r in rps], [0, 1])
+
+    def test_separate_blocks_keep_their_own_first_round(self):
+        rps = self._rps([
+            {"round": 1, "start_round": 0, "pairing": "RoundRobin"},
+            {"round": 2, "start_round": 1, "pairing": "RoundRobin"},
+            {"round": 3, "start_round": 2, "pairing": "Swiss"},
+            {"round": 4, "start_round": 3, "pairing": "RoundRobin"},
+        ])
+        normalize_round_robin_start_rounds(rps)
+        self.assertEqual([r.start_round for r in rps], [1, 1, 2, 4])

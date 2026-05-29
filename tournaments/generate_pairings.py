@@ -68,6 +68,10 @@ def regenerate_pairings(division):
     division.round_pairings_set.filter(status=RoundPairings.DRAFT).delete()
     division.pairings.filter(round_pairings__isnull=True).delete()
 
+    # Seeding order, used as a fallback rank for entrants the round's standings
+    # don't cover (see below).
+    seed_rank = {p.name: i + 1 for i, p in enumerate(standings_after_round(pd, 0))}
+
     for round_num, round_pairings in pairings:
         # Create the RoundPairings container for this round.
         rp_obj, _ = RoundPairings.objects.get_or_create(
@@ -83,6 +87,12 @@ def regenerate_pairings(division):
         start_round = start_round_by_round.get(round_num, 0)
         standings = standings_after_round(pd, start_round)
         rank = {p.name: i + 1 for i, p in enumerate(standings)}
+        # A full round-robin schedule is generated up front, so later rounds
+        # have no standings yet (no results played). Fall back to seeding order
+        # for any entrant the standings don't cover, keeping board ordering and
+        # fixed-table resolution well defined.
+        for name, seed in seed_rank.items():
+            rank.setdefault(name, len(standings) + seed)
 
         # Resolve entrants and effective fixed table for each pairing.
         resolved = []
