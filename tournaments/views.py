@@ -3,9 +3,10 @@ import json
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.db import models
-from django.http import Http404, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
+from django.utils.text import slugify
 from django.views import View
 from django.views.generic import (
     CreateView,
@@ -31,6 +32,11 @@ from .generate_pairings import regenerate_pairings
 from .pairing.base import PairingData, standings_after_round
 from .pairing.pair import STRATEGY_TYPES
 from .pairings_view import PairingsPresenter, PublishedPairingsPresenter
+from .scorecards import ScorecardSpec, make_rounds, render_scorecards
+
+DOCX_CONTENT_TYPE = (
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+)
 
 
 class TournamentListView(ListView):
@@ -387,6 +393,38 @@ class PublishedPairingsView(VisibleDivisionMixin, DetailView):
         context = super().get_context_data(**kwargs)
         context.update(PublishedPairingsPresenter(self.object).as_context())
         return context
+
+
+class DivisionScorecardsView(VisibleDivisionMixin, DetailView):
+    """Download a .docx with a printable scorecard for every entrant."""
+
+    model = Division
+    context_object_name = "division"
+
+    def render_to_response(self, context, **kwargs):
+        division = self.object
+        tournament = division.tournament
+        rounds = make_rounds(division.configured_round_numbers())
+        qr_url = self.request.build_absolute_uri(
+            reverse("published_pairings", args=[division.pk])
+        )
+        specs = [
+            ScorecardSpec(
+                tournament_name=tournament.name,
+                tournament_date=tournament.start_date.strftime("%B %-d, %Y"),
+                player_name=entrant.name,
+                rounds=rounds,
+                qr_url=qr_url,
+            )
+            for entrant in division.entrants.all()
+        ]
+
+        response = HttpResponse(
+            render_scorecards(specs), content_type=DOCX_CONTENT_TYPE
+        )
+        filename = slugify(f"{tournament.name}-{division.name}-scorecards") + ".docx"
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
 
 
 class DivisionSettingsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
