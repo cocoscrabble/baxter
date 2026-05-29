@@ -10,6 +10,7 @@ from tournaments.scorecards import (
     make_rounds,
     render_scorecards,
 )
+from tournaments.models import DivisionSettings, Pairing
 from tournaments.tests.test_views import setUpTournament
 
 DOCX_CONTENT_TYPE = (
@@ -80,6 +81,43 @@ class ScorecardStructureTests(SimpleTestCase):
     def test_one_set_of_tables_per_player(self):
         doc = build_document([_spec("Alice", n_rounds=6), _spec("Bob", n_rounds=6)])
         self.assertEqual(len(doc.tables), 2)
+
+
+class OpponentPrefillTests(SimpleTestCase):
+    def test_supplied_opponents_fill_their_round_only(self):
+        doc = build_document(
+            [_spec("Alice", n_rounds=6, opponents={1: "Bob", 3: "Carol"})]
+        )
+        table = doc.tables[0]
+        # Opponent column is index 1; round N's row pair starts at 1 + 2*(N-1).
+        self.assertEqual(table.cell(1, 1).text, "Bob")     # round 1
+        self.assertEqual(table.cell(5, 1).text, "Carol")   # round 3
+        self.assertEqual(table.cell(3, 1).text, "")        # round 2 left blank
+
+    def test_no_opponents_leaves_column_blank(self):
+        doc = build_document([_spec("Alice", n_rounds=6)])
+        table = doc.tables[0]
+        for round_idx in range(6):
+            self.assertEqual(table.cell(1 + 2 * round_idx, 1).text, "")
+
+    def test_each_player_keeps_their_own_opponents(self):
+        specs = [
+            _spec("Alice", opponents={1: "Bob"}),
+            _spec("Bob", opponents={1: "Alice"}),
+        ]
+        doc = build_document(specs)
+        self.assertEqual(doc.tables[0].cell(1, 1).text, "Bob")
+        self.assertEqual(doc.tables[1].cell(1, 1).text, "Alice")
+
+    def test_prefilled_division_still_shares_images(self):
+        # Opponents differ per player but the clone path must still hold, so the
+        # QR + logo stay a single shared pair.
+        specs = [
+            _spec(f"P{i}", opponents={1: f"Opp{i}"}, qr_url="https://x.test/live")
+            for i in range(4)
+        ]
+        doc = Document(BytesIO(render_scorecards(specs)))
+        self.assertEqual(len(doc.part.package.image_parts._image_parts), 2)
 
 
 class RenderScorecardsTests(SimpleTestCase):
@@ -170,3 +208,22 @@ class DivisionScorecardsViewTests(TestCase):
             reverse("division_scorecards", kwargs={"pk": self.division.pk})
         )
         self.assertEqual(response.status_code, 404)
+
+    def test_opponents_prefilled_from_pairings(self):
+        # Keep it to 3 rounds so each player's card is a single table.
+        DivisionSettings.objects.create(
+            division=self.division,
+            round_pairings=[{"round": 1}, {"round": 2}, {"round": 3}],
+        )
+        Pairing.objects.create(
+            division=self.division, round=1,
+            first=self.entrant1, second=self.entrant2,
+        )
+        response = self.client.get(
+            reverse("division_scorecards", kwargs={"pk": self.division.pk})
+        )
+        doc = Document(BytesIO(response.content))
+        # Entrants order by number: table[0] is player1's card, table[1] player2's.
+        # Round 1's Opponent cell is row 1, column 1.
+        self.assertEqual(doc.tables[0].cell(1, 1).text, self.player2.name)
+        self.assertEqual(doc.tables[1].cell(1, 1).text, self.player1.name)
