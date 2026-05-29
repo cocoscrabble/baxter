@@ -1,4 +1,5 @@
 import json
+from collections import defaultdict
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
@@ -408,12 +409,14 @@ class DivisionScorecardsView(VisibleDivisionMixin, DetailView):
         qr_url = self.request.build_absolute_uri(
             reverse("published_pairings", args=[division.pk])
         )
+        opponents = self._opponents_by_entrant(division)
         specs = [
             ScorecardSpec(
                 tournament_name=tournament.name,
                 tournament_date=tournament.start_date.strftime("%B %-d, %Y"),
                 player_name=entrant.name,
                 rounds=rounds,
+                opponents=opponents.get(entrant.pk, {}),
                 qr_url=qr_url,
             )
             for entrant in division.entrants.all()
@@ -425,6 +428,20 @@ class DivisionScorecardsView(VisibleDivisionMixin, DetailView):
         filename = slugify(f"{tournament.name}-{division.name}-scorecards") + ".docx"
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
+
+    @staticmethod
+    def _opponents_by_entrant(division):
+        """Map each entrant id to a {round: opponent name} dict from pairings."""
+        pairings = division.pairings.select_related(
+            "first__player", "second__player"
+        )
+        opponents = defaultdict(dict)
+        for p in pairings:
+            if p.first_id == p.second_id:
+                continue  # bye — no opponent to prefill
+            opponents[p.first_id][p.round] = p.second.name
+            opponents[p.second_id][p.round] = p.first.name
+        return opponents
 
 
 class DivisionSettingsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):

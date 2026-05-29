@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import copy
 import os
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from io import BytesIO
 
 import qrcode
@@ -67,6 +67,8 @@ class ScorecardSpec:
     tournament_date: str
     player_name: str
     rounds: list[RoundSpec]
+    # Optional {round number: opponent name} to prefill the Opponent column.
+    opponents: dict[int, str] = field(default_factory=dict)
     qr_url: str = ""
     footer_text: str = "Submit results and view pairings and standings at:"
     footer_url: str = "cocoscrabble.org/live-coverage"
@@ -264,8 +266,12 @@ def _set_vmerge(cell, *, restart):
     vMerge.val = "restart" if restart else None
 
 
-def _add_round_table(doc, round_specs):
-    """One bordered table covering ``round_specs`` (each round = two grid rows)."""
+def _add_round_table(doc, round_specs, opponents):
+    """One bordered table covering ``round_specs`` (each round = two grid rows).
+
+    ``opponents`` is a {round number: name} mapping used to prefill the
+    Opponent column; rounds absent from it are left blank.
+    """
     table = doc.add_table(rows=1 + 2 * len(round_specs), cols=len(HEADERS))
     table.alignment = WD_TABLE_ALIGNMENT.LEFT
     _set_grid_widths(table, COL_WIDTHS)
@@ -302,6 +308,11 @@ def _add_round_table(doc, round_specs):
 
         # Round number goes in the (merged) first cell so it appears once.
         _fill_round_cell(top[0], spec.number)
+
+        # Prefill the (merged) Opponent cell if a name was supplied.
+        opponent = opponents.get(spec.number, "")
+        if opponent:
+            _set_run_font(top[1].paragraphs[0].add_run(opponent), 10)
         r += 2
 
     return table
@@ -339,7 +350,7 @@ def build_scorecard(doc, spec):
 
     chunks = _chunk_rounds(spec)
     for i, chunk in enumerate(chunks):
-        _add_round_table(doc, chunk)
+        _add_round_table(doc, chunk, spec.opponents)
         if i < len(chunks) - 1:
             _add_page_break(doc)
 
@@ -364,16 +375,21 @@ def _configure_page(section):
 _NAME_SENTINEL = "PLAYER_NAME"
 
 
+def _opp_sentinel(round_number):
+    return f"OPPONENT_{round_number}"
+
+
 def _layout_signature(spec):
-    """Everything that determines a scorecard's structure except the player name."""
-    return replace(spec, player_name="")
+    """What fixes a scorecard's structure: everything but the per-player values
+    (player name and opponent names) that get patched into clones."""
+    return replace(spec, player_name="", opponents={})
 
 
-def _set_player_name(element, name):
+def _patch_text(element, replacements):
+    """Replace any ``<w:t>`` whose text is a key of ``replacements`` in place."""
     for t in element.iter(qn("w:t")):
-        if t.text == _NAME_SENTINEL:
-            t.text = name
-            return
+        if t.text in replacements:
+            t.text = replacements[t.text]
 
 
 def _reassign_drawing_ids(element):
@@ -387,11 +403,12 @@ def _reassign_drawing_ids(element):
 def build_document(specs):
     """Build a Document with one scorecard per spec, each starting a new page.
 
-    Within a division every scorecard is identical except the player name (and
-    even the QR/logo are shared), so we build the first one as a template and
-    deep-copy its XML for the rest, patching just the name. That skips almost
-    all per-element construction — and renders the QR / reads the logo once.
-    Specs whose layout differs from the first fall back to a fresh build.
+    Within a division every scorecard shares the same structure, QR and logo;
+    only the player name and any prefilled opponent names differ. So we build
+    the first one as a template (with placeholders in those spots) and deep-copy
+    its XML for the rest, patching only the placeholders. That skips almost all
+    per-element construction and renders the QR / reads the logo once. Specs
+    whose layout differs from the first fall back to a fresh build.
     """
     doc = Document()
     _configure_page(doc.sections[0])
@@ -403,15 +420,16 @@ def build_document(specs):
     if not specs:
         return doc
 
-    # Build the clonable template (one scorecard) with a placeholder name.
-    build_scorecard(doc, replace(specs[0], player_name=_NAME_SENTINEL))
+    # Rounds that any player has a prefilled opponent for get a placeholder in
+    # the template so every clone can patch its own name into that slot.
+    prefill_rounds = {n for spec in specs for n in spec.opponents}
+    template_opponents = {n: _opp_sentinel(n) for n in prefill_rounds}
+    build_scorecard(doc, replace(
+        specs[0], player_name=_NAME_SENTINEL, opponents=template_opponents
+    ))
     template_els = [c for c in body if c is not sectPr]
     for el in template_els:
         body.remove(el)
-    name_idx = next(
-        i for i, el in enumerate(template_els)
-        if any(t.text == _NAME_SENTINEL for t in el.iter(qn("w:t")))
-    )
 
     def append(el):
         sectPr.addprevious(el) if sectPr is not None else body.append(el)
@@ -421,11 +439,13 @@ def build_document(specs):
         if i > 0:
             _add_page_break(doc)
         if _layout_signature(spec) == template_sig:
-            for j, el in enumerate(template_els):
+            replacements = {_NAME_SENTINEL: spec.player_name}
+            for n in prefill_rounds:
+                replacements[_opp_sentinel(n)] = spec.opponents.get(n, "")
+            for el in template_els:
                 clone = copy.deepcopy(el)
                 _reassign_drawing_ids(clone)
-                if j == name_idx:
-                    _set_player_name(clone, spec.player_name)
+                _patch_text(clone, replacements)
                 append(clone)
         else:
             build_scorecard(doc, spec)
