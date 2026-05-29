@@ -6,7 +6,10 @@ from enum import Enum
 import networkx as nx
 from dataclasses_json import dataclass_json
 
-from tournaments.pairing.round_pairing import RoundPairing
+from tournaments.pairing.round_pairing import (
+    RoundPairing,
+    normalize_round_robin_start_rounds,
+)
 
 # ---------------------------------------------------------------------------
 # Snapshot of db objects
@@ -108,6 +111,7 @@ class PairingData:
         except Exception:
             raw_rps = []
         rps = [RoundPairing.from_dict(x) for x in raw_rps]
+        normalize_round_robin_start_rounds(rps)
         return cls(result_slips=slips, entrants=entrants, repeats=Repeats(), fixed_pairings=dict(fixed), round_pairings=rps)
 
 

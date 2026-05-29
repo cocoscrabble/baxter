@@ -52,6 +52,29 @@ class RoundPairing:
     pairing: str
 
 
+def normalize_round_robin_start_rounds(rps: list[RoundPairing]) -> list[RoundPairing]:
+    """Make each contiguous round-robin block share its first round as start_round.
+
+    A round-robin schedule rotates off a single fixed ordering (the standings as
+    of ``start_round``), so every round in the block must point at the same one —
+    this is what ``make_pairings`` produces. The settings editor instead stores a
+    per-round ``start_round`` (defaulting to ``round - 1``), which leaves later
+    rounds reading results that don't exist yet and pairing nobody. Repair those
+    blocks in place; non-round-robin rounds are left untouched.
+    """
+    i = 0
+    while i < len(rps):
+        if RP.is_round_robin(rps[i].pairing):
+            block_pairing = rps[i].pairing
+            block_start = rps[i].round
+            while i < len(rps) and rps[i].pairing == block_pairing:
+                rps[i].start_round = block_start
+                i += 1
+        else:
+            i += 1
+    return rps
+
+
 def make_pairings(spec: str) -> list[RoundPairing]:
     out = []
     parts = spec.split(" ")

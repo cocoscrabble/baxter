@@ -834,3 +834,32 @@ class RoundPairingsLifecycleTests(PairingDBTestBase):
         pairing.round_pairings.update_status()
         rp.refresh_from_db()
         self.assertEqual(rp.status, RoundPairings.PUBLISHED)
+
+
+class RoundRobinUnplayedRoundsTests(PairingDBTestBase):
+    """Regression: a round-robin configured with per-round start_round (as the
+    settings editor stores it) must still pair every round up front, before any
+    results exist — previously only the round whose start_round landed on the
+    seedings got paired, and ranking the rest raised KeyError."""
+
+    def _regenerate(self):
+        from tournaments.generate_pairings import regenerate_pairings
+        regenerate_pairings(self.division)
+
+    def test_all_round_robin_rounds_pair_before_any_results(self):
+        DivisionSettings.objects.create(
+            division=self.division,
+            round_pairings=[
+                {"round": 1, "start_round": 0, "pairing": "RoundRobin"},
+                {"round": 2, "start_round": 1, "pairing": "RoundRobin"},
+                {"round": 3, "start_round": 2, "pairing": "RoundRobin"},
+            ],
+        )
+        self._regenerate()  # must not raise
+        for rnd in (1, 2, 3):
+            pairings = self.division.pairings.filter(round=rnd)
+            self.assertEqual(pairings.count(), 2)
+            names = set()
+            for p in pairings:
+                names.update({p.first_id, p.second_id})
+            self.assertEqual(len(names), 4)  # every entrant paired exactly once
