@@ -5,7 +5,7 @@
     <button class="btn-secondary" data-on:click="$showForm = ($showForm === 'test' ? '' : 'test')">+ Add Test Division</button>
 </div>
 
-<div class="division-inline-form hidden" data-show="$showForm === 'regular'">
+<div class="division-inline-form hidden" data-class="{hidden: $showForm !== 'regular'}">
     <form method="post" action="{% url 'division_create' tournament.pk %}">
         {% csrf_token %}
         <input type="hidden" name="is_test" value="0">
@@ -15,7 +15,7 @@
     </form>
 </div>
 
-<div class="division-inline-form hidden" data-show="$showForm === 'test'">
+<div class="division-inline-form hidden" data-class="{hidden: $showForm !== 'test'}">
     <form method="post" action="{% url 'division_create' tournament.pk %}">
         {% csrf_token %}
         <input type="hidden" name="is_test" value="1">
