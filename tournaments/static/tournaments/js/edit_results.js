@@ -41,6 +41,7 @@ const table = createEditTable("#results-table", {
             field: "winner_started",
             editor: "list",
             editorParams: { values: { true: "Winner", false: "Opponent" } },
+            width: 120,
             formatter: function(cell) {
                 const v = cell.getValue();
                 if (v === true || v === "true") return "Winner";

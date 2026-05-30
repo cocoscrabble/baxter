@@ -1,7 +1,12 @@
 // Shared helpers for Tabulator edit-tables.
 
 export const TABLE_DEFAULTS = {
-    layout: "fitDataTable",
+    // "fitColumns" divides the container width among columns. We deliberately do
+    // NOT use "fitDataTable"/"fitData": those measure every cell's content to size
+    // the table, which on Firefox can enter a width/scrollbar feedback loop and
+    // hang the page (the script-unresponsive dialog). fitColumns never measures
+    // content, so it stays stable across browsers.
+    layout: "fitColumns",
     keybindings: true,
     selectableRange: 1,
     editTriggerEvent: "dblclick",
