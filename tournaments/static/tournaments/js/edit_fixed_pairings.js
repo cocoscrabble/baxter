@@ -1,16 +1,16 @@
 import {
-    TABLE_DEFAULTS,
     buildLookup,
+    createEditTable,
     deleteColumn,
     lookupColumn,
     wireAddRowButton,
     wireSaveButton,
+    wireUndoRedo,
 } from "./table_helpers.js";
 
 const entrantLookup = buildLookup(pageData.entrantValues);
 
-const table = new Tabulator("#fixed-pairings-table", {
-    ...TABLE_DEFAULTS,
+const table = createEditTable("#fixed-pairings-table", {
     data: pageData.fixedPairings,
     columns: [
         {
@@ -43,3 +43,5 @@ wireSaveButton({
         entrant2: parseInt(r.entrant2) || null,
     }),
 });
+
+wireUndoRedo(table);

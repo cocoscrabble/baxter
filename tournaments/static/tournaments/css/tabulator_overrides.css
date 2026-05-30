@@ -53,3 +53,48 @@
     outline: none;
     box-shadow: 0 0 0 2px rgba(192, 57, 43, 0.25);
 }
+
+.row-restore-btn {
+    background: transparent;
+    border: none;
+    color: #1e9e57;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border-radius: 50%;
+    transition: background-color 0.12s ease, color 0.12s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    vertical-align: middle;
+}
+
+.row-restore-btn:hover {
+    background-color: #e6f6ee;
+    color: #157a43;
+}
+
+.row-restore-btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(30, 158, 87, 0.25);
+}
+
+/* Pending-change preview, cleared on save. Green = the row/cell will be added or
+   updated; red = the row will be deleted. Set on cells so the colours win over
+   Tabulator's own row backgrounds (zebra striping, hover). */
+.tabulator .tabulator-row.row-added .tabulator-cell {
+    background-color: #e3f7ec;
+}
+
+.tabulator .tabulator-cell.cell-changed {
+    background-color: #c9ecd7;
+}
+
+.tabulator .tabulator-row.row-deleted .tabulator-cell {
+    background-color: #fbe4e1;
+    color: #b53122;
+    text-decoration: line-through;
+}

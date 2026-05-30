@@ -318,6 +318,17 @@ input[type="submit"]:hover {
     background-color: var(--color-primary-light);
 }
 
+.btn-secondary:disabled {
+    background-color: #fff;
+    color: var(--color-border);
+    border-color: var(--color-border);
+    cursor: default;
+}
+
+.btn-secondary:disabled:hover {
+    background-color: #fff;
+}
+
 .btn-cancel {
     background-color: #fff;
     color: var(--color-muted);

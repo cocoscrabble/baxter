@@ -1,12 +1,13 @@
 import {
-    TABLE_DEFAULTS,
+    createEditTable,
     deleteColumn,
+    tagRows,
     wireAddRowButton,
     wireSaveButton,
+    wireUndoRedo,
 } from "./table_helpers.js";
 
-const table = new Tabulator("#board-table-map-table", {
-    ...TABLE_DEFAULTS,
+const table = createEditTable("#board-table-map-table", {
     data: pageData.boardTableMap,
     columns: [
         {
@@ -56,7 +57,7 @@ document.getElementById("generate-btn").addEventListener("click", function() {
     const singleTables = parseInt(document.getElementById("single-tables").value) || 0;
     const boardCount = parseInt(document.getElementById("board-count").value) || 0;
     if (boardCount < 1) return;
-    table.setData(generateMapping(singleTables, boardCount));
+    table.setData(tagRows(generateMapping(singleTables, boardCount)));
 });
 
 wireAddRowButton({
@@ -77,3 +78,5 @@ wireSaveButton({
         table: parseInt(r.table) || null,
     }),
 });
+
+wireUndoRedo(table);
