@@ -23,43 +23,81 @@ export function tagRows(rows) {
     return rows.map(r => ({ ...r, _rid: nextRid() }));
 }
 
-// Decorate a row to preview what Save will do, comparing live data against the
-// loaded snapshot: green for added rows and changed cells, red for rows pending
-// deletion. Driven from data via rowFormatter so it survives virtual re-renders.
-function makeRowFormatter(original) {
-    return function(row) {
-        const data = row.getData();
-        const el = row.getElement();
-        const orig = original[data._rid];
-        const deleted = !!data._deleted;
-        el.classList.toggle("row-deleted", deleted);
-        el.classList.toggle("row-added", !orig && !deleted);
-        row.getCells().forEach(cell => {
-            const field = cell.getField();
-            if (!field) return;  // action columns (delete button) have no field
-            const changed = orig && !deleted && norm(data[field]) !== norm(orig[field]);
-            cell.getElement().classList.toggle("cell-changed", !!changed);
-        });
-    };
+// --- Change-preview decorations -------------------------------------------
+// Compare each row against the snapshot of the data as it loaded and show what
+// Save will do: green for added rows and changed cells, red for rows pending
+// deletion, plus an action button that deletes / reverts / restores the row.
+//
+// These are applied as pure DOM updates (classes + the action cell's markup)
+// rather than via row.reformat(): reformatting a row inside a cell edit discards
+// Tabulator's just-recorded undo-history entry, breaking undo/redo of edits.
+
+const deleteButton =
+    "<button type='button' class='row-delete-btn' aria-label='Delete row' title='Delete row'>×</button>";
+
+const restoreButton = title =>
+    `<button type='button' class='row-restore-btn' aria-label='${title}' title='${title}'>&#8634;</button>`;
+
+// True when an existing row's cells differ from the loaded snapshot. Added rows
+// (no snapshot) and rows already pending deletion are not "edited".
+function rowIsEdited(row, original) {
+    if (!original) return false;
+    const data = row.getData();
+    if (data._deleted) return false;
+    const orig = original[data._rid];
+    if (!orig) return false;
+    return Object.keys(orig).some(f => norm(data[f]) !== norm(orig[f]));
+}
+
+// The action-column button for a row: restore a deleted row, revert an edited
+// row to its loaded values, or (when unchanged) offer to soft-delete it.
+function actionButton(row, original) {
+    const data = row.getData();
+    if (data._deleted) return restoreButton("Restore row");
+    if (rowIsEdited(row, original)) return restoreButton("Revert changes");
+    return deleteButton;
+}
+
+function decorateRow(row, original) {
+    const data = row.getData();
+    const orig = original ? original[data._rid] : undefined;
+    const deleted = !!data._deleted;
+    row.getElement().classList.toggle("row-deleted", deleted);
+    row.getElement().classList.toggle("row-added", !orig && !deleted);
+    row.getCells().forEach(cell => {
+        const el = cell.getElement();
+        const field = cell.getField();
+        if (!field) {                         // action column
+            el.innerHTML = actionButton(row, original);
+            return;
+        }
+        const changed = orig && !deleted && norm(data[field]) !== norm(orig[field]);
+        el.classList.toggle("cell-changed", !!changed);
+    });
 }
 
 // Build a Tabulator edit-grid: shared defaults, undo/redo history, and the
 // change/add/delete decorations above. `original` (keyed by `_rid`) is stashed
-// on the table as `_editOriginal` for the save helper to re-baseline after save.
+// on the table as `_editOriginal` for the save and delete helpers.
 export function createEditTable(selector, { data, columns, ...options }) {
     const rows = tagRows(data || []);
     const original = {};
     rows.forEach(({ _rid, ...rest }) => { original[_rid] = rest; });
+    const decorate = row => decorateRow(row, original);
 
     const table = new Tabulator(selector, {
         ...TABLE_DEFAULTS,
         history: true,
         data: rows,
         columns,
-        rowFormatter: makeRowFormatter(original),
+        rowFormatter: decorate,
         ...options,
     });
     table._editOriginal = original;
+    // A cell edit can change the whole row's decoration (cells turn green, the
+    // delete button becomes a revert button), so re-decorate the row after each
+    // interactive edit — without row.reformat(), which would wipe the undo entry.
+    table.on("cellEdited", cell => decorate(cell.getRow()));
     return table;
 }
 
@@ -76,7 +114,7 @@ function rebaseline(table) {
         const { _rid, _deleted, ...rest } = row.getData();
         original[_rid] = rest;
     });
-    table.getRows().forEach(row => row.reformat());
+    table.getRows().forEach(row => decorateRow(row, original));
     if (typeof table.clearHistory === "function") table.clearHistory();
 }
 
@@ -85,15 +123,22 @@ export const deleteColumn = () => ({
     width: 50,
     hozAlign: "center",
     headerSort: false,
-    // Soft delete: flag the row (turning it red) instead of removing it, so the
-    // change is previewed and reversible. The button toggles between the two.
-    formatter: cell => cell.getRow().getData()._deleted
-        ? "<button type='button' class='row-restore-btn' aria-label='Restore row' title='Restore row'>&#8634;</button>"
-        : "<button type='button' class='row-delete-btn' aria-label='Delete row' title='Delete row'>×</button>",
+    // Three states: a deleted row offers to be un-deleted; an edited row offers
+    // to revert to its loaded values; an unchanged row offers to be soft-deleted
+    // (flagged red rather than removed, so the change is previewed and reversible).
+    formatter: cell => actionButton(cell.getRow(), cell.getTable()._editOriginal),
     cellClick: function(e, cell) {
         const row = cell.getRow();
-        row.update({ _deleted: !row.getData()._deleted });
-        row.reformat();
+        const original = cell.getTable()._editOriginal;
+        const data = row.getData();
+        if (data._deleted) {
+            row.update({ _deleted: false });
+        } else if (rowIsEdited(row, original)) {
+            row.update({ ...original[data._rid] });
+        } else {
+            row.update({ _deleted: true });
+        }
+        decorateRow(row, original);
     },
 });
 
@@ -191,13 +236,14 @@ export function wireUndoRedo(table) {
     redoBtn.disabled = true;
     undoBtn.addEventListener("click", () => table.undo());
     redoBtn.addEventListener("click", () => table.redo());
-    const reformatAll = () => table.getRows().forEach(r => r.reformat());
+    // An undo/redo changes cell values; refresh every row's decoration to match.
+    const redecorateAll = () => table.getRows().forEach(r => decorateRow(r, table._editOriginal));
     // dataChanged fires just before the history entry is recorded, so read the
     // sizes on the next tick to reflect the action that just happened.
     const sync = () => setTimeout(() => syncUndoRedo(table), 0);
     table.on("dataChanged", sync);
-    table.on("historyUndo", () => { reformatAll(); sync(); });
-    table.on("historyRedo", () => { reformatAll(); sync(); });
+    table.on("historyUndo", () => { redecorateAll(); sync(); });
+    table.on("historyRedo", () => { redecorateAll(); sync(); });
 }
 
 function syncUndoRedo(table) {
