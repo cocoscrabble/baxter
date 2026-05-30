@@ -1,12 +1,15 @@
 <div id="standings-content">
-<p>Rounds:
-    {% for r in rounds %}
-        {% if r == round %}<strong>{{ r }}</strong>{% else %}<a href="#" data-on:click__prevent="@get('{% url 'division_standings_round' division.pk r %}')">{{ r }}</a>{% endif %}
-        {% if not forloop.last %} | {% endif %}
-    {% endfor %}
-</p>
-<p>After round {{ round }}</p>
-
+<div class="standings-layout">
+    <aside class="card standings-rounds">
+        <h3>Rounds</h3>
+        <div class="round-links">
+            {% for r in rounds %}
+            {% if r == round %}<strong>{{ r }}</strong>{% else %}<a href="#" data-on:click__prevent="@get('{% url 'division_standings_round' division.pk r %}')">{{ r }}</a>{% endif %}
+            {% endfor %}
+        </div>
+        <p class="mt-sm">After round {{ round }}</p>
+    </aside>
+    <div class="standings-main">
 {% if standings %}
 <div class="table-scroll table-narrow">
 <table>
@@ -37,4 +40,6 @@
 {% else %}
 {% include "tournaments/_empty_state.html" with message="No results yet." %}
 {% endif %}
+    </div>
+</div>
 </div>

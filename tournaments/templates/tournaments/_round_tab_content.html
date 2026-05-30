@@ -23,24 +23,25 @@
 
 {% if selected_status == 'finished' or selected_status == 'in_progress' %}
     {% if round_pairings %}
+    <div class="pairings-main">
     <table>
         <thead>
             <tr>
-                <th>Table</th>
+                <th class="num">Table</th>
                 <th>First</th>
                 <th></th>
                 <th>Second</th>
-                <th>Result</th>
+                <th class="num">Result</th>
             </tr>
         </thead>
         <tbody>
             {% for entry in round_pairings %}
             <tr>
-                <td>{{ entry.pairing.table }}</td>
+                <td class="num">{{ entry.pairing.table }}</td>
                 <td>{{ entry.pairing.first.name }}</td>
                 <td>{% if entry.is_fixed %}&#x1F512;{% endif %}</td>
                 <td>{{ entry.pairing.second.name }}</td>
-                <td>
+                <td class="num">
                     {% if entry.result %}
                         {{ entry.result }}
                     {% elif division.is_test %}
@@ -51,6 +52,7 @@
             {% endfor %}
         </tbody>
     </table>
+    </div>
     {% else %}
     {% include "tournaments/_empty_state.html" with message="No pairings data for this round." %}
     {% endif %}
@@ -59,8 +61,9 @@
     <p>This round has results recorded but no pairings on file. Generate or import pairings before editing results.</p>
 
 {% elif selected_status == 'pairable' or selected_status == 'published' %}
+    <div class="pairings-body{% if can_edit and selected_status == 'pairable' %} pairings-body--split{% endif %}">
     {% if can_edit and selected_status == 'pairable' %}
-    <div class="fixed-pairings-section" data-signals="{fixedFirst: '', fixedSecond: ''}">
+    <aside class="card fixed-pairings-section pairings-side" data-signals="{fixedFirst: '', fixedSecond: ''}">
         <h3>Fixed pairings (round {{ selected_round }})</h3>
         {% if fixed_error %}<p class="error">{{ fixed_error }}</p>{% endif %}
         {% if fixed_pairings_for_round %}
@@ -90,28 +93,29 @@
                 data-attr-disabled="$fixedFirst === '' || $fixedSecond === '' || $fixedFirst === $fixedSecond"
                 data-on:click="@post('{% url 'add_fixed_pairing' division.pk %}', {headers: {'X-CSRFToken': $_csrfToken}, payload: {round: {{ selected_round }}, entrant1: $fixedFirst, entrant2: $fixedSecond}})">Add fixed pairing</button>
         </div>
-    </div>
+    </aside>
     {% endif %}
+    <div class="pairings-main">
     {% if round_pairings %}
     <table>
         <thead>
             <tr>
-                <th>Table</th>
+                <th class="num">Table</th>
                 <th>First</th>
                 <th></th>
                 <th>Second</th>
-                <th>Repeats</th>
+                <th class="num">Repeats</th>
                 <th>{% if division.is_test %}<button type="button" data-on:click="@post('{% url 'simulate_round' division.pk %}', {headers: {'X-CSRFToken': $_csrfToken}, payload: {round: {{ selected_round }}}})">simulate all</button>{% endif %}</th>
             </tr>
         </thead>
         <tbody>
             {% for entry in round_pairings %}
             <tr>
-                <td>{{ entry.pairing.table }}</td>
+                <td class="num">{{ entry.pairing.table }}</td>
                 <td>{{ entry.pairing.first.name }}</td>
                 <td>{% if entry.is_fixed %}&#x1F512;{% endif %}</td>
                 <td>{{ entry.pairing.second.name }}</td>
-                <td>{{ entry.pairing.repeats }}</td>
+                <td class="num">{{ entry.pairing.repeats }}</td>
                 <td>
                     {% if entry.result %}
                         {{ entry.result }}
@@ -126,6 +130,8 @@
     {% else %}
     {% include "tournaments/_empty_state.html" with message="Pairings not yet generated for this round." %}
     {% endif %}
+    </div>
+    </div>
 
 {% elif selected_status == 'future' %}
     <p>{{ round_label }}</p>
