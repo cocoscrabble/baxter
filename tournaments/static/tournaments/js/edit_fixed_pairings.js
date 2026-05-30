@@ -18,7 +18,7 @@ const table = new Tabulator("#fixed-pairings-table", {
             field: "round_number",
             editor: "number",
             editorParams: { min: 1 },
-            width: 80,
+            width: 100,
             hozAlign: "center",
         },
         lookupColumn({ title: "Player 1", field: "entrant1", lookup: entrantLookup, autocomplete: true }),

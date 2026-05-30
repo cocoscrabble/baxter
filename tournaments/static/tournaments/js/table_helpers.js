@@ -101,6 +101,9 @@ export function lookupColumn({ title, field, lookup, autocomplete = false, ...ex
         editor: "list",
         editorParams: { values: lookup, autocomplete, listOnEmpty: autocomplete },
         formatter: cell => lookup[cell.getValue()] || "",
+        // Names are data-sized; without a floor an empty grid collapses the
+        // column below its header. Callers can override via `extra`.
+        minWidth: 150,
         ...extra,
     };
 }

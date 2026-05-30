@@ -18,7 +18,7 @@ const table = new Tabulator("#results-table", {
             field: "round",
             editor: "number",
             editorParams: { min: 1 },
-            width: 80,
+            width: 100,
         },
         lookupColumn({ title: "Winner", field: "winner", lookup: entrantLookup }),
         {
@@ -26,7 +26,7 @@ const table = new Tabulator("#results-table", {
             field: "winner_score",
             editor: "number",
             editorParams: { min: 0 },
-            width: 90,
+            width: 120,
         },
         lookupColumn({ title: "Opponent", field: "loser", lookup: entrantLookup }),
         {
@@ -34,7 +34,7 @@ const table = new Tabulator("#results-table", {
             field: "loser_score",
             editor: "number",
             editorParams: { min: 0 },
-            width: 90,
+            width: 130,
         },
         {
             title: "Started",
