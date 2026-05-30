@@ -349,6 +349,24 @@ input[type="submit"]:hover {
     background-color: var(--color-muted-bg);
 }
 
+/* Save buttons reflect unsaved-changes state: grey when clean, red when the
+   form/grid has edits that haven't been saved yet. */
+.btn-save {
+    background-color: var(--color-muted-bg);
+}
+
+.btn-save:hover {
+    background-color: var(--color-muted);
+}
+
+.btn-save.is-dirty {
+    background-color: var(--color-danger);
+}
+
+.btn-save.is-dirty:hover {
+    background-color: var(--color-danger-hover);
+}
+
 /* ── Tables ────────────────────────────────────────────────── */
 table {
     width: 100%;
