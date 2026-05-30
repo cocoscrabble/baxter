@@ -550,6 +550,26 @@ td a:hover {
     gap: var(--space-xs) var(--space-sm);
 }
 
+/* Settings formset: size the table to its content instead of stretching the
+   full container width (which leaves large gaps between the few columns). */
+#settings-formset table {
+    width: auto;
+}
+
+#settings-formset th,
+#settings-formset td {
+    padding-right: var(--space-lg);
+}
+
+/* Round-number inputs hold a single value; keep them narrow so the columns
+   (and the controls row above) stay tight instead of spreading. */
+#settings-formset input[type="text"],
+#settings-formset input[type="number"],
+.settings-controls input[type="text"],
+.settings-controls input[type="number"] {
+    width: 5em;
+}
+
 /* Tournament detail: divisions beside a metadata card. */
 .tournament-divisions h2 {
     margin-top: 0;

@@ -24,16 +24,16 @@ const table = new Tabulator("#fixed-tables-table", {
                 if (v === -1 || v === "-1") return "All";
                 return v != null ? String(v) : "";
             },
-            width: 80,
+            width: 100,
             hozAlign: "center",
         },
-        lookupColumn({ title: "Player", field: "entrant", lookup: entrantLookup, autocomplete: true }),
+        lookupColumn({ title: "Player", field: "entrant", lookup: entrantLookup, autocomplete: true, minWidth: 200 }),
         {
             title: "Table",
             field: "table_number",
             editor: "number",
             editorParams: { min: 1 },
-            width: 80,
+            width: 100,
             hozAlign: "center",
         },
         deleteColumn(),
