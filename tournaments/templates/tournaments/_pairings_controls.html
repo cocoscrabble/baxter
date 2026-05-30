@@ -2,10 +2,8 @@
 {% if can_edit %}
 <p>
 {% if has_draft_rounds %}
-<form method="post" action="{% url 'publish_pairings' division.pk %}" class="inline">
-    {% csrf_token %}
-    <button type="submit" class="btn-publish-needed">Publish Pairings</button>
-</form>
+<button type="button" class="btn-publish-needed"
+    data-on:click="@post('{% url 'publish_pairings' division.pk %}', {headers: {'X-CSRFToken': $_csrfToken}})">Publish All</button>
 {% endif %}
 {% if has_published_rounds %}
 <a href="{% url 'published_pairings' division.pk %}" target="_blank" rel="noopener">View published pairings page</a>

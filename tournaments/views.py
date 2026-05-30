@@ -303,23 +303,16 @@ class DivisionStandingsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
 
 
 
-class PublishPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
-    def post(self, request, pk):
-        division = self.get_division()
-        division.round_pairings_set.filter(
-            status=RoundPairings.DRAFT
-        ).update(status=RoundPairings.PUBLISHED)
-        return redirect("division_pairings", pk=pk)
-
-
-def _fixed_pairing_response(request, division, round_number, error):
-    """Datastar: re-render the pairings body for ``round_number`` (live regenerate).
+def _pairings_body_response(request, division, *, select_round=None, error=None):
+    """Datastar: re-render the pairings body, optionally focused on ``select_round``.
 
     Falls back to a flash + redirect for non-Datastar (no-JS) submissions, which
     keeps the existing full-page behaviour and its tests intact.
     """
     if is_datastar(request):
-        presenter = PairingsPresenter(division).select(round_number)
+        presenter = PairingsPresenter(division)
+        if select_round is not None:
+            presenter.select(select_round)
         context = {
             "division": division,
             "can_edit": True,
@@ -337,6 +330,30 @@ def _fixed_pairing_response(request, division, round_number, error):
     return redirect("division_pairings", pk=division.pk)
 
 
+class PublishPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    """Publish every draft round at once."""
+
+    def post(self, request, pk):
+        division = self.get_division()
+        division.round_pairings_set.filter(
+            status=RoundPairings.DRAFT
+        ).update(status=RoundPairings.PUBLISHED)
+        return _pairings_body_response(request, division)
+
+
+class PublishRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    """Publish a single draft round and live-swap the pairings body."""
+
+    def post(self, request, pk):
+        division = self.get_division()
+        data = (read_signals(request) or {}) if is_datastar(request) else request.POST
+        round_number = int(data["round"])
+        division.round_pairings_set.filter(
+            round=round_number, status=RoundPairings.DRAFT
+        ).update(status=RoundPairings.PUBLISHED)
+        return _pairings_body_response(request, division, select_round=round_number)
+
+
 class AddFixedPairingView(LoginRequiredMixin, CanEditDivisionMixin, View):
     def post(self, request, pk):
         division = self.get_division()
@@ -345,7 +362,7 @@ class AddFixedPairingView(LoginRequiredMixin, CanEditDivisionMixin, View):
         entrant1_id = int(data["entrant1"])
         entrant2_id = int(data["entrant2"])
         _, error = add_fixed_pairing(division, round_number, entrant1_id, entrant2_id)
-        return _fixed_pairing_response(request, division, round_number, error)
+        return _pairings_body_response(request, division, select_round=round_number, error=error)
 
 
 class RemoveFixedPairingView(LoginRequiredMixin, CanEditDivisionMixin, View):
@@ -357,7 +374,7 @@ class RemoveFixedPairingView(LoginRequiredMixin, CanEditDivisionMixin, View):
         fp_id = int(data["fp_id"])
         round_number = int(data["round"])
         _, error = remove_fixed_pairing(division, fp_id)
-        return _fixed_pairing_response(request, division, round_number, error)
+        return _pairings_body_response(request, division, select_round=round_number, error=error)
 
 
 class RemoveFixedPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):

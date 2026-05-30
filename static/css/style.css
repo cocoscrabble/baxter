@@ -457,6 +457,22 @@ dd {
     margin-bottom: var(--space-md);
 }
 
+.round-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    margin-bottom: var(--space-md);
+}
+
+.round-header h2 {
+    margin: 0;
+}
+
+.btn-publish-round {
+    font-size: 0.85rem;
+    padding: var(--space-xs) var(--space-md);
+}
+
 .round-status-badge {
     display: inline-block;
     font-size: 0.6em;
