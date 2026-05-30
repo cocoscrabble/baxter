@@ -14,7 +14,7 @@
 <a href="{% url 'division_pairings' division.pk %}" class="nav-tab{% if active_tab == 'pairings' %} active{% endif %}">Pairings</a>
 <a href="{% url 'division_all_results' division.pk %}" class="nav-tab{% if active_tab == 'results' %} active{% endif %}">Results</a>
 <a href="{% url 'resultslip_create' division.pk %}" class="nav-tab{% if active_tab == 'add_result' %} active{% endif %}">Add Result</a>
-<a href="{% url 'division_scorecards' division.pk %}" class="nav-tab">Scorecards</a>
+<a href="{% url 'division_scorecards' division.pk %}" class="nav-tab{% if active_tab == 'scorecards' %} active{% endif %}">Scorecards</a>
 {% if can_edit %}
 <span class="nav-tab-sep"></span>
 <a href="{% url 'division_edit_results' division.pk %}" class="nav-tab{% if active_tab == 'edit_results' %} active{% endif %}">Edit Results</a>

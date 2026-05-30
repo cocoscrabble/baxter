@@ -1,0 +1,15 @@
+{% extends "tournaments/base_division.html" %}
+
+{% block title %}Scorecards - {{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
+
+{% block content %}
+<h1>Scorecards: {{ division.name }}</h1>
+
+<p>Generate a printable Word document (.docx) with one scorecard per entrant. Opponents
+are pre-filled from the pairings where available, and each card includes a QR code
+linking to the published pairings page.</p>
+
+<form method="get" action="{% url 'division_scorecards_download' division.pk %}">
+    <button type="submit">Generate and download scorecards</button>
+</form>
+{% endblock %}

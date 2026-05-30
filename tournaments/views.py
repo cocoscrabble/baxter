@@ -470,7 +470,16 @@ class PublishedPairingsView(VisibleDivisionMixin, DetailView):
         return context
 
 
-class DivisionScorecardsView(VisibleDivisionMixin, DetailView):
+class DivisionScorecardsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
+    """Scorecards landing page with a generate-and-download action."""
+
+    model = Division
+    template_name = "tournaments/division_scorecards.html"
+    context_object_name = "division"
+    active_tab = "scorecards"
+
+
+class DivisionScorecardsDownloadView(VisibleDivisionMixin, DetailView):
     """Download a .docx with a printable scorecard for every entrant."""
 
     model = Division
