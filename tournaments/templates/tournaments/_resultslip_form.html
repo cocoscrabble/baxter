@@ -38,7 +38,7 @@
         {{ form.winner_started }}
         {% if form.winner_started.errors %}<ul class="errorlist">{% for e in form.winner_started.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
     </p>
-    <button type="submit">Save</button>
+    <button type="submit" class="btn-save">Save</button>
     {% if success_message %}<button type="button" onclick="window.location='{% url 'division_detail' division.pk %}'">Done</button>{% endif %}
 </form>
 </div>

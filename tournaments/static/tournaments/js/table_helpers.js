@@ -66,15 +66,23 @@ export function postJson({ url = "", csrfToken, payload, statusEl }) {
     });
 }
 
-// Wire the Save button to serialize rows and POST them.
+// Wire the Save button to serialize rows and POST them. The button tracks dirty
+// state: it goes red the moment the grid's data changes and back to grey once a
+// save succeeds (see the .btn-save rules in style.css).
 export function wireSaveButton({ table, csrfToken, payloadKey, serializeRow, beforeSave }) {
-    document.getElementById("save-btn").addEventListener("click", function() {
+    const saveBtn = document.getElementById("save-btn");
+    // Any edit, added row, or deleted row marks the grid as having unsaved work.
+    // Loading the initial data via the `data:` option does not fire this.
+    table.on("dataChanged", () => saveBtn.classList.add("is-dirty"));
+    saveBtn.addEventListener("click", function() {
         if (beforeSave) beforeSave();
         const rows = table.getData().map(serializeRow);
         postJson({
             csrfToken,
             payload: { [payloadKey]: rows },
             statusEl: document.getElementById("save-status"),
+        }).then(result => {
+            if (result && result.ok) saveBtn.classList.remove("is-dirty");
         });
     });
 }
