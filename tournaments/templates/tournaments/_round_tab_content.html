@@ -11,9 +11,15 @@
 
 <div id="round-tab-content">
 {% if selected_round %}
+<div class="round-header">
 <h2>Round {{ selected_round }}
     {% if selected_status %}<span class="round-status-badge {{ selected_status_badge_class }}">{{ selected_status_badge_label }}</span>{% endif %}
 </h2>
+{% if can_edit and selected_status == 'pairable' %}
+<button type="button" class="btn-publish-needed btn-publish-round"
+    data-on:click="@post('{% url 'publish_round' division.pk %}', {headers: {'X-CSRFToken': $_csrfToken}, payload: {round: {{ selected_round }}}})">Publish round {{ selected_round }}</button>
+{% endif %}
+</div>
 
 {% if selected_status == 'finished' or selected_status == 'in_progress' %}
     {% if round_pairings %}

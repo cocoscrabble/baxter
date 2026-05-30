@@ -1110,6 +1110,45 @@ class InlineFixedPairingTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(self.division.fixed_pairings.filter(pk=fp.pk).exists())
 
+    def test_publish_buttons_shown_on_pairable_round(self):
+        self.client.login(username="owner", password="testpass123")
+        # Viewing the tab auto-generates draft pairings for the pairable round.
+        response = self.client.get(
+            reverse("division_pairings", kwargs={"pk": self.division.pk})
+        )
+        self.assertEqual(response.context["selected_status"], "pairable")
+        self.assertContains(response, "Publish All")
+        self.assertContains(response, "Publish round 1")
+
+    def test_publish_round_publishes_only_that_round(self):
+        self.client.login(username="owner", password="testpass123")
+        self.client.get(reverse("division_pairings", kwargs={"pk": self.division.pk}))
+        response = self._datastar_post("publish_round", {"round": 1})
+        self.assertEqual(response.status_code, 200)
+        rp = self.division.round_pairings_set.get(round=1)
+        self.assertEqual(rp.status, RoundPairings.PUBLISHED)
+        # Round 2 was not pairable, so nothing was published there.
+        self.assertFalse(
+            self.division.round_pairings_set.filter(
+                round=2, status=RoundPairings.PUBLISHED
+            ).exists()
+        )
+
+    def test_publish_all_publishes_every_draft(self):
+        self.client.login(username="owner", password="testpass123")
+        RoundPairings.objects.create(
+            division=self.division, round=1, status=RoundPairings.DRAFT
+        )
+        RoundPairings.objects.create(
+            division=self.division, round=2, status=RoundPairings.DRAFT
+        )
+        response = self._datastar_post("publish_pairings", {})
+        self.assertEqual(response.status_code, 200)
+        statuses = set(
+            self.division.round_pairings_set.values_list("status", flat=True)
+        )
+        self.assertEqual(statuses, {RoundPairings.PUBLISHED})
+
 
 @tag("slow")
 class DivisionEditResultsViewTests(TestCase):
