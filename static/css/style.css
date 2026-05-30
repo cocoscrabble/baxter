@@ -510,6 +510,17 @@ td a:hover {
     margin-bottom: var(--space-sm);
 }
 
+/* Keep the toolbar controls in scale with the 13px table rows below them. */
+.table-toolbar button {
+    font-size: 0.8rem;
+    padding: 4px 10px;
+}
+
+.table-toolbar #save-status {
+    font-size: 0.8rem;
+    color: var(--color-muted);
+}
+
 .form-narrow {
     max-width: 480px;
 }
