@@ -3,27 +3,31 @@
 {% block title %}Entrants - {{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
 
 {% block content %}
-<h1>Entrants: {{ division.name }}</h1>
+<div class="page-head">
+    <h1>Entrants: {{ division.name }}</h1>
+</div>
 
 {% if division.entrants.all %}
+<div class="table-scroll table-narrow">
 <table>
     <thead>
         <tr>
-            <th>#</th>
+            <th class="num">#</th>
             <th>Player</th>
-            <th>Rating</th>
+            <th class="num">Rating</th>
         </tr>
     </thead>
     <tbody>
         {% for entrant in division.entrants.all %}
         <tr>
-            <td>{{ entrant.number }}</td>
+            <td class="num">{{ entrant.number }}</td>
             <td>{{ entrant.player.name }}</td>
-            <td>{{ entrant.player.rating }}</td>
+            <td class="num">{{ entrant.player.rating }}</td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
+</div>
 {% else %}
 {% include "tournaments/_empty_state.html" with message="No entrants yet." %}
 {% endif %}

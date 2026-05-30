@@ -3,15 +3,18 @@
 {% block title %}All Results - {{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
 
 {% block content %}
-<h1>All Results: {{ division.name }}</h1>
+<div class="page-head">
+    <h1>All Results: {{ division.name }}</h1>
+</div>
 
 {% if division.result_slips.all %}
+<div class="table-scroll table-narrow">
 <table>
     <thead>
         <tr>
-            <th>Round</th>
+            <th class="num">Round</th>
             <th>Winner</th>
-            <th>Score</th>
+            <th class="num">Score</th>
             <th>Opponent</th>
             <th>Started</th>
         </tr>
@@ -19,15 +22,16 @@
     <tbody>
         {% for slip in division.result_slips.all %}
         <tr>
-            <td>{{ slip.round }}</td>
+            <td class="num">{{ slip.round }}</td>
             <td>{{ slip.winner.player.name }}</td>
-            <td>{{ slip.winner_score }}-{{ slip.loser_score }}</td>
+            <td class="num">{{ slip.winner_score }}-{{ slip.loser_score }}</td>
             <td>{{ slip.loser.player.name }}</td>
             <td>{% if slip.winner_started %}Winner{% else %}Opponent{% endif %}</td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
+</div>
 {% else %}
 {% include "tournaments/_empty_state.html" with message="No results yet." %}
 {% endif %}

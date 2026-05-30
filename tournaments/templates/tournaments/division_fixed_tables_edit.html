@@ -8,13 +8,13 @@
 
 {% include "tournaments/_tabulator_head.html" %}
 
-<div id="fixed-tables-table"></div>
-
-<p class="mt-md">
+<div class="table-toolbar">
     <button id="add-row-btn" type="button">Add Row</button>
     <button id="save-btn" type="button">Save</button>
     <span id="save-status"></span>
-</p>
+</div>
+
+<div id="fixed-tables-table"></div>
 
 <script>
 const pageData = {

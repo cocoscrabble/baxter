@@ -5,6 +5,9 @@ export const TABLE_DEFAULTS = {
     keybindings: true,
     selectableRange: 1,
     editTriggerEvent: "dblclick",
+    // Bound the grid to the viewport so its body scrolls internally (with a
+    // frozen header row) instead of pushing the Add Row / Save toolbar off-screen.
+    maxHeight: "calc(100vh - 200px)",
 };
 
 export const deleteColumn = (onAfterDelete) => ({
