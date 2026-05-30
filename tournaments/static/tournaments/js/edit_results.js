@@ -1,16 +1,16 @@
 import {
-    TABLE_DEFAULTS,
     buildLookup,
+    createEditTable,
     deleteColumn,
     lookupColumn,
     wireAddRowButton,
     wireSaveButton,
+    wireUndoRedo,
 } from "./table_helpers.js";
 
 const entrantLookup = buildLookup(pageData.entrants);
 
-const table = new Tabulator("#results-table", {
-    ...TABLE_DEFAULTS,
+const table = createEditTable("#results-table", {
     data: pageData.results,
     columns: [
         {
@@ -80,3 +80,5 @@ wireSaveButton({
         winner_started: r.winner_started === true || r.winner_started === "true",
     }),
 });
+
+wireUndoRedo(table);

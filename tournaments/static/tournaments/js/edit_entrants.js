@@ -1,20 +1,27 @@
 import {
-    TABLE_DEFAULTS,
     buildLookup,
+    createEditTable,
     deleteColumn,
     lookupColumn,
+    nextRid,
     wireAddRowButton,
     wireSaveButton,
+    wireUndoRedo,
 } from "./table_helpers.js";
 
 const playerLookup = buildLookup(pageData.players);
 
+// Number only the surviving rows, so seeds stay sequential once rows marked for
+// deletion are dropped on save.
 function renumber() {
-    table.getRows().forEach((row, i) => row.update({ number: i + 1 }));
+    let n = 0;
+    table.getRows().forEach(row => {
+        if (row.getData()._deleted) return;
+        row.update({ number: ++n });
+    });
 }
 
-const table = new Tabulator("#entrants-table", {
-    ...TABLE_DEFAULTS,
+const table = createEditTable("#entrants-table", {
     data: pageData.entrants,
     columns: [
         {
@@ -24,7 +31,7 @@ const table = new Tabulator("#entrants-table", {
             hozAlign: "center",
         },
         lookupColumn({ title: "Player", field: "player", lookup: playerLookup, autocomplete: true }),
-        deleteColumn(renumber),
+        deleteColumn(),
     ],
 });
 
@@ -44,6 +51,8 @@ wireSaveButton({
         player: parseInt(r.player) || null,
     }),
 });
+
+wireUndoRedo(table);
 
 // -- Create New Player (form toggle handled by datastar data-show) --
 
@@ -76,7 +85,7 @@ document.getElementById("create-player-btn").addEventListener("click", function(
         if (ok && body.ok) {
             playerLookup[body.id] = body.label;
             const count = table.getDataCount();
-            table.addRow({ number: count + 1, player: body.id });
+            table.addRow({ number: count + 1, player: body.id, _rid: nextRid() });
             nameInput.value = "";
             ratingInput.value = "0";
             statusEl.textContent = "";

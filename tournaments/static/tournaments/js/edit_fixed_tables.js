@@ -1,17 +1,17 @@
 import {
-    TABLE_DEFAULTS,
     buildLookup,
+    createEditTable,
     deleteColumn,
     lookupColumn,
     wireAddRowButton,
     wireSaveButton,
+    wireUndoRedo,
 } from "./table_helpers.js";
 
 const entrantLookup = buildLookup(pageData.entrantValues);
 const roundValues = Object.fromEntries(pageData.roundValues.map(r => [r.value, r.label]));
 
-const table = new Tabulator("#fixed-tables-table", {
-    ...TABLE_DEFAULTS,
+const table = createEditTable("#fixed-tables-table", {
     data: pageData.fixedTables,
     columns: [
         {
@@ -56,3 +56,5 @@ wireSaveButton({
         table_number: parseInt(r.table_number) || null,
     }),
 });
+
+wireUndoRedo(table);
