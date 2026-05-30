@@ -186,7 +186,7 @@ class DivisionScorecardsViewTests(TestCase):
 
     def test_downloads_docx_attachment(self):
         response = self.client.get(
-            reverse("division_scorecards", kwargs={"pk": self.division.pk})
+            reverse("division_scorecards_download", kwargs={"pk": self.division.pk})
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], DOCX_CONTENT_TYPE)
@@ -196,7 +196,7 @@ class DivisionScorecardsViewTests(TestCase):
 
     def test_filename_is_slugified(self):
         response = self.client.get(
-            reverse("division_scorecards", kwargs={"pk": self.division.pk})
+            reverse("division_scorecards_download", kwargs={"pk": self.division.pk})
         )
         self.assertIn("test-tournament-open-scorecards.docx",
                       response["Content-Disposition"])
@@ -204,10 +204,12 @@ class DivisionScorecardsViewTests(TestCase):
     def test_test_division_hidden_from_non_editor(self):
         self.division.is_test = True
         self.division.save()
-        response = self.client.get(
-            reverse("division_scorecards", kwargs={"pk": self.division.pk})
-        )
-        self.assertEqual(response.status_code, 404)
+        # Both the landing page and the download 404 for a hidden test division.
+        for name in ("division_scorecards", "division_scorecards_download"):
+            response = self.client.get(
+                reverse(name, kwargs={"pk": self.division.pk})
+            )
+            self.assertEqual(response.status_code, 404)
 
     def test_opponents_prefilled_from_pairings(self):
         # Keep it to 3 rounds so each player's card is a single table.
@@ -220,7 +222,7 @@ class DivisionScorecardsViewTests(TestCase):
             first=self.entrant1, second=self.entrant2,
         )
         response = self.client.get(
-            reverse("division_scorecards", kwargs={"pk": self.division.pk})
+            reverse("division_scorecards_download", kwargs={"pk": self.division.pk})
         )
         doc = Document(BytesIO(response.content))
         # Entrants order by number: table[0] is player1's card, table[1] player2's.
