@@ -981,6 +981,121 @@ class DivisionPairingsRoundContentTests(TestCase):
         self.assertEqual(by_table[2].result, "")
 
 
+DATASTAR_HEADERS = {"datastar-request": "true"}
+
+
+class InlineFixedPairingTests(TestCase):
+    """The fixed-pairings section embedded in a pairable round of the pairings tab."""
+
+    @classmethod
+    def setUpTestData(cls):
+        setUpTournament(cls)
+        cls.player3 = Player.objects.create(name="Carol", player_number="003", rating=1400)
+        cls.player4 = Player.objects.create(name="Dave", player_number="004", rating=1300)
+        cls.entrant3 = Entrant.objects.create(division=cls.division, player=cls.player3, number=3)
+        cls.entrant4 = Entrant.objects.create(division=cls.division, player=cls.player4, number=4)
+        DivisionSettings.objects.create(
+            division=cls.division,
+            round_pairings=[
+                {"round": 1, "pairing": "KotH", "start_round": 0},
+                {"round": 2, "pairing": "KotH", "start_round": 1},
+            ],
+        )
+
+    def _datastar_post(self, name, payload):
+        return self.client.post(
+            reverse(name, kwargs={"pk": self.division.pk}),
+            data=json.dumps(payload),
+            content_type="application/json",
+            headers=DATASTAR_HEADERS,
+        )
+
+    def test_section_shown_for_editor_on_pairable_round(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(
+            reverse("division_pairings", kwargs={"pk": self.division.pk})
+        )
+        self.assertEqual(response.context["selected_status"], "pairable")
+        self.assertContains(response, "Add fixed pairing")
+
+    def test_section_hidden_for_non_editor(self):
+        response = self.client.get(
+            reverse("division_pairings", kwargs={"pk": self.division.pk})
+        )
+        self.assertEqual(response.context["selected_status"], "pairable")
+        self.assertNotContains(response, "Add fixed pairing")
+
+    def test_datastar_add_creates_pairing_and_renders_it(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self._datastar_post(
+            "add_fixed_pairing",
+            {"round": 1, "entrant1": self.entrant1.pk, "entrant2": self.entrant3.pk},
+        )
+        self.assertEqual(response.status_code, 200)
+        fp = self.division.fixed_pairings.get(round_number=1)
+        self.assertEqual({fp.entrant1_id, fp.entrant2_id}, {self.entrant1.pk, self.entrant3.pk})
+        self.assertContains(response, "Alice vs Carol")
+        # The round was regenerated with the fix honoured.
+        paired = self.division.pairings.filter(round=1).filter(
+            first__in=[self.entrant1, self.entrant3],
+            second__in=[self.entrant1, self.entrant3],
+        )
+        self.assertEqual(paired.count(), 1)
+
+    def test_datastar_add_duplicate_player_renders_error(self):
+        self.client.login(username="owner", password="testpass123")
+        FixedPairing.objects.create(
+            division=self.division, round_number=1,
+            entrant1=self.entrant1, entrant2=self.entrant2,
+        )
+        response = self._datastar_post(
+            "add_fixed_pairing",
+            {"round": 1, "entrant1": self.entrant1.pk, "entrant2": self.entrant3.pk},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "already have a fixed pairing")
+        self.assertEqual(self.division.fixed_pairings.filter(round_number=1).count(), 1)
+
+    def test_datastar_remove_single_pairing(self):
+        self.client.login(username="owner", password="testpass123")
+        fp = FixedPairing.objects.create(
+            division=self.division, round_number=1,
+            entrant1=self.entrant1, entrant2=self.entrant3,
+        )
+        response = self._datastar_post(
+            "remove_fixed_pairing", {"fp_id": fp.pk, "round": 1}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(self.division.fixed_pairings.filter(pk=fp.pk).exists())
+
+    def test_datastar_remove_guarded_when_round_has_results(self):
+        # A round with results renders as in_progress (no inline delete button),
+        # so this path is not reachable via the UI; the backend guard still
+        # refuses the delete as defense-in-depth.
+        self.client.login(username="owner", password="testpass123")
+        rp = RoundPairings.objects.create(
+            division=self.division, round=1, status=RoundPairings.IN_PROGRESS
+        )
+        pairing = Pairing.objects.create(
+            division=self.division, round=1, round_pairings=rp,
+            first=self.entrant1, second=self.entrant2, table=1,
+        )
+        ResultSlip.objects.create(
+            division=self.division, round=1, pairing=pairing,
+            winner=self.entrant1, winner_score=450,
+            loser=self.entrant2, loser_score=380, winner_started=True,
+        )
+        fp = FixedPairing.objects.create(
+            division=self.division, round_number=1,
+            entrant1=self.entrant3, entrant2=self.entrant4,
+        )
+        response = self._datastar_post(
+            "remove_fixed_pairing", {"fp_id": fp.pk, "round": 1}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(self.division.fixed_pairings.filter(pk=fp.pk).exists())
+
+
 @tag("slow")
 class DivisionEditResultsViewTests(TestCase):
     def setUp(self):

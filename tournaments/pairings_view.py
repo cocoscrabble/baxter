@@ -150,6 +150,16 @@ class PairingsPresenter:
         }
 
     @cached_property
+    def fixed_for_selected(self):
+        if self.selected_round is None:
+            return []
+        return list(
+            self.division.fixed_pairings
+            .filter(round_number=self.selected_round)
+            .select_related("entrant1__player", "entrant2__player")
+        )
+
+    @cached_property
     def has_draft_rounds(self) -> bool:
         return self.division.round_pairings_set.filter(status=RoundPairings.DRAFT).exists()
 
@@ -295,6 +305,8 @@ class PairingsPresenter:
             context["selected_status_badge_class"] = sel["_enum"].badge_class
             context["selected_status_badge_label"] = sel["_enum"].badge_label
             context["round_label"] = sel["label"]
+            if sel["status"] == "pairable":
+                context["fixed_pairings_for_round"] = self.fixed_for_selected
         rows = self._rows_for_selected()
         if rows is not None:
             context["round_pairings"] = rows

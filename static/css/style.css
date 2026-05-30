@@ -472,6 +472,48 @@ dd {
 .badge-future { background-color: var(--color-future-light); color: var(--color-future); }
 .badge-error { background-color: #fdecea; color: #b3261e; }
 
+/* ── Inline fixed pairings (pairings tab) ──────────────────── */
+.fixed-pairings-section {
+    margin: var(--space-md) 0;
+    padding: var(--space-md);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+}
+
+.fixed-pairings-section h3 {
+    margin-top: 0;
+}
+
+.fixed-pairings-list {
+    list-style: none;
+    margin: 0 0 var(--space-md);
+    padding: 0;
+}
+
+.fixed-pairings-list li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: 2px 0;
+}
+
+.fixed-pairing-remove {
+    line-height: 1;
+    padding: 0 var(--space-sm);
+}
+
+.fixed-pairings-empty {
+    color: var(--color-future);
+    margin: 0 0 var(--space-md);
+}
+
+.fixed-pairing-add {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+}
+
 /* ── Utilities ────────────────────────────────────────────── */
 .mt-sm { margin-top: var(--space-sm); }
 .mt-md { margin-top: var(--space-md); }

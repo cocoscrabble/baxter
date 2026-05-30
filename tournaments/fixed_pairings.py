@@ -57,6 +57,25 @@ def add_fixed_pairing(division, round_number, entrant1_id, entrant2_id) -> tuple
     return True, None
 
 
+def remove_fixed_pairing(division, fp_id) -> tuple[bool, str | None]:
+    """Remove a single fixed pairing and regenerate. Returns (ok, error_message)."""
+    fp = division.fixed_pairings.filter(pk=fp_id).first()
+    if fp is None:
+        return False, None  # silent: already gone or wrong division
+
+    round_number = fp.round_number
+    if rounds_with_results(division, [round_number]):
+        return False, (
+            f"Round {round_number} already has results — "
+            "fixed pairings cannot be changed."
+        )
+
+    fp.delete()
+    division.round_pairings_set.revert_published_to_draft([round_number])
+    regenerate_pairings(division)
+    return True, None
+
+
 def remove_fixed_pairings(division, keep_ids) -> str | None:
     """Remove all fixed pairings not in keep_ids. Returns error message, or None."""
     to_remove = division.fixed_pairings.exclude(pk__in=keep_ids)

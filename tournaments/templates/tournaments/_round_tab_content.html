@@ -53,6 +53,39 @@
     <p>This round has results recorded but no pairings on file. Generate or import pairings before editing results.</p>
 
 {% elif selected_status == 'pairable' or selected_status == 'published' %}
+    {% if can_edit and selected_status == 'pairable' %}
+    <div class="fixed-pairings-section" data-signals="{fixedFirst: '', fixedSecond: ''}">
+        <h3>Fixed pairings (round {{ selected_round }})</h3>
+        {% if fixed_error %}<p class="error">{{ fixed_error }}</p>{% endif %}
+        {% if fixed_pairings_for_round %}
+        <ul class="fixed-pairings-list">
+            {% for fp in fixed_pairings_for_round %}
+            <li>
+                <span>{{ fp.entrant1.name }} vs {{ fp.entrant2.name }}</span>
+                <button type="button" class="fixed-pairing-remove" title="Remove fixed pairing"
+                    data-on:click="@post('{% url 'remove_fixed_pairing' division.pk %}', {headers: {'X-CSRFToken': $_csrfToken}, payload: {fp_id: {{ fp.id }}, round: {{ selected_round }}}})">&#x2715;</button>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="fixed-pairings-empty">No fixed pairings for this round.</p>
+        {% endif %}
+        <div class="fixed-pairing-add">
+            <select data-bind="fixedFirst">
+                <option value="">— player —</option>
+                {% for e in entrants %}<option value="{{ e.pk }}">{{ e.name }}</option>{% endfor %}
+            </select>
+            <span>vs</span>
+            <select data-bind="fixedSecond">
+                <option value="">— player —</option>
+                {% for e in entrants %}<option value="{{ e.pk }}">{{ e.name }}</option>{% endfor %}
+            </select>
+            <button type="button"
+                data-attr-disabled="$fixedFirst === '' || $fixedSecond === '' || $fixedFirst === $fixedSecond"
+                data-on:click="@post('{% url 'add_fixed_pairing' division.pk %}', {headers: {'X-CSRFToken': $_csrfToken}, payload: {round: {{ selected_round }}, entrant1: $fixedFirst, entrant2: $fixedSecond}})">Add fixed pairing</button>
+        </div>
+    </div>
+    {% endif %}
     {% if round_pairings %}
     <table>
         <thead>
