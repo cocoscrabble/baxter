@@ -26,7 +26,11 @@ from .forms import (
     TournamentForm,
 )
 from .dto import EntrantDTO, FixedPairingDTO, FixedTableDTO, ResultSlipDTO, parse_rows
-from .fixed_pairings import add_fixed_pairing, remove_fixed_pairings
+from .fixed_pairings import (
+    add_fixed_pairing,
+    remove_fixed_pairing,
+    remove_fixed_pairings,
+)
 from .match_simulation import simulate_match, simulate_round
 from .models import Division, DivisionSettings, Entrant, FixedPairing, FixedTable, Pairing, Player, ResultSlip, RoundPairings, Tournament
 from .generate_pairings import regenerate_pairings
@@ -315,16 +319,52 @@ class PublishPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
         return redirect("division_pairings", pk=pk)
 
 
+def _fixed_pairing_response(request, division, round_number, error):
+    """Datastar: re-render the pairings body for ``round_number`` (live regenerate).
+
+    Falls back to a flash + redirect for non-Datastar (no-JS) submissions, which
+    keeps the existing full-page behaviour and its tests intact.
+    """
+    if is_datastar(request):
+        presenter = PairingsPresenter(division).select(round_number)
+        context = {
+            "division": division,
+            "can_edit": True,
+            "active_tab": "pairings",
+        }
+        context.update(presenter.as_context())
+        context.update(_editor_pairings_context(division, presenter))
+        if error:
+            context["fixed_error"] = error
+        return fragment_response(
+            "tournaments/_pairings_body.html", context, request=request
+        )
+    if error:
+        messages.error(request, error)
+    return redirect("division_pairings", pk=division.pk)
+
+
 class AddFixedPairingView(LoginRequiredMixin, CanEditDivisionMixin, View):
     def post(self, request, pk):
         division = self.get_division()
-        round_number = int(request.POST["round"])
-        entrant1_id = int(request.POST["entrant1"])
-        entrant2_id = int(request.POST["entrant2"])
+        data = (read_signals(request) or {}) if is_datastar(request) else request.POST
+        round_number = int(data["round"])
+        entrant1_id = int(data["entrant1"])
+        entrant2_id = int(data["entrant2"])
         _, error = add_fixed_pairing(division, round_number, entrant1_id, entrant2_id)
-        if error:
-            messages.error(request, error)
-        return redirect("division_pairings", pk=pk)
+        return _fixed_pairing_response(request, division, round_number, error)
+
+
+class RemoveFixedPairingView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    """Delete a single fixed pairing inline and live-regenerate its round."""
+
+    def post(self, request, pk):
+        division = self.get_division()
+        data = (read_signals(request) or {}) if is_datastar(request) else request.POST
+        fp_id = int(data["fp_id"])
+        round_number = int(data["round"])
+        _, error = remove_fixed_pairing(division, fp_id)
+        return _fixed_pairing_response(request, division, round_number, error)
 
 
 class RemoveFixedPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
@@ -343,6 +383,23 @@ def _entrants_for_editing(division):
     )
 
 
+def _editor_pairings_context(division, presenter):
+    """Controls/edit context shared by the full page and every fragment endpoint.
+
+    Keeps the generate/publish controls and the inline fixed-pairing editor
+    consistent whichever endpoint rendered the ``_pairings_body`` swap unit.
+    """
+    context = {"entrants": _entrants_for_editing(division)}
+    label = presenter.generate_label()
+    if label:
+        context["generate_label"] = label
+    else:
+        msg = presenter.waiting_message
+        if msg:
+            context["waiting_message"] = msg
+    return context
+
+
 class DivisionPairingsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
     model = Division
     template_name = "tournaments/division_pairings.html"
@@ -354,14 +411,7 @@ class DivisionPairingsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
         presenter = PairingsPresenter(self.object)
         context.update(presenter.as_context())
         if context["can_edit"]:
-            label = presenter.generate_label()
-            if label:
-                context["generate_label"] = label
-            else:
-                msg = presenter.waiting_message
-                if msg:
-                    context["waiting_message"] = msg
-            context["entrants"] = _entrants_for_editing(self.object)
+            context.update(_editor_pairings_context(self.object, presenter))
         return context
 
 
@@ -375,12 +425,13 @@ class RoundPairingsTabView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
     def get(self, request, pk, round):
         self.object = self.get_object()
         context = self.get_context_data(object=self.object)
-        context.update(PairingsPresenter(self.object).select(round).as_context())
+        presenter = PairingsPresenter(self.object).select(round)
+        context.update(presenter.as_context())
         if context.get("can_edit"):
-            context["entrants"] = _entrants_for_editing(self.object)
+            context.update(_editor_pairings_context(self.object, presenter))
         if is_datastar(request):
             return fragment_response(
-                "tournaments/_round_tab_content.html", context, request=request
+                "tournaments/_pairings_body.html", context, request=request
             )
         return self.render_to_response(context)
 
