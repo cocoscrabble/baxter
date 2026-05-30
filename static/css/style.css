@@ -23,12 +23,14 @@
     --color-deleted-bg: #fdecea;
 
     /* Round status colors */
-    --color-finished: #27ae60;
-    --color-finished-light: #e8f8f0;
+    --color-finished: #607d8b;
+    --color-finished-light: #eceff1;
     --color-in-progress: #e67e22;
     --color-in-progress-light: #fef5e7;
     --color-pairable: #2980b9;
     --color-pairable-light: #ebf5fb;
+    --color-published: #1e9e57;
+    --color-published-light: #e6f6ee;
     --color-future: #95a5a6;
     --color-future-light: #f2f3f4;
 
@@ -429,7 +431,7 @@ dd {
 .round-tab-finished     { --tab-color: var(--color-finished);    --tab-bg: var(--color-finished-light); }
 .round-tab-in_progress  { --tab-color: var(--color-in-progress); --tab-bg: var(--color-in-progress-light); }
 .round-tab-pairable     { --tab-color: var(--color-pairable);    --tab-bg: var(--color-pairable-light); }
-.round-tab-published    { --tab-color: var(--color-pairable);    --tab-bg: var(--color-pairable-light); }
+.round-tab-published    { --tab-color: var(--color-published);   --tab-bg: var(--color-published-light); }
 .round-tab-future       { --tab-color: var(--color-future);      --tab-bg: var(--color-future-light); }
 .round-tab-error_no_pairings { --tab-color: #b3261e; --tab-bg: #fdecea; }
 
@@ -468,7 +470,7 @@ dd {
 .badge-finished { background-color: var(--color-finished-light); color: var(--color-finished); }
 .badge-in-progress { background-color: var(--color-in-progress-light); color: var(--color-in-progress); }
 .badge-pairable { background-color: var(--color-pairable-light); color: var(--color-pairable); }
-.badge-published { background-color: var(--color-pairable-light); color: var(--color-pairable); }
+.badge-published { background-color: var(--color-published-light); color: var(--color-published); }
 .badge-future { background-color: var(--color-future-light); color: var(--color-future); }
 .badge-error { background-color: #fdecea; color: #b3261e; }
 
