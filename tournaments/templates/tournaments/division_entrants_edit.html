@@ -8,16 +8,14 @@
 
 {% include "tournaments/_tabulator_head.html" %}
 
-<div id="entrants-table"></div>
-
-<p class="mt-md">
+<div class="table-toolbar">
     <button id="add-row-btn" type="button">Add Entrant</button>
     <button type="button" data-on:click="$showNewPlayer = !$showNewPlayer">Add New Player</button>
     <button id="save-btn" type="button">Save</button>
     <span id="save-status"></span>
-</p>
+</div>
 
-<div class="inline-panel hidden" data-class="{hidden: !$showNewPlayer}">
+<div class="inline-panel hidden mt-sm" data-class="{hidden: !$showNewPlayer}">
     <h3>Create New Player</h3>
     <p>
         <label>Name: <input type="text" data-bind="newPlayerName"></label>
@@ -28,7 +26,7 @@
     <span id="new-player-status"></span>
 </div>
 
-<details class="mt-xl">
+<details class="mt-sm">
     <summary>Bulk Import (CSV)</summary>
     <p class="mt-sm">
         Upload a CSV file. One column: <code>name</code>. Two columns: <code>name, rating</code>.
@@ -40,6 +38,8 @@
     </form>
     <div id="import-status" class="mt-sm"></div>
 </details>
+
+<div id="entrants-table" class="mt-md"></div>
 
 <script>
 const pageData = {

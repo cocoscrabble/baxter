@@ -2,6 +2,8 @@
 
 {% block title %}{% if editing %}Edit Result{% else %}Add Result{% endif %} - {{ division.name }} - Baxter{% endblock %}
 
+{% block page_class %}page--narrow{% endblock %}
+
 {% block content %}
 <h1>{% if editing %}Edit Result{% else %}Add Result{% endif %}</h1>
 

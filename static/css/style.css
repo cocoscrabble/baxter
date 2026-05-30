@@ -34,6 +34,11 @@
     --color-future: #95a5a6;
     --color-future-light: #f2f3f4;
 
+    /* Surfaces */
+    --surface: #f6f5f3;          /* warm off-white page background */
+    --surface-raised: #ffffff;   /* cards, table headers, sticky bars */
+    --text: #1d1d1f;
+
     /* Spacing */
     --space-xs: 4px;
     --space-sm: 8px;
@@ -45,31 +50,70 @@
     --radius-sm: 3px;
     --radius: 4px;
 
-    /* Typography */
+    /* Typography (font phase will swap these families; tokens stay) */
     --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    --line-height: 1.6;
+    --font-display: var(--font-family);
+    --font-body: var(--font-family);
+    --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --line-height: 1.45;
 
     /* Layout */
-    --max-width: 800px;
+    --content-max: 1440px;       /* content fills the laptop, capped here */
+    --pad-inline: clamp(16px, 4vw, 40px);
+    --header-h: 88px;            /* approx sticky header height (scroll offset math) */
+    --measure: 640px;           /* narrow column for form-only pages */
 }
 
 /* ── Base ──────────────────────────────────────────────────── */
 body {
-    font-family: var(--font-family);
-    max-width: var(--max-width);
-    margin: 0 auto;
-    padding: 20px;
+    font-family: var(--font-body);
+    margin: 0;
+    padding: 0;
     line-height: var(--line-height);
+    background: var(--surface);
+    color: var(--text);
+}
+
+h1, h2, h3 {
+    font-family: var(--font-display);
+    line-height: 1.2;
+}
+
+h1 { font-size: 1.6rem; margin: 0 0 var(--space-md); }
+h2 { font-size: 1.2rem; margin: var(--space-lg) 0 var(--space-sm); }
+h3 { font-size: 1.02rem; margin: var(--space-md) 0 var(--space-sm); }
+
+/* ── App shell ─────────────────────────────────────────────── */
+.app-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: var(--surface-raised);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.app-main {
+    display: block;
+}
+
+.page {
+    max-width: var(--content-max);
+    margin-inline: auto;
+    padding: var(--space-lg) var(--pad-inline) var(--space-xl);
+}
+
+.page--narrow {
+    max-width: var(--measure);
 }
 
 /* ── Navbar ────────────────────────────────────────────────── */
 .navbar {
+    max-width: var(--content-max);
+    margin-inline: auto;
     display: flex;
     flex-direction: column;
     gap: var(--space-xs);
-    padding: var(--space-sm) 0;
-    margin-bottom: var(--space-md);
-    border-bottom: 1px solid var(--color-border);
+    padding: var(--space-sm) var(--pad-inline);
     font-size: 0.9em;
 }
 
@@ -248,10 +292,11 @@ button,
 input[type="submit"] {
     background-color: var(--color-primary);
     color: white;
-    padding: 10px 20px;
+    padding: 8px 14px;
     border: none;
     border-radius: var(--radius);
     cursor: pointer;
+    font: inherit;
 }
 
 button:hover,
@@ -308,24 +353,136 @@ input[type="submit"]:hover {
 table {
     width: 100%;
     border-collapse: collapse;
-    margin-bottom: 20px;
+    margin-bottom: var(--space-md);
 }
 
 th,
 td {
-    padding: 10px;
+    padding: 6px 10px;
     text-align: left;
     border-bottom: 1px solid var(--color-border);
 }
 
+td {
+    font-variant-numeric: tabular-nums;
+}
+
 th {
-    background-color: var(--color-bg-subtle);
-    font-weight: bold;
+    background-color: var(--surface-raised);
+    font-weight: 600;
+}
+
+tbody tr:nth-child(even) {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+tbody tr:hover {
+    background-color: var(--color-primary-light);
+}
+
+/* Right-align numeric columns (scores, wins, spread, ratings, table #). */
+.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
 }
 
 td a:hover {
     background-color: var(--color-bg-hover);
     border-radius: var(--radius-sm);
+}
+
+/* Bounded scroll region: long tables scroll internally so page-level controls
+   stay on screen. Header row sticks to the top of the scroll box (no dependency
+   on the sticky-header height). */
+.table-scroll {
+    max-height: calc(100vh - var(--header-h) - 96px);
+    overflow: auto;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--surface-raised);
+}
+
+.table-scroll table {
+    margin-bottom: 0;
+}
+
+.table-scroll thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    /* border-collapse drops borders on sticky cells; use an inset shadow. */
+    box-shadow: inset 0 -1px 0 var(--color-border);
+}
+
+.table-narrow {
+    max-width: 680px;
+}
+
+/* ── Layout utilities ─────────────────────────────────────── */
+/* Title row with right-aligned page actions (replaces stacked controls). */
+.page-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-md);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-md);
+}
+
+.page-head h1 {
+    margin: 0;
+}
+
+.page-head-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+}
+
+/* Primary content + a contextual side panel. */
+.split-main-side {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 340px);
+    gap: var(--space-lg);
+    align-items: start;
+}
+
+@media (max-width: 900px) {
+    .split-main-side {
+        grid-template-columns: 1fr;
+    }
+}
+
+.card {
+    background: var(--surface-raised);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: var(--space-md);
+}
+
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: var(--space-md);
+}
+
+/* Sticky action bar above a bounded grid (Tabulator edit pages). */
+.table-toolbar {
+    position: sticky;
+    top: var(--header-h);
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    background: var(--surface);
+    padding: var(--space-sm) 0;
+    margin-bottom: var(--space-sm);
+}
+
+.form-narrow {
+    max-width: 480px;
 }
 
 /* ── Definition Lists ─────────────────────────────────────── */

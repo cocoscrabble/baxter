@@ -9,6 +9,7 @@
     {% block extra_head %}{% endblock %}
 </head>
 <body data-signals="{_csrfToken: '{{ csrf_token }}'}">
+    <header class="app-header">
     <nav class="navbar">
         <div class="nav-top">
             <div class="nav-left">
@@ -28,7 +29,10 @@
         </div>
         {% block nav_tabs_row %}{% block nav_tabs %}{% endblock %}{% endblock %}
     </nav>
+    </header>
 
+    <main class="app-main">
+    <div class="page {% block page_class %}{% endblock %}">
     {% if messages %}
     <ul class="messages">
         {% for message in messages %}
@@ -38,6 +42,8 @@
     {% endif %}
 
     {% block content %}{% endblock %}
+    </div>
+    </main>
 
     <script type="module" src="{% static 'js/datastar.js' %}"></script>
     {% block extra_js %}{% endblock %}
