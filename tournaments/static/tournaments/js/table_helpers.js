@@ -10,6 +10,17 @@ export const TABLE_DEFAULTS = {
     keybindings: true,
     selectableRange: 1,
     editTriggerEvent: "dblclick",
+    // Fixed row height (matching the 26px rows in tabulator_overrides.css) lets
+    // Tabulator skip measuring each row's height. That measurement is a forced
+    // synchronous reflow per row; on Firefox it compounds into a multi-second
+    // freeze while the table builds. With a known height there is nothing to
+    // measure, so the build stays fast across browsers.
+    rowHeight: 26,
+    // These grids hold at most a few hundred rows, so skip the virtual renderer:
+    // its per-row offset-height measurement is a forced reflow that, like the
+    // height measurement above, freezes Firefox for seconds. "basic" renders all
+    // rows up front with none of that measurement.
+    renderVertical: "basic",
     // Bound the grid to the viewport so its body scrolls internally (with a
     // frozen header row) instead of pushing the Add Row / Save toolbar off-screen.
     maxHeight: "calc(100vh - 200px)",
