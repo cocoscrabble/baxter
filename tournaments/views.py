@@ -303,13 +303,6 @@ class DivisionStandingsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
 
 
 
-class GeneratePairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
-    def post(self, request, pk):
-        division = self.get_division()
-        regenerate_pairings(division)
-        return redirect("division_pairings", pk=pk)
-
-
 class PublishPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
     def post(self, request, pk):
         division = self.get_division()
@@ -386,18 +379,27 @@ def _entrants_for_editing(division):
 def _editor_pairings_context(division, presenter):
     """Controls/edit context shared by the full page and every fragment endpoint.
 
-    Keeps the generate/publish controls and the inline fixed-pairing editor
-    consistent whichever endpoint rendered the ``_pairings_body`` swap unit.
+    Keeps the publish control and the inline fixed-pairing editor consistent
+    whichever endpoint rendered the ``_pairings_body`` swap unit.
     """
     context = {"entrants": _entrants_for_editing(division)}
-    label = presenter.generate_label()
-    if label:
-        context["generate_label"] = label
-    else:
-        msg = presenter.waiting_message
-        if msg:
-            context["waiting_message"] = msg
+    msg = presenter.waiting_message
+    if msg:
+        context["waiting_message"] = msg
     return context
+
+
+def _autogenerate_pairable_rounds(division):
+    """Generate pairings for any pairable round that has none yet.
+
+    Makes 'pairable' imply 'has draft pairings', so the pairings tab only needs
+    a Publish action rather than a manual Generate step. Regeneration only
+    touches draft rounds and is idempotent for the deterministic strategies, so
+    running it lazily on render is safe; it is a no-op once every pairable round
+    has pairings.
+    """
+    if PairingsPresenter(division).rounds_needing_generation:
+        regenerate_pairings(division)
 
 
 class DivisionPairingsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
@@ -408,6 +410,8 @@ class DivisionPairingsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        if context["can_edit"]:
+            _autogenerate_pairable_rounds(self.object)
         presenter = PairingsPresenter(self.object)
         context.update(presenter.as_context())
         if context["can_edit"]:
@@ -425,6 +429,8 @@ class RoundPairingsTabView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
     def get(self, request, pk, round):
         self.object = self.get_object()
         context = self.get_context_data(object=self.object)
+        if context.get("can_edit"):
+            _autogenerate_pairable_rounds(self.object)
         presenter = PairingsPresenter(self.object).select(round)
         context.update(presenter.as_context())
         if context.get("can_edit"):

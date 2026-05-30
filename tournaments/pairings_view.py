@@ -280,12 +280,10 @@ class PairingsPresenter:
             return None
         return "All rounds are finished."
 
-    def generate_label(self) -> str | None:
-        rounds = self.available_rounds
-        if not rounds:
-            return None
-        plural = "rounds" if len(rounds) > 1 else "round"
-        return f"Generate Pairings ({plural} {', '.join(str(r) for r in rounds)})"
+    @cached_property
+    def rounds_needing_generation(self) -> list[int]:
+        """Pairable rounds that have no pairings yet (need auto-generation)."""
+        return [r for r in self.available_rounds if r not in self.rounds_with_pairings]
 
     # --- Context builders ---
 
