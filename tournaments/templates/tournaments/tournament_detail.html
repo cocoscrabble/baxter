@@ -8,29 +8,21 @@
 {% endblock %}
 
 {% block content %}
-<h1>{{ tournament.name }}</h1>
+<div class="page-head">
+    <h1>{{ tournament.name }}</h1>
+    {% if can_edit %}
+    <div class="page-head-actions">
+        <a href="{% url 'tournament_edit' tournament.pk %}">Edit</a>
+        {% if user == tournament.owner %}
+        <a href="{% url 'tournament_delete' tournament.pk %}">Delete</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
 
-<dl>
-    <dt>Location</dt>
-    <dd>{{ tournament.location }}</dd>
-
-    <dt>Date</dt>
-    <dd>{{ tournament.start_date }}</dd>
-
-    <dt>Owner</dt>
-    <dd>{{ tournament.owner.username }}</dd>
-
-    <dt>Editors</dt>
-    <dd>
-        {% for editor in tournament.editors.all %}
-            {{ editor.username }}{% if not forloop.last %}, {% endif %}
-        {% empty %}
-            None
-        {% endfor %}
-    </dd>
-
-    <dt>Divisions</dt>
-    <dd>
+<div class="split-main-side">
+    <section class="tournament-divisions">
+        <h2>Divisions</h2>
         {% if can_edit %}
             {% include "tournaments/_division_management.html" %}
         {% else %}
@@ -40,15 +32,28 @@
                 None
             {% endfor %}
         {% endif %}
-    </dd>
-</dl>
+    </section>
 
-{% if can_edit %}
-<p>
-    <a href="{% url 'tournament_edit' tournament.pk %}">Edit</a>
-    {% if user == tournament.owner %}
-    | <a href="{% url 'tournament_delete' tournament.pk %}">Delete</a>
-    {% endif %}
-</p>
-{% endif %}
+    <aside class="card">
+        <dl>
+            <dt>Location</dt>
+            <dd>{{ tournament.location }}</dd>
+
+            <dt>Date</dt>
+            <dd>{{ tournament.start_date }}</dd>
+
+            <dt>Owner</dt>
+            <dd>{{ tournament.owner.username }}</dd>
+
+            <dt>Editors</dt>
+            <dd>
+                {% for editor in tournament.editors.all %}
+                    {{ editor.username }}{% if not forloop.last %}, {% endif %}
+                {% empty %}
+                    None
+                {% endfor %}
+            </dd>
+        </dl>
+    </aside>
+</div>
 {% endblock %}
