@@ -1,12 +1,6 @@
 <div id="pairings-controls">
 {% if can_edit %}
 <p>
-{% if generate_label %}
-<form method="post" action="{% url 'generate_pairings' division.pk %}" class="inline">
-    {% csrf_token %}
-    <button type="submit">{{ generate_label }}</button>
-</form>
-{% endif %}
 {% if has_draft_rounds %}
 <form method="post" action="{% url 'publish_pairings' division.pk %}" class="inline">
     {% csrf_token %}
@@ -17,7 +11,7 @@
 <a href="{% url 'published_pairings' division.pk %}" target="_blank" rel="noopener">View published pairings page</a>
 {% endif %}
 </p>
-{% if not generate_label and waiting_message %}
+{% if waiting_message %}
 <p>{{ waiting_message }}</p>
 {% endif %}
 {% endif %}
