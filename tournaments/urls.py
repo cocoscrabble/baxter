@@ -4,6 +4,7 @@ from .views import (
     AddFixedPairingView,
     BulkImportEntrantsView,
     CreatePlayerView,
+    PlayerImportView,
     DivisionAllResultsView,
     DivisionCreateView,
     DivisionDeleteView,
@@ -71,4 +72,5 @@ urlpatterns = [
     path("division/<int:pk>/board-tables/", DivisionBoardTableMapEditView.as_view(), name="division_board_tables"),
     path("division/<int:pk>/bulk-import/", BulkImportEntrantsView.as_view(), name="bulk_import_entrants"),
     path("create-player/", CreatePlayerView.as_view(), name="create_player"),
+    path("players/import/", PlayerImportView.as_view(), name="player_import"),
 ]

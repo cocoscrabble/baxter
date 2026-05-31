@@ -33,6 +33,8 @@ from .fixed_pairings import (
 )
 from .match_simulation import simulate_match, simulate_round
 from .models import Division, DivisionSettings, Entrant, FixedPairing, FixedTable, Pairing, Player, ResultSlip, RoundPairings, Tournament
+from .player_sync import import_players
+from users.models import User
 from .generate_pairings import regenerate_pairings
 from .pairing.base import PairingData, standings_after_round
 from .pairing.pair import STRATEGY_TYPES
@@ -99,6 +101,20 @@ class CanEditDivisionMixin(UserPassesTestMixin):
 
     def get_division(self):
         return get_object_or_404(Division, pk=self.kwargs["pk"])
+
+
+class IsAdminMixin(UserPassesTestMixin):
+    """Allow only Django superusers or users with the Admin role.
+
+    With the default ``raise_exception = False``, Django redirects anonymous
+    users to the login page but returns 403 for an authenticated non-admin.
+    """
+
+    def test_func(self):
+        user = self.request.user
+        return user.is_authenticated and (
+            user.is_superuser or user.role == User.Role.ADMIN
+        )
 
 
 def _ensure_visible_division(division, user):
@@ -651,6 +667,42 @@ class CreatePlayerView(LoginRequiredMixin, View):
             "label": player.name,
             "player_number": player.player_number,
         })
+
+
+class PlayerImportView(LoginRequiredMixin, IsAdminMixin, View):
+    """Admin-only page to upsert the global player roster from a JSON upload.
+
+    Pairs with the ``export_players`` management command: export on the source
+    machine, upload the file here. Players are matched on player_number, so
+    re-uploading is safe and only adds/updates rows.
+    """
+
+    template_name = "tournaments/player_import.html"
+
+    def get(self, request):
+        return render(request, self.template_name, {
+            "player_count": Player.objects.count(),
+        })
+
+    def post(self, request):
+        uploaded = request.FILES.get("players_file")
+        if not uploaded:
+            messages.error(request, "No file uploaded.")
+            return redirect("player_import")
+
+        result, errors = import_players(uploaded.read())
+        if errors:
+            for error in errors[:25]:
+                messages.error(request, error)
+            if len(errors) > 25:
+                messages.error(request, f"... and {len(errors) - 25} more.")
+        else:
+            messages.success(
+                request,
+                f"Imported {result['total']} player(s): {result['added']} added, "
+                f"{result['updated']} updated, {result['unchanged']} unchanged."
+            )
+        return redirect("player_import")
 
 
 class BulkImportEntrantsView(LoginRequiredMixin, CanEditDivisionMixin, View):

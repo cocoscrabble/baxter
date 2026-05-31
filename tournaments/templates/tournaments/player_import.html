@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}Import Players - Baxter{% endblock %}
+
+{% block page_class %}page--narrow{% endblock %}
+
+{% block content %}
+<h1>Import Players</h1>
+
+<p>Upload a player export to add new players and update existing ones. Players are
+matched by player number: existing entries are updated in place, new ones are
+added, and nothing is ever deleted.</p>
+
+<p>This database currently holds {{ player_count }} player{{ player_count|pluralize }}.</p>
+
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <p><input type="file" name="players_file" accept=".json,application/json" required></p>
+    <button type="submit">Upload and import</button>
+</form>
+
+<h2>Producing the file</h2>
+<p>On the machine with the players you want to push, run:</p>
+<pre>uv run manage.py export_players -o players.json</pre>
+<p>then upload <code>players.json</code> here.</p>
+{% endblock %}
