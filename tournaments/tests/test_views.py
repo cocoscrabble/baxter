@@ -1612,6 +1612,56 @@ class SimulateMatchViewTests(TestCase):
 
 
 @tag("slow")
+class SimulateButtonVisibilityTests(TestCase):
+    """The simulate buttons must only appear on published rounds of a test
+    division. Simulating a pairable (draft) round would record results against
+    pairings that can still be regenerated, leaving results with no pairing.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        setUpTournament(cls)
+        cls.test_division = Division.objects.create(
+            name="Test Div", tournament=cls.tournament, is_test=True,
+        )
+        cls.e1 = Entrant.objects.create(
+            division=cls.test_division, player=cls.player1, number=1
+        )
+        cls.e2 = Entrant.objects.create(
+            division=cls.test_division, player=cls.player2, number=2
+        )
+        DivisionSettings.objects.create(
+            division=cls.test_division,
+            round_pairings=[{"round": 1, "pairing": "KotH", "start_round": 0}],
+        )
+
+    def test_simulate_hidden_on_pairable_round(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(
+            reverse("division_pairings", kwargs={"pk": self.test_division.pk})
+        )
+        self.assertEqual(response.context["selected_status"], "pairable")
+        self.assertNotContains(response, ">simulate<")
+        self.assertNotContains(response, "simulate all")
+
+    def test_simulate_shown_on_published_round(self):
+        rp = RoundPairings.objects.create(
+            division=self.test_division, round=1, status=RoundPairings.PUBLISHED,
+        )
+        Pairing.objects.create(
+            division=self.test_division, round=1, round_pairings=rp,
+            first=self.e1, second=self.e2, table=1,
+        )
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(
+            reverse("round_pairings_tab", kwargs={"pk": self.test_division.pk, "round": 1})
+        )
+        self.assertEqual(response.context["selected_status"], "published")
+        self.assertContains(response, ">simulate<")
+        self.assertContains(response, "simulate all")
+
+
+@tag("slow")
 class DivisionEntrantsEditViewTests(TestCase):
     def setUp(self):
         setUpTournament(self)
