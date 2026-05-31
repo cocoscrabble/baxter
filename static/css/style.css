@@ -543,6 +543,9 @@ td a:hover {
     align-items: start;
 }
 
+/* The side panel comes first in the DOM but sits in column 2, so both items
+   need an explicit row 1 — otherwise grid's sparse auto-placement drops the
+   main table to row 2 (below the panel). */
 .pairings-body--split .pairings-main {
     grid-column: 1;
     grid-row: 1;
@@ -559,11 +562,21 @@ td a:hover {
     margin-top: 0;
 }
 
-.pairings-side .fixed-pairing-add {
-    flex-direction: column;
-    align-items: stretch;
+/* Keep the two player selects on one line ([name] vs [name]); the selects
+   shrink to share the panel width (the dropdown still shows full names) and the
+   Add button wraps to its own full-width line below. */
+.pairings-side .fixed-pairing-add select {
+    flex: 1 1 0;
+    min-width: 0;
 }
 
+.pairings-side .fixed-pairing-add button {
+    flex: 1 1 100%;
+}
+
+/* Narrow screens: stack into a single column. Clearing the explicit row/column
+   placement lets the items flow in DOM order, floating the side panel on top of
+   the main table. */
 @media (max-width: 980px) {
     .pairings-body--split {
         grid-template-columns: 1fr;
@@ -571,6 +584,7 @@ td a:hover {
     .pairings-body--split .pairings-main,
     .pairings-body--split .pairings-side {
         grid-column: 1;
+        grid-row: auto;
     }
 }
 
@@ -590,10 +604,23 @@ td a:hover {
     margin-top: 0;
 }
 
+.standings-main {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
 .round-links {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-xs) var(--space-sm);
+}
+
+/* Narrow screens: stack into a single column with the rounds panel on top of
+   the standings table (it comes first in the DOM). */
+@media (max-width: 768px) {
+    .standings-rounds {
+        flex: 1 1 100%;
+    }
 }
 
 /* Settings formset: size the table to its content instead of stretching the
