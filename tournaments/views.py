@@ -1041,6 +1041,24 @@ def _simulation_response(request, division):
     return JsonResponse({"ok": True})
 
 
+def _require_published_round(division, round_num):
+    """Return an error JsonResponse if the round's pairings aren't committed.
+
+    Simulation records results against pairings, so it's only safe once a round
+    is published: a draft (pairable) round can still be regenerated, and a round
+    with no RoundPairings at all has nothing to attach results to — either way
+    we'd be left with results referencing pairings that may not exist. Returns
+    None when the round is published/in-progress/finished.
+    """
+    rp = division.round_pairings_set.filter(round=round_num).first()
+    if rp is None or rp.status == RoundPairings.DRAFT:
+        return JsonResponse(
+            {"error": "Round must be published before results can be simulated."},
+            status=409,
+        )
+    return None
+
+
 class SimulateMatchView(LoginRequiredMixin, CanEditDivisionMixin, View):
     """Simulate a single match for a test division and create a result slip."""
 
@@ -1061,6 +1079,10 @@ class SimulateMatchView(LoginRequiredMixin, CanEditDivisionMixin, View):
         second_name = data.get("second")
         if not all([round_num, first_name, second_name]):
             return JsonResponse({"error": "Missing required fields."}, status=400)
+
+        error = _require_published_round(division, round_num)
+        if error:
+            return error
 
         entrants = {
             e.player.name: e
@@ -1096,6 +1118,10 @@ class SimulateRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
         round_num = data.get("round")
         if not round_num:
             return JsonResponse({"error": "Missing required fields."}, status=400)
+
+        error = _require_published_round(division, round_num)
+        if error:
+            return error
 
         simulate_round(division, round_num)
         return _simulation_response(request, division)
