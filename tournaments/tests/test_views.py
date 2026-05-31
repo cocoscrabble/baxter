@@ -1573,7 +1573,17 @@ class SimulateMatchViewTests(TestCase):
         )
         self.url = reverse("simulate_match", kwargs={"pk": self.test_division.pk})
 
+    def _publish_round_one(self):
+        rp = RoundPairings.objects.create(
+            division=self.test_division, round=1, status=RoundPairings.PUBLISHED,
+        )
+        Pairing.objects.create(
+            division=self.test_division, round=1, round_pairings=rp,
+            first=self.test_entrant1, second=self.test_entrant2, table=1,
+        )
+
     def test_creates_result_slip(self):
+        self._publish_round_one()
         self.client.login(username="owner", password="testpass123")
         response = self.client.post(
             self.url,
@@ -1588,6 +1598,29 @@ class SimulateMatchViewTests(TestCase):
         self.assertIn(slip.winner, [self.test_entrant1, self.test_entrant2])
         self.assertIn(slip.loser, [self.test_entrant1, self.test_entrant2])
         self.assertNotEqual(slip.winner, slip.loser)
+
+    def test_rejected_when_round_has_no_pairings(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.post(
+            self.url,
+            json.dumps({"round": 1, "first": "Alice", "second": "Bob"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(self.test_division.result_slips.count(), 0)
+
+    def test_rejected_when_round_is_draft(self):
+        RoundPairings.objects.create(
+            division=self.test_division, round=1, status=RoundPairings.DRAFT,
+        )
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.post(
+            self.url,
+            json.dumps({"round": 1, "first": "Alice", "second": "Bob"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(self.test_division.result_slips.count(), 0)
 
     def test_forbidden_for_non_test_division(self):
         self.client.login(username="owner", password="testpass123")
