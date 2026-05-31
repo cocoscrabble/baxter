@@ -105,7 +105,7 @@
                 <th></th>
                 <th>Second</th>
                 <th class="num">Repeats</th>
-                <th>{% if division.is_test %}<button type="button" data-on:click="@post('{% url 'simulate_round' division.pk %}', {headers: {'X-CSRFToken': $_csrfToken}, payload: {round: {{ selected_round }}}})">simulate all</button>{% endif %}</th>
+                <th>{% if division.is_test and selected_status == 'published' %}<button type="button" data-on:click="@post('{% url 'simulate_round' division.pk %}', {headers: {'X-CSRFToken': $_csrfToken}, payload: {round: {{ selected_round }}}})">simulate all</button>{% endif %}</th>
             </tr>
         </thead>
         <tbody>
@@ -119,7 +119,7 @@
                 <td>
                     {% if entry.result %}
                         {{ entry.result }}
-                    {% elif division.is_test %}
+                    {% elif division.is_test and selected_status == 'published' %}
                         <button type="button" data-on:click="@post('{% url 'simulate_match' division.pk %}', {headers: {'X-CSRFToken': $_csrfToken}, payload: {round: {{ selected_round }}, first: '{{ entry.pairing.first.name }}', second: '{{ entry.pairing.second.name }}'}})">simulate</button>
                     {% endif %}
                 </td>
