@@ -516,6 +516,12 @@ td a:hover {
     padding: 4px 10px;
 }
 
+/* Inline simulate buttons in the pairings tables, sized to match the rows. */
+.btn-sim {
+    font-size: 0.8rem;
+    padding: 4px 10px;
+}
+
 .table-toolbar #save-status {
     font-size: 0.8rem;
     color: var(--color-muted);
