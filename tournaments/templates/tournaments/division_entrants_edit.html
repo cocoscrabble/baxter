@@ -7,6 +7,7 @@
 <h1>Edit Entrants: {{ division.name }}</h1>
 
 {% include "tournaments/_tabulator_head.html" %}
+{% include "tournaments/_edit_presence.html" with scope="entrants" %}
 
 <div class="table-toolbar">
     <button id="add-row-btn" type="button">Add Entrant</button>

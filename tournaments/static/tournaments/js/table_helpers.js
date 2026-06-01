@@ -1,5 +1,7 @@
 // Shared helpers for Tabulator edit-tables.
 
+import { getEditVersion, setEditVersion } from "./edit_version.js";
+
 export const TABLE_DEFAULTS = {
     // "fitColumns" divides the container width among columns. We deliberately do
     // NOT use "fitDataTable"/"fitData": those measure every cell's content to size
@@ -210,7 +212,9 @@ export function wireSaveButton({ table, csrfToken, payloadKey, serializeRow, bef
     const saveBtn = document.getElementById("save-btn");
     // Optimistic-concurrency token: sent with each save, refreshed from the
     // server's response so consecutive saves from the same page don't conflict.
-    let currentVersion = version;
+    // Held in the shared edit-version store so the presence heartbeat can spot
+    // when someone else has saved and warn before this user hits Save.
+    setEditVersion(version);
     table.on("dataChanged", () => saveBtn.classList.add("is-dirty"));
     saveBtn.addEventListener("click", function() {
         if (beforeSave) beforeSave();
@@ -218,6 +222,7 @@ export function wireSaveButton({ table, csrfToken, payloadKey, serializeRow, bef
             .filter(r => !r._deleted)
             .map(serializeRow);
         const payload = { [payloadKey]: rows };
+        const currentVersion = getEditVersion();
         if (currentVersion !== undefined) payload._version = currentVersion;
         postJson({
             csrfToken,
@@ -226,7 +231,7 @@ export function wireSaveButton({ table, csrfToken, payloadKey, serializeRow, bef
         }).then(result => {
             if (result && result.ok) {
                 if (result.body && typeof result.body.version === "number") {
-                    currentVersion = result.body.version;
+                    setEditVersion(result.body.version);
                 }
                 rebaseline(table);
                 saveBtn.classList.remove("is-dirty");
