@@ -1393,10 +1393,10 @@ class DivisionFixedTablesEditViewTests(TestCase):
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(self.url)
         round_values = response.context["grid"].lookups["roundValues"]
-        values = [r["value"] for r in round_values]
+        values = [r["id"] for r in round_values]
         self.assertIn(-1, values)
         self.assertIn(1, values)
-        all_entry = next(r for r in round_values if r["value"] == -1)
+        all_entry = next(r for r in round_values if r["id"] == -1)
         self.assertEqual(all_entry["label"], "All")
 
     def test_get_returns_existing_fixed_tables(self):

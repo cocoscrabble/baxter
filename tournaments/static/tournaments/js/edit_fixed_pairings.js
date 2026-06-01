@@ -1,8 +1,7 @@
 import {
-    buildLookup,
+    buildColumns,
     createEditTable,
-    deleteColumn,
-    lookupColumn,
+    serializeRow,
     wireAddRowButton,
     wireSaveButton,
     wireUndoRedo,
@@ -10,23 +9,10 @@ import {
 
 const gridId = "fixed-pairings-table";
 const cfg = window.editgrids[gridId];
-const entrantLookup = buildLookup(cfg.lookups.entrantValues);
 
 const table = createEditTable("#fixed-pairings-table", {
     data: cfg.rows,
-    columns: [
-        {
-            title: "Round",
-            field: "round_number",
-            editor: "number",
-            editorParams: { min: 1 },
-            width: 100,
-            hozAlign: "center",
-        },
-        lookupColumn({ title: "Player 1", field: "entrant1", lookup: entrantLookup, autocomplete: true }),
-        lookupColumn({ title: "Player 2", field: "entrant2", lookup: entrantLookup, autocomplete: true }),
-        deleteColumn(),
-    ],
+    columns: buildColumns(gridId),
 });
 
 wireAddRowButton({
@@ -36,14 +22,6 @@ wireAddRowButton({
     focusField: "round_number",
 });
 
-wireSaveButton({
-    table,
-    gridId,
-    serializeRow: r => ({
-        round_number: parseInt(r.round_number) || null,
-        entrant1: parseInt(r.entrant1) || null,
-        entrant2: parseInt(r.entrant2) || null,
-    }),
-});
+wireSaveButton({ table, gridId, serializeRow: serializeRow(gridId) });
 
 wireUndoRedo(table, gridId);

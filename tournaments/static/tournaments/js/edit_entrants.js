@@ -1,9 +1,9 @@
 import {
-    buildLookup,
+    buildColumns,
     createEditTable,
-    deleteColumn,
-    lookupColumn,
+    lookupMap,
     nextRid,
+    serializeRow,
     wireAddRowButton,
     wireSaveButton,
     wireUndoRedo,
@@ -11,7 +11,6 @@ import {
 
 const gridId = "entrants-table";
 const cfg = window.editgrids[gridId];
-const playerLookup = buildLookup(cfg.lookups.players);
 
 // Number only the surviving rows, so seeds stay sequential once rows marked for
 // deletion are dropped on save.
@@ -25,16 +24,7 @@ function renumber() {
 
 const table = createEditTable("#entrants-table", {
     data: cfg.rows,
-    columns: [
-        {
-            title: "#",
-            field: "number",
-            width: 60,
-            hozAlign: "center",
-        },
-        lookupColumn({ title: "Player", field: "player", lookup: playerLookup, autocomplete: true }),
-        deleteColumn(),
-    ],
+    columns: buildColumns(gridId),
 });
 
 wireAddRowButton({
@@ -48,10 +38,7 @@ wireSaveButton({
     table,
     gridId,
     beforeSave: renumber,
-    serializeRow: r => ({
-        number: r.number,
-        player: parseInt(r.player) || null,
-    }),
+    serializeRow: serializeRow(gridId),
 });
 
 wireUndoRedo(table, gridId);
@@ -85,7 +72,7 @@ document.getElementById("create-player-btn").addEventListener("click", function(
     .then(resp => resp.json().then(body => ({ ok: resp.ok, body })))
     .then(({ ok, body }) => {
         if (ok && body.ok) {
-            playerLookup[body.id] = body.label;
+            lookupMap(gridId, "player")[body.id] = body.label;
             const count = table.getDataCount();
             table.addRow({ number: count + 1, player: body.id, _rid: nextRid() });
             nameInput.value = "";

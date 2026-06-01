@@ -5,7 +5,33 @@ host app and supply the model, validation DTO, serialization, and lookups.
 """
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+
+@dataclass
+class Column:
+    """Declarative Tabulator column. Drives the grid's columns, the label
+    formatting for choice columns, and row serialization (via ``value_type``).
+
+    kind:
+      - ``display`` — read-only text
+      - ``number``  — integer editor (``min`` floor)
+      - ``choice``  — list editor over a value->label map: either ``lookup``
+        (a key into the grid's ``lookups``) or a static ``values`` map;
+        ``autocomplete`` for large sets.
+    """
+
+    field: str
+    title: str = ""
+    kind: str = "number"
+    width: int | None = None
+    min_width: int | None = None
+    align: str = ""
+    min: int | None = None
+    lookup: str = ""
+    values: dict | None = None
+    autocomplete: bool = False
+    value_type: str = "int"  # int | bool | str — how the client serializes it
 
 
 def parse_rows(dto_cls, rows, *validate_args):
@@ -43,6 +69,7 @@ class GridContext:
     presence_url: str
     js_module: str
     save_url: str = ""
+    columns: list = field(default_factory=list)
 
     @property
     def rows_json(self):
@@ -51,6 +78,10 @@ class GridContext:
     @property
     def lookups_json(self):
         return json.dumps(self.lookups)
+
+    @property
+    def columns_json(self):
+        return json.dumps(self.columns)
 
 
 class EditGrid:
@@ -71,6 +102,7 @@ class EditGrid:
     dom_id: str = ""
     js_module: str = ""        # static path to the per-grid JS module
     template_name: str = ""
+    columns: list = []         # list[Column] driving the client's table
 
     def queryset(self, parent):
         return getattr(parent, self.related_name).all()
