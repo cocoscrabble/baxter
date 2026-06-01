@@ -905,3 +905,23 @@ dd {
     color: var(--color-error-text);
     border-color: var(--color-danger);
 }
+
+/* Two edit grids side by side on a wide window, stacked when narrow. The
+   minmax(0, ...) tracks + min-width:0 columns let each Tabulator table shrink
+   to its share of the width (it scrolls internally) rather than overflowing. */
+.editgrid-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--space-lg);
+    align-items: start;
+}
+
+.editgrid-columns > * {
+    min-width: 0;
+}
+
+@media (max-width: 900px) {
+    .editgrid-columns {
+        grid-template-columns: 1fr;
+    }
+}
