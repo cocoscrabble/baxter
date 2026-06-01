@@ -23,6 +23,7 @@ const pageData = {
     entrants: {{ entrants_json|safe }},
     results: {{ results_json|safe }},
     csrfToken: "{{ csrf_token }}",
+    version: {{ edit_version|default:"0" }},
 };
 </script>
 <script type="module" src="{% static 'tournaments/js/edit_results.js' %}"></script>

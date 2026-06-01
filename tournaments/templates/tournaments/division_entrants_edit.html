@@ -50,6 +50,7 @@ const pageData = {
     csrfToken: "{{ csrf_token }}",
     createPlayerUrl: "{% url 'create_player' %}",
     bulkImportUrl: "{% url 'bulk_import_entrants' division.pk %}",
+    version: {{ edit_version|default:"0" }},
 };
 </script>
 <script type="module" src="{% static 'tournaments/js/edit_entrants.js' %}"></script>

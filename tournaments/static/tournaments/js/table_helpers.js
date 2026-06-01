@@ -206,24 +206,34 @@ export function postJson({ url = "", csrfToken, payload, statusEl }) {
 // deletion are dropped from the payload. The button tracks dirty state: red
 // while there are unsaved changes, grey once a save succeeds (see style.css).
 // A successful save also re-baselines the grid so all previews clear.
-export function wireSaveButton({ table, csrfToken, payloadKey, serializeRow, beforeSave }) {
+export function wireSaveButton({ table, csrfToken, payloadKey, serializeRow, beforeSave, version }) {
     const saveBtn = document.getElementById("save-btn");
+    // Optimistic-concurrency token: sent with each save, refreshed from the
+    // server's response so consecutive saves from the same page don't conflict.
+    let currentVersion = version;
     table.on("dataChanged", () => saveBtn.classList.add("is-dirty"));
     saveBtn.addEventListener("click", function() {
         if (beforeSave) beforeSave();
         const rows = table.getData()
             .filter(r => !r._deleted)
             .map(serializeRow);
+        const payload = { [payloadKey]: rows };
+        if (currentVersion !== undefined) payload._version = currentVersion;
         postJson({
             csrfToken,
-            payload: { [payloadKey]: rows },
+            payload,
             statusEl: document.getElementById("save-status"),
         }).then(result => {
             if (result && result.ok) {
+                if (result.body && typeof result.body.version === "number") {
+                    currentVersion = result.body.version;
+                }
                 rebaseline(table);
                 saveBtn.classList.remove("is-dirty");
                 syncUndoRedo(table);
             }
+            // On a conflict the button stays dirty so unsaved edits aren't lost;
+            // postJson already shows the server's "reload" message in save-status.
         });
     });
 }

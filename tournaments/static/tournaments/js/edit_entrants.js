@@ -45,6 +45,7 @@ wireSaveButton({
     table,
     csrfToken: pageData.csrfToken,
     payloadKey: "entrants",
+    version: pageData.version,
     beforeSave: renumber,
     serializeRow: r => ({
         number: r.number,

@@ -50,6 +50,7 @@ wireSaveButton({
     table,
     csrfToken: pageData.csrfToken,
     payloadKey: "tables",
+    version: pageData.version,
     serializeRow: r => ({
         round_number: r.round_number != null ? parseInt(r.round_number) : null,
         entrant: parseInt(r.entrant) || null,

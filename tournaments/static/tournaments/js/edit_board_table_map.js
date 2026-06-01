@@ -73,6 +73,7 @@ wireSaveButton({
     table,
     csrfToken: pageData.csrfToken,
     payloadKey: "rows",
+    version: pageData.version,
     serializeRow: r => ({
         board: parseInt(r.board) || null,
         table: parseInt(r.table) || null,
