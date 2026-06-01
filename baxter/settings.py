@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django_node_assets",
+    "editgrid",
     "tournaments",
     "users",
 ]
