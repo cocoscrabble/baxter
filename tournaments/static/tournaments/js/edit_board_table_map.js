@@ -8,7 +8,7 @@ import {
 } from "/static/editgrid/js/table_helpers.js";
 
 const table = createEditTable("#board-table-map-table", {
-    data: pageData.boardTableMap,
+    data: pageData.rows,
     columns: [
         {
             title: "Board",

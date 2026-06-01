@@ -1508,7 +1508,7 @@ class DivisionBoardTableMapEditViewTests(TestCase):
         )
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(self.url)
-        rows = json.loads(response.context["board_table_map_json"])
+        rows = response.context["grid"].rows
         self.assertEqual(rows, [{"board": 1, "table": 1}, {"board": 2, "table": 1}])
         del settings_obj
 

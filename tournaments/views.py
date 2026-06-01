@@ -34,6 +34,7 @@ from .match_simulation import simulate_match, simulate_round
 from .grids import EntrantsGrid, FixedPairingsGrid, FixedTablesGrid, ResultsGrid
 from .models import EDIT_SCOPES, Division, DivisionSettings, Pairing, Player, RoundPairings, Tournament
 from editgrid.concurrency import check_conflict
+from editgrid.grids import GridContext
 from editgrid.models import EditVersion
 from editgrid.views import BaseEditGridView, EditPresenceBaseView
 from .player_sync import import_players
@@ -724,14 +725,23 @@ class DivisionBoardTableMapEditView(LoginRequiredMixin, CanEditDivisionMixin, Vi
     def get(self, request, pk):
         division = self.get_division()
         settings_obj, _ = DivisionSettings.objects.get_or_create(division=division)
-        existing = settings_obj.board_table_map or []
+        key = edit_key(division, "board_table_map")
+        grid = GridContext(
+            dom_id="board-table-map-table",
+            rows=settings_obj.board_table_map or [],
+            lookups={},
+            version=EditVersion.version_for(key),
+            key=key,
+            presence_url=reverse(
+                "edit_presence", kwargs={"pk": division.pk, "scope": "board_table_map"}
+            ),
+            js_module="tournaments/js/edit_board_table_map.js",
+        )
         n_entrants = division.entrants.count()
-        default_board_count = (n_entrants + 1) // 2
         return render(request, self.template_name, {
             "division": division,
-            "board_table_map_json": json.dumps(existing),
-            "default_board_count": default_board_count,
-            "edit_version": EditVersion.version_for(edit_key(division, "board_table_map")),
+            "grid": grid,
+            "default_board_count": (n_entrants + 1) // 2,
             "active_tab": "board_tables",
             "can_edit": True,
         })
