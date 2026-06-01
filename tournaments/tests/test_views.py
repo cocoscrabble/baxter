@@ -1379,7 +1379,7 @@ class DivisionFixedTablesEditViewTests(TestCase):
     def test_get_returns_entrant_values(self):
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(self.url)
-        entrant_values = json.loads(response.context["entrant_values_json"])
+        entrant_values = response.context["grid"].lookups["entrantValues"]
         ids = {e["id"] for e in entrant_values}
         self.assertIn(self.entrant1.pk, ids)
         self.assertIn(self.entrant2.pk, ids)
@@ -1391,7 +1391,7 @@ class DivisionFixedTablesEditViewTests(TestCase):
         )
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(self.url)
-        round_values = json.loads(response.context["round_values_json"])
+        round_values = response.context["grid"].lookups["roundValues"]
         values = [r["value"] for r in round_values]
         self.assertIn(-1, values)
         self.assertIn(1, values)
@@ -1405,14 +1405,14 @@ class DivisionFixedTablesEditViewTests(TestCase):
         )
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(self.url)
-        fixed_tables = json.loads(response.context["fixed_tables_json"])
+        fixed_tables = response.context["grid"].rows
         self.assertEqual(len(fixed_tables), 1)
         self.assertEqual(fixed_tables[0]["entrant"], self.entrant1.pk)
         self.assertEqual(fixed_tables[0]["table_number"], 2)
 
     def test_post_saves_fixed_table(self):
         self.client.login(username="owner", password="testpass123")
-        payload = {"tables": [{"round_number": 1, "entrant": self.entrant1.pk, "table_number": 2}]}
+        payload = {"rows": [{"round_number": 1, "entrant": self.entrant1.pk, "table_number": 2}]}
         response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["ok"])
@@ -1423,7 +1423,7 @@ class DivisionFixedTablesEditViewTests(TestCase):
 
     def test_post_all_sentinel_round(self):
         self.client.login(username="owner", password="testpass123")
-        payload = {"tables": [{"round_number": -1, "entrant": self.entrant1.pk, "table_number": 1}]}
+        payload = {"rows": [{"round_number": -1, "entrant": self.entrant1.pk, "table_number": 1}]}
         response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
         self.assertEqual(response.status_code, 200)
         ft = self.division.fixed_tables.first()
@@ -1434,7 +1434,7 @@ class DivisionFixedTablesEditViewTests(TestCase):
             division=self.division, round_number=1, entrant=self.entrant1, table_number=1,
         )
         self.client.login(username="owner", password="testpass123")
-        payload = {"tables": [{"round_number": 2, "entrant": self.entrant2.pk, "table_number": 3}]}
+        payload = {"rows": [{"round_number": 2, "entrant": self.entrant2.pk, "table_number": 3}]}
         response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.division.fixed_tables.count(), 1)
@@ -1443,7 +1443,7 @@ class DivisionFixedTablesEditViewTests(TestCase):
 
     def test_post_missing_fields_returns_error(self):
         self.client.login(username="owner", password="testpass123")
-        payload = {"tables": [{"round_number": 1, "entrant": self.entrant1.pk}]}  # missing table_number
+        payload = {"rows": [{"round_number": 1, "entrant": self.entrant1.pk}]}  # missing table_number
         response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
         self.assertEqual(response.status_code, 400)
         self.assertIn("errors", response.json())
@@ -1451,7 +1451,7 @@ class DivisionFixedTablesEditViewTests(TestCase):
 
     def test_post_invalid_entrant_returns_error(self):
         self.client.login(username="owner", password="testpass123")
-        payload = {"tables": [{"round_number": 1, "entrant": 99999, "table_number": 1}]}
+        payload = {"rows": [{"round_number": 1, "entrant": 99999, "table_number": 1}]}
         response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
         self.assertEqual(response.status_code, 400)
         self.assertIn("errors", response.json())
@@ -1460,7 +1460,7 @@ class DivisionFixedTablesEditViewTests(TestCase):
     def test_post_duplicate_entrant_per_round_returns_error(self):
         self.client.login(username="owner", password="testpass123")
         payload = {
-            "tables": [
+            "rows": [
                 {"round_number": 1, "entrant": self.entrant1.pk, "table_number": 1},
                 {"round_number": 1, "entrant": self.entrant1.pk, "table_number": 2},
             ]
@@ -1473,7 +1473,7 @@ class DivisionFixedTablesEditViewTests(TestCase):
     def test_post_same_entrant_different_rounds_is_valid(self):
         self.client.login(username="owner", password="testpass123")
         payload = {
-            "tables": [
+            "rows": [
                 {"round_number": 1, "entrant": self.entrant1.pk, "table_number": 1},
                 {"round_number": 2, "entrant": self.entrant1.pk, "table_number": 2},
             ]

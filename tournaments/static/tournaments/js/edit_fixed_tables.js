@@ -8,11 +8,11 @@ import {
     wireUndoRedo,
 } from "/static/editgrid/js/table_helpers.js";
 
-const entrantLookup = buildLookup(pageData.entrantValues);
-const roundValues = Object.fromEntries(pageData.roundValues.map(r => [r.value, r.label]));
+const entrantLookup = buildLookup(pageData.lookups.entrantValues);
+const roundValues = Object.fromEntries(pageData.lookups.roundValues.map(r => [r.value, r.label]));
 
 const table = createEditTable("#fixed-tables-table", {
-    data: pageData.fixedTables,
+    data: pageData.rows,
     columns: [
         {
             title: "Round",
@@ -49,7 +49,7 @@ wireAddRowButton({
 wireSaveButton({
     table,
     csrfToken: pageData.csrfToken,
-    payloadKey: "tables",
+    payloadKey: "rows",
     version: pageData.version,
     serializeRow: r => ({
         round_number: r.round_number != null ? parseInt(r.round_number) : null,
