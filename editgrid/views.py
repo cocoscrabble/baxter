@@ -1,7 +1,77 @@
+import json
+
 from django.http import Http404, HttpResponse, JsonResponse
+from django.shortcuts import render
 from django.views import View
 
+from .concurrency import check_conflict
+from .grids import GridContext
 from .models import EditPresence, EditVersion
+
+
+class BaseEditGridView(View):
+    """Config-driven GET/POST for one editable grid.
+
+    Set ``grid`` (an :class:`~editgrid.grids.EditGrid`) via ``as_view(grid=...)``.
+    Subclasses supply the host-domain bits: ``get_parent()``, ``grid_key(parent)``
+    (the opaque editgrid key) and ``presence_url(parent)``.
+    """
+
+    grid = None
+
+    def get_parent(self):
+        raise NotImplementedError
+
+    def grid_key(self, parent):
+        raise NotImplementedError
+
+    def presence_url(self, parent):
+        return ""
+
+    def get_grid_context(self, parent):
+        key = self.grid_key(parent)
+        return GridContext(
+            dom_id=self.grid.dom_id,
+            rows=self.grid.rows_for(parent),
+            lookups=self.grid.lookups(parent),
+            version=EditVersion.version_for(key),
+            key=key,
+            presence_url=self.presence_url(parent),
+            js_module=self.grid.js_module,
+        )
+
+    def get_context_data(self, parent):
+        return {"grid": self.get_grid_context(parent)}
+
+    def get(self, request, *args, **kwargs):
+        parent = self.get_parent()
+        return render(request, self.grid.template_name, self.get_context_data(parent))
+
+    def post(self, request, *args, **kwargs):
+        parent = self.get_parent()
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({"errors": ["Invalid JSON."]}, status=400)
+
+        rows = data.get(self.grid.data_key, [])
+        validated, errors = self.grid.validate(rows, parent)
+        if errors:
+            return JsonResponse({"errors": errors}, status=400)
+
+        # Build (and any extra validation) before the transaction so a failure
+        # doesn't bump the version.
+        instances, prep_errors = self.grid.prepare(parent, validated)
+        if prep_errors:
+            return JsonResponse({"errors": prep_errors}, status=400)
+
+        with check_conflict(self.grid_key(parent), data.get("_version")) as guard:
+            if guard.conflict:
+                return guard.conflict
+            self.grid.queryset(parent).delete()
+            self.grid.model.objects.bulk_create(instances)
+            self.grid.after_save(parent)
+        return guard.response
 
 
 class EditPresenceBaseView(View):

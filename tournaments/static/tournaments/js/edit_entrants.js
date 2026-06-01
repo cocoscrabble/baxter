@@ -9,7 +9,7 @@ import {
     wireUndoRedo,
 } from "/static/editgrid/js/table_helpers.js";
 
-const playerLookup = buildLookup(pageData.players);
+const playerLookup = buildLookup(pageData.lookups.players);
 
 // Number only the surviving rows, so seeds stay sequential once rows marked for
 // deletion are dropped on save.
@@ -22,7 +22,7 @@ function renumber() {
 }
 
 const table = createEditTable("#entrants-table", {
-    data: pageData.entrants,
+    data: pageData.rows,
     columns: [
         {
             title: "#",
@@ -44,7 +44,7 @@ wireAddRowButton({
 wireSaveButton({
     table,
     csrfToken: pageData.csrfToken,
-    payloadKey: "entrants",
+    payloadKey: "rows",
     version: pageData.version,
     beforeSave: renumber,
     serializeRow: r => ({
@@ -70,7 +70,7 @@ document.getElementById("create-player-btn").addEventListener("click", function(
 
     statusEl.textContent = "Creating...";
 
-    fetch(pageData.createPlayerUrl, {
+    fetch(entrantsExtra.createPlayerUrl, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
@@ -119,7 +119,7 @@ document.getElementById("bulk-import-form").addEventListener("submit", function(
 
     statusEl.textContent = "Importing...";
 
-    fetch(pageData.bulkImportUrl, {
+    fetch(entrantsExtra.bulkImportUrl, {
         method: "POST",
         headers: { "X-CSRFToken": pageData.csrfToken },
         body: formData,

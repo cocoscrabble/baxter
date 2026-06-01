@@ -1,5 +1,5 @@
 {% extends "tournaments/base_division.html" %}
-{% load static %}
+{% load static editgrid %}
 
 {% block title %}Edit Entrants - {{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
 
@@ -7,7 +7,7 @@
 <h1>Edit Entrants: {{ division.name }}</h1>
 
 {% include "tournaments/_tabulator_head.html" %}
-{% include "tournaments/_edit_presence.html" with scope="entrants" %}
+{% editgrid_presence grid %}
 
 <div class="table-toolbar">
     <button id="add-row-btn" type="button">Add Entrant</button>
@@ -42,17 +42,11 @@
     <div id="import-status" class="mt-sm"></div>
 </details>
 
-<div id="entrants-table" class="mt-md"></div>
-
 <script>
-const pageData = {
-    players: {{ players_json|safe }},
-    entrants: {{ entrants_json|safe }},
-    csrfToken: "{{ csrf_token }}",
+const entrantsExtra = {
     createPlayerUrl: "{% url 'create_player' %}",
     bulkImportUrl: "{% url 'bulk_import_entrants' division.pk %}",
-    version: {{ edit_version|default:"0" }},
 };
 </script>
-<script type="module" src="{% static 'tournaments/js/edit_entrants.js' %}"></script>
+{% editgrid_table grid %}
 {% endblock %}
