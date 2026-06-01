@@ -8,10 +8,10 @@ import {
     wireUndoRedo,
 } from "/static/editgrid/js/table_helpers.js";
 
-const entrantLookup = buildLookup(pageData.entrantValues);
+const entrantLookup = buildLookup(pageData.lookups.entrantValues);
 
 const table = createEditTable("#fixed-pairings-table", {
-    data: pageData.fixedPairings,
+    data: pageData.rows,
     columns: [
         {
             title: "Round",
@@ -36,7 +36,7 @@ wireAddRowButton({
 wireSaveButton({
     table,
     csrfToken: pageData.csrfToken,
-    payloadKey: "pairings",
+    payloadKey: "rows",
     version: pageData.version,
     serializeRow: r => ({
         round_number: parseInt(r.round_number) || null,

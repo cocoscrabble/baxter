@@ -25,15 +25,15 @@ from .forms import (
     RoundPairingFormSet,
     TournamentForm,
 )
-from .dto import FixedPairingDTO, FixedTableDTO, ResultSlipDTO
+from .dto import ResultSlipDTO
 from .fixed_pairings import (
     add_fixed_pairing,
     remove_fixed_pairing,
     remove_fixed_pairings,
 )
 from .match_simulation import simulate_match, simulate_round
-from .grids import EntrantsGrid
-from .models import EDIT_SCOPES, Division, DivisionSettings, FixedPairing, FixedTable, Pairing, Player, ResultSlip, RoundPairings, Tournament
+from .grids import EntrantsGrid, FixedPairingsGrid, FixedTablesGrid
+from .models import EDIT_SCOPES, Division, DivisionSettings, Pairing, Player, ResultSlip, RoundPairings, Tournament
 from editgrid.concurrency import check_conflict
 from editgrid.grids import parse_rows
 from editgrid.models import EditVersion
@@ -135,52 +135,6 @@ def edit_key(division, scope):
     everything on this string; Baxter composes it from the division and scope.
     """
     return f"division:{division.pk}:{scope}"
-
-
-class BulkReplaceDivisionRowsMixin:
-    """Handle 'wipe-and-recreate' JSON endpoints for division child collections.
-
-    Subclasses set ``data_key``, ``dto_class``, ``target_relation``, and
-    ``target_model``, and override ``validate_args(division)`` to supply the
-    extra positional args needed by the DTO's validate() method. The version
-    scope defaults to ``target_relation`` (override ``edit_scope`` if needed).
-    """
-
-    data_key: str = ""
-    dto_class: type
-    target_relation: str = ""
-    target_model: type
-    edit_scope: str = ""
-
-    def get_edit_scope(self):
-        return self.edit_scope or self.target_relation
-
-    def validate_args(self, division):
-        return ()
-
-    def post(self, request, pk):
-        division = self.get_division()
-        try:
-            data = json.loads(request.body)
-        except json.JSONDecodeError:
-            return JsonResponse({"errors": ["Invalid JSON."]}, status=400)
-
-        rows = data.get(self.data_key, [])
-        validated, errors = parse_rows(
-            self.dto_class, rows, *self.validate_args(division)
-        )
-        if errors:
-            return JsonResponse({"errors": errors}, status=400)
-
-        with check_conflict(edit_key(division, self.get_edit_scope()), data.get("_version")) as guard:
-            if guard.conflict:
-                return guard.conflict
-            getattr(division, self.target_relation).all().delete()
-            for dto in validated:
-                self.target_model.objects.create(
-                    division=division, **dto.to_db_kwargs()
-                )
-        return guard.response
 
 
 class VisibleDivisionMixin:
@@ -756,67 +710,14 @@ class BulkImportEntrantsView(LoginRequiredMixin, CanEditDivisionMixin, View):
         })
 
 
-class DivisionFixedPairingsEditView(
-    LoginRequiredMixin, CanEditDivisionMixin, BulkReplaceDivisionRowsMixin, View
-):
-    template_name = "tournaments/division_fixed_pairings_edit.html"
-    data_key = "pairings"
-    dto_class = FixedPairingDTO
-    target_relation = "fixed_pairings"
-    target_model = FixedPairing
-
-    def validate_args(self, division):
-        return (set(division.entrants.values_list("pk", flat=True)), {})
-
-    def get(self, request, pk):
-        division = self.get_division()
-        entrants = division.entrants.select_related("player").order_by("number")
-        entrant_values = [{"id": e.pk, "label": e.player.name} for e in entrants]
-        existing = [
-            {"round_number": fp.round_number, "entrant1": fp.entrant1_id, "entrant2": fp.entrant2_id}
-            for fp in division.fixed_pairings.all()
-        ]
-        return render(request, self.template_name, {
-            "division": division,
-            "entrant_values_json": json.dumps(entrant_values),
-            "fixed_pairings_json": json.dumps(existing),
-            "edit_version": EditVersion.version_for(edit_key(division, "fixed_pairings")),
-            "active_tab": "fixed_pairings",
-            "can_edit": True,
-        })
+class DivisionFixedPairingsEditView(DivisionEditGridView):
+    grid = FixedPairingsGrid()
+    active_tab = "fixed_pairings"
 
 
-class DivisionFixedTablesEditView(
-    LoginRequiredMixin, CanEditDivisionMixin, BulkReplaceDivisionRowsMixin, View
-):
-    template_name = "tournaments/division_fixed_tables_edit.html"
-    data_key = "tables"
-    dto_class = FixedTableDTO
-    target_relation = "fixed_tables"
-    target_model = FixedTable
-
-    def validate_args(self, division):
-        return (set(division.entrants.values_list("pk", flat=True)), {})
-
-    def get(self, request, pk):
-        division = self.get_division()
-        entrants = division.entrants.select_related("player").order_by("number")
-        entrant_values = [{"id": e.pk, "label": e.player.name} for e in entrants]
-        existing = [
-            {"round_number": ft.round_number, "entrant": ft.entrant_id, "table_number": ft.table_number}
-            for ft in division.fixed_tables.all()
-        ]
-        round_numbers = division.configured_round_numbers()
-        round_values = [{"value": -1, "label": "All"}] + [{"value": r, "label": str(r)} for r in round_numbers]
-        return render(request, self.template_name, {
-            "division": division,
-            "entrant_values_json": json.dumps(entrant_values),
-            "fixed_tables_json": json.dumps(existing),
-            "round_values_json": json.dumps(round_values),
-            "edit_version": EditVersion.version_for(edit_key(division, "fixed_tables")),
-            "active_tab": "fixed_tables",
-            "can_edit": True,
-        })
+class DivisionFixedTablesEditView(DivisionEditGridView):
+    grid = FixedTablesGrid()
+    active_tab = "fixed_tables"
 
 
 class DivisionBoardTableMapEditView(LoginRequiredMixin, CanEditDivisionMixin, View):

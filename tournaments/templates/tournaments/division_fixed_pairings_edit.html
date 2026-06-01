@@ -1,5 +1,5 @@
 {% extends "tournaments/base_division.html" %}
-{% load static %}
+{% load static editgrid %}
 
 {% block title %}Edit Fixed Pairings - {{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
 
@@ -7,25 +7,7 @@
 <h1>Edit Fixed Pairings: {{ division.name }}</h1>
 
 {% include "tournaments/_tabulator_head.html" %}
-{% include "tournaments/_edit_presence.html" with scope="fixed_pairings" %}
-
-<div class="table-toolbar">
-    <button id="add-row-btn" type="button">Add Row</button>
-    <button id="undo-btn" type="button" class="btn-secondary">Undo</button>
-    <button id="redo-btn" type="button" class="btn-secondary">Redo</button>
-    <button id="save-btn" type="button" class="btn-save">Save</button>
-    <span id="save-status"></span>
-</div>
-
-<div id="fixed-pairings-table"></div>
-
-<script>
-const pageData = {
-    entrantValues: {{ entrant_values_json|safe }},
-    fixedPairings: {{ fixed_pairings_json|safe }},
-    csrfToken: "{{ csrf_token }}",
-    version: {{ edit_version|default:"0" }},
-};
-</script>
-<script type="module" src="{% static 'tournaments/js/edit_fixed_pairings.js' %}"></script>
+{% editgrid_presence grid %}
+{% editgrid_toolbar %}
+{% editgrid_table grid %}
 {% endblock %}
