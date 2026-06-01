@@ -1,0 +1,10 @@
+{% load static %}
+<div id="edit-presence" class="presence-banner" hidden></div>
+<script>
+const presenceConfig = {
+    url: "{{ grid.presence_url }}",
+    csrfToken: "{{ csrf_token }}",
+    version: {{ grid.version }},
+};
+</script>
+<script type="module" src="{% static 'editgrid/js/presence.js' %}"></script>

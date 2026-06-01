@@ -1,10 +1,44 @@
+from dataclasses import dataclass
+
 from django.test import TestCase
 from django.utils import timezone
 
+from editgrid.grids import GridContext, parse_rows
 from editgrid.models import PRESENCE_WINDOW, EditPresence, EditVersion
 from users.models import User
 
 KEY = "thing:1:rows"
+
+
+@dataclass
+class _RowDTO:
+    """Minimal DTO for exercising parse_rows."""
+
+    n: int
+
+    @classmethod
+    def from_json(cls, row):
+        return cls(n=row["n"]) if "n" in row else None
+
+    def validate(self, ceiling):
+        return [] if self.n <= ceiling else ["too big"]
+
+
+class ParseRowsTests(TestCase):
+    def test_collects_validated_and_errors_with_row_numbers(self):
+        validated, errors = parse_rows(_RowDTO, [{"n": 1}, {}, {"n": 9}], 5)
+        self.assertEqual([d.n for d in validated], [1])
+        self.assertEqual(errors, ["Row 2: all fields are required.", "Row 3: too big"])
+
+
+class GridContextTests(TestCase):
+    def test_json_properties_serialize_rows_and_lookups(self):
+        ctx = GridContext(
+            dom_id="t", rows=[{"a": 1}], lookups={"x": [2]},
+            version=3, key=KEY, presence_url="/p/", js_module="m.js",
+        )
+        self.assertEqual(ctx.rows_json, '[{"a": 1}]')
+        self.assertEqual(ctx.lookups_json, '{"x": [2]}')
 
 
 class EditVersionTests(TestCase):

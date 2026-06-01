@@ -25,17 +25,19 @@ from .forms import (
     RoundPairingFormSet,
     TournamentForm,
 )
-from .dto import EntrantDTO, FixedPairingDTO, FixedTableDTO, ResultSlipDTO, parse_rows
+from .dto import FixedPairingDTO, FixedTableDTO, ResultSlipDTO
 from .fixed_pairings import (
     add_fixed_pairing,
     remove_fixed_pairing,
     remove_fixed_pairings,
 )
 from .match_simulation import simulate_match, simulate_round
-from .models import EDIT_SCOPES, Division, DivisionSettings, Entrant, FixedPairing, FixedTable, Pairing, Player, ResultSlip, RoundPairings, Tournament
+from .grids import EntrantsGrid
+from .models import EDIT_SCOPES, Division, DivisionSettings, FixedPairing, FixedTable, Pairing, Player, ResultSlip, RoundPairings, Tournament
 from editgrid.concurrency import check_conflict
+from editgrid.grids import parse_rows
 from editgrid.models import EditVersion
-from editgrid.views import EditPresenceBaseView
+from editgrid.views import BaseEditGridView, EditPresenceBaseView
 from .player_sync import import_players
 from users.models import User
 from .generate_pairings import regenerate_pairings
@@ -635,37 +637,36 @@ class DivisionSettingsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
         })
 
 
-class DivisionEntrantsEditView(
-    LoginRequiredMixin, CanEditDivisionMixin, BulkReplaceDivisionRowsMixin, View
-):
-    template_name = "tournaments/division_entrants_edit.html"
-    data_key = "entrants"
-    dto_class = EntrantDTO
-    target_relation = "entrants"
-    target_model = Entrant
+class DivisionEditGridView(LoginRequiredMixin, CanEditDivisionMixin, BaseEditGridView):
+    """Baxter base for editable grids: division-scoped and permission-gated.
 
-    def validate_args(self, division):
-        return (set(Player.objects.values_list("pk", flat=True)), set())
+    Concrete grids subclass this and set ``grid`` (an EditGrid) and
+    ``active_tab`` as class attributes."""
 
-    def get(self, request, pk):
-        division = self.get_division()
-        entrants = division.entrants.select_related("player").order_by("number")
-        entrants_json = [
-            {"number": e.number, "player": e.player.pk}
-            for e in entrants
-        ]
-        players_json = [
-            {"id": p.pk, "label": p.name}
-            for p in Player.objects.all()
-        ]
-        return render(request, self.template_name, {
-            "division": division,
-            "entrants_json": json.dumps(entrants_json),
-            "players_json": json.dumps(players_json),
-            "edit_version": EditVersion.version_for(edit_key(division, "entrants")),
-            "active_tab": "edit_entrants",
-            "can_edit": True,
-        })
+    active_tab = ""
+
+    def get_parent(self):
+        return self.get_division()
+
+    def grid_key(self, division):
+        return edit_key(division, self.grid.scope)
+
+    def presence_url(self, division):
+        return reverse(
+            "edit_presence", kwargs={"pk": division.pk, "scope": self.grid.scope}
+        )
+
+    def get_context_data(self, division):
+        context = super().get_context_data(division)
+        context.update(
+            {"division": division, "active_tab": self.active_tab, "can_edit": True}
+        )
+        return context
+
+
+class DivisionEntrantsEditView(DivisionEditGridView):
+    grid = EntrantsGrid()
+    active_tab = "edit_entrants"
 
 
 class CreatePlayerView(LoginRequiredMixin, View):

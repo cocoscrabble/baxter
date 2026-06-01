@@ -1714,18 +1714,17 @@ class DivisionEntrantsEditViewTests(TestCase):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 403)
 
-    def test_get_returns_json_context(self):
+    def test_get_returns_grid_context(self):
         Entrant.objects.create(division=self.division, player=self.player1, number=1)
         Entrant.objects.create(division=self.division, player=self.player2, number=2)
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(self.url)
-        entrants = json.loads(response.context["entrants_json"])
-        players = json.loads(response.context["players_json"])
-        self.assertEqual(len(entrants), 2)
-        self.assertEqual(entrants[0]["player"], self.player1.pk)
-        self.assertEqual(entrants[1]["player"], self.player2.pk)
-        # players_json should include all players in the DB
-        player_ids = {p["id"] for p in players}
+        grid = response.context["grid"]
+        self.assertEqual(len(grid.rows), 2)
+        self.assertEqual(grid.rows[0]["player"], self.player1.pk)
+        self.assertEqual(grid.rows[1]["player"], self.player2.pk)
+        # The players lookup should include all players in the DB.
+        player_ids = {p["id"] for p in grid.lookups["players"]}
         self.assertIn(self.player1.pk, player_ids)
         self.assertIn(self.player2.pk, player_ids)
         self.assertIn(self.player3.pk, player_ids)
@@ -1733,7 +1732,7 @@ class DivisionEntrantsEditViewTests(TestCase):
     def test_post_saves_entrants(self):
         self.client.login(username="owner", password="testpass123")
         payload = {
-            "entrants": [
+            "rows": [
                 {"number": 1, "player": self.player1.pk},
                 {"number": 2, "player": self.player2.pk},
             ]
@@ -1752,7 +1751,7 @@ class DivisionEntrantsEditViewTests(TestCase):
         Entrant.objects.create(division=self.division, player=self.player1, number=1)
         self.client.login(username="owner", password="testpass123")
         payload = {
-            "entrants": [
+            "rows": [
                 {"number": 1, "player": self.player2.pk},
                 {"number": 2, "player": self.player3.pk},
             ]
@@ -1769,7 +1768,7 @@ class DivisionEntrantsEditViewTests(TestCase):
     def test_post_duplicate_player_returns_errors(self):
         self.client.login(username="owner", password="testpass123")
         payload = {
-            "entrants": [
+            "rows": [
                 {"number": 1, "player": self.player1.pk},
                 {"number": 2, "player": self.player1.pk},
             ]
@@ -1786,7 +1785,7 @@ class DivisionEntrantsEditViewTests(TestCase):
     def test_post_missing_fields_returns_errors(self):
         self.client.login(username="owner", password="testpass123")
         payload = {
-            "entrants": [
+            "rows": [
                 {"number": 1},
             ]
         }
@@ -1801,7 +1800,7 @@ class DivisionEntrantsEditViewTests(TestCase):
 
     def _save(self, players, version=None):
         payload = {
-            "entrants": [
+            "rows": [
                 {"number": i + 1, "player": p.pk} for i, p in enumerate(players)
             ]
         }
@@ -1814,9 +1813,9 @@ class DivisionEntrantsEditViewTests(TestCase):
     def test_get_exposes_current_edit_version(self):
         self.client.login(username="owner", password="testpass123")
         # Starts at 0 before any save, and the GET reflects each saved version.
-        self.assertEqual(self.client.get(self.url).context["edit_version"], 0)
+        self.assertEqual(self.client.get(self.url).context["grid"].version, 0)
         self._save([self.player1], version=0)
-        self.assertEqual(self.client.get(self.url).context["edit_version"], 1)
+        self.assertEqual(self.client.get(self.url).context["grid"].version, 1)
 
     def test_save_bumps_and_returns_version(self):
         self.client.login(username="owner", password="testpass123")
