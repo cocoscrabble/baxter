@@ -9,7 +9,9 @@ import {
     wireUndoRedo,
 } from "/static/editgrid/js/table_helpers.js";
 
-const playerLookup = buildLookup(pageData.lookups.players);
+const gridId = "entrants-table";
+const cfg = window.editgrids[gridId];
+const playerLookup = buildLookup(cfg.lookups.players);
 
 // Number only the surviving rows, so seeds stay sequential once rows marked for
 // deletion are dropped on save.
@@ -22,7 +24,7 @@ function renumber() {
 }
 
 const table = createEditTable("#entrants-table", {
-    data: pageData.rows,
+    data: cfg.rows,
     columns: [
         {
             title: "#",
@@ -37,15 +39,14 @@ const table = createEditTable("#entrants-table", {
 
 wireAddRowButton({
     table,
+    gridId,
     template: t => ({ number: t.getDataCount() + 1, player: null }),
     focusField: "player",
 });
 
 wireSaveButton({
     table,
-    csrfToken: pageData.csrfToken,
-    payloadKey: "rows",
-    version: pageData.version,
+    gridId,
     beforeSave: renumber,
     serializeRow: r => ({
         number: r.number,
@@ -53,7 +54,7 @@ wireSaveButton({
     }),
 });
 
-wireUndoRedo(table);
+wireUndoRedo(table, gridId);
 
 // -- Create New Player (form toggle handled by datastar data-show) --
 
@@ -74,7 +75,7 @@ document.getElementById("create-player-btn").addEventListener("click", function(
         method: "POST",
         headers: {
             "Content-Type": "application/json",
-            "X-CSRFToken": pageData.csrfToken,
+            "X-CSRFToken": cfg.csrfToken,
         },
         body: JSON.stringify({
             name: name,
@@ -121,7 +122,7 @@ document.getElementById("bulk-import-form").addEventListener("submit", function(
 
     fetch(entrantsExtra.bulkImportUrl, {
         method: "POST",
-        headers: { "X-CSRFToken": pageData.csrfToken },
+        headers: { "X-CSRFToken": cfg.csrfToken },
         body: formData,
     })
     .then(resp => resp.json().then(body => ({ ok: resp.ok, body })))

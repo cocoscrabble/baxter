@@ -7,8 +7,11 @@ import {
     wireUndoRedo,
 } from "/static/editgrid/js/table_helpers.js";
 
+const gridId = "board-table-map-table";
+const cfg = window.editgrids[gridId];
+
 const table = createEditTable("#board-table-map-table", {
-    data: pageData.rows,
+    data: cfg.rows,
     columns: [
         {
             title: "Board",
@@ -62,6 +65,7 @@ document.getElementById("generate-btn").addEventListener("click", function() {
 
 wireAddRowButton({
     table,
+    gridId,
     template: t => {
         const maxBoard = t.getData().reduce((m, r) => Math.max(m, parseInt(r.board) || 0), 0);
         return { board: maxBoard + 1, table: null };
@@ -71,13 +75,11 @@ wireAddRowButton({
 
 wireSaveButton({
     table,
-    csrfToken: pageData.csrfToken,
-    payloadKey: "rows",
-    version: pageData.version,
+    gridId,
     serializeRow: r => ({
         board: parseInt(r.board) || null,
         table: parseInt(r.table) || null,
     }),
 });
 
-wireUndoRedo(table);
+wireUndoRedo(table, gridId);

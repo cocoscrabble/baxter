@@ -23,7 +23,8 @@ def editgrid_presence(context, grid):
 
 
 @register.inclusion_tag("editgrid/_toolbar.html")
-def editgrid_toolbar(add_label="Add Row"):
-    """The standard generic controls. For grids with custom controls, skip this
-    and hand-roll the toolbar with the same button ids."""
-    return {"add_label": add_label}
+def editgrid_toolbar(grid, add_label="Add Row"):
+    """The standard generic controls, scoped to ``grid``. For grids with custom
+    controls, skip this and hand-roll the toolbar with the same data-eg
+    attributes (``data-eg="<dom_id>" data-eg-action="add|undo|redo|save|status"``)."""
+    return {"grid": grid, "add_label": add_label}

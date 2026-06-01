@@ -1,11 +1,15 @@
 {% load static %}
 <div id="{{ grid.dom_id }}" class="mt-md"></div>
 <script>
-const pageData = {
-    rows: {{ grid.rows_json|safe }},
-    lookups: {{ grid.lookups_json|safe }},
-    version: {{ grid.version }},
-    csrfToken: "{{ csrf_token }}",
-};
+(window.editgrids = window.editgrids || {})["{{ grid.dom_id }}"] = Object.assign(
+    (window.editgrids["{{ grid.dom_id }}"] || {}),
+    {
+        rows: {{ grid.rows_json|safe }},
+        lookups: {{ grid.lookups_json|safe }},
+        version: {{ grid.version }},
+        csrfToken: "{{ csrf_token }}",
+        saveUrl: "{{ grid.save_url }}",
+    }
+);
 </script>
 <script type="module" src="{% static grid.js_module %}"></script>

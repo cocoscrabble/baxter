@@ -33,7 +33,7 @@ from .fixed_pairings import (
 from .match_simulation import simulate_match, simulate_round
 from .grids import BoardTableMapGrid, EntrantsGrid, FixedPairingsGrid, FixedTablesGrid, ResultsGrid
 from .models import EDIT_SCOPES, Division, DivisionSettings, Pairing, Player, RoundPairings, Tournament
-from editgrid.views import BaseEditGridView, EditPresenceBaseView
+from editgrid.views import BaseEditGridView, EditPresenceBaseView, build_grid_context
 from .player_sync import import_players
 from users.models import User
 from .generate_pairings import regenerate_pairings
@@ -714,6 +714,36 @@ class DivisionFixedPairingsEditView(DivisionEditGridView):
 class DivisionFixedTablesEditView(DivisionEditGridView):
     grid = FixedTablesGrid()
     active_tab = "fixed_tables"
+
+
+class DivisionFixturesEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    """Combined page editing Fixed Pairings and Fixed Tables side by side.
+
+    GET-only: it renders two grid contexts. Each grid saves and heartbeats to
+    its own existing endpoint, so the combined page never handles a POST.
+    """
+
+    template_name = "tournaments/division_fixtures_edit.html"
+
+    GRIDS = [
+        (FixedPairingsGrid(), "division_fixed_pairings", "pairings_grid"),
+        (FixedTablesGrid(), "division_fixed_tables", "tables_grid"),
+    ]
+
+    def get(self, request, pk):
+        division = self.get_division()
+        context = {"division": division, "active_tab": "fixtures", "can_edit": True}
+        for grid, route, ctx_name in self.GRIDS:
+            context[ctx_name] = build_grid_context(
+                grid,
+                division,
+                key=edit_key(division, grid.scope),
+                presence_url=reverse(
+                    "edit_presence", kwargs={"pk": division.pk, "scope": grid.scope}
+                ),
+                save_url=reverse(route, kwargs={"pk": division.pk}),
+            )
+        return render(request, self.template_name, context)
 
 
 class DivisionBoardTableMapEditView(DivisionEditGridView):

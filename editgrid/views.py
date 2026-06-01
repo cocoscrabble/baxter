@@ -9,12 +9,32 @@ from .grids import GridContext
 from .models import EditPresence, EditVersion
 
 
+def build_grid_context(grid, parent, *, key, presence_url="", save_url=""):
+    """Assemble the GridContext the template tags render for one grid.
+
+    The host supplies the domain-specific URLs/key; this fills in the rows,
+    lookups, and current version. Used both by the single-grid view and by
+    pages that compose several grids.
+    """
+    return GridContext(
+        dom_id=grid.dom_id,
+        rows=grid.rows_for(parent),
+        lookups=grid.lookups(parent),
+        version=EditVersion.version_for(key),
+        key=key,
+        presence_url=presence_url,
+        js_module=grid.js_module,
+        save_url=save_url,
+    )
+
+
 class BaseEditGridView(View):
     """Config-driven GET/POST for one editable grid.
 
     Set ``grid`` (an :class:`~editgrid.grids.EditGrid`) via ``as_view(grid=...)``.
     Subclasses supply the host-domain bits: ``get_parent()``, ``grid_key(parent)``
-    (the opaque editgrid key) and ``presence_url(parent)``.
+    (the opaque editgrid key), ``presence_url(parent)``, and ``save_url(parent)``
+    (defaults to the current page, fine for a single-grid page).
     """
 
     grid = None
@@ -28,16 +48,16 @@ class BaseEditGridView(View):
     def presence_url(self, parent):
         return ""
 
+    def save_url(self, parent):
+        return ""
+
     def get_grid_context(self, parent):
-        key = self.grid_key(parent)
-        return GridContext(
-            dom_id=self.grid.dom_id,
-            rows=self.grid.rows_for(parent),
-            lookups=self.grid.lookups(parent),
-            version=EditVersion.version_for(key),
-            key=key,
+        return build_grid_context(
+            self.grid,
+            parent,
+            key=self.grid_key(parent),
             presence_url=self.presence_url(parent),
-            js_module=self.grid.js_module,
+            save_url=self.save_url(parent),
         )
 
     def get_context_data(self, parent):

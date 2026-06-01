@@ -8,10 +8,12 @@ import {
     wireUndoRedo,
 } from "/static/editgrid/js/table_helpers.js";
 
-const entrantLookup = buildLookup(pageData.lookups.entrants);
+const gridId = "results-table";
+const cfg = window.editgrids[gridId];
+const entrantLookup = buildLookup(cfg.lookups.entrants);
 
 const table = createEditTable("#results-table", {
-    data: pageData.rows,
+    data: cfg.rows,
     columns: [
         {
             title: "Round",
@@ -55,6 +57,7 @@ const table = createEditTable("#results-table", {
 
 wireAddRowButton({
     table,
+    gridId,
     template: t => {
         const maxRound = t.getData().reduce((m, r) => Math.max(m, r.round || 0), 0);
         return {
@@ -70,9 +73,7 @@ wireAddRowButton({
 
 wireSaveButton({
     table,
-    csrfToken: pageData.csrfToken,
-    payloadKey: "rows",
-    version: pageData.version,
+    gridId,
     serializeRow: r => ({
         round: parseInt(r.round) || null,
         winner: parseInt(r.winner) || null,
@@ -83,4 +84,4 @@ wireSaveButton({
     }),
 });
 
-wireUndoRedo(table);
+wireUndoRedo(table, gridId);

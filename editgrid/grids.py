@@ -42,6 +42,7 @@ class GridContext:
     key: str
     presence_url: str
     js_module: str
+    save_url: str = ""
 
     @property
     def rows_json(self):

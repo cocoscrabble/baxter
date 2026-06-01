@@ -8,10 +8,12 @@ import {
     wireUndoRedo,
 } from "/static/editgrid/js/table_helpers.js";
 
-const entrantLookup = buildLookup(pageData.lookups.entrantValues);
+const gridId = "fixed-pairings-table";
+const cfg = window.editgrids[gridId];
+const entrantLookup = buildLookup(cfg.lookups.entrantValues);
 
 const table = createEditTable("#fixed-pairings-table", {
-    data: pageData.rows,
+    data: cfg.rows,
     columns: [
         {
             title: "Round",
@@ -29,15 +31,14 @@ const table = createEditTable("#fixed-pairings-table", {
 
 wireAddRowButton({
     table,
+    gridId,
     template: { round_number: null, entrant1: null, entrant2: null },
     focusField: "round_number",
 });
 
 wireSaveButton({
     table,
-    csrfToken: pageData.csrfToken,
-    payloadKey: "rows",
-    version: pageData.version,
+    gridId,
     serializeRow: r => ({
         round_number: parseInt(r.round_number) || null,
         entrant1: parseInt(r.entrant1) || null,
@@ -45,4 +46,4 @@ wireSaveButton({
     }),
 });
 
-wireUndoRedo(table);
+wireUndoRedo(table, gridId);

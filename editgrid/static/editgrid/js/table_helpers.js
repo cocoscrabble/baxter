@@ -204,38 +204,55 @@ export function postJson({ url = "", csrfToken, payload, statusEl }) {
     });
 }
 
+// The per-grid config the server rendered into the registry, keyed by grid id
+// (the table's dom id). Carries rows, lookups, version, csrfToken, saveUrl.
+export function gridConfig(gridId) {
+    return (window.editgrids || {})[gridId] || {};
+}
+
+// A grid's controls are tagged data-eg="<gridId>" so several grids can share a
+// page; look them up by gridId + action rather than a global element id.
+function control(gridId, action) {
+    return document.querySelector(
+        `[data-eg="${gridId}"][data-eg-action="${action}"]`
+    );
+}
+
 // Wire the Save button to serialize rows and POST them. Rows flagged for
 // deletion are dropped from the payload. The button tracks dirty state: red
 // while there are unsaved changes, grey once a save succeeds (see style.css).
 // A successful save also re-baselines the grid so all previews clear.
-export function wireSaveButton({ table, csrfToken, payloadKey, serializeRow, beforeSave, version }) {
-    const saveBtn = document.getElementById("save-btn");
+export function wireSaveButton({ table, gridId, serializeRow, beforeSave }) {
+    const cfg = gridConfig(gridId);
+    const saveBtn = control(gridId, "save");
+    const statusEl = control(gridId, "status");
     // Optimistic-concurrency token: sent with each save, refreshed from the
     // server's response so consecutive saves from the same page don't conflict.
-    // Held in the shared edit-version store so the presence heartbeat can spot
-    // when someone else has saved and warn before this user hits Save.
-    setEditVersion(version);
+    // Held in the shared (keyed) edit-version store so the presence heartbeat
+    // can spot when someone else has saved and warn before this user hits Save.
+    setEditVersion(gridId, cfg.version);
     table.on("dataChanged", () => saveBtn.classList.add("is-dirty"));
     saveBtn.addEventListener("click", function() {
         if (beforeSave) beforeSave();
         const rows = table.getData()
             .filter(r => !r._deleted)
             .map(serializeRow);
-        const payload = { [payloadKey]: rows };
-        const currentVersion = getEditVersion();
+        const payload = { rows };
+        const currentVersion = getEditVersion(gridId);
         if (currentVersion !== undefined) payload._version = currentVersion;
         postJson({
-            csrfToken,
+            url: cfg.saveUrl || "",
+            csrfToken: cfg.csrfToken,
             payload,
-            statusEl: document.getElementById("save-status"),
+            statusEl,
         }).then(result => {
             if (result && result.ok) {
                 if (result.body && typeof result.body.version === "number") {
-                    setEditVersion(result.body.version);
+                    setEditVersion(gridId, result.body.version);
                 }
                 rebaseline(table);
                 saveBtn.classList.remove("is-dirty");
-                syncUndoRedo(table);
+                syncUndoRedo(table, gridId);
             }
             // On a conflict the button stays dirty so unsaved edits aren't lost;
             // postJson already shows the server's "reload" message in save-status.
@@ -246,8 +263,8 @@ export function wireSaveButton({ table, csrfToken, payloadKey, serializeRow, bef
 // Wire the Add Row button. `template` is a row dict, or a function (table) => dict
 // to compute one from current data. Every new row gets a `_rid` so it previews
 // as added. If `focusField` is set, the new row's cell for that field is opened.
-export function wireAddRowButton({ table, template, focusField }) {
-    document.getElementById("add-row-btn").addEventListener("click", function() {
+export function wireAddRowButton({ table, gridId, template, focusField }) {
+    control(gridId, "add").addEventListener("click", function() {
         const base = typeof template === "function" ? template(table) : { ...template };
         const promise = table.addRow({ ...base, _rid: nextRid() });
         if (focusField) {
@@ -256,12 +273,12 @@ export function wireAddRowButton({ table, template, focusField }) {
     });
 }
 
-// Wire optional Undo / Redo buttons (ids `undo-btn` / `redo-btn`) to Tabulator's
+// Wire optional Undo / Redo buttons (data-eg-action undo/redo) to Tabulator's
 // history. Ctrl/Cmd+Z and Ctrl/Cmd+Y work natively once `history: true` is set;
 // these buttons just make it discoverable and reflect availability.
-export function wireUndoRedo(table) {
-    const undoBtn = document.getElementById("undo-btn");
-    const redoBtn = document.getElementById("redo-btn");
+export function wireUndoRedo(table, gridId) {
+    const undoBtn = control(gridId, "undo");
+    const redoBtn = control(gridId, "redo");
     if (!undoBtn || !redoBtn) return;
     undoBtn.disabled = true;
     redoBtn.disabled = true;
@@ -271,15 +288,15 @@ export function wireUndoRedo(table) {
     const redecorateAll = () => table.getRows().forEach(r => decorateRow(r, table._editOriginal));
     // dataChanged fires just before the history entry is recorded, so read the
     // sizes on the next tick to reflect the action that just happened.
-    const sync = () => setTimeout(() => syncUndoRedo(table), 0);
+    const sync = () => setTimeout(() => syncUndoRedo(table, gridId), 0);
     table.on("dataChanged", sync);
     table.on("historyUndo", () => { redecorateAll(); sync(); });
     table.on("historyRedo", () => { redecorateAll(); sync(); });
 }
 
-function syncUndoRedo(table) {
-    const undoBtn = document.getElementById("undo-btn");
-    const redoBtn = document.getElementById("redo-btn");
+function syncUndoRedo(table, gridId) {
+    const undoBtn = control(gridId, "undo");
+    const redoBtn = control(gridId, "redo");
     if (!undoBtn || !redoBtn) return;
     try {
         undoBtn.disabled = table.getHistoryUndoSize() === 0;
