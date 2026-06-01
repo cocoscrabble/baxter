@@ -25,17 +25,15 @@ from .forms import (
     RoundPairingFormSet,
     TournamentForm,
 )
-from .dto import ResultSlipDTO
 from .fixed_pairings import (
     add_fixed_pairing,
     remove_fixed_pairing,
     remove_fixed_pairings,
 )
 from .match_simulation import simulate_match, simulate_round
-from .grids import EntrantsGrid, FixedPairingsGrid, FixedTablesGrid
-from .models import EDIT_SCOPES, Division, DivisionSettings, Pairing, Player, ResultSlip, RoundPairings, Tournament
+from .grids import EntrantsGrid, FixedPairingsGrid, FixedTablesGrid, ResultsGrid
+from .models import EDIT_SCOPES, Division, DivisionSettings, Pairing, Player, RoundPairings, Tournament
 from editgrid.concurrency import check_conflict
-from editgrid.grids import parse_rows
 from editgrid.models import EditVersion
 from editgrid.views import BaseEditGridView, EditPresenceBaseView
 from .player_sync import import_players
@@ -893,79 +891,9 @@ class ResultSlipCreateView(View):
         return render(request, self.template_name, context)
 
 
-class DivisionEditResultsView(LoginRequiredMixin, CanEditDivisionMixin, View):
-    template_name = "tournaments/division_edit_results.html"
-
-    def get(self, request, pk):
-        division = self.get_division()
-        results = division.result_slips.select_related(
-            "winner", "loser"
-        ).order_by("round", "pk")
-        results_json = [r.to_dict() for r in results]
-        entrants = division.entrants.select_related("player").order_by("number")
-        entrants_json = [
-            {"id": e.pk, "label": e.player.name}
-            for e in entrants
-        ]
-        return render(request, self.template_name, {
-            "division": division,
-            "results_json": json.dumps(results_json),
-            "entrants_json": json.dumps(entrants_json),
-            "edit_version": EditVersion.version_for(edit_key(division, "results")),
-            "active_tab": "edit_results",
-            "can_edit": True,
-        })
-
-    def post(self, request, pk):
-        division = self.get_division()
-        try:
-            data = json.loads(request.body)
-        except json.JSONDecodeError:
-            return JsonResponse({"errors": ["Invalid JSON."]}, status=400)
-
-        rows = data if isinstance(data, list) else data.get("results", [])
-        client_version = data.get("_version") if isinstance(data, dict) else None
-        entrant_ids = set(division.entrants.values_list("pk", flat=True))
-        validated, errors = parse_rows(ResultSlipDTO, rows, entrant_ids)
-        if errors:
-            return JsonResponse({"errors": errors}, status=400)
-
-        pairing_lookup = division.pairings_by_round_pair()
-
-        # Every row must correspond to an existing Pairing — results for
-        # unpaired matches are not allowed via this flow.
-        missing = []
-        for i, slip in enumerate(validated):
-            key = (slip.round, frozenset({slip.winner, slip.loser}))
-            if key not in pairing_lookup:
-                missing.append(
-                    f"Row {i + 1}: no pairing for that match in round {slip.round}."
-                )
-        if missing:
-            return JsonResponse({"errors": missing}, status=400)
-
-        # Track which RoundPairings are affected for status updates.
-        affected_rounds = set(
-            division.result_slips.values_list("round", flat=True)
-        )
-
-        with check_conflict(edit_key(division, "results"), client_version) as guard:
-            if guard.conflict:
-                return guard.conflict
-
-            division.result_slips.all().delete()
-            for slip in validated:
-                db_kwargs = slip.to_db_kwargs()
-                key = (db_kwargs["round"], frozenset({db_kwargs["winner_id"], db_kwargs["loser_id"]}))
-                ResultSlip.objects.create(
-                    division=division, pairing=pairing_lookup[key], **db_kwargs
-                )
-                affected_rounds.add(db_kwargs["round"])
-
-            for rp in division.round_pairings_set.filter(round__in=affected_rounds):
-                rp.update_status()
-
-        return guard.response
+class DivisionEditResultsView(DivisionEditGridView):
+    grid = ResultsGrid()
+    active_tab = "edit_results"
 
 
 def _read_request_data(request):

@@ -2,8 +2,8 @@
 
 from editgrid.grids import EditGrid
 
-from .dto import EntrantDTO, FixedPairingDTO, FixedTableDTO
-from .models import Entrant, FixedPairing, FixedTable, Player
+from .dto import EntrantDTO, FixedPairingDTO, FixedTableDTO, ResultSlipDTO
+from .models import Entrant, FixedPairing, FixedTable, Player, ResultSlip
 
 
 def _entrant_values(division):
@@ -87,3 +87,52 @@ class FixedTablesGrid(EditGrid):
 
     def validate_args(self, division):
         return (set(division.entrants.values_list("pk", flat=True)), {})
+
+
+class ResultsGrid(EditGrid):
+    model = ResultSlip
+    parent_field = "division"
+    related_name = "result_slips"
+    scope = "results"
+    dto_class = ResultSlipDTO
+    dom_id = "results-table"
+    js_module = "tournaments/js/edit_results.js"
+    template_name = "tournaments/division_edit_results.html"
+
+    def queryset(self, division):
+        return division.result_slips.select_related("winner", "loser").order_by("round", "pk")
+
+    def serialize_row(self, slip):
+        return slip.to_dict()
+
+    def lookups(self, division):
+        entrants = division.entrants.select_related("player").order_by("number")
+        return {"entrants": [{"id": e.pk, "label": e.player.name} for e in entrants]}
+
+    def validate_args(self, division):
+        return (set(division.entrants.values_list("pk", flat=True)),)
+
+    def prepare(self, division, validated):
+        # Every row must correspond to an existing Pairing — results for
+        # unpaired matches are not allowed via this flow.
+        pairing_lookup = division.pairings_by_round_pair()
+        instances, errors = [], []
+        for i, slip in enumerate(validated):
+            pairing = pairing_lookup.get((slip.round, frozenset({slip.winner, slip.loser})))
+            if pairing is None:
+                errors.append(
+                    f"Row {i + 1}: no pairing for that match in round {slip.round}."
+                )
+                continue
+            instances.append(
+                ResultSlip(division=division, pairing=pairing, **slip.to_db_kwargs())
+            )
+        if errors:
+            return [], errors
+        return instances, []
+
+    def after_save(self, division):
+        # Recreating the slips can change which rounds have results; refresh the
+        # status of every round (update_status is idempotent).
+        for rp in division.round_pairings_set.all():
+            rp.update_status()
