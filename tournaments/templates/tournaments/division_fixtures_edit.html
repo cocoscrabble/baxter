@@ -8,13 +8,18 @@
 
 {% include "tournaments/_tabulator_head.html" %}
 
-<h2>Fixed Pairings</h2>
-{% editgrid_presence pairings_grid %}
-{% editgrid_toolbar pairings_grid %}
-{% editgrid_table pairings_grid %}
-
-<h2 class="mt-lg">Fixed Tables</h2>
-{% editgrid_presence tables_grid %}
-{% editgrid_toolbar tables_grid %}
-{% editgrid_table tables_grid %}
+<div class="editgrid-columns">
+    <div>
+        <h2>Fixed Pairings</h2>
+        {% editgrid_presence pairings_grid %}
+        {% editgrid_toolbar pairings_grid %}
+        {% editgrid_table pairings_grid %}
+    </div>
+    <div>
+        <h2>Fixed Tables</h2>
+        {% editgrid_presence tables_grid %}
+        {% editgrid_toolbar tables_grid %}
+        {% editgrid_table tables_grid %}
+    </div>
+</div>
 {% endblock %}
