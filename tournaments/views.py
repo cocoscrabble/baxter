@@ -32,7 +32,7 @@ from .fixed_pairings import (
     remove_fixed_pairings,
 )
 from .match_simulation import simulate_match, simulate_round
-from .models import Division, DivisionEditVersion, DivisionSettings, Entrant, FixedPairing, FixedTable, Pairing, Player, ResultSlip, RoundPairings, Tournament
+from .models import EDIT_SCOPES, Division, DivisionEditPresence, DivisionEditVersion, DivisionSettings, Entrant, FixedPairing, FixedTable, Pairing, Player, ResultSlip, RoundPairings, Tournament
 from .player_sync import import_players
 from users.models import User
 from .generate_pairings import regenerate_pairings
@@ -920,6 +920,39 @@ class DivisionBoardTableMapEditView(LoginRequiredMixin, CanEditDivisionMixin, Vi
             settings_obj.board_table_map = validated
             settings_obj.save(update_fields=["board_table_map"])
         return guard.response
+
+
+class EditPresenceView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    """Soft editing-presence endpoint for an edit grid's ``scope``.
+
+    A heartbeat POST records the caller as present and returns the other
+    editors currently active on the same grid; a ``release`` POST drops the
+    caller (sent via ``navigator.sendBeacon`` on tab close, with the CSRF token
+    in the form body so the standard CSRF check still applies).
+
+    If the heartbeat carries a ``known_version`` query param, the response also
+    reports whether the scope's edit version has moved on since the page loaded,
+    so the client can warn the user before they hit Save and hit a conflict.
+    """
+
+    def post(self, request, pk, scope):
+        if scope not in EDIT_SCOPES:
+            raise Http404("Unknown edit scope.")
+        division = self.get_division()
+        if request.POST.get("release"):
+            DivisionEditPresence.release(division, scope, request.user)
+            return HttpResponse(status=204)
+        DivisionEditPresence.heartbeat(division, scope, request.user)
+        payload = {"editors": DivisionEditPresence.others(division, scope, request.user)}
+        try:
+            known_version = int(request.GET["known_version"])
+        except (KeyError, ValueError):
+            known_version = None
+        if known_version is not None:
+            current_version = DivisionEditVersion.version_for(division, scope)
+            payload["stale"] = current_version != known_version
+            payload["current_version"] = current_version
+        return JsonResponse(payload)
 
 
 def _pairings_by_round(division):

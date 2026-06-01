@@ -1,0 +1,14 @@
+{% load static %}
+{% comment %}
+Soft "someone else is editing this" banner. Expects a `scope` argument, e.g.
+{% include "tournaments/_edit_presence.html" with scope="entrants" %}
+{% endcomment %}
+<div id="edit-presence" class="presence-banner" hidden></div>
+<script>
+const presenceConfig = {
+    url: "{% url 'edit_presence' division.pk scope %}",
+    csrfToken: "{{ csrf_token }}",
+    version: {{ edit_version|default:"0" }},
+};
+</script>
+<script type="module" src="{% static 'tournaments/js/presence.js' %}"></script>

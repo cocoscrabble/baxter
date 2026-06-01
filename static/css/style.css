@@ -887,3 +887,21 @@ dd {
     font-style: italic;
     margin: var(--space-md) 0;
 }
+
+/* "Someone else is editing this" warning shown on the edit grids. */
+.presence-banner {
+    margin: 0 0 var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--color-in-progress-light);
+    color: var(--color-in-progress);
+    border: 1px solid var(--color-in-progress);
+    border-radius: var(--radius);
+    font-weight: 600;
+}
+
+/* Stronger styling once the data has actually gone stale (someone saved). */
+.presence-banner.is-stale {
+    background: var(--color-error-bg);
+    color: var(--color-error-text);
+    border-color: var(--color-danger);
+}

@@ -1,4 +1,5 @@
 import re
+from datetime import timedelta
 
 from django.conf import settings
 from django.db import models
@@ -393,6 +394,18 @@ class FixedTable(models.Model):
         return f"R{self.round_number}: {self.entrant.player.name} at table {self.table_number}"
 
 
+# The bulk-editable grids, used as the ``scope`` for both the optimistic-
+# concurrency token (DivisionEditVersion) and editing presence
+# (DivisionEditPresence).
+EDIT_SCOPES = frozenset(
+    {"entrants", "results", "fixed_pairings", "fixed_tables", "board_table_map"}
+)
+
+# How often a client heartbeats, and how long after the last heartbeat an
+# editor is still considered present (two missed beats = gone).
+PRESENCE_WINDOW = timedelta(seconds=30)
+
+
 class DivisionEditVersion(models.Model):
     """Optimistic-concurrency token for a division's bulk-editable collections.
 
@@ -431,3 +444,63 @@ class DivisionEditVersion(models.Model):
         return cls.objects.select_for_update().get_or_create(
             division=division, scope=scope
         )[0]
+
+
+class DivisionEditPresence(models.Model):
+    """Tracks who currently has a division's edit grid open.
+
+    Each open edit page heartbeats periodically, refreshing its row's
+    ``last_seen``. An editor is considered present while their last heartbeat
+    is within ``PRESENCE_WINDOW``; stale rows are pruned opportunistically. This
+    drives a soft "someone else is editing this" banner — the actual clobber
+    protection is the optimistic-concurrency token (:class:`DivisionEditVersion`).
+    One row per (division, scope, user).
+    """
+
+    division = models.ForeignKey(
+        Division, on_delete=models.CASCADE, related_name="edit_presences"
+    )
+    scope = models.CharField(max_length=50)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="edit_presences"
+    )
+    last_seen = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ["division", "scope", "user"]
+
+    def __str__(self):
+        return f"{self.user} editing {self.division} / {self.scope}"
+
+    @classmethod
+    def heartbeat(cls, division, scope, user):
+        """Record (or refresh) this user's presence, then prune stale rows."""
+        cls.objects.update_or_create(
+            division=division, scope=scope, user=user
+        )
+        cls.prune(division, scope)
+
+    @classmethod
+    def release(cls, division, scope, user):
+        """Drop this user's presence (e.g. when their tab closes)."""
+        cls.objects.filter(division=division, scope=scope, user=user).delete()
+
+    @classmethod
+    def prune(cls, division, scope):
+        """Delete presence rows whose last heartbeat is older than the window."""
+        cutoff = timezone.now() - PRESENCE_WINDOW
+        cls.objects.filter(
+            division=division, scope=scope, last_seen__lt=cutoff
+        ).delete()
+
+    @classmethod
+    def others(cls, division, scope, user):
+        """Usernames of other editors active within the window, sorted."""
+        cutoff = timezone.now() - PRESENCE_WINDOW
+        return sorted(
+            cls.objects.filter(
+                division=division, scope=scope, last_seen__gte=cutoff
+            )
+            .exclude(user=user)
+            .values_list("user__username", flat=True)
+        )
