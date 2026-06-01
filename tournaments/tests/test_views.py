@@ -1797,4 +1797,51 @@ class DivisionEntrantsEditViewTests(TestCase):
         self.assertIn("errors", response.json())
         self.assertEqual(self.division.entrants.count(), 0)
 
+    def _save(self, players, version=None):
+        payload = {
+            "entrants": [
+                {"number": i + 1, "player": p.pk} for i, p in enumerate(players)
+            ]
+        }
+        if version is not None:
+            payload["_version"] = version
+        return self.client.post(
+            self.url, json.dumps(payload), content_type="application/json"
+        )
+
+    def test_get_exposes_current_edit_version(self):
+        self.client.login(username="owner", password="testpass123")
+        # Starts at 0 before any save, and the GET reflects each saved version.
+        self.assertEqual(self.client.get(self.url).context["edit_version"], 0)
+        self._save([self.player1], version=0)
+        self.assertEqual(self.client.get(self.url).context["edit_version"], 1)
+
+    def test_save_bumps_and_returns_version(self):
+        self.client.login(username="owner", password="testpass123")
+        first = self._save([self.player1], version=0)
+        self.assertEqual(first.json()["version"], 1)
+        # The client reuses the returned version for a consecutive save.
+        second = self._save([self.player2], version=1)
+        self.assertEqual(second.json()["version"], 2)
+
+    def test_stale_version_is_rejected_as_conflict(self):
+        self.client.login(username="owner", password="testpass123")
+        self._save([self.player1], version=0)  # bumps to v1
+        # A second editor still holding v0 must be rejected, not silently win.
+        response = self._save([self.player2], version=0)
+        self.assertEqual(response.status_code, 409)
+        body = response.json()
+        self.assertTrue(body["conflict"])
+        # The losing save is discarded — player1 survives.
+        self.assertEqual(self.division.entrants.count(), 1)
+        self.assertEqual(self.division.entrants.get().player, self.player1)
+
+    def test_missing_version_skips_check(self):
+        # A payload without _version (older page) still saves, for compatibility.
+        self.client.login(username="owner", password="testpass123")
+        self._save([self.player1])  # establishes v1
+        response = self._save([self.player2])
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.division.entrants.get().player, self.player2)
+
 

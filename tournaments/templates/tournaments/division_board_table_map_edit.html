@@ -29,6 +29,7 @@ const pageData = {
     boardTableMap: {{ board_table_map_json|safe }},
     defaultBoardCount: {{ default_board_count }},
     csrfToken: "{{ csrf_token }}",
+    version: {{ edit_version|default:"0" }},
 };
 </script>
 <script type="module" src="{% static 'tournaments/js/edit_board_table_map.js' %}"></script>

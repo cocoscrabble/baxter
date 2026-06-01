@@ -23,6 +23,7 @@ const pageData = {
     entrantValues: {{ entrant_values_json|safe }},
     fixedPairings: {{ fixed_pairings_json|safe }},
     csrfToken: "{{ csrf_token }}",
+    version: {{ edit_version|default:"0" }},
 };
 </script>
 <script type="module" src="{% static 'tournaments/js/edit_fixed_pairings.js' %}"></script>

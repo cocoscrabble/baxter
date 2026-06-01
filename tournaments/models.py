@@ -391,3 +391,43 @@ class FixedTable(models.Model):
 
     def __str__(self):
         return f"R{self.round_number}: {self.entrant.player.name} at table {self.table_number}"
+
+
+class DivisionEditVersion(models.Model):
+    """Optimistic-concurrency token for a division's bulk-editable collections.
+
+    The editable grids (entrants, results, fixed pairings, etc.) save by wiping
+    and recreating their whole collection, so two people editing the same grid
+    would silently clobber each other. The edit page embeds the current version
+    for its ``scope``; a save is rejected if the version has moved on since the
+    page was loaded. One row per (division, scope).
+    """
+
+    division = models.ForeignKey(
+        Division, on_delete=models.CASCADE, related_name="edit_versions"
+    )
+    scope = models.CharField(max_length=50)
+    version = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = ["division", "scope"]
+
+    def __str__(self):
+        return f"{self.division} / {self.scope} @ v{self.version}"
+
+    @classmethod
+    def version_for(cls, division, scope):
+        """Current version for a scope, or 0 if it has never been saved."""
+        row = cls.objects.filter(division=division, scope=scope).first()
+        return row.version if row else 0
+
+    @classmethod
+    def lock(cls, division, scope):
+        """Fetch-or-create the version row with a row lock.
+
+        Must be called inside a ``transaction.atomic`` block; the lock
+        serializes concurrent saves of the same scope.
+        """
+        return cls.objects.select_for_update().get_or_create(
+            division=division, scope=scope
+        )[0]

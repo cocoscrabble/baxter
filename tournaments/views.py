@@ -3,7 +3,7 @@ from collections import defaultdict
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.db import models
+from django.db import models, transaction
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
@@ -32,7 +32,7 @@ from .fixed_pairings import (
     remove_fixed_pairings,
 )
 from .match_simulation import simulate_match, simulate_round
-from .models import Division, DivisionSettings, Entrant, FixedPairing, FixedTable, Pairing, Player, ResultSlip, RoundPairings, Tournament
+from .models import Division, DivisionEditVersion, DivisionSettings, Entrant, FixedPairing, FixedTable, Pairing, Player, ResultSlip, RoundPairings, Tournament
 from .player_sync import import_players
 from users.models import User
 from .generate_pairings import regenerate_pairings
@@ -123,18 +123,81 @@ def _ensure_visible_division(division, user):
         raise Http404
 
 
+class check_conflict:
+    """Wrap the optimistic-concurrency dance around a bulk-replace save.
+
+    Opens a transaction, row-locks the scope's version, and compares it against
+    the client's. The caller checks ``guard.conflict`` (a 409 ``JsonResponse``
+    when the client's version is stale, else None) and runs the save logic only
+    when it's clear; on a clean exit the version is bumped and ``guard.response``
+    holds the success ``JsonResponse`` to return. A ``client_version`` of None
+    skips the check (e.g. an older page that doesn't send one)::
+
+        with check_conflict(division, scope, client_version) as guard:
+            if guard.conflict:
+                return guard.conflict
+            ...  # the specific save logic
+        return guard.response
+
+    The transaction means an exception in the body rolls back the bump too.
+    """
+
+    def __init__(self, division, scope, client_version):
+        self.division = division
+        self.scope = scope
+        self.client_version = client_version
+        self.conflict = None
+        self.response = None
+
+    def __enter__(self):
+        self._atomic = transaction.atomic()
+        self._atomic.__enter__()
+        self.version_row = DivisionEditVersion.lock(self.division, self.scope)
+        if (
+            self.client_version is not None
+            and self.version_row.version != self.client_version
+        ):
+            self.conflict = JsonResponse(
+                {
+                    "ok": False,
+                    "conflict": True,
+                    "errors": [
+                        "Someone else changed this data since you opened the page. "
+                        "Reload to see their changes before saving."
+                    ],
+                },
+                status=409,
+            )
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if exc_type is None and self.conflict is None:
+            self.version_row.version += 1
+            self.version_row.save(update_fields=["version"])
+            self.response = JsonResponse(
+                {"ok": True, "version": self.version_row.version}
+            )
+        self._atomic.__exit__(exc_type, exc, tb)
+        return False
+
+
 class BulkReplaceDivisionRowsMixin:
     """Handle 'wipe-and-recreate' JSON endpoints for division child collections.
 
     Subclasses set ``data_key``, ``dto_class``, ``target_relation``, and
     ``target_model``, and override ``validate_args(division)`` to supply the
-    extra positional args needed by the DTO's validate() method.
+    extra positional args needed by the DTO's validate() method. The version
+    scope defaults to ``target_relation`` (override ``edit_scope`` if needed).
     """
 
     data_key: str = ""
     dto_class: type
     target_relation: str = ""
     target_model: type
+    edit_scope: str = ""
+
+    def get_edit_scope(self):
+        return self.edit_scope or self.target_relation
 
     def validate_args(self, division):
         return ()
@@ -153,12 +216,15 @@ class BulkReplaceDivisionRowsMixin:
         if errors:
             return JsonResponse({"errors": errors}, status=400)
 
-        getattr(division, self.target_relation).all().delete()
-        for dto in validated:
-            self.target_model.objects.create(
-                division=division, **dto.to_db_kwargs()
-            )
-        return JsonResponse({"ok": True})
+        with check_conflict(division, self.get_edit_scope(), data.get("_version")) as guard:
+            if guard.conflict:
+                return guard.conflict
+            getattr(division, self.target_relation).all().delete()
+            for dto in validated:
+                self.target_model.objects.create(
+                    division=division, **dto.to_db_kwargs()
+                )
+        return guard.response
 
 
 class VisibleDivisionMixin:
@@ -642,6 +708,7 @@ class DivisionEntrantsEditView(
             "division": division,
             "entrants_json": json.dumps(entrants_json),
             "players_json": json.dumps(players_json),
+            "edit_version": DivisionEditVersion.version_for(division, "entrants"),
             "active_tab": "edit_entrants",
             "can_edit": True,
         })
@@ -758,6 +825,7 @@ class DivisionFixedPairingsEditView(
             "division": division,
             "entrant_values_json": json.dumps(entrant_values),
             "fixed_pairings_json": json.dumps(existing),
+            "edit_version": DivisionEditVersion.version_for(division, "fixed_pairings"),
             "active_tab": "fixed_pairings",
             "can_edit": True,
         })
@@ -790,6 +858,7 @@ class DivisionFixedTablesEditView(
             "entrant_values_json": json.dumps(entrant_values),
             "fixed_tables_json": json.dumps(existing),
             "round_values_json": json.dumps(round_values),
+            "edit_version": DivisionEditVersion.version_for(division, "fixed_tables"),
             "active_tab": "fixed_tables",
             "can_edit": True,
         })
@@ -808,6 +877,7 @@ class DivisionBoardTableMapEditView(LoginRequiredMixin, CanEditDivisionMixin, Vi
             "division": division,
             "board_table_map_json": json.dumps(existing),
             "default_board_count": default_board_count,
+            "edit_version": DivisionEditVersion.version_for(division, "board_table_map"),
             "active_tab": "board_tables",
             "can_edit": True,
         })
@@ -843,10 +913,13 @@ class DivisionBoardTableMapEditView(LoginRequiredMixin, CanEditDivisionMixin, Vi
             return JsonResponse({"errors": errors}, status=400)
 
         validated.sort(key=lambda r: r["board"])
-        settings_obj, _ = DivisionSettings.objects.get_or_create(division=division)
-        settings_obj.board_table_map = validated
-        settings_obj.save(update_fields=["board_table_map"])
-        return JsonResponse({"ok": True})
+        with check_conflict(division, "board_table_map", data.get("_version")) as guard:
+            if guard.conflict:
+                return guard.conflict
+            settings_obj, _ = DivisionSettings.objects.get_or_create(division=division)
+            settings_obj.board_table_map = validated
+            settings_obj.save(update_fields=["board_table_map"])
+        return guard.response
 
 
 def _pairings_by_round(division):
@@ -971,6 +1044,7 @@ class DivisionEditResultsView(LoginRequiredMixin, CanEditDivisionMixin, View):
             "division": division,
             "results_json": json.dumps(results_json),
             "entrants_json": json.dumps(entrants_json),
+            "edit_version": DivisionEditVersion.version_for(division, "results"),
             "active_tab": "edit_results",
             "can_edit": True,
         })
@@ -983,6 +1057,7 @@ class DivisionEditResultsView(LoginRequiredMixin, CanEditDivisionMixin, View):
             return JsonResponse({"errors": ["Invalid JSON."]}, status=400)
 
         rows = data if isinstance(data, list) else data.get("results", [])
+        client_version = data.get("_version") if isinstance(data, dict) else None
         entrant_ids = set(division.entrants.values_list("pk", flat=True))
         validated, errors = parse_rows(ResultSlipDTO, rows, entrant_ids)
         if errors:
@@ -1007,19 +1082,23 @@ class DivisionEditResultsView(LoginRequiredMixin, CanEditDivisionMixin, View):
             division.result_slips.values_list("round", flat=True)
         )
 
-        division.result_slips.all().delete()
-        for slip in validated:
-            db_kwargs = slip.to_db_kwargs()
-            key = (db_kwargs["round"], frozenset({db_kwargs["winner_id"], db_kwargs["loser_id"]}))
-            ResultSlip.objects.create(
-                division=division, pairing=pairing_lookup[key], **db_kwargs
-            )
-            affected_rounds.add(db_kwargs["round"])
+        with check_conflict(division, "results", client_version) as guard:
+            if guard.conflict:
+                return guard.conflict
 
-        for rp in division.round_pairings_set.filter(round__in=affected_rounds):
-            rp.update_status()
+            division.result_slips.all().delete()
+            for slip in validated:
+                db_kwargs = slip.to_db_kwargs()
+                key = (db_kwargs["round"], frozenset({db_kwargs["winner_id"], db_kwargs["loser_id"]}))
+                ResultSlip.objects.create(
+                    division=division, pairing=pairing_lookup[key], **db_kwargs
+                )
+                affected_rounds.add(db_kwargs["round"])
 
-        return JsonResponse({"ok": True})
+            for rp in division.round_pairings_set.filter(round__in=affected_rounds):
+                rp.update_status()
+
+        return guard.response
 
 
 def _read_request_data(request):

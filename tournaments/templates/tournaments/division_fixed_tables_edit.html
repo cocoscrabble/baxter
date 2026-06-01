@@ -24,6 +24,7 @@ const pageData = {
     fixedTables: {{ fixed_tables_json|safe }},
     roundValues: {{ round_values_json|safe }},
     csrfToken: "{{ csrf_token }}",
+    version: {{ edit_version|default:"0" }},
 };
 </script>
 <script type="module" src="{% static 'tournaments/js/edit_fixed_tables.js' %}"></script>
