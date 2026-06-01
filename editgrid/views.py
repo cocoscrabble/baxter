@@ -1,4 +1,5 @@
 import json
+from dataclasses import asdict
 
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import render
@@ -25,6 +26,7 @@ def build_grid_context(grid, parent, *, key, presence_url="", save_url=""):
         presence_url=presence_url,
         js_module=grid.js_module,
         save_url=save_url,
+        columns=[asdict(c) for c in grid.columns],
     )
 
 

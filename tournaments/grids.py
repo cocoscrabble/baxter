@@ -1,6 +1,6 @@
 """Concrete editgrid configs for Baxter's editable grids."""
 
-from editgrid.grids import EditGrid, JsonBlobGrid
+from editgrid.grids import Column, EditGrid, JsonBlobGrid
 
 from .dto import EntrantDTO, FixedPairingDTO, FixedTableDTO, ResultSlipDTO
 from .models import DivisionSettings, Entrant, FixedPairing, FixedTable, Player, ResultSlip
@@ -20,6 +20,10 @@ class EntrantsGrid(EditGrid):
     dom_id = "entrants-table"
     js_module = "tournaments/js/edit_entrants.js"
     template_name = "tournaments/division_entrants_edit.html"
+    columns = [
+        Column("number", "#", kind="display", width=60, align="center"),
+        Column("player", "Player", kind="choice", lookup="players", autocomplete=True),
+    ]
 
     def queryset(self, division):
         return division.entrants.select_related("player").order_by("number")
@@ -43,6 +47,11 @@ class FixedPairingsGrid(EditGrid):
     dom_id = "fixed-pairings-table"
     js_module = "tournaments/js/edit_fixed_pairings.js"
     template_name = "tournaments/division_fixed_pairings_edit.html"
+    columns = [
+        Column("round_number", "Round", kind="number", min=1, width=100, align="center"),
+        Column("entrant1", "Player 1", kind="choice", lookup="entrantValues", autocomplete=True),
+        Column("entrant2", "Player 2", kind="choice", lookup="entrantValues", autocomplete=True),
+    ]
 
     def serialize_row(self, fp):
         return {
@@ -67,6 +76,11 @@ class FixedTablesGrid(EditGrid):
     dom_id = "fixed-tables-table"
     js_module = "tournaments/js/edit_fixed_tables.js"
     template_name = "tournaments/division_fixed_tables_edit.html"
+    columns = [
+        Column("round_number", "Round", kind="choice", lookup="roundValues", width=100, align="center"),
+        Column("entrant", "Player", kind="choice", lookup="entrantValues", autocomplete=True, min_width=200),
+        Column("table_number", "Table", kind="number", min=1, width=100, align="center"),
+    ]
 
     def serialize_row(self, ft):
         return {
@@ -77,8 +91,8 @@ class FixedTablesGrid(EditGrid):
 
     def lookups(self, division):
         round_numbers = division.configured_round_numbers()
-        round_values = [{"value": -1, "label": "All"}] + [
-            {"value": r, "label": str(r)} for r in round_numbers
+        round_values = [{"id": -1, "label": "All"}] + [
+            {"id": r, "label": str(r)} for r in round_numbers
         ]
         return {
             "entrantValues": _entrant_values(division),
@@ -98,6 +112,15 @@ class ResultsGrid(EditGrid):
     dom_id = "results-table"
     js_module = "tournaments/js/edit_results.js"
     template_name = "tournaments/division_edit_results.html"
+    columns = [
+        Column("round", "Round", kind="number", min=1, width=100),
+        Column("winner", "Winner", kind="choice", lookup="entrants"),
+        Column("winner_score", "W Score", kind="number", min=0, width=120),
+        Column("loser", "Opponent", kind="choice", lookup="entrants"),
+        Column("loser_score", "Opp Score", kind="number", min=0, width=130),
+        Column("winner_started", "Started", kind="choice",
+               values={True: "Winner", False: "Opponent"}, width=120, value_type="bool"),
+    ]
 
     def queryset(self, division):
         return division.result_slips.select_related("winner", "loser").order_by("round", "pk")
@@ -146,6 +169,10 @@ class BoardTableMapGrid(JsonBlobGrid):
     dom_id = "board-table-map-table"
     js_module = "tournaments/js/edit_board_table_map.js"
     template_name = "tournaments/division_board_table_map_edit.html"
+    columns = [
+        Column("board", "Board", kind="number", min=1, width=120, align="center"),
+        Column("table", "Table", kind="number", min=1, width=120, align="center"),
+    ]
 
     def validate(self, rows, division):
         errors = []

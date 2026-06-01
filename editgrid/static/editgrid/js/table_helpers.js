@@ -321,3 +321,58 @@ export function lookupColumn({ title, field, lookup, autocomplete = false, ...ex
         ...extra,
     };
 }
+
+// Build a Tabulator column from one declarative Column spec (see editgrid.grids).
+// `choice` columns resolve their value->label map from a static `values` or the
+// grid's lookups; the resolved map is stashed on cfg._lookups[field] so custom
+// code (e.g. create-player) can extend it live.
+function columnFromSpec(c, cfg) {
+    const col = { title: c.title, field: c.field };
+    if (c.width) col.width = c.width;
+    if (c.min_width) col.minWidth = c.min_width;
+    if (c.align) col.hozAlign = c.align;
+    if (c.kind === "number") {
+        col.editor = "number";
+        col.editorParams = { min: c.min != null ? c.min : 0 };
+    } else if (c.kind === "choice") {
+        const map = c.values || buildLookup(cfg.lookups[c.lookup] || []);
+        cfg._lookups[c.field] = map;
+        col.editor = "list";
+        col.editorParams = { values: map, autocomplete: c.autocomplete, listOnEmpty: true };
+        col.formatter = cell => map[cell.getValue()] ?? "";
+        if (!col.minWidth) col.minWidth = 150;
+    }
+    // kind "display": no editor — read-only text.
+    return col;
+}
+
+// Tabulator columns for a grid, from its declarative spec, plus the delete column.
+export function buildColumns(gridId) {
+    const cfg = gridConfig(gridId);
+    cfg._lookups = {};
+    const cols = (cfg.columns || []).map(c => columnFromSpec(c, cfg));
+    cols.push(deleteColumn());
+    return cols;
+}
+
+// The resolved value->label map for a choice column (so custom code can extend
+// it live, e.g. adding a newly-created player to the dropdown).
+export function lookupMap(gridId, field) {
+    return (gridConfig(gridId)._lookups || {})[field];
+}
+
+// Row serializer derived from the column spec: each field is coerced per its
+// value_type (int -> parseInt||null, bool -> true/"true", str -> as-is).
+export function serializeRow(gridId) {
+    const cols = gridConfig(gridId).columns || [];
+    return (r) => {
+        const out = {};
+        for (const c of cols) {
+            const v = r[c.field];
+            if (c.value_type === "bool") out[c.field] = v === true || v === "true";
+            else if (c.value_type === "str") out[c.field] = v;
+            else out[c.field] = parseInt(v) || null;
+        }
+        return out;
+    };
+}

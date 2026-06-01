@@ -1,6 +1,7 @@
 import {
+    buildColumns,
     createEditTable,
-    deleteColumn,
+    serializeRow,
     tagRows,
     wireAddRowButton,
     wireSaveButton,
@@ -12,25 +13,7 @@ const cfg = window.editgrids[gridId];
 
 const table = createEditTable("#board-table-map-table", {
     data: cfg.rows,
-    columns: [
-        {
-            title: "Board",
-            field: "board",
-            editor: "number",
-            editorParams: { min: 1 },
-            width: 120,
-            hozAlign: "center",
-        },
-        {
-            title: "Table",
-            field: "table",
-            editor: "number",
-            editorParams: { min: 1 },
-            width: 120,
-            hozAlign: "center",
-        },
-        deleteColumn(),
-    ],
+    columns: buildColumns(gridId),
 });
 
 function generateMapping(singleTables, boardCount) {
@@ -73,13 +56,6 @@ wireAddRowButton({
     focusField: "table",
 });
 
-wireSaveButton({
-    table,
-    gridId,
-    serializeRow: r => ({
-        board: parseInt(r.board) || null,
-        table: parseInt(r.table) || null,
-    }),
-});
+wireSaveButton({ table, gridId, serializeRow: serializeRow(gridId) });
 
 wireUndoRedo(table, gridId);

@@ -6,6 +6,7 @@
     {
         rows: {{ grid.rows_json|safe }},
         lookups: {{ grid.lookups_json|safe }},
+        columns: {{ grid.columns_json|safe }},
         version: {{ grid.version }},
         csrfToken: "{{ csrf_token }}",
         saveUrl: "{{ grid.save_url }}",
