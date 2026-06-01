@@ -1,7 +1,7 @@
 <div class="table-toolbar">
-    <button id="add-row-btn" type="button">{{ add_label }}</button>
-    <button id="undo-btn" type="button" class="btn-secondary">Undo</button>
-    <button id="redo-btn" type="button" class="btn-secondary">Redo</button>
-    <button id="save-btn" type="button" class="btn-save">Save</button>
-    <span id="save-status"></span>
+    <button data-eg="{{ grid.dom_id }}" data-eg-action="add" type="button">{{ add_label }}</button>
+    <button data-eg="{{ grid.dom_id }}" data-eg-action="undo" type="button" class="btn-secondary">Undo</button>
+    <button data-eg="{{ grid.dom_id }}" data-eg-action="redo" type="button" class="btn-secondary">Redo</button>
+    <button data-eg="{{ grid.dom_id }}" data-eg-action="save" type="button" class="btn-save">Save</button>
+    <span data-eg="{{ grid.dom_id }}" data-eg-action="status"></span>
 </div>

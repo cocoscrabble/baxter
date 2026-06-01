@@ -10,12 +10,12 @@
 {% editgrid_presence grid %}
 
 <div class="table-toolbar">
-    <button id="add-row-btn" type="button">Add Entrant</button>
+    <button data-eg="entrants-table" data-eg-action="add" type="button">Add Entrant</button>
     <button type="button" data-on:click="$showNewPlayer = !$showNewPlayer">Add New Player</button>
-    <button id="undo-btn" type="button" class="btn-secondary">Undo</button>
-    <button id="redo-btn" type="button" class="btn-secondary">Redo</button>
-    <button id="save-btn" type="button" class="btn-save">Save</button>
-    <span id="save-status"></span>
+    <button data-eg="entrants-table" data-eg-action="undo" type="button" class="btn-secondary">Undo</button>
+    <button data-eg="entrants-table" data-eg-action="redo" type="button" class="btn-secondary">Redo</button>
+    <button data-eg="entrants-table" data-eg-action="save" type="button" class="btn-save">Save</button>
+    <span data-eg="entrants-table" data-eg-action="status"></span>
 </div>
 
 <div class="inline-panel hidden mt-sm" data-class="{hidden: !$showNewPlayer}">

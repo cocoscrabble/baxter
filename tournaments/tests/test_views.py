@@ -1906,3 +1906,44 @@ class EditPresenceViewTests(TestCase):
         self.assertEqual(body["current_version"], 3)
 
 
+class DivisionFixturesEditViewTests(TestCase):
+    def setUp(self):
+        setUpTournament(self)
+        self.url = reverse("division_fixtures", kwargs={"pk": self.division.pk})
+
+    def test_non_editor_forbidden(self):
+        self.client.login(username="other", password="testpass123")
+        self.assertEqual(self.client.get(self.url).status_code, 403)
+
+    def test_get_renders_both_grids_with_own_save_urls(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        pairings = response.context["pairings_grid"]
+        tables = response.context["tables_grid"]
+        # Distinct grids, each pointing at its own existing save endpoint.
+        self.assertEqual(pairings.dom_id, "fixed-pairings-table")
+        self.assertEqual(tables.dom_id, "fixed-tables-table")
+        self.assertEqual(
+            pairings.save_url,
+            reverse("division_fixed_pairings", kwargs={"pk": self.division.pk}),
+        )
+        self.assertEqual(
+            tables.save_url,
+            reverse("division_fixed_tables", kwargs={"pk": self.division.pk}),
+        )
+
+    def test_each_grid_saves_via_its_own_endpoint(self):
+        # The combined page is GET-only; saves go to the per-grid endpoints.
+        self.client.login(username="owner", password="testpass123")
+        pairings_url = reverse("division_fixed_pairings", kwargs={"pk": self.division.pk})
+        payload = {
+            "rows": [
+                {"round_number": 1, "entrant1": self.entrant1.pk, "entrant2": self.entrant2.pk}
+            ]
+        }
+        response = self.client.post(
+            pairings_url, json.dumps(payload), content_type="application/json"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.division.fixed_pairings.count(), 1)

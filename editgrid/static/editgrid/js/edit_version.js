@@ -1,16 +1,15 @@
-// The page's current optimistic-concurrency version for its edit grid.
-//
-// Shared so the Save button (which sends it and refreshes it after each save)
-// and the presence heartbeat (which reports it to detect that someone else has
-// saved) agree on which version we're holding. One grid per edit page, so a
-// single module-level value is sufficient. Undefined until the grid wires up.
+// Per-grid optimistic-concurrency versions, keyed by grid id (the table's
+// dom id). Shared so each grid's Save button (which sends its version and
+// refreshes it after each save) and its presence heartbeat (which reports it
+// to detect that someone else saved) agree on the version they're holding.
+// Keyed rather than a single value so multiple grids can coexist on one page.
 
-let current;
+const versions = new Map();
 
-export function getEditVersion() {
-    return current;
+export function getEditVersion(gridId) {
+    return versions.get(gridId);
 }
 
-export function setEditVersion(version) {
-    current = version;
+export function setEditVersion(gridId, version) {
+    versions.set(gridId, version);
 }
