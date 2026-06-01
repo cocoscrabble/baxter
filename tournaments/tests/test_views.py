@@ -1175,8 +1175,9 @@ class DivisionEditResultsViewTests(TestCase):
         )
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(self.url)
-        results = json.loads(response.context["results_json"])
-        entrants = json.loads(response.context["entrants_json"])
+        grid = response.context["grid"]
+        results = grid.rows
+        entrants = grid.lookups["entrants"]
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["round"], 1)
         self.assertEqual(results[0]["winner"], self.entrant1.pk)
@@ -1195,7 +1196,7 @@ class DivisionEditResultsViewTests(TestCase):
         self._make_pairing(1, self.entrant1, self.entrant2)
         self.client.login(username="owner", password="testpass123")
         payload = {
-            "results": [
+            "rows": [
                 {
                     "round": 1,
                     "winner": self.entrant1.pk,
@@ -1226,7 +1227,7 @@ class DivisionEditResultsViewTests(TestCase):
         )
         self.client.login(username="owner", password="testpass123")
         payload = {
-            "results": [
+            "rows": [
                 {
                     "round": 2,
                     "winner": self.entrant2.pk,
@@ -1251,7 +1252,7 @@ class DivisionEditResultsViewTests(TestCase):
     def test_post_rejects_result_without_pairing(self):
         self.client.login(username="owner", password="testpass123")
         payload = {
-            "results": [
+            "rows": [
                 {
                     "round": 1,
                     "winner": self.entrant1.pk,
@@ -1275,7 +1276,7 @@ class DivisionEditResultsViewTests(TestCase):
     def test_post_same_winner_loser_returns_error(self):
         self.client.login(username="owner", password="testpass123")
         payload = {
-            "results": [
+            "rows": [
                 {
                     "round": 1,
                     "winner": self.entrant1.pk,
@@ -1299,7 +1300,7 @@ class DivisionEditResultsViewTests(TestCase):
     def test_post_missing_fields_returns_error(self):
         self.client.login(username="owner", password="testpass123")
         payload = {
-            "results": [
+            "rows": [
                 {
                     "round": 1,
                     "winner": self.entrant1.pk,
