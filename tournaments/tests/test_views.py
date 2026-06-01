@@ -4,7 +4,9 @@ from datetime import date
 from django.test import TestCase, tag
 from django.urls import reverse
 
-from tournaments.models import Division, DivisionEditPresence, DivisionEditVersion, DivisionSettings, Entrant, FixedPairing, FixedTable, Pairing, Player, ResultSlip, RoundPairings, Tournament
+from tournaments.models import Division, DivisionSettings, Entrant, FixedPairing, FixedTable, Pairing, Player, ResultSlip, RoundPairings, Tournament
+from tournaments.views import edit_key
+from editgrid.models import EditPresence, EditVersion
 from users.models import User
 
 
@@ -1851,6 +1853,7 @@ class EditPresenceViewTests(TestCase):
         self.url = reverse(
             "edit_presence", kwargs={"pk": self.division.pk, "scope": "entrants"}
         )
+        self.key = edit_key(self.division, "entrants")
 
     def test_non_editor_forbidden(self):
         self.client.login(username="other", password="testpass123")
@@ -1865,18 +1868,14 @@ class EditPresenceViewTests(TestCase):
 
     def test_heartbeat_records_self_and_returns_other_editors(self):
         # Another editor is already present on this grid.
-        DivisionEditPresence.objects.create(
-            division=self.division, scope="entrants", user=self.other
-        )
+        EditPresence.objects.create(key=self.key, user=self.other)
         self.client.login(username="owner", password="testpass123")
         response = self.client.post(self.url)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["editors"], ["other"])
         # The heartbeat recorded the caller too.
         self.assertTrue(
-            DivisionEditPresence.objects.filter(
-                division=self.division, scope="entrants", user=self.owner
-            ).exists()
+            EditPresence.objects.filter(key=self.key, user=self.owner).exists()
         )
 
     def test_release_removes_presence(self):
@@ -1885,9 +1884,7 @@ class EditPresenceViewTests(TestCase):
         response = self.client.post(self.url, {"release": "1"})
         self.assertEqual(response.status_code, 204)
         self.assertFalse(
-            DivisionEditPresence.objects.filter(
-                division=self.division, scope="entrants", user=self.owner
-            ).exists()
+            EditPresence.objects.filter(key=self.key, user=self.owner).exists()
         )
 
     def test_heartbeat_without_known_version_omits_staleness(self):
@@ -1895,18 +1892,14 @@ class EditPresenceViewTests(TestCase):
         self.assertNotIn("stale", self.client.post(self.url).json())
 
     def test_heartbeat_reports_not_stale_when_version_matches(self):
-        DivisionEditVersion.objects.create(
-            division=self.division, scope="entrants", version=3
-        )
+        EditVersion.objects.create(key=self.key, version=3)
         self.client.login(username="owner", password="testpass123")
         body = self.client.post(self.url + "?known_version=3").json()
         self.assertFalse(body["stale"])
         self.assertEqual(body["current_version"], 3)
 
     def test_heartbeat_reports_stale_when_version_moved_on(self):
-        DivisionEditVersion.objects.create(
-            division=self.division, scope="entrants", version=3
-        )
+        EditVersion.objects.create(key=self.key, version=3)
         self.client.login(username="owner", password="testpass123")
         body = self.client.post(self.url + "?known_version=2").json()
         self.assertTrue(body["stale"])

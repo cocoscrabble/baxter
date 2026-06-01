@@ -2,9 +2,8 @@ from datetime import date
 
 from django.db import IntegrityError
 from django.test import TestCase
-from django.utils import timezone
 
-from tournaments.models import PRESENCE_WINDOW, Division, DivisionEditPresence, DivisionSettings, Entrant, Player, ResultSlip, Tournament, next_player_number
+from tournaments.models import Division, DivisionSettings, Entrant, Player, ResultSlip, Tournament, next_player_number
 from users.models import User
 
 
@@ -168,67 +167,3 @@ class NextPlayerNumberTests(TestCase):
         Player.objects.create(name="B", player_number="B10", rating=1500)
         # "B10" sorts after "A50" lexically
         self.assertEqual(next_player_number(), "B11")
-
-
-class DivisionEditPresenceModelTests(TestCase):
-    @classmethod
-    def setUpTestData(cls):
-        setUpTournament(cls)
-
-    def _stale(self, presence):
-        """Push a presence row's last heartbeat just outside the window."""
-        old = timezone.now() - PRESENCE_WINDOW - timezone.timedelta(seconds=1)
-        DivisionEditPresence.objects.filter(pk=presence.pk).update(last_seen=old)
-
-    def test_heartbeat_upserts_one_row_per_user(self):
-        DivisionEditPresence.heartbeat(self.division, "entrants", self.owner)
-        DivisionEditPresence.heartbeat(self.division, "entrants", self.owner)
-        self.assertEqual(
-            DivisionEditPresence.objects.filter(
-                division=self.division, scope="entrants", user=self.owner
-            ).count(),
-            1,
-        )
-
-    def test_others_excludes_self_and_lists_others(self):
-        DivisionEditPresence.heartbeat(self.division, "entrants", self.owner)
-        DivisionEditPresence.heartbeat(self.division, "entrants", self.other)
-        self.assertEqual(
-            DivisionEditPresence.others(self.division, "entrants", self.owner),
-            ["other"],
-        )
-        # Each editor sees the other, not themselves.
-        self.assertEqual(
-            DivisionEditPresence.others(self.division, "entrants", self.other),
-            ["owner"],
-        )
-
-    def test_others_ignores_stale_and_other_scopes(self):
-        stale = DivisionEditPresence.objects.create(
-            division=self.division, scope="entrants", user=self.other
-        )
-        self._stale(stale)
-        DivisionEditPresence.heartbeat(self.division, "results", self.other)
-        # Stale row and the row in a different scope are both excluded.
-        self.assertEqual(
-            DivisionEditPresence.others(self.division, "entrants", self.owner), []
-        )
-
-    def test_heartbeat_prunes_stale_rows(self):
-        stale = DivisionEditPresence.objects.create(
-            division=self.division, scope="entrants", user=self.other
-        )
-        self._stale(stale)
-        DivisionEditPresence.heartbeat(self.division, "entrants", self.owner)
-        self.assertFalse(
-            DivisionEditPresence.objects.filter(pk=stale.pk).exists()
-        )
-
-    def test_release_drops_the_users_row(self):
-        DivisionEditPresence.heartbeat(self.division, "entrants", self.owner)
-        DivisionEditPresence.release(self.division, "entrants", self.owner)
-        self.assertFalse(
-            DivisionEditPresence.objects.filter(
-                division=self.division, scope="entrants", user=self.owner
-            ).exists()
-        )

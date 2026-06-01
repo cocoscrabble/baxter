@@ -7,7 +7,7 @@ import {
     wireAddRowButton,
     wireSaveButton,
     wireUndoRedo,
-} from "./table_helpers.js";
+} from "/static/editgrid/js/table_helpers.js";
 
 const playerLookup = buildLookup(pageData.players);
 

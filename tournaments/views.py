@@ -3,7 +3,7 @@ from collections import defaultdict
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.db import models, transaction
+from django.db import models
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
@@ -32,7 +32,10 @@ from .fixed_pairings import (
     remove_fixed_pairings,
 )
 from .match_simulation import simulate_match, simulate_round
-from .models import EDIT_SCOPES, Division, DivisionEditPresence, DivisionEditVersion, DivisionSettings, Entrant, FixedPairing, FixedTable, Pairing, Player, ResultSlip, RoundPairings, Tournament
+from .models import EDIT_SCOPES, Division, DivisionSettings, Entrant, FixedPairing, FixedTable, Pairing, Player, ResultSlip, RoundPairings, Tournament
+from editgrid.concurrency import check_conflict
+from editgrid.models import EditVersion
+from editgrid.views import EditPresenceBaseView
 from .player_sync import import_players
 from users.models import User
 from .generate_pairings import regenerate_pairings
@@ -123,62 +126,13 @@ def _ensure_visible_division(division, user):
         raise Http404
 
 
-class check_conflict:
-    """Wrap the optimistic-concurrency dance around a bulk-replace save.
+def edit_key(division, scope):
+    """Opaque editgrid key identifying one division's editable grid.
 
-    Opens a transaction, row-locks the scope's version, and compares it against
-    the client's. The caller checks ``guard.conflict`` (a 409 ``JsonResponse``
-    when the client's version is stale, else None) and runs the save logic only
-    when it's clear; on a clean exit the version is bumped and ``guard.response``
-    holds the success ``JsonResponse`` to return. A ``client_version`` of None
-    skips the check (e.g. an older page that doesn't send one)::
-
-        with check_conflict(division, scope, client_version) as guard:
-            if guard.conflict:
-                return guard.conflict
-            ...  # the specific save logic
-        return guard.response
-
-    The transaction means an exception in the body rolls back the bump too.
+    The editgrid app (version tokens, presence) is domain-agnostic and keys
+    everything on this string; Baxter composes it from the division and scope.
     """
-
-    def __init__(self, division, scope, client_version):
-        self.division = division
-        self.scope = scope
-        self.client_version = client_version
-        self.conflict = None
-        self.response = None
-
-    def __enter__(self):
-        self._atomic = transaction.atomic()
-        self._atomic.__enter__()
-        self.version_row = DivisionEditVersion.lock(self.division, self.scope)
-        if (
-            self.client_version is not None
-            and self.version_row.version != self.client_version
-        ):
-            self.conflict = JsonResponse(
-                {
-                    "ok": False,
-                    "conflict": True,
-                    "errors": [
-                        "Someone else changed this data since you opened the page. "
-                        "Reload to see their changes before saving."
-                    ],
-                },
-                status=409,
-            )
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        if exc_type is None and self.conflict is None:
-            self.version_row.version += 1
-            self.version_row.save(update_fields=["version"])
-            self.response = JsonResponse(
-                {"ok": True, "version": self.version_row.version}
-            )
-        self._atomic.__exit__(exc_type, exc, tb)
-        return False
+    return f"division:{division.pk}:{scope}"
 
 
 class BulkReplaceDivisionRowsMixin:
@@ -216,7 +170,7 @@ class BulkReplaceDivisionRowsMixin:
         if errors:
             return JsonResponse({"errors": errors}, status=400)
 
-        with check_conflict(division, self.get_edit_scope(), data.get("_version")) as guard:
+        with check_conflict(edit_key(division, self.get_edit_scope()), data.get("_version")) as guard:
             if guard.conflict:
                 return guard.conflict
             getattr(division, self.target_relation).all().delete()
@@ -708,7 +662,7 @@ class DivisionEntrantsEditView(
             "division": division,
             "entrants_json": json.dumps(entrants_json),
             "players_json": json.dumps(players_json),
-            "edit_version": DivisionEditVersion.version_for(division, "entrants"),
+            "edit_version": EditVersion.version_for(edit_key(division, "entrants")),
             "active_tab": "edit_entrants",
             "can_edit": True,
         })
@@ -825,7 +779,7 @@ class DivisionFixedPairingsEditView(
             "division": division,
             "entrant_values_json": json.dumps(entrant_values),
             "fixed_pairings_json": json.dumps(existing),
-            "edit_version": DivisionEditVersion.version_for(division, "fixed_pairings"),
+            "edit_version": EditVersion.version_for(edit_key(division, "fixed_pairings")),
             "active_tab": "fixed_pairings",
             "can_edit": True,
         })
@@ -858,7 +812,7 @@ class DivisionFixedTablesEditView(
             "entrant_values_json": json.dumps(entrant_values),
             "fixed_tables_json": json.dumps(existing),
             "round_values_json": json.dumps(round_values),
-            "edit_version": DivisionEditVersion.version_for(division, "fixed_tables"),
+            "edit_version": EditVersion.version_for(edit_key(division, "fixed_tables")),
             "active_tab": "fixed_tables",
             "can_edit": True,
         })
@@ -877,7 +831,7 @@ class DivisionBoardTableMapEditView(LoginRequiredMixin, CanEditDivisionMixin, Vi
             "division": division,
             "board_table_map_json": json.dumps(existing),
             "default_board_count": default_board_count,
-            "edit_version": DivisionEditVersion.version_for(division, "board_table_map"),
+            "edit_version": EditVersion.version_for(edit_key(division, "board_table_map")),
             "active_tab": "board_tables",
             "can_edit": True,
         })
@@ -913,7 +867,7 @@ class DivisionBoardTableMapEditView(LoginRequiredMixin, CanEditDivisionMixin, Vi
             return JsonResponse({"errors": errors}, status=400)
 
         validated.sort(key=lambda r: r["board"])
-        with check_conflict(division, "board_table_map", data.get("_version")) as guard:
+        with check_conflict(edit_key(division, "board_table_map"), data.get("_version")) as guard:
             if guard.conflict:
                 return guard.conflict
             settings_obj, _ = DivisionSettings.objects.get_or_create(division=division)
@@ -922,37 +876,15 @@ class DivisionBoardTableMapEditView(LoginRequiredMixin, CanEditDivisionMixin, Vi
         return guard.response
 
 
-class EditPresenceView(LoginRequiredMixin, CanEditDivisionMixin, View):
-    """Soft editing-presence endpoint for an edit grid's ``scope``.
+class EditPresenceView(LoginRequiredMixin, CanEditDivisionMixin, EditPresenceBaseView):
+    """Baxter binding of the generic editgrid presence endpoint: gates on
+    division-edit permission and derives the key from the division + scope."""
 
-    A heartbeat POST records the caller as present and returns the other
-    editors currently active on the same grid; a ``release`` POST drops the
-    caller (sent via ``navigator.sendBeacon`` on tab close, with the CSRF token
-    in the form body so the standard CSRF check still applies).
-
-    If the heartbeat carries a ``known_version`` query param, the response also
-    reports whether the scope's edit version has moved on since the page loaded,
-    so the client can warn the user before they hit Save and hit a conflict.
-    """
-
-    def post(self, request, pk, scope):
+    def get_key(self):
+        scope = self.kwargs["scope"]
         if scope not in EDIT_SCOPES:
-            raise Http404("Unknown edit scope.")
-        division = self.get_division()
-        if request.POST.get("release"):
-            DivisionEditPresence.release(division, scope, request.user)
-            return HttpResponse(status=204)
-        DivisionEditPresence.heartbeat(division, scope, request.user)
-        payload = {"editors": DivisionEditPresence.others(division, scope, request.user)}
-        try:
-            known_version = int(request.GET["known_version"])
-        except (KeyError, ValueError):
-            known_version = None
-        if known_version is not None:
-            current_version = DivisionEditVersion.version_for(division, scope)
-            payload["stale"] = current_version != known_version
-            payload["current_version"] = current_version
-        return JsonResponse(payload)
+            return None
+        return edit_key(self.get_division(), scope)
 
 
 def _pairings_by_round(division):
@@ -1077,7 +1009,7 @@ class DivisionEditResultsView(LoginRequiredMixin, CanEditDivisionMixin, View):
             "division": division,
             "results_json": json.dumps(results_json),
             "entrants_json": json.dumps(entrants_json),
-            "edit_version": DivisionEditVersion.version_for(division, "results"),
+            "edit_version": EditVersion.version_for(edit_key(division, "results")),
             "active_tab": "edit_results",
             "can_edit": True,
         })
@@ -1115,7 +1047,7 @@ class DivisionEditResultsView(LoginRequiredMixin, CanEditDivisionMixin, View):
             division.result_slips.values_list("round", flat=True)
         )
 
-        with check_conflict(division, "results", client_version) as guard:
+        with check_conflict(edit_key(division, "results"), client_version) as guard:
             if guard.conflict:
                 return guard.conflict
 
