@@ -100,5 +100,42 @@ class EditGrid:
         fk = {self.parent_field: parent}
         return [self.model(**fk, **dto.to_db_kwargs()) for dto in validated], []
 
+    def persist(self, parent, prepared):
+        """Write the prepared rows inside the save transaction.
+
+        Default replaces the whole FK-scoped collection (delete + bulk-create);
+        grids backed by something other than a model collection override.
+        """
+        self.queryset(parent).delete()
+        self.model.objects.bulk_create(prepared)
+
     def after_save(self, parent):
-        """Hook run inside the save transaction after the rows are recreated."""
+        """Hook run inside the save transaction after the rows are written."""
+
+
+class JsonBlobGrid(EditGrid):
+    """An editable grid backed by a JSON list field on a settings-style model,
+    rather than an FK-scoped model collection.
+
+    Concrete grids set ``blob_model`` / ``blob_fk`` / ``blob_field`` and provide
+    their own ``validate`` (no DTO); the validated rows are stored verbatim.
+    """
+
+    blob_model: type
+    blob_fk: str = ""
+    blob_field: str = ""
+
+    def _blob_object(self, parent):
+        obj, _ = self.blob_model.objects.get_or_create(**{self.blob_fk: parent})
+        return obj
+
+    def rows_for(self, parent):
+        return getattr(self._blob_object(parent), self.blob_field) or []
+
+    def prepare(self, parent, validated):
+        return validated, []
+
+    def persist(self, parent, prepared):
+        obj = self._blob_object(parent)
+        setattr(obj, self.blob_field, prepared)
+        obj.save(update_fields=[self.blob_field])

@@ -31,11 +31,8 @@ from .fixed_pairings import (
     remove_fixed_pairings,
 )
 from .match_simulation import simulate_match, simulate_round
-from .grids import EntrantsGrid, FixedPairingsGrid, FixedTablesGrid, ResultsGrid
+from .grids import BoardTableMapGrid, EntrantsGrid, FixedPairingsGrid, FixedTablesGrid, ResultsGrid
 from .models import EDIT_SCOPES, Division, DivisionSettings, Pairing, Player, RoundPairings, Tournament
-from editgrid.concurrency import check_conflict
-from editgrid.grids import GridContext
-from editgrid.models import EditVersion
 from editgrid.views import BaseEditGridView, EditPresenceBaseView
 from .player_sync import import_players
 from users.models import User
@@ -719,71 +716,14 @@ class DivisionFixedTablesEditView(DivisionEditGridView):
     active_tab = "fixed_tables"
 
 
-class DivisionBoardTableMapEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
-    template_name = "tournaments/division_board_table_map_edit.html"
+class DivisionBoardTableMapEditView(DivisionEditGridView):
+    grid = BoardTableMapGrid()
+    active_tab = "board_tables"
 
-    def get(self, request, pk):
-        division = self.get_division()
-        settings_obj, _ = DivisionSettings.objects.get_or_create(division=division)
-        key = edit_key(division, "board_table_map")
-        grid = GridContext(
-            dom_id="board-table-map-table",
-            rows=settings_obj.board_table_map or [],
-            lookups={},
-            version=EditVersion.version_for(key),
-            key=key,
-            presence_url=reverse(
-                "edit_presence", kwargs={"pk": division.pk, "scope": "board_table_map"}
-            ),
-            js_module="tournaments/js/edit_board_table_map.js",
-        )
-        n_entrants = division.entrants.count()
-        return render(request, self.template_name, {
-            "division": division,
-            "grid": grid,
-            "default_board_count": (n_entrants + 1) // 2,
-            "active_tab": "board_tables",
-            "can_edit": True,
-        })
-
-    def post(self, request, pk):
-        division = self.get_division()
-        try:
-            data = json.loads(request.body)
-        except json.JSONDecodeError:
-            return JsonResponse({"errors": ["Invalid JSON."]}, status=400)
-
-        rows = data.get("rows", [])
-        errors = []
-        seen_boards = set()
-        validated = []
-        for i, row in enumerate(rows):
-            try:
-                board = int(row["board"])
-                table = int(row["table"])
-            except (KeyError, TypeError, ValueError):
-                errors.append(f"Row {i+1}: board and table must be integers.")
-                continue
-            if board < 1 or table < 1:
-                errors.append(f"Row {i+1}: board and table must be positive.")
-                continue
-            if board in seen_boards:
-                errors.append(f"Row {i+1}: duplicate board {board}.")
-                continue
-            seen_boards.add(board)
-            validated.append({"board": board, "table": table})
-
-        if errors:
-            return JsonResponse({"errors": errors}, status=400)
-
-        validated.sort(key=lambda r: r["board"])
-        with check_conflict(edit_key(division, "board_table_map"), data.get("_version")) as guard:
-            if guard.conflict:
-                return guard.conflict
-            settings_obj, _ = DivisionSettings.objects.get_or_create(division=division)
-            settings_obj.board_table_map = validated
-            settings_obj.save(update_fields=["board_table_map"])
-        return guard.response
+    def get_context_data(self, division):
+        context = super().get_context_data(division)
+        context["default_board_count"] = (division.entrants.count() + 1) // 2
+        return context
 
 
 class EditPresenceView(LoginRequiredMixin, CanEditDivisionMixin, EditPresenceBaseView):
