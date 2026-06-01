@@ -61,15 +61,14 @@ class BaseEditGridView(View):
 
         # Build (and any extra validation) before the transaction so a failure
         # doesn't bump the version.
-        instances, prep_errors = self.grid.prepare(parent, validated)
+        prepared, prep_errors = self.grid.prepare(parent, validated)
         if prep_errors:
             return JsonResponse({"errors": prep_errors}, status=400)
 
         with check_conflict(self.grid_key(parent), data.get("_version")) as guard:
             if guard.conflict:
                 return guard.conflict
-            self.grid.queryset(parent).delete()
-            self.grid.model.objects.bulk_create(instances)
+            self.grid.persist(parent, prepared)
             self.grid.after_save(parent)
         return guard.response
 

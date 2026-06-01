@@ -1,9 +1,9 @@
 """Concrete editgrid configs for Baxter's editable grids."""
 
-from editgrid.grids import EditGrid
+from editgrid.grids import EditGrid, JsonBlobGrid
 
 from .dto import EntrantDTO, FixedPairingDTO, FixedTableDTO, ResultSlipDTO
-from .models import Entrant, FixedPairing, FixedTable, Player, ResultSlip
+from .models import DivisionSettings, Entrant, FixedPairing, FixedTable, Player, ResultSlip
 
 
 def _entrant_values(division):
@@ -136,3 +136,35 @@ class ResultsGrid(EditGrid):
         # status of every round (update_status is idempotent).
         for rp in division.round_pairings_set.all():
             rp.update_status()
+
+
+class BoardTableMapGrid(JsonBlobGrid):
+    blob_model = DivisionSettings
+    blob_fk = "division"
+    blob_field = "board_table_map"
+    scope = "board_table_map"
+    dom_id = "board-table-map-table"
+    js_module = "tournaments/js/edit_board_table_map.js"
+    template_name = "tournaments/division_board_table_map_edit.html"
+
+    def validate(self, rows, division):
+        errors = []
+        seen_boards = set()
+        validated = []
+        for i, row in enumerate(rows):
+            try:
+                board = int(row["board"])
+                table = int(row["table"])
+            except (KeyError, TypeError, ValueError):
+                errors.append(f"Row {i + 1}: board and table must be integers.")
+                continue
+            if board < 1 or table < 1:
+                errors.append(f"Row {i + 1}: board and table must be positive.")
+                continue
+            if board in seen_boards:
+                errors.append(f"Row {i + 1}: duplicate board {board}.")
+                continue
+            seen_boards.add(board)
+            validated.append({"board": board, "table": table})
+        validated.sort(key=lambda r: r["board"])
+        return validated, errors
