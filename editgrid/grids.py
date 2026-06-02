@@ -7,6 +7,11 @@ host app and supply the model, validation DTO, serialization, and lookups.
 import json
 from dataclasses import dataclass, field
 
+# Default client module: the generic bootstrap that builds + wires a grid from
+# its column spec. Grids with custom controls override ``js_module`` with a thin
+# module that calls ``initGrid`` itself.
+GENERIC_JS = "editgrid/js/grid.js"
+
 
 @dataclass
 class Column:
@@ -32,6 +37,8 @@ class Column:
     values: dict | None = None
     autocomplete: bool = False
     value_type: str = "int"  # int | bool | str — how the client serializes it
+    auto_increment: bool = False  # new rows get max(field) + 1
+    new_row: object = None  # default value for this field in a new row
 
 
 def parse_rows(dto_cls, rows, *validate_args):
@@ -70,6 +77,8 @@ class GridContext:
     js_module: str
     save_url: str = ""
     columns: list = field(default_factory=list)
+    auto_init: bool = False
+    focus_field: str = ""
 
     @property
     def rows_json(self):
@@ -100,9 +109,10 @@ class EditGrid:
     dto_class: type
     data_key: str = "rows"     # JSON key the client wraps its rows in
     dom_id: str = ""
-    js_module: str = ""        # static path to the per-grid JS module
+    js_module: str = GENERIC_JS  # generic bootstrap; override for custom controls
     template_name: str = ""
     columns: list = []         # list[Column] driving the client's table
+    focus_field: str = ""      # field to focus when a new row is added
 
     def queryset(self, parent):
         return getattr(parent, self.related_name).all()

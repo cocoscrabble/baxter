@@ -6,7 +6,7 @@ from django.shortcuts import render
 from django.views import View
 
 from .concurrency import check_conflict
-from .grids import GridContext
+from .grids import GENERIC_JS, GridContext
 from .models import EditPresence, EditVersion
 
 
@@ -27,6 +27,8 @@ def build_grid_context(grid, parent, *, key, presence_url="", save_url=""):
         js_module=grid.js_module,
         save_url=save_url,
         columns=[asdict(c) for c in grid.columns],
+        auto_init=(grid.js_module == GENERIC_JS),
+        focus_field=grid.focus_field,
     )
 
 

@@ -10,6 +10,8 @@
         version: {{ grid.version }},
         csrfToken: "{{ csrf_token }}",
         saveUrl: "{{ grid.save_url }}",
+        autoInit: {{ grid.auto_init|yesno:"true,false" }},
+        focusField: "{{ grid.focus_field }}",
     }
 );
 </script>

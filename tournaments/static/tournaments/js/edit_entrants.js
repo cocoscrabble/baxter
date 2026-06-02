@@ -1,13 +1,5 @@
-import {
-    buildColumns,
-    createEditTable,
-    lookupMap,
-    nextRid,
-    serializeRow,
-    wireAddRowButton,
-    wireSaveButton,
-    wireUndoRedo,
-} from "/static/editgrid/js/table_helpers.js";
+import { initGrid } from "/static/editgrid/js/grid.js";
+import { lookupMap, nextRid } from "/static/editgrid/js/table_helpers.js";
 
 const gridId = "entrants-table";
 const cfg = window.editgrids[gridId];
@@ -22,26 +14,7 @@ function renumber() {
     });
 }
 
-const table = createEditTable("#entrants-table", {
-    data: cfg.rows,
-    columns: buildColumns(gridId),
-});
-
-wireAddRowButton({
-    table,
-    gridId,
-    template: t => ({ number: t.getDataCount() + 1, player: null }),
-    focusField: "player",
-});
-
-wireSaveButton({
-    table,
-    gridId,
-    beforeSave: renumber,
-    serializeRow: serializeRow(gridId),
-});
-
-wireUndoRedo(table, gridId);
+const table = initGrid(gridId, { beforeSave: renumber });
 
 // -- Create New Player (form toggle handled by datastar data-show) --
 
