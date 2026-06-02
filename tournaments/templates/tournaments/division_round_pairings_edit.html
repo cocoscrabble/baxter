@@ -26,17 +26,22 @@
 <div id="round-pairings-preview-table" class="mt-sm"></div>
 
 <script>
+// Register for presence (banner above) the same way editgrid tags do.
+(window.editgrids = window.editgrids || {})["pairing-blocks-table"] = {
+    presenceUrl: "{{ presence_url }}",
+    csrfToken: "{{ csrf_token }}",
+    version: {{ edit_version|default:"0" }},
+};
 const pageData = {
     blocks: {{ blocks_json|safe }},
     preview: {{ preview_json|safe }},
     defaultRounds: {{ default_rounds_json|safe }},
     strategyTypes: {{ strategy_types_json|safe }},
-    version: {{ edit_version|default:"0" }},
     csrfToken: "{{ csrf_token }}",
     saveUrl: "",
     previewUrl: "{{ preview_url }}",
-    presenceUrl: "{{ presence_url }}",
 };
 </script>
+<script type="module" src="{% static 'editgrid/js/presence.js' %}"></script>
 <script type="module" src="{% static 'tournaments/js/edit_round_pairings.js' %}"></script>
 {% endblock %}

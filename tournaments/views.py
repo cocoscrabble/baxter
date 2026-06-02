@@ -617,11 +617,11 @@ class DivisionRoundPairingsPreviewView(LoginRequiredMixin, CanEditDivisionMixin,
             data = json.loads(request.body)
         except json.JSONDecodeError:
             return JsonResponse({"errors": ["Invalid JSON."]}, status=400)
-        blocks, errors = _validate_blocks(data.get("blocks", []))
-        if errors:
-            return JsonResponse({"errors": errors}, status=400)
+        # Lenient: expand whatever blocks are valid so partial edits still
+        # preview (a half-filled row just doesn't contribute rounds yet).
+        blocks, _errors = _validate_blocks(data.get("blocks", []))
         rows = [rp.to_dict() for rp in blocks_to_round_pairings(blocks)]
-        return JsonResponse({"rows": rows})
+        return JsonResponse({"ok": True, "rows": rows})
 
 
 class DivisionEditGridView(LoginRequiredMixin, CanEditDivisionMixin, BaseEditGridView):

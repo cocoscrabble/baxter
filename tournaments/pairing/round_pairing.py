@@ -134,10 +134,14 @@ def round_pairings_to_blocks(round_pairings) -> list[dict]:
     for rp in sorted(round_pairings, key=lambda x: x["round"]):
         pairing = rp["pairing"]
         if RP.is_round_robin(pairing):
-            sig = (pairing, "fixed", rp["start_round"])
+            # Round-robin doesn't pair off standings, so pair_from is nominal —
+            # consecutive RR rounds are one block regardless of stored start_round.
+            sig = (pairing, "rr")
             pair_from = 1
         elif RP.is_quad(pairing):
-            sig = (pairing, "fixed", rp["start_round"])
+            # Quads pair off one fixed snapshot; the block is delimited by that
+            # snapshot (constant start_round within a block).
+            sig = (pairing, "quad", rp["start_round"])
             pair_from = rp["round"] - rp["start_round"]  # blockStart - start_round
         else:
             offset = rp["round"] - rp["start_round"]
