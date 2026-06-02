@@ -229,6 +229,16 @@ class RoundPairingsToBlocksTests(TestCase):
             {"pairing": "Swiss", "rounds": 2, "pair_from": 2},
         ])
 
+    def test_consecutive_round_robin_rounds_collapse_to_one_block(self):
+        # Legacy schedules stored per-round start_rounds for RR; they should
+        # still seed a single round-robin block.
+        blocks = round_pairings_to_blocks([
+            {"round": 1, "start_round": 0, "pairing": "RoundRobin"},
+            {"round": 2, "start_round": 1, "pairing": "RoundRobin"},
+            {"round": 3, "start_round": 2, "pairing": "RoundRobin"},
+        ])
+        self.assertEqual(blocks, [{"pairing": "RoundRobin", "rounds": 3, "pair_from": 1}])
+
     def test_quads_stay_one_block_despite_varying_offset(self):
         # Quads share a fixed start_round; round-start_round varies (1,2,3) but
         # they must remain a single block.
