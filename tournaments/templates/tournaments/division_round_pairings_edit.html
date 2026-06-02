@@ -14,16 +14,21 @@
     Drag rows to reorder; the per-round schedule below regenerates automatically.
 </p>
 
-<div class="table-toolbar">
-    <button id="add-block-btn" type="button">Add Block</button>
-    <button id="rp-save-btn" type="button" class="btn-save">Save</button>
-    <span id="rp-save-status"></span>
+<div class="editgrid-columns">
+    <div>
+        <h2>Schedule blocks</h2>
+        <div class="table-toolbar">
+            <button id="add-block-btn" type="button">Add Block</button>
+            <button id="rp-save-btn" type="button" class="btn-save">Save</button>
+            <span id="rp-save-status"></span>
+        </div>
+        <div id="pairing-blocks-table"></div>
+    </div>
+    <div>
+        <h2>Generated rounds</h2>
+        <div id="round-pairings-preview-table" class="mt-sm"></div>
+    </div>
 </div>
-
-<div id="pairing-blocks-table"></div>
-
-<h2 class="mt-lg">Generated rounds</h2>
-<div id="round-pairings-preview-table" class="mt-sm"></div>
 
 <script>
 // Register for presence (banner above) the same way editgrid tags do.
