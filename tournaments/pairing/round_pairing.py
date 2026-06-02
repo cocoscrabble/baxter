@@ -75,6 +75,82 @@ def normalize_round_robin_start_rounds(rps: list[RoundPairing]) -> list[RoundPai
     return rps
 
 
+def blocks_to_round_pairings(blocks) -> list[RoundPairing]:
+    """Expand block specs into the per-round pairing list.
+
+    Each block is ``{"pairing", "rounds", "pair_from"}``. Rounds are numbered
+    cumulatively; ``pair_from = N`` sets each round's standings source by family:
+      - sliding (Swiss/KotH/Random/...): ``start_round = round - N``
+      - quads/sixes: one fixed snapshot, ``start_round = blockStart - N``
+      - round-robin: ``start_round = blockStart`` (rotates off a fixed order)
+    """
+    out = []
+    for block in blocks:
+        pairing = block["pairing"]
+        rounds = int(block.get("rounds") or 0)
+        pair_from = int(block.get("pair_from") or 1)
+        start = len(out) + 1
+        for i in range(rounds):
+            r = start + i
+            if RP.is_round_robin(pairing):
+                start_round = start
+            elif RP.is_quad(pairing):
+                start_round = start - pair_from
+            else:
+                start_round = r - pair_from
+            out.append(RoundPairing(r, start_round, pairing))
+    return out
+
+
+def default_block_rounds(n_entrants: int) -> dict:
+    """Per-strategy default round counts for a field of ``n_entrants`` (all
+    editable afterward). Strategies not listed default to 1 on the client."""
+    rr = (n_entrants - 1) if n_entrants % 2 == 0 else n_entrants
+    rr = max(rr, 0)
+    return {
+        RP.RoundRobin: rr,
+        RP.DoubleRoundRobin: 2 * rr,
+        RP.Charlottesville: n_entrants // 2,
+        RP.Quads_Clustered: 3,
+        RP.Quads_Distributed: 3,
+        RP.Quads_Equalized: 3,
+        RP.Sixes: 3,
+    }
+
+
+def round_pairings_to_blocks(round_pairings) -> list[dict]:
+    """Group a per-round list back into blocks (for seeding the editor from an
+    existing schedule).
+
+    Consecutive rounds join the same block only when they share a strategy AND
+    the same ``pair_from``. Because that comparison differs by family — sliding
+    strategies keep a constant per-round offset (``round - start_round``), while
+    quads/round-robin pair off one fixed snapshot (constant ``start_round``) —
+    each round gets a family-aware signature; a change in signature starts a new
+    block. ``pair_from`` is taken from each block's first round.
+    """
+    blocks = []
+    last_sig = None
+    for rp in sorted(round_pairings, key=lambda x: x["round"]):
+        pairing = rp["pairing"]
+        if RP.is_round_robin(pairing):
+            sig = (pairing, "fixed", rp["start_round"])
+            pair_from = 1
+        elif RP.is_quad(pairing):
+            sig = (pairing, "fixed", rp["start_round"])
+            pair_from = rp["round"] - rp["start_round"]  # blockStart - start_round
+        else:
+            offset = rp["round"] - rp["start_round"]
+            sig = (pairing, "slide", offset)
+            pair_from = offset
+        if sig == last_sig:
+            blocks[-1]["rounds"] += 1
+            continue
+        blocks.append({"pairing": pairing, "rounds": 1, "pair_from": pair_from})
+        last_sig = sig
+    return blocks
+
+
 def make_pairings(spec: str) -> list[RoundPairing]:
     out = []
     parts = spec.split(" ")

@@ -506,146 +506,83 @@ class DivisionStandingsViewTests(TestCase):
 class DivisionSettingsEditViewTests(TestCase):
     def setUp(self):
         setUpTournament(self)
+        self.url = reverse("division_settings", kwargs={"pk": self.division.pk})
 
-    def test_get_with_rounds_param(self):
+    def test_editor_sees_placeholder(self):
         self.client.login(username="owner", password="testpass123")
-        response = self.client.get(
-            reverse("division_settings", kwargs={"pk": self.division.pk})
-            + "?rounds=3"
-        )
+        response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "tournaments/division_settings_edit.html")
-        # Should have 3 forms in the formset
-        self.assertEqual(len(response.context["formset"]), 3)
-
-    def test_get_with_existing_settings(self):
-        DivisionSettings.objects.create(
-            division=self.division,
-            round_pairings=[
-                {"round": 1, "pairing": "Swiss", "start_round": 0},
-                {"round": 2, "pairing": "KotH", "start_round": 1},
-            ],
-        )
-        self.client.login(username="owner", password="testpass123")
-        response = self.client.get(
-            reverse("division_settings", kwargs={"pk": self.division.pk})
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.context["formset"]), 2)
-
-    def test_get_without_data_shows_empty_formset(self):
-        self.client.login(username="owner", password="testpass123")
-        response = self.client.get(
-            reverse("division_settings", kwargs={"pk": self.division.pk})
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.context["formset"]), 0)
-        self.assertEqual(response.context["round_count_form"].initial["num_rounds"], 0)
 
     def test_non_editor_forbidden(self):
         self.client.login(username="other", password="testpass123")
-        response = self.client.get(
-            reverse("division_settings", kwargs={"pk": self.division.pk})
-        )
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(self.client.get(self.url).status_code, 403)
 
-    def test_post_saves_settings(self):
-        self.client.login(username="owner", password="testpass123")
-        response = self.client.post(
-            reverse("division_settings", kwargs={"pk": self.division.pk}),
-            {
-                "form-TOTAL_FORMS": "2",
-                "form-INITIAL_FORMS": "0",
-                "form-MIN_NUM_FORMS": "0",
-                "form-MAX_NUM_FORMS": "1000",
-                "form-0-round": "1",
-                "form-0-pairing_type": "Swiss",
-                "form-0-start_round": "0",
-                "form-1-round": "2",
-                "form-1-pairing_type": "KotH",
-                "form-1-start_round": "1",
-            },
-        )
-        self.assertRedirects(
-            response,
-            reverse("division_detail", kwargs={"pk": self.division.pk}),
-        )
-        settings = DivisionSettings.objects.get(division=self.division)
-        self.assertEqual(len(settings.round_pairings), 2)
-        self.assertEqual(settings.round_pairings[0]["pairing"], "Swiss")
-        self.assertEqual(settings.round_pairings[1]["pairing"], "KotH")
 
-    def test_increase_rounds_preserves_existing(self):
-        DivisionSettings.objects.create(
-            division=self.division,
-            round_pairings=[
-                {"round": 1, "pairing": "Swiss", "start_round": 0},
-                {"round": 2, "pairing": "KotH", "start_round": 1},
-            ],
-        )
-        self.client.login(username="owner", password="testpass123")
-        response = self.client.get(
-            reverse("division_settings", kwargs={"pk": self.division.pk})
-            + "?rounds=4"
-        )
-        formset = response.context["formset"]
-        self.assertEqual(len(formset), 4)
-        # Existing rounds preserved
-        self.assertEqual(formset[0].initial["pairing_type"], "Swiss")
-        self.assertEqual(formset[1].initial["pairing_type"], "KotH")
-        # New rounds have defaults
-        self.assertEqual(formset[2].initial["round"], 3)
-        self.assertEqual(formset[2].initial["pairing_type"], "")
-        self.assertEqual(formset[3].initial["round"], 4)
+class DivisionRoundPairingsEditViewTests(TestCase):
+    def setUp(self):
+        setUpTournament(self)
+        self.url = reverse("division_round_pairings", kwargs={"pk": self.division.pk})
 
-    def test_decrease_rounds_truncates(self):
-        DivisionSettings.objects.create(
-            division=self.division,
-            round_pairings=[
-                {"round": 1, "pairing": "Swiss", "start_round": 0},
-                {"round": 2, "pairing": "KotH", "start_round": 1},
-                {"round": 3, "pairing": "Swiss", "start_round": 2},
-            ],
-        )
-        self.client.login(username="owner", password="testpass123")
-        response = self.client.get(
-            reverse("division_settings", kwargs={"pk": self.division.pk})
-            + "?rounds=1"
-        )
-        formset = response.context["formset"]
-        self.assertEqual(len(formset), 1)
-        self.assertEqual(formset[0].initial["pairing_type"], "Swiss")
+    def test_non_editor_forbidden(self):
+        self.client.login(username="other", password="testpass123")
+        self.assertEqual(self.client.get(self.url).status_code, 403)
 
-    def test_round_count_form_in_context(self):
-        DivisionSettings.objects.create(
-            division=self.division,
-            round_pairings=[
-                {"round": 1, "pairing": "Swiss", "start_round": 0},
-                {"round": 2, "pairing": "KotH", "start_round": 1},
-            ],
-        )
+    def test_get_exposes_blocks_defaults_and_strategies(self):
         self.client.login(username="owner", password="testpass123")
-        response = self.client.get(
-            reverse("division_settings", kwargs={"pk": self.division.pk})
-        )
-        round_count_form = response.context["round_count_form"]
-        self.assertEqual(round_count_form.initial["num_rounds"], 2)
-
-    def test_post_invalid_stays_on_page(self):
-        self.client.login(username="owner", password="testpass123")
-        response = self.client.post(
-            reverse("division_settings", kwargs={"pk": self.division.pk}),
-            {
-                "form-TOTAL_FORMS": "1",
-                "form-INITIAL_FORMS": "0",
-                "form-MIN_NUM_FORMS": "0",
-                "form-MAX_NUM_FORMS": "1000",
-                "form-0-round": "1",
-                "form-0-pairing_type": "Swiss",
-                "form-0-start_round": "1",  # invalid: not less than round
-            },
-        )
+        response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
+        self.assertIn("default_rounds_json", response.context)
+        self.assertIn("KotH", json.loads(response.context["strategy_types_json"]))
+
+    def test_get_backfills_blocks_from_existing_schedule(self):
+        DivisionSettings.objects.create(
+            division=self.division,
+            round_pairings=[
+                {"round": 1, "pairing": "Swiss", "start_round": 0},
+                {"round": 2, "pairing": "Swiss", "start_round": 1},
+                {"round": 3, "pairing": "KotH", "start_round": 2},
+            ],
+        )
+        self.client.login(username="owner", password="testpass123")
+        blocks = json.loads(self.client.get(self.url).context["blocks_json"])
+        self.assertEqual(blocks, [
+            {"pairing": "Swiss", "rounds": 2, "pair_from": 1},
+            {"pairing": "KotH", "rounds": 1, "pair_from": 1},
+        ])
+
+    def test_post_saves_blocks_and_derives_round_pairings(self):
+        self.client.login(username="owner", password="testpass123")
+        payload = {"blocks": [
+            {"pairing": "KotH", "rounds": 3, "pair_from": 1},
+            {"pairing": "Swiss", "rounds": 2, "pair_from": 2},
+        ]}
+        response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["ok"])
+        s = DivisionSettings.objects.get(division=self.division)
+        self.assertEqual(s.pairing_blocks, payload["blocks"])
+        rounds = [(rp["round"], rp["pairing"], rp["start_round"]) for rp in s.round_pairings]
+        self.assertEqual(rounds, [
+            (1, "KotH", 0), (2, "KotH", 1), (3, "KotH", 2),  # sliding: round - 1
+            (4, "Swiss", 2), (5, "Swiss", 3),                # sliding: round - 2
+        ])
+
+    def test_post_invalid_pairing_rejected(self):
+        self.client.login(username="owner", password="testpass123")
+        payload = {"blocks": [{"pairing": "Nope", "rounds": 2, "pair_from": 1}]}
+        response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("errors", response.json())
+
+    def test_preview_expands_without_saving(self):
+        self.client.login(username="owner", password="testpass123")
+        url = reverse("division_round_pairings_preview", kwargs={"pk": self.division.pk})
+        payload = {"blocks": [{"pairing": "Quads_Clustered", "rounds": 3, "pair_from": 1}]}
+        response = self.client.post(url, json.dumps(payload), content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        # Quads pair off one fixed snapshot: start_round = blockStart - 1 = 0 for all.
+        self.assertEqual([r["start_round"] for r in response.json()["rows"]], [0, 0, 0])
         self.assertFalse(DivisionSettings.objects.filter(division=self.division).exists())
 
 

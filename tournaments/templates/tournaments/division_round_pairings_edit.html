@@ -1,0 +1,42 @@
+{% extends "tournaments/base_division.html" %}
+{% load static %}
+
+{% block title %}Round Pairings - {{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
+
+{% block content %}
+<h1>Round Pairings: {{ division.name }}</h1>
+
+{% include "tournaments/_tabulator_head.html" %}
+<div data-eg-presence="pairing-blocks-table" class="presence-banner" hidden></div>
+
+<p class="empty-state">
+    Define the schedule in blocks (e.g. KotH for 3 rounds, then Swiss for 5).
+    Drag rows to reorder; the per-round schedule below regenerates automatically.
+</p>
+
+<div class="table-toolbar">
+    <button id="add-block-btn" type="button">Add Block</button>
+    <button id="rp-save-btn" type="button" class="btn-save">Save</button>
+    <span id="rp-save-status"></span>
+</div>
+
+<div id="pairing-blocks-table"></div>
+
+<h2 class="mt-lg">Generated rounds</h2>
+<div id="round-pairings-preview-table" class="mt-sm"></div>
+
+<script>
+const pageData = {
+    blocks: {{ blocks_json|safe }},
+    preview: {{ preview_json|safe }},
+    defaultRounds: {{ default_rounds_json|safe }},
+    strategyTypes: {{ strategy_types_json|safe }},
+    version: {{ edit_version|default:"0" }},
+    csrfToken: "{{ csrf_token }}",
+    saveUrl: "",
+    previewUrl: "{{ preview_url }}",
+    presenceUrl: "{{ presence_url }}",
+};
+</script>
+<script type="module" src="{% static 'tournaments/js/edit_round_pairings.js' %}"></script>
+{% endblock %}
