@@ -18,10 +18,11 @@ class EntrantsGrid(EditGrid):
     scope = "entrants"
     dto_class = EntrantDTO
     dom_id = "entrants-table"
-    js_module = "tournaments/js/edit_entrants.js"
+    js_module = "tournaments/js/edit_entrants.js"  # custom: create-player + import
     template_name = "tournaments/division_entrants_edit.html"
+    focus_field = "player"
     columns = [
-        Column("number", "#", kind="display", width=60, align="center"),
+        Column("number", "#", kind="display", width=60, align="center", auto_increment=True),
         Column("player", "Player", kind="choice", lookup="players", autocomplete=True),
     ]
 
@@ -45,8 +46,8 @@ class FixedPairingsGrid(EditGrid):
     scope = "fixed_pairings"
     dto_class = FixedPairingDTO
     dom_id = "fixed-pairings-table"
-    js_module = "tournaments/js/edit_fixed_pairings.js"
     template_name = "tournaments/division_fixed_pairings_edit.html"
+    focus_field = "round_number"
     columns = [
         Column("round_number", "Round", kind="number", min=1, width=100, align="center"),
         Column("entrant1", "Player 1", kind="choice", lookup="entrantValues", autocomplete=True),
@@ -74,10 +75,10 @@ class FixedTablesGrid(EditGrid):
     scope = "fixed_tables"
     dto_class = FixedTableDTO
     dom_id = "fixed-tables-table"
-    js_module = "tournaments/js/edit_fixed_tables.js"
     template_name = "tournaments/division_fixed_tables_edit.html"
+    focus_field = "round_number"
     columns = [
-        Column("round_number", "Round", kind="choice", lookup="roundValues", width=100, align="center"),
+        Column("round_number", "Round", kind="choice", lookup="roundValues", width=100, align="center", new_row=-1),
         Column("entrant", "Player", kind="choice", lookup="entrantValues", autocomplete=True, min_width=200),
         Column("table_number", "Table", kind="number", min=1, width=100, align="center"),
     ]
@@ -110,16 +111,16 @@ class ResultsGrid(EditGrid):
     scope = "results"
     dto_class = ResultSlipDTO
     dom_id = "results-table"
-    js_module = "tournaments/js/edit_results.js"
     template_name = "tournaments/division_edit_results.html"
     columns = [
-        Column("round", "Round", kind="number", min=1, width=100),
+        Column("round", "Round", kind="number", min=1, width=100, auto_increment=True),
         Column("winner", "Winner", kind="choice", lookup="entrants"),
         Column("winner_score", "W Score", kind="number", min=0, width=120),
         Column("loser", "Opponent", kind="choice", lookup="entrants"),
         Column("loser_score", "Opp Score", kind="number", min=0, width=130),
         Column("winner_started", "Started", kind="choice",
-               values={True: "Winner", False: "Opponent"}, width=120, value_type="bool"),
+               values={True: "Winner", False: "Opponent"}, width=120,
+               value_type="bool", new_row=True),
     ]
 
     def queryset(self, division):
@@ -167,10 +168,11 @@ class BoardTableMapGrid(JsonBlobGrid):
     blob_field = "board_table_map"
     scope = "board_table_map"
     dom_id = "board-table-map-table"
-    js_module = "tournaments/js/edit_board_table_map.js"
+    js_module = "tournaments/js/edit_board_table_map.js"  # custom: generate button
     template_name = "tournaments/division_board_table_map_edit.html"
+    focus_field = "table"
     columns = [
-        Column("board", "Board", kind="number", min=1, width=120, align="center"),
+        Column("board", "Board", kind="number", min=1, width=120, align="center", auto_increment=True),
         Column("table", "Table", kind="number", min=1, width=120, align="center"),
     ]
 
