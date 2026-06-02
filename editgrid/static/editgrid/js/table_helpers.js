@@ -306,22 +306,6 @@ function syncUndoRedo(table, gridId) {
     }
 }
 
-// Factory for a Tabulator column backed by an id -> label lookup.
-// Renders the label, edits with a `list` editor over the same values.
-export function lookupColumn({ title, field, lookup, autocomplete = false, ...extra }) {
-    return {
-        title,
-        field,
-        editor: "list",
-        editorParams: { values: lookup, autocomplete, listOnEmpty: autocomplete },
-        formatter: cell => lookup[cell.getValue()] || "",
-        // Names are data-sized; without a floor an empty grid collapses the
-        // column below its header. Callers can override via `extra`.
-        minWidth: 150,
-        ...extra,
-    };
-}
-
 // Build a Tabulator column from one declarative Column spec (see editgrid.grids).
 // `choice` columns resolve their value->label map from a static `values` or the
 // grid's lookups; the resolved map is stashed on cfg._lookups[field] so custom
