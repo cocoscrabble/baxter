@@ -21,8 +21,6 @@ from .datastar_utils import fragment_response, is_datastar
 from datastar_py.django import read_signals
 from .forms import (
     ResultSlipForm,
-    RoundCountForm,
-    RoundPairingFormSet,
     TournamentForm,
 )
 from .fixed_pairings import (
@@ -33,7 +31,14 @@ from .fixed_pairings import (
 from .match_simulation import simulate_match, simulate_round
 from .grids import BoardTableMapGrid, EntrantsGrid, FixedPairingsGrid, FixedTablesGrid, ResultsGrid
 from .models import EDIT_SCOPES, Division, DivisionSettings, Pairing, Player, RoundPairings, Tournament
+from editgrid.concurrency import check_conflict
+from editgrid.models import EditVersion
 from editgrid.views import BaseEditGridView, EditPresenceBaseView, build_grid_context
+from .pairing.round_pairing import (
+    blocks_to_round_pairings,
+    default_block_rounds,
+    round_pairings_to_blocks,
+)
 from .player_sync import import_players
 from users.models import User
 from .generate_pairings import regenerate_pairings
@@ -516,75 +521,107 @@ class DivisionScorecardsDownloadView(VisibleDivisionMixin, DetailView):
 
 
 class DivisionSettingsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    """Placeholder for future per-division configuration. Round pairings, which
+    used to live here, now have their own tab."""
+
     template_name = "tournaments/division_settings_edit.html"
-
-    def _existing_initial(self, division):
-        try:
-            if division.settings.round_pairings:
-                return [
-                    {
-                        "round": rp["round"],
-                        "pairing_type": rp["pairing"],
-                        "start_round": rp["start_round"],
-                    }
-                    for rp in division.settings.round_pairings
-                ]
-        except DivisionSettings.DoesNotExist:
-            pass
-        return []
-
-    def _resize_initial(self, existing, num_rounds):
-        result = (existing or [])[:num_rounds]
-        for i in range(len(result) + 1, num_rounds + 1):
-            result.append({"round": i, "pairing_type": "", "start_round": i - 1})
-        return result
-
-    def get_initial_data(self, division):
-        existing = self._existing_initial(division)
-        num_rounds = self.request.GET.get("num_rounds") or self.request.GET.get("rounds")
-        if num_rounds:
-            return self._resize_initial(existing, int(num_rounds))
-        return existing
 
     def get(self, request, pk):
         division = self.get_division()
-        initial = self.get_initial_data(division)
-        formset = RoundPairingFormSet(initial=initial)
-        round_count_form = RoundCountForm(initial={"num_rounds": len(initial)})
-        context = {
+        return render(request, self.template_name, {
             "division": division,
-            "formset": formset,
-            "round_count_form": round_count_form,
-            "strategy_types": STRATEGY_TYPES,
             "active_tab": "settings",
             "can_edit": True,
-        }
-        if is_datastar(request):
-            return fragment_response(
-                "tournaments/_settings_formset.html", context, request=request
-            )
-        return render(request, self.template_name, context)
+        })
+
+
+def _validate_blocks(raw):
+    """Validate raw pairing-block dicts. Returns ``(blocks, errors)``."""
+    valid = {str(s) for s in STRATEGY_TYPES}
+    blocks, errors = [], []
+    for i, b in enumerate(raw):
+        pairing = b.get("pairing")
+        if pairing not in valid:
+            errors.append(f"Row {i + 1}: choose a pairing type.")
+            continue
+        try:
+            rounds = int(b.get("rounds"))
+            pair_from = int(b.get("pair_from") or 1)
+        except (TypeError, ValueError):
+            errors.append(f"Row {i + 1}: rounds and pair-from must be whole numbers.")
+            continue
+        if rounds < 1:
+            errors.append(f"Row {i + 1}: rounds must be at least 1.")
+            continue
+        blocks.append({"pairing": pairing, "rounds": rounds, "pair_from": pair_from})
+    return blocks, errors
+
+
+class DivisionRoundPairingsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    """Block-based round-pairings editor. Blocks are the source of truth; the
+    per-round ``round_pairings`` the engine reads are derived from them."""
+
+    template_name = "tournaments/division_round_pairings_edit.html"
+
+    def get(self, request, pk):
+        division = self.get_division()
+        settings_obj, _ = DivisionSettings.objects.get_or_create(division=division)
+        blocks = settings_obj.pairing_blocks
+        # Seed the editor from an existing schedule if blocks were never saved.
+        if not blocks and settings_obj.round_pairings:
+            blocks = round_pairings_to_blocks(settings_obj.round_pairings)
+        preview = [rp.to_dict() for rp in blocks_to_round_pairings(blocks)]
+        key = edit_key(division, "round_pairings")
+        return render(request, self.template_name, {
+            "division": division,
+            "blocks_json": json.dumps(blocks),
+            "preview_json": json.dumps(preview),
+            "default_rounds_json": json.dumps(default_block_rounds(division.entrants.count())),
+            "strategy_types_json": json.dumps([str(s) for s in STRATEGY_TYPES]),
+            "edit_version": EditVersion.version_for(key),
+            "presence_url": reverse(
+                "edit_presence", kwargs={"pk": division.pk, "scope": "round_pairings"}
+            ),
+            "preview_url": reverse("division_round_pairings_preview", kwargs={"pk": division.pk}),
+            "active_tab": "round_pairings",
+            "can_edit": True,
+        })
 
     def post(self, request, pk):
         division = self.get_division()
-        formset = RoundPairingFormSet(request.POST)
-        if formset.is_valid():
-            round_pairings = [
-                {
-                    "round": form.cleaned_data["round"],
-                    "pairing": form.cleaned_data["pairing_type"],
-                    "start_round": form.cleaned_data["start_round"],
-                }
-                for form in formset
-            ]
-            settings, _ = DivisionSettings.objects.get_or_create(division=division)
-            settings.round_pairings = round_pairings
-            settings.save()
-            return redirect("division_detail", pk=pk)
-        return render(request, self.template_name, {
-            "division": division,
-            "formset": formset,
-        })
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({"errors": ["Invalid JSON."]}, status=400)
+        blocks, errors = _validate_blocks(data.get("blocks", []))
+        if errors:
+            return JsonResponse({"errors": errors}, status=400)
+        round_pairings = [rp.to_dict() for rp in blocks_to_round_pairings(blocks)]
+        with check_conflict(edit_key(division, "round_pairings"), data.get("_version")) as guard:
+            if guard.conflict:
+                return guard.conflict
+            settings_obj, _ = DivisionSettings.objects.get_or_create(division=division)
+            settings_obj.pairing_blocks = blocks
+            settings_obj.round_pairings = round_pairings
+            settings_obj.save(update_fields=["pairing_blocks", "round_pairings"])
+        return guard.response
+
+
+class DivisionRoundPairingsPreviewView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    """Expand blocks into the per-round list without saving — drives the live
+    preview table."""
+
+    def post(self, request, pk):
+        self.get_division()  # permission gate
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({"errors": ["Invalid JSON."]}, status=400)
+        blocks, errors = _validate_blocks(data.get("blocks", []))
+        if errors:
+            return JsonResponse({"errors": errors}, status=400)
+        rows = [rp.to_dict() for rp in blocks_to_round_pairings(blocks)]
+        return JsonResponse({"rows": rows})
 
 
 class DivisionEditGridView(LoginRequiredMixin, CanEditDivisionMixin, BaseEditGridView):

@@ -120,6 +120,9 @@ class DivisionSettings(models.Model):
     )
     round_pairings = models.JSONField(default=list)
     board_table_map = models.JSONField(default=list)
+    # Source of truth for the round-pairings editor; round_pairings is derived
+    # from it. Each block: {"pairing", "rounds", "pair_from"}.
+    pairing_blocks = models.JSONField(default=list)
 
     def __str__(self):
         return f"Settings for {self.division}"
@@ -397,5 +400,5 @@ class FixedTable(models.Model):
 # (see ``edit_key`` in views) for the optimistic-concurrency token and editing
 # presence, both of which now live in the reusable ``editgrid`` app.
 EDIT_SCOPES = frozenset(
-    {"entrants", "results", "fixed_pairings", "fixed_tables", "board_table_map"}
+    {"entrants", "results", "fixed_pairings", "fixed_tables", "board_table_map", "round_pairings"}
 )
