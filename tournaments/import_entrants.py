@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 
 from django.db import models
 
-from tournaments.models import Entrant, Player, next_player_number
+from tournaments.models import Entrant, Player, next_temp_player_number
 
 
 @dataclass
@@ -100,8 +100,9 @@ def resolve_players(parsed_rows, existing_entrant_names):
         else:
             player = Player.objects.create(
                 name=name,
-                player_number=next_player_number(),
+                player_number=next_temp_player_number(),
                 rating=rating,
+                is_provisional=True,
             )
             result.created.append({"name": player.name, "player_number": player.player_number})
 
