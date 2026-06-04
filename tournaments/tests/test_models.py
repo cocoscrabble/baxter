@@ -3,7 +3,7 @@ from datetime import date
 from django.db import IntegrityError
 from django.test import TestCase
 
-from tournaments.models import Division, DivisionSettings, Entrant, Player, ResultSlip, Tournament, next_player_number
+from tournaments.models import Division, DivisionSettings, Entrant, Player, ResultSlip, Tournament, next_temp_player_number
 from users.models import User
 
 
@@ -148,22 +148,21 @@ class DivisionSettingsModelTests(TestCase):
         self.assertEqual(str(settings), "Settings for Open")
 
 
-class NextPlayerNumberTests(TestCase):
+class NextTempPlayerNumberTests(TestCase):
     def test_no_players(self):
-        self.assertEqual(next_player_number(), "1")
+        self.assertEqual(next_temp_player_number(), "T-1")
 
-    def test_numeric_only(self):
-        Player.objects.create(name="A", player_number="100", rating=1500)
-        Player.objects.create(name="B", player_number="101", rating=1500)
-        self.assertEqual(next_player_number(), "102")
+    def test_sequences_over_existing_temp_numbers(self):
+        Player.objects.create(name="A", player_number="T-1", rating=1500, is_provisional=True)
+        Player.objects.create(name="B", player_number="T-2", rating=1500, is_provisional=True)
+        self.assertEqual(next_temp_player_number(), "T-3")
 
-    def test_alpha_prefix(self):
+    def test_ignores_registry_players(self):
+        # Canonical registry numbers must not influence the temp sequence.
         Player.objects.create(name="A", player_number="A100", rating=1500)
-        Player.objects.create(name="B", player_number="A101", rating=1500)
-        self.assertEqual(next_player_number(), "A102")
+        Player.objects.create(name="B", player_number="101", rating=1500)
+        self.assertEqual(next_temp_player_number(), "T-1")
 
-    def test_mixed_prefixes_uses_last_lexically(self):
-        Player.objects.create(name="A", player_number="A50", rating=1500)
-        Player.objects.create(name="B", player_number="B10", rating=1500)
-        # "B10" sorts after "A50" lexically
-        self.assertEqual(next_player_number(), "B11")
+    def test_fills_gap_above_current_max(self):
+        Player.objects.create(name="A", player_number="T-5", rating=1500, is_provisional=True)
+        self.assertEqual(next_temp_player_number(), "T-6")

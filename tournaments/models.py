@@ -1,4 +1,3 @@
-import re
 
 from django.conf import settings
 from django.db import models
@@ -128,24 +127,28 @@ class DivisionSettings(models.Model):
         return f"Settings for {self.division}"
 
 
-def next_player_number():
-    """Generate the next player number by incrementing the last one lexically.
+# Reserved namespace for player numbers minted locally in Baxter for players
+# that are not yet known to the registry. The hyphen guarantees these never
+# collide with canonical registry numbers (optional alpha prefix + digits), and
+# the registry replaces them with real numbers when the tournament is uploaded.
+TEMP_NUMBER_PREFIX = "T-"
 
-    Player numbers have an optional alpha prefix followed by digits (e.g. "A100", "100").
-    Sort all existing numbers lexically, take the last, and increment the integer part.
+
+def next_temp_player_number():
+    """Generate the next temporary player number for a locally-created player.
+
+    Numbers live in the reserved ``T-`` namespace and are sequenced over the
+    existing provisional players only, so they never clash with registry numbers.
     """
-    all_numbers = list(
-        Player.objects.values_list("player_number", flat=True)
-    )
-    if not all_numbers:
-        return "1"
-    all_numbers.sort()
-    last = all_numbers[-1]
-    m = re.match(r"^([A-Za-z]*)(\d+)$", last)
-    if not m:
-        return "1"
-    prefix, num_str = m.groups()
-    return f"{prefix}{int(num_str) + 1}"
+    max_n = 0
+    for number in Player.objects.filter(
+        is_provisional=True, player_number__startswith=TEMP_NUMBER_PREFIX
+    ).values_list("player_number", flat=True):
+        try:
+            max_n = max(max_n, int(number[len(TEMP_NUMBER_PREFIX):]))
+        except ValueError:
+            continue
+    return f"{TEMP_NUMBER_PREFIX}{max_n + 1}"
 
 
 class Player(models.Model):
@@ -154,6 +157,9 @@ class Player(models.Model):
     name = models.CharField(max_length=200)
     player_number = models.CharField(max_length=8)
     rating = models.IntegerField()
+    # True for players created locally that the registry has not yet seen; their
+    # player_number is a temporary T- value the registry replaces on upload.
+    is_provisional = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["name"]
@@ -178,8 +184,9 @@ class Player(models.Model):
             rating = 0
         player = cls.objects.create(
             name=name,
-            player_number=next_player_number(),
+            player_number=next_temp_player_number(),
             rating=rating,
+            is_provisional=True,
         )
         return player, None
 
