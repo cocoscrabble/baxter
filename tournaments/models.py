@@ -332,7 +332,11 @@ class RoundPairings(models.Model):
         elif 0 < with_results < total and self.status == RoundPairings.PUBLISHED:
             self.status = RoundPairings.IN_PROGRESS
             self.save(update_fields=["status"])
-        elif with_results == total and self.status in (RoundPairings.PUBLISHED, RoundPairings.IN_PROGRESS):
+        elif total > 0 and with_results == total and self.status in (RoundPairings.PUBLISHED, RoundPairings.IN_PROGRESS):
+            # `total > 0` guards against an unpaired round (e.g. a round-robin
+            # block round created up front but not yet paired): with no pairings
+            # `with_results == total` is vacuously true, which would otherwise
+            # mark a round with no games as finished.
             self.status = RoundPairings.FINISHED
             self.save(update_fields=["status"])
 
