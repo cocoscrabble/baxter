@@ -16,6 +16,41 @@ function renumber() {
 
 const table = initGrid(gridId, { beforeSave: renumber });
 
+// -- Add Entrant (form toggle handled by datastar data-show) --
+
+// Populate the player picker from the column's lookup, sorted by name. New
+// players created below extend this same lookup map, so they appear here too.
+const entrantSelect = document.getElementById("add-entrant-select");
+
+function refreshEntrantOptions() {
+    const players = lookupMap(gridId, "player") || {};
+    const entries = Object.entries(players)
+        .sort((a, b) => a[1].localeCompare(b[1]));
+    entrantSelect.innerHTML = "";
+    for (const [id, label] of entries) {
+        const opt = document.createElement("option");
+        opt.value = id;
+        opt.textContent = label;
+        entrantSelect.appendChild(opt);
+    }
+}
+refreshEntrantOptions();
+
+document.getElementById("add-entrant-btn").addEventListener("click", function() {
+    const statusEl = document.getElementById("add-entrant-status");
+    const playerId = parseInt(entrantSelect.value);
+
+    if (!playerId) {
+        statusEl.textContent = "Select a player.";
+        return;
+    }
+
+    statusEl.textContent = "";
+    const count = table.getDataCount();
+    table.addRow({ number: count + 1, player: playerId, _rid: nextRid() });
+    document.querySelector("[data-on\\:click='$showNewEntrant = false']").click();
+});
+
 // -- Create New Player (form toggle handled by datastar data-show) --
 
 document.getElementById("create-player-btn").addEventListener("click", function() {
@@ -46,6 +81,7 @@ document.getElementById("create-player-btn").addEventListener("click", function(
     .then(({ ok, body }) => {
         if (ok && body.ok) {
             lookupMap(gridId, "player")[body.id] = body.label;
+            refreshEntrantOptions();
             const count = table.getDataCount();
             table.addRow({ number: count + 1, player: body.id, _rid: nextRid() });
             nameInput.value = "";
