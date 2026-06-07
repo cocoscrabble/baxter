@@ -194,6 +194,26 @@ class ResultSlipFormTests(TestCase):
         )
         self.assertTrue(form.is_valid(), form.errors)
 
+    def test_accepts_negative_scores(self):
+        # Scrabble scores can legitimately go negative (e.g. end-of-game
+        # penalties), so the score fields must accept them.
+        form = ResultSlipForm(
+            data={
+                "round": 1,
+                "pairing": self.pairing.pk,
+                "winner": self.entrant1.pk,
+                "winner_score": 5,
+                "loser_score": -20,
+                "winner_started": True,
+            },
+            division=self.division,
+            pairings_by_round=self._pbr(),
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        rs = form.save()
+        self.assertEqual(rs.winner_score, 5)
+        self.assertEqual(rs.loser_score, -20)
+
     def test_winner_must_be_in_pairing(self):
         other_player = Player.objects.create(name="Charlie", player_number="003", rating=1400)
         other_entrant = Entrant.objects.create(division=self.division, player=other_player, number=3)
