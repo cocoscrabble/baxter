@@ -1,10 +1,10 @@
 {% extends "tournaments/base_division.html" %}
 {% load static editgrid %}
 
-{% block title %}Edit Fixed Tables - {{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
+{% block title %}Edit Fixed Table Assignments - {{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
 
 {% block content %}
-<h1>Edit Fixed Tables: {{ division.name }}</h1>
+<h1>Edit Fixed Table Assignments: {{ division.name }}</h1>
 
 {% include "tournaments/_tabulator_head.html" %}
 {% editgrid_presence grid %}

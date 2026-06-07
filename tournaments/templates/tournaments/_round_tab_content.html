@@ -27,17 +27,17 @@
     <table>
         <thead>
             <tr>
-                <th class="num">Table</th>
-                <th>First</th>
+                <th class="num-left">Table</th>
+                <th>First Player</th>
                 <th></th>
-                <th>Second</th>
+                <th>Second Player</th>
                 <th class="num">Result</th>
             </tr>
         </thead>
         <tbody>
             {% for entry in round_pairings %}
             <tr>
-                <td class="num">{{ entry.pairing.table }}</td>
+                <td class="num-left">{{ entry.pairing.table }}</td>
                 <td>{{ entry.pairing.first.name }}</td>
                 <td>{% if entry.is_fixed %}&#x1F512;{% endif %}</td>
                 <td>{{ entry.pairing.second.name }}</td>
@@ -100,10 +100,10 @@
     <table>
         <thead>
             <tr>
-                <th class="num">Table</th>
-                <th>First</th>
+                <th class="num-left">Table</th>
+                <th>First Player</th>
                 <th></th>
-                <th>Second</th>
+                <th>Second Player</th>
                 <th class="num">Repeats</th>
                 <th>{% if division.is_test and selected_status == 'published' %}<button type="button" class="btn-sim" data-on:click="@post('{% url 'simulate_round' division.pk %}', {headers: {'X-CSRFToken': $_csrfToken}, payload: {round: {{ selected_round }}}})">simulate all</button>{% endif %}</th>
             </tr>
@@ -111,7 +111,7 @@
         <tbody>
             {% for entry in round_pairings %}
             <tr>
-                <td class="num">{{ entry.pairing.table }}</td>
+                <td class="num-left">{{ entry.pairing.table }}</td>
                 <td>{{ entry.pairing.first.name }}</td>
                 <td>{% if entry.is_fixed %}&#x1F512;{% endif %}</td>
                 <td>{{ entry.pairing.second.name }}</td>

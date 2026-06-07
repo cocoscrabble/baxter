@@ -157,7 +157,7 @@ class FixedTableDTO(DataClassJsonMixin):
             return errors
         seen = seen_per_round.setdefault(self.round_number, set())
         if self.entrant in seen:
-            errors.append(f"player already has a fixed table in round {self.round_number}.")
+            errors.append(f"player already has a fixed table assignment in round {self.round_number}.")
         else:
             seen.add(self.entrant)
         return errors
