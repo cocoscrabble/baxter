@@ -7,7 +7,7 @@ from .models import DivisionSettings, Entrant, FixedPairing, FixedTable, Player,
 
 
 def _entrant_values(division):
-    entrants = division.entrants.select_related("player").order_by("number")
+    entrants = division.entrants.select_related("player").order_by("player__name")
     return [{"id": e.pk, "label": e.player.name} for e in entrants]
 
 
@@ -130,7 +130,7 @@ class ResultsGrid(EditGrid):
         return slip.to_dict()
 
     def lookups(self, division):
-        entrants = division.entrants.select_related("player").order_by("number")
+        entrants = division.entrants.select_related("player").order_by("player__name")
         return {"entrants": [{"id": e.pk, "label": e.player.name} for e in entrants]}
 
     def validate_args(self, division):
