@@ -68,7 +68,13 @@ def pair_round_robin(pd: PairingData, rp: RoundPairing) -> Pairings:
     """Round robin pairing."""
     # See https://github.com/domino14/liwords/ for strategy
 
-    standings = standings_after_round(pd, rp.start_round - 1)
+    # A round robin rotates off a fixed ordering and never depends on results,
+    # so it always seeds from the tournament seedings — not the standings as of
+    # its start round. That lets a round-robin block anywhere in the schedule
+    # pair up front (a block starting mid-event would otherwise read standings
+    # for rounds not yet played and pair nobody). `pos` still uses start_round
+    # (normalized to the block's first round) to pick the rotation step.
+    standings = standings_after_round(pd, 0)
     # Pair for game #pos in the round robin
     n = len(standings)
     pairings = Pairings()
@@ -117,7 +123,8 @@ def pair_charlottesville(pd: PairingData, rp: RoundPairing) -> Pairings:
 
 def pair_double_round_robin(pd: PairingData, rp: RoundPairing) -> Pairings:
     """Double round robin: consecutive pairs of rounds share the same RR pairing."""
-    standings = standings_after_round(pd, rp.start_round - 1)
+    # Seed from the seedings, not the start-round standings (see pair_round_robin).
+    standings = standings_after_round(pd, 0)
     n = len(standings)
     pairings = Pairings()
     pos = (rp.round - rp.start_round) // 2
