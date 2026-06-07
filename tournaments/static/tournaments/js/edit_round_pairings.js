@@ -96,9 +96,42 @@ function refreshPreview() {
     }, 300);
 }
 
+// --- Autosave -----------------------------------------------------------
+// Persist the blocks. The save carries an optimistic-concurrency version token
+// that the server refreshes on each response, so saves must not overlap: if one
+// is requested while another is in flight, queue a single follow-up that runs
+// once the fresh token is in hand.
+let saving = false;
+let saveQueued = false;
+
+function save() {
+    if (saving) { saveQueued = true; return; }
+    saving = true;
+    const payload = { blocks: blocks() };
+    const version = getEditVersion(GRID_ID);
+    if (version !== undefined) payload._version = version;
+    postJson({ url: pageData.saveUrl, csrfToken: pageData.csrfToken, payload, statusEl: saveStatus })
+        .then(res => {
+            saving = false;
+            if (res && res.ok && res.body && typeof res.body.version === "number") {
+                setEditVersion(GRID_ID, res.body.version);
+            }
+            if (saveQueued) { saveQueued = false; save(); }
+        });
+}
+
+// Debounced so a flurry of edits (and an edit that auto-updates a second cell)
+// coalesce into one save.
+let saveTimer;
+function autoSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(save, 400);
+}
+
 function afterChange() {
     recomputeRanges();
     refreshPreview();
+    autoSave();
 }
 
 blocksTable.on("tableBuilt", recomputeRanges);
@@ -119,17 +152,4 @@ document.getElementById("add-block-btn").addEventListener("click", () => {
         .then(afterChange);
 });
 
-document.getElementById("rp-save-btn").addEventListener("click", () => {
-    const payload = { blocks: blocks() };
-    const version = getEditVersion(GRID_ID);
-    if (version !== undefined) payload._version = version;
-    postJson({ url: pageData.saveUrl, csrfToken: pageData.csrfToken, payload, statusEl: saveStatus })
-        .then(res => {
-            if (res && res.ok) {
-                if (res.body && typeof res.body.version === "number") {
-                    setEditVersion(GRID_ID, res.body.version);
-                }
-                refreshPreview();
-            }
-        });
-});
+document.getElementById("rp-save-btn").addEventListener("click", save);
