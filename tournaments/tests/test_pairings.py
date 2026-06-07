@@ -878,3 +878,31 @@ class RoundRobinUnplayedRoundsTests(PairingDBTestBase):
             for p in pairings:
                 names.update({p.first_id, p.second_id})
             self.assertEqual(len(names), 4)  # every entrant paired exactly once
+
+    def test_round_robin_block_after_other_rounds_pairs_up_front(self):
+        # A round-robin block that does NOT start at round 1 (here it follows two
+        # KotH rounds) seeds off the tournament seedings, so it must still pair
+        # every round before any results — it must not read the (empty) standings
+        # of the unplayed rounds before it and pair nobody.
+        DivisionSettings.objects.create(
+            division=self.division,
+            round_pairings=[
+                {"round": 1, "start_round": 0, "pairing": "KotH"},
+                {"round": 2, "start_round": 1, "pairing": "KotH"},
+                {"round": 3, "start_round": 2, "pairing": "RoundRobin"},
+                {"round": 4, "start_round": 3, "pairing": "RoundRobin"},
+                {"round": 5, "start_round": 4, "pairing": "RoundRobin"},
+            ],
+        )
+        self._regenerate()
+        # Round 1 (KotH off seedings) pairs; round 2 depends on round 1's results
+        # so it is not paired yet. The round-robin block pairs in full.
+        self.assertEqual(self.division.pairings.filter(round=1).count(), 2)
+        self.assertEqual(self.division.pairings.filter(round=2).count(), 0)
+        for rnd in (3, 4, 5):
+            pairings = self.division.pairings.filter(round=rnd)
+            self.assertEqual(pairings.count(), 2, f"round {rnd}")
+            names = set()
+            for p in pairings:
+                names.update({p.first_id, p.second_id})
+            self.assertEqual(len(names), 4)  # every entrant paired exactly once
