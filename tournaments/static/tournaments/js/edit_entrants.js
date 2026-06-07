@@ -32,9 +32,12 @@ cfg.rows.forEach((r, i) => { r.number = i + 1; });
 
 const table = initGrid(gridId, { beforeSave: renumber });
 
-// Insert a new entrant into its rating-sorted slot and renumber the seeds.
-// addRow is a single undoable action, and renumber's row.update() does not
-// touch history, so Undo cleanly removes the just-added row.
+const saveBtn = document.querySelector(`[data-eg="${gridId}"][data-eg-action="save"]`);
+
+// Insert a new entrant into its rating-sorted slot, then autosave. Clicking the
+// Save control reuses the grid's save path (renumber via beforeSave, version
+// token, re-baseline), so the new entrant is persisted immediately in the right
+// seed position.
 function insertByRating(playerId) {
     const rating = playerRating[playerId] ?? 0;
     const target = table.getRows().find(
@@ -42,7 +45,7 @@ function insertByRating(playerId) {
     );
     const data = { player: playerId, _rid: nextRid() };
     const added = target ? table.addRow(data, true, target) : table.addRow(data, false);
-    return added.then(renumber);
+    return added.then(() => saveBtn.click());
 }
 
 // -- Add Entrant (form toggle handled by datastar data-show) --
