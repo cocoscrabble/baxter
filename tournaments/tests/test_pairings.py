@@ -835,6 +835,21 @@ class RoundPairingsLifecycleTests(PairingDBTestBase):
         rp.refresh_from_db()
         self.assertEqual(rp.status, RoundPairings.PUBLISHED)
 
+    def test_unpaired_round_not_marked_finished(self):
+        # Regression: a published round with no pairings has 0 results and 0
+        # pairings, so `with_results == total` is vacuously true (0 == 0). It
+        # must NOT be treated as finished — a round with no games can't be
+        # finished. Round-robin blocks create a RoundPairings row per round up
+        # front, so this empty-but-published state is reachable; wrongly marking
+        # it finished makes later rounds (which depend on it) look pairable.
+        rp = RoundPairings.objects.create(
+            division=self.division, round=1, status=RoundPairings.PUBLISHED,
+        )
+        self.assertEqual(rp.pairings.count(), 0)
+        rp.update_status()
+        rp.refresh_from_db()
+        self.assertEqual(rp.status, RoundPairings.PUBLISHED)
+
 
 class RoundRobinUnplayedRoundsTests(PairingDBTestBase):
     """Regression: a round-robin configured with per-round start_round (as the
