@@ -33,7 +33,10 @@ class EntrantsGrid(EditGrid):
         return {"number": entrant.number, "player": entrant.player_id}
 
     def lookups(self, division):
-        return {"players": [{"id": p.pk, "label": p.name} for p in Player.objects.all()]}
+        return {"players": [
+            {"id": p.pk, "label": p.name, "rating": p.rating}
+            for p in Player.objects.all()
+        ]}
 
     def validate_args(self, division):
         return (set(Player.objects.values_list("pk", flat=True)), set())

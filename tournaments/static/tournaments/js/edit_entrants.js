@@ -4,6 +4,11 @@ import { lookupMap, nextRid } from "/static/editgrid/js/table_helpers.js";
 const gridId = "entrants-table";
 const cfg = window.editgrids[gridId];
 
+// Player id -> rating, so the table can be kept sorted by rating client-side.
+// Newly created players (below) extend this map.
+const playerRating = {};
+(cfg.lookups.players || []).forEach(p => { playerRating[p.id] = p.rating ?? 0; });
+
 // Number only the surviving rows, so seeds stay sequential once rows marked for
 // deletion are dropped on save.
 function renumber() {
@@ -14,7 +19,31 @@ function renumber() {
     });
 }
 
+const byRatingDesc = (a, b) => (playerRating[b.player] ?? 0) - (playerRating[a.player] ?? 0);
+
+// Establish the invariant up front: the table opens in rating order (highest
+// first) with sequential seeds. Sorting the loaded rows here (before the grid
+// is built) makes this the baseline snapshot, so it shows no "changed"
+// decorations. Every other creation path — fresh load, or a bulk import that
+// reloads the page — passes back through here, so the table is always sorted on
+// arrival and stays sorted as rows are inserted in place below.
+cfg.rows.sort(byRatingDesc);
+cfg.rows.forEach((r, i) => { r.number = i + 1; });
+
 const table = initGrid(gridId, { beforeSave: renumber });
+
+// Insert a new entrant into its rating-sorted slot and renumber the seeds.
+// addRow is a single undoable action, and renumber's row.update() does not
+// touch history, so Undo cleanly removes the just-added row.
+function insertByRating(playerId) {
+    const rating = playerRating[playerId] ?? 0;
+    const target = table.getRows().find(
+        row => !row.getData()._deleted && (playerRating[row.getData().player] ?? 0) < rating
+    );
+    const data = { player: playerId, _rid: nextRid() };
+    const added = target ? table.addRow(data, true, target) : table.addRow(data, false);
+    return added.then(renumber);
+}
 
 // -- Add Entrant (form toggle handled by datastar data-show) --
 
@@ -46,8 +75,7 @@ document.getElementById("add-entrant-btn").addEventListener("click", function() 
     }
 
     statusEl.textContent = "";
-    const count = table.getDataCount();
-    table.addRow({ number: count + 1, player: playerId, _rid: nextRid() });
+    insertByRating(playerId);
     document.querySelector("[data-on\\:click='$showNewEntrant = false']").click();
 });
 
@@ -81,9 +109,9 @@ document.getElementById("create-player-btn").addEventListener("click", function(
     .then(({ ok, body }) => {
         if (ok && body.ok) {
             lookupMap(gridId, "player")[body.id] = body.label;
+            playerRating[body.id] = body.rating ?? 0;
             refreshEntrantOptions();
-            const count = table.getDataCount();
-            table.addRow({ number: count + 1, player: body.id, _rid: nextRid() });
+            insertByRating(body.id);
             nameInput.value = "";
             ratingInput.value = "0";
             statusEl.textContent = "";
