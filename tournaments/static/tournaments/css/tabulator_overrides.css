@@ -9,6 +9,17 @@
     padding: 4px 8px;
 }
 
+/* The horizontal scrollbar renders at the bottom edge of the scrolling
+   tableholder, overlapping the last row — which is exactly where a freshly
+   added row gets edited. Reserve space below the rows so the scrollbar sits
+   fully clear of the bottom row. */
+.tabulator .tabulator-tableholder {
+    /* border-box so the padding stays within the height Tabulator sets inline
+       (eating into the scroll area) rather than growing the holder. */
+    box-sizing: border-box;
+    padding-bottom: 18px;
+}
+
 .tabulator .tabulator-row {
     min-height: 26px;
 }
