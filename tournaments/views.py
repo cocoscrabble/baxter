@@ -674,6 +674,7 @@ class CreatePlayerView(LoginRequiredMixin, View):
             "ok": True,
             "id": player.pk,
             "label": player.name,
+            "rating": player.rating,
             "player_number": player.player_number,
         })
 
