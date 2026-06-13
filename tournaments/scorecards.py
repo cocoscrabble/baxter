@@ -46,6 +46,16 @@ QR_SIZE = 840105
 LOGO_H_OFFSET, LOGO_V_OFFSET = 1, -634
 QR_H_OFFSET, QR_V_OFFSET = 5789295, 7315
 
+# Ellipse drawn around the "1st"/"2nd" prompt to mark which seat the player took.
+# Offsets (EMU) are relative to the Round cell's column / the prompt paragraph;
+# the "1st" sits left of centre and "2nd" right, in a ~54pt-wide cell. Tune these
+# if a font change shifts where the ordinals land.
+CIRCLE_COLOR = "C00000"  # outline colour (dark red), like a pen mark
+CIRCLE_W, CIRCLE_H = 295000, 200000
+CIRCLE_V_OFFSET = -48000
+CIRCLE_FIRST_H_OFFSET = 72000
+CIRCLE_SECOND_H_OFFSET = 300000
+
 
 @dataclass(frozen=True)
 class RoundSpec:
@@ -69,6 +79,9 @@ class ScorecardSpec:
     rounds: list[RoundSpec]
     # Optional {round number: opponent name} to prefill the Opponent column.
     opponents: dict[int, str] = field(default_factory=dict)
+    # Optional {round number: "1st"/"2nd"} marking whether the player went
+    # first or second that round, where the pairing fixes it.
+    starts: dict[int, str] = field(default_factory=dict)
     qr_url: str = ""
     footer_text: str = "Submit results and view pairings and standings at:"
     footer_url: str = "cocoscrabble.org/live-coverage"
@@ -185,8 +198,14 @@ def _fill_header_cell(cell, text):
     _set_run_font(p.add_run(text), 10, bold=True)
 
 
-def _fill_round_cell(cell, round_number):
-    """Round number on the first line, '1st   2nd' (superscript) below it."""
+def _fill_round_cell(cell, round_number, *, mark_start=False):
+    """Round number on the first line, '1st   2nd' (superscript) below it.
+
+    The '1st'/'2nd' prompt is always written out. When ``mark_start`` is set the
+    round's seat may be fixed for some player, so a placeholder run is appended;
+    :func:`_resolve_start` later turns it into an ellipse over the right ordinal
+    (or removes it) per player.
+    """
     cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
     _clear_cell(cell)
 
@@ -204,6 +223,8 @@ def _fill_round_cell(cell, round_number):
         _set_run_font(run, 10)
         if sup:
             run.font.superscript = True
+    if mark_start:
+        _set_run_font(p2.add_run(_start_sentinel(round_number)), 1)
 
 
 _uid = [1000]
@@ -266,11 +287,86 @@ def _set_vmerge(cell, *, restart):
     vMerge.val = "restart" if restart else None
 
 
-def _add_round_table(doc, round_specs, opponents):
+_WPS_NS = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
+_WPS_DRAWING_NS = "http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing"
+
+_QN_DOCPR = qn("wp:docPr")
+
+# A round whose seat may be fixed gets a placeholder run in its prompt paragraph
+# carrying this prefix plus the round number. The per-player patch pass swaps
+# each placeholder for an ellipse over the right ordinal — or removes it —
+# riding the same walk that fills in the name and opponents, so locating the
+# marks costs nothing extra.
+_START_PREFIX = ""  # U+E000 (private use): never appears in real text
+
+
+def _start_sentinel(round_number):
+    return f"{_START_PREFIX}{round_number}"
+
+
+def _circle_xml(h_offset):
+    return (
+        f'<w:r xmlns:w="{nsmap["w"]}" xmlns:wp="{nsmap["wp"]}" '
+        f'xmlns:a="{nsmap["a"]}" xmlns:wps="{_WPS_NS}"><w:drawing>'
+        '<wp:anchor simplePos="0" relativeHeight="0" behindDoc="0" locked="0" '
+        'layoutInCell="1" allowOverlap="1" distT="0" distB="0" distL="0" distR="0">'
+        '<wp:simplePos x="0" y="0"/>'
+        f'<wp:positionH relativeFrom="column"><wp:posOffset>{h_offset}</wp:posOffset></wp:positionH>'
+        f'<wp:positionV relativeFrom="paragraph"><wp:posOffset>{CIRCLE_V_OFFSET}</wp:posOffset></wp:positionV>'
+        f'<wp:extent cx="{CIRCLE_W}" cy="{CIRCLE_H}"/>'
+        '<wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/>'
+        '<wp:docPr id="0" name="circle0"/><wp:cNvGraphicFramePr/>'
+        '<a:graphic><a:graphicData uri="' + _WPS_DRAWING_NS + '">'
+        '<wps:wsp><wps:cNvSpPr/><wps:spPr>'
+        f'<a:xfrm><a:off x="0" y="0"/><a:ext cx="{CIRCLE_W}" cy="{CIRCLE_H}"/></a:xfrm>'
+        '<a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom><a:noFill/>'
+        f'<a:ln w="19050"><a:solidFill><a:srgbClr val="{CIRCLE_COLOR}"/></a:solidFill></a:ln>'
+        '</wps:spPr><wps:bodyPr/></wps:wsp></a:graphicData></a:graphic>'
+        '</wp:anchor></w:drawing></w:r>'
+    )
+
+
+# One parsed ellipse run per side, cloned per insertion. parse_xml is ~3x the
+# cost of a deepcopy and was being paid once per ellipse; building each side's
+# XML once and copying instead keeps a big division's cards cheap.
+_CIRCLE_RUNS = {}
+
+
+def _circle_run(*, first):
+    base = _CIRCLE_RUNS.get(first)
+    if base is None:
+        h = CIRCLE_FIRST_H_OFFSET if first else CIRCLE_SECOND_H_OFFSET
+        base = parse_xml(_circle_xml(h))
+        _CIRCLE_RUNS[first] = base
+    run = copy.deepcopy(base)
+    _uid[0] += 1
+    docPr = run.find(".//" + _QN_DOCPR)
+    docPr.set("id", str(_uid[0]))
+    docPr.set("name", f"circle{_uid[0]}")
+    return run
+
+
+def _resolve_start(run, round_number, spec):
+    """Turn a start placeholder ``<w:r>`` into an ellipse, or drop it.
+
+    ``spec.starts`` says whether the player took the 1st or 2nd seat that round;
+    we replace the placeholder run with an ellipse over that ordinal, or remove
+    it when the round has no fixed seat for this player.
+    """
+    para = run.getparent()
+    seat = spec.starts.get(round_number)
+    if seat:
+        para.replace(run, _circle_run(first=seat == "1st"))
+    else:
+        para.remove(run)
+
+
+def _add_round_table(doc, round_specs, opponents, placeholder_rounds):
     """One bordered table covering ``round_specs`` (each round = two grid rows).
 
     ``opponents`` is a {round number: name} mapping used to prefill the
-    Opponent column; rounds absent from it are left blank.
+    Opponent column; rounds absent from it are left blank. ``placeholder_rounds``
+    are the rounds whose Round cell gets a seat placeholder for later resolving.
     """
     table = doc.add_table(rows=1 + 2 * len(round_specs), cols=len(HEADERS))
     table.alignment = WD_TABLE_ALIGNMENT.LEFT
@@ -307,7 +403,8 @@ def _add_round_table(doc, round_specs, opponents):
             _center_cell(bottom[c])
 
         # Round number goes in the (merged) first cell so it appears once.
-        _fill_round_cell(top[0], spec.number)
+        _fill_round_cell(top[0], spec.number,
+                         mark_start=spec.number in placeholder_rounds)
 
         # Prefill the (merged) Opponent cell if a name was supplied.
         opponent = opponents.get(spec.number, "")
@@ -333,8 +430,12 @@ def _chunk_rounds(spec):
     return [c for c in chunks if c]
 
 
-def build_scorecard(doc, spec):
-    """Append one player's scorecard to ``doc`` (assumes the page is fresh)."""
+def build_scorecard(doc, spec, *, placeholder_rounds=frozenset()):
+    """Append one player's scorecard to ``doc`` (assumes the page is fresh).
+
+    Returns the round tables. ``placeholder_rounds`` are the rounds to leave a
+    seat placeholder in; the caller resolves those (per player) afterwards.
+    """
     title = _add_paragraph(doc, spec.tournament_name, 25, bold=True)
     if spec.qr_url:
         _add_floating_image(title, BytesIO(_make_qr_png(spec.qr_url)),
@@ -349,8 +450,9 @@ def build_scorecard(doc, spec):
     _add_paragraph(doc, "", 11, center=False)
 
     chunks = _chunk_rounds(spec)
+    tables = []
     for i, chunk in enumerate(chunks):
-        _add_round_table(doc, chunk, spec.opponents)
+        tables.append(_add_round_table(doc, chunk, spec.opponents, placeholder_rounds))
         if i < len(chunks) - 1:
             _add_page_break(doc)
 
@@ -360,6 +462,7 @@ def build_scorecard(doc, spec):
     _set_run_font(footer.add_run(spec.footer_text + "\n"), 14)
     _set_run_font(footer.add_run(spec.footer_url), 14, bold=True)
     _add_paragraph(doc, "", 11)
+    return tables
 
 
 def _configure_page(section):
@@ -381,15 +484,30 @@ def _opp_sentinel(round_number):
 
 def _layout_signature(spec):
     """What fixes a scorecard's structure: everything but the per-player values
-    (player name and opponent names) that get patched into clones."""
-    return replace(spec, player_name="", opponents={})
+    (player name, opponent names, first/second marks) patched into clones."""
+    return replace(spec, player_name="", opponents={}, starts={})
 
 
-def _patch_text(element, replacements):
-    """Replace any ``<w:t>`` whose text is a key of ``replacements`` in place."""
+def _patch_text(element, replacements, spec):
+    """Apply every per-player edit in a single pass over ``element``'s text.
+
+    Sentinel ``<w:t>`` strings (player name, opponents) are swapped in place;
+    start placeholders are collected and, after the walk, each is turned into an
+    ellipse over the right ordinal or removed (see :func:`_resolve_start`).
+    Folding both into one traversal means locating the seat marks is free — it
+    rides the walk the name/opponent patch already makes.
+    """
+    starts = []
     for t in element.iter(qn("w:t")):
-        if t.text in replacements:
-            t.text = replacements[t.text]
+        text = t.text
+        if not text:
+            continue
+        if text in replacements:
+            t.text = replacements[text]
+        elif text.startswith(_START_PREFIX):
+            starts.append((t.getparent(), int(text[len(_START_PREFIX):])))
+    for run, round_number in starts:
+        _resolve_start(run, round_number, spec)
 
 
 def _reassign_drawing_ids(element):
@@ -420,13 +538,18 @@ def build_document(specs):
     if not specs:
         return doc
 
-    # Rounds that any player has a prefilled opponent for get a placeholder in
-    # the template so every clone can patch its own name into that slot.
+    # Rounds that any player has a prefilled opponent for get a text placeholder
+    # in the template so every clone can patch its own name into that slot;
+    # rounds that any player has a fixed seat for get a seat placeholder, which
+    # each clone resolves into an ellipse (or removes). Both are handled in the
+    # clone's single patch pass.
     prefill_rounds = {n for spec in specs for n in spec.opponents}
     template_opponents = {n: _opp_sentinel(n) for n in prefill_rounds}
+    start_rounds = frozenset(n for spec in specs for n in spec.starts)
     build_scorecard(doc, replace(
-        specs[0], player_name=_NAME_SENTINEL, opponents=template_opponents
-    ))
+        specs[0], player_name=_NAME_SENTINEL,
+        opponents=template_opponents, starts={},
+    ), placeholder_rounds=start_rounds)
     template_els = [c for c in body if c is not sectPr]
     for el in template_els:
         body.remove(el)
@@ -445,10 +568,14 @@ def build_document(specs):
             for el in template_els:
                 clone = copy.deepcopy(el)
                 _reassign_drawing_ids(clone)
-                _patch_text(clone, replacements)
+                _patch_text(clone, replacements, spec)
                 append(clone)
         else:
-            build_scorecard(doc, spec)
+            # Different layout: build it fresh, with seat placeholders for its
+            # own rounds, then resolve them (no name/opponent sentinels here).
+            tables = build_scorecard(doc, spec, placeholder_rounds=frozenset(spec.starts))
+            for table in tables:
+                _patch_text(table._tbl, {}, spec)
     return doc
 
 

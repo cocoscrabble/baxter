@@ -520,7 +520,7 @@ class DivisionScorecardsDownloadView(VisibleDivisionMixin, DetailView):
         qr_url = self.request.build_absolute_uri(
             reverse("published_pairings", args=[division.pk])
         )
-        opponents = self._opponents_by_entrant(division)
+        opponents, starts = self._prefills_by_entrant(division)
         specs = [
             ScorecardSpec(
                 tournament_name=tournament.name,
@@ -528,6 +528,7 @@ class DivisionScorecardsDownloadView(VisibleDivisionMixin, DetailView):
                 player_name=entrant.name,
                 rounds=rounds,
                 opponents=opponents.get(entrant.pk, {}),
+                starts=starts.get(entrant.pk, {}),
                 qr_url=qr_url,
             )
             for entrant in division.entrants.all()
@@ -541,18 +542,22 @@ class DivisionScorecardsDownloadView(VisibleDivisionMixin, DetailView):
         return response
 
     @staticmethod
-    def _opponents_by_entrant(division):
-        """Map each entrant id to a {round: opponent name} dict from pairings."""
+    def _prefills_by_entrant(division):
+        """Map each entrant id to its {round: opponent name} and
+        {round: "1st"/"2nd"} prefills, drawn from the division's pairings."""
         pairings = division.pairings.select_related(
             "first__player", "second__player"
         )
         opponents = defaultdict(dict)
+        starts = defaultdict(dict)
         for p in pairings:
             if p.first_id == p.second_id:
-                continue  # bye — no opponent to prefill
+                continue  # bye — nothing to prefill
             opponents[p.first_id][p.round] = p.second.name
             opponents[p.second_id][p.round] = p.first.name
-        return opponents
+            starts[p.first_id][p.round] = "1st"
+            starts[p.second_id][p.round] = "2nd"
+        return opponents, starts
 
 
 class DivisionSettingsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
