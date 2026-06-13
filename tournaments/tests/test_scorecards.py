@@ -120,6 +120,78 @@ class OpponentPrefillTests(SimpleTestCase):
         self.assertEqual(len(doc.part.package.image_parts._image_parts), 2)
 
 
+def _circle_offsets(el):
+    """Horizontal offset of every ellipse-circle drawing under ``el``, in order."""
+    from docx.oxml.ns import qn
+
+    offsets = []
+    for anchor in el.iter(qn("wp:anchor")):
+        if not any(g.get("prst") == "ellipse" for g in anchor.iter(qn("a:prstGeom"))):
+            continue
+        offsets.append(
+            int(anchor.find(qn("wp:positionH")).find(qn("wp:posOffset")).text)
+        )
+    return offsets
+
+
+class StartPrefillTests(SimpleTestCase):
+    # Round N's row pair starts at row 1 + 2*(N-1); the Round cell is column 0.
+    @staticmethod
+    def _round_cell(table, round_number):
+        return table.cell(1 + 2 * (round_number - 1), 0)
+
+    def test_supplied_starts_circle_the_right_ordinal(self):
+        from tournaments.scorecards import (
+            CIRCLE_FIRST_H_OFFSET,
+            CIRCLE_SECOND_H_OFFSET,
+        )
+
+        doc = build_document(
+            [_spec("Alice", n_rounds=6, starts={1: "1st", 3: "2nd"})]
+        )
+        table = doc.tables[0]
+        # The prompt text is untouched; the seat is shown by a circle over it.
+        self.assertIn("1st", self._round_cell(table, 1).text)
+        self.assertIn("2nd", self._round_cell(table, 1).text)
+        self.assertEqual(_circle_offsets(self._round_cell(table, 1)._tc),
+                         [CIRCLE_FIRST_H_OFFSET])
+        self.assertEqual(_circle_offsets(self._round_cell(table, 3)._tc),
+                         [CIRCLE_SECOND_H_OFFSET])
+
+    def test_unmarked_rounds_get_no_circle(self):
+        doc = build_document([_spec("Alice", n_rounds=6, starts={1: "1st"})])
+        table = doc.tables[0]
+        self.assertEqual(_circle_offsets(self._round_cell(table, 2)._tc), [])
+        # Exactly one circle in the whole card (round 1 only).
+        self.assertEqual(len(_circle_offsets(table._tbl)), 1)
+
+    def test_each_player_circles_their_own_seat(self):
+        from tournaments.scorecards import (
+            CIRCLE_FIRST_H_OFFSET,
+            CIRCLE_SECOND_H_OFFSET,
+        )
+
+        specs = [
+            _spec("Alice", starts={1: "1st"}),
+            _spec("Bob", starts={1: "2nd"}),
+        ]
+        doc = build_document(specs)
+        self.assertEqual(_circle_offsets(self._round_cell(doc.tables[0], 1)._tc),
+                         [CIRCLE_FIRST_H_OFFSET])
+        self.assertEqual(_circle_offsets(self._round_cell(doc.tables[1], 1)._tc),
+                         [CIRCLE_SECOND_H_OFFSET])
+
+    def test_marked_division_still_shares_images(self):
+        # Starts differ per player but the clone path must still hold.
+        specs = [
+            _spec(f"P{i}", starts={1: "1st" if i % 2 else "2nd"},
+                  qr_url="https://x.test/live")
+            for i in range(4)
+        ]
+        doc = Document(BytesIO(render_scorecards(specs)))
+        self.assertEqual(len(doc.part.package.image_parts._image_parts), 2)
+
+
 class RenderScorecardsTests(SimpleTestCase):
     def test_returns_openable_docx_bytes(self):
         data = render_scorecards([_spec("Alice")])
@@ -229,3 +301,27 @@ class DivisionScorecardsViewTests(TestCase):
         # Round 1's Opponent cell is row 1, column 1.
         self.assertEqual(doc.tables[0].cell(1, 1).text, self.player2.name)
         self.assertEqual(doc.tables[1].cell(1, 1).text, self.player1.name)
+
+    def test_starts_circled_from_pairings(self):
+        from tournaments.scorecards import (
+            CIRCLE_FIRST_H_OFFSET,
+            CIRCLE_SECOND_H_OFFSET,
+        )
+
+        DivisionSettings.objects.create(
+            division=self.division,
+            round_pairings=[{"round": 1}, {"round": 2}, {"round": 3}],
+        )
+        Pairing.objects.create(
+            division=self.division, round=1,
+            first=self.entrant1, second=self.entrant2,
+        )
+        response = self.client.get(
+            reverse("division_scorecards_download", kwargs={"pk": self.division.pk})
+        )
+        doc = Document(BytesIO(response.content))
+        # entrant1 went first, entrant2 second; round 1's Round cell is (1, 0).
+        self.assertEqual(_circle_offsets(doc.tables[0].cell(1, 0)._tc),
+                         [CIRCLE_FIRST_H_OFFSET])
+        self.assertEqual(_circle_offsets(doc.tables[1].cell(1, 0)._tc),
+                         [CIRCLE_SECOND_H_OFFSET])
