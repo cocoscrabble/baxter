@@ -167,6 +167,94 @@ class DivisionCreateDeleteViewTests(TestCase):
         self.assertTrue(Division.all_objects.filter(pk=self.division.pk, is_deleted=True).exists())
 
 
+class DivisionRenameViewTests(TestCase):
+    def setUp(self):
+        setUpTournament(self)
+
+    def test_rename_division(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.post(
+            reverse("division_rename", kwargs={"pk": self.division.pk}),
+            {"name": "Championship"},
+        )
+        self.assertRedirects(
+            response, reverse("tournament_detail", kwargs={"pk": self.tournament.pk})
+        )
+        self.division.refresh_from_db()
+        self.assertEqual(self.division.name, "Championship")
+
+    def test_rename_strips_whitespace(self):
+        self.client.login(username="owner", password="testpass123")
+        self.client.post(
+            reverse("division_rename", kwargs={"pk": self.division.pk}),
+            {"name": "  Trimmed  "},
+        )
+        self.division.refresh_from_db()
+        self.assertEqual(self.division.name, "Trimmed")
+
+    def test_rename_empty_name_rejected(self):
+        self.client.login(username="owner", password="testpass123")
+        self.client.post(
+            reverse("division_rename", kwargs={"pk": self.division.pk}),
+            {"name": "   "},
+        )
+        self.division.refresh_from_db()
+        self.assertEqual(self.division.name, "Open")
+
+    def test_rename_duplicate_name_rejected(self):
+        Division.objects.create(name="Expert", tournament=self.tournament)
+        self.client.login(username="owner", password="testpass123")
+        self.client.post(
+            reverse("division_rename", kwargs={"pk": self.division.pk}),
+            {"name": "Expert"},
+        )
+        self.division.refresh_from_db()
+        self.assertEqual(self.division.name, "Open")
+
+    def test_rename_non_editor_forbidden(self):
+        self.client.login(username="other", password="testpass123")
+        response = self.client.post(
+            reverse("division_rename", kwargs={"pk": self.division.pk}),
+            {"name": "Hacked"},
+        )
+        self.assertEqual(response.status_code, 403)
+        self.division.refresh_from_db()
+        self.assertEqual(self.division.name, "Open")
+
+    def test_rename_duplicate_datastar_surfaces_error(self):
+        Division.objects.create(name="Expert", tournament=self.tournament)
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.post(
+            reverse("division_rename", kwargs={"pk": self.division.pk}),
+            data=json.dumps({"name": "Expert"}),
+            content_type="application/json",
+            headers={"datastar-request": "true"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.division.refresh_from_db()
+        self.assertEqual(self.division.name, "Open")
+        body = b"".join(response.streaming_content).decode()
+        self.assertIn("already exists", body)
+        self.assertIn('class="error"', body)
+
+    def test_rename_datastar_returns_management_fragment(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.post(
+            reverse("division_rename", kwargs={"pk": self.division.pk}),
+            data=json.dumps({"name": "Masters"}),
+            content_type="application/json",
+            headers={"datastar-request": "true"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.division.refresh_from_db()
+        self.assertEqual(self.division.name, "Masters")
+        body = b"".join(response.streaming_content).decode()
+        # The swapped-in fragment shows the new name and resets the edit signals.
+        self.assertIn("division-management", body)
+        self.assertIn("Masters", body)
+        self.assertIn("renamingPk", body)
+
+
 @tag("slow")
 class TournamentUpdateViewTests(TestCase):
     def setUp(self):

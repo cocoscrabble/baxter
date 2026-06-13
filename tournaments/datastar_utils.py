@@ -7,10 +7,17 @@ def is_datastar(request):
     return "Datastar-Request" in request.headers
 
 
-def fragment_response(template_name, context, request=None, **kwargs):
-    """Render template to HTML, return as Datastar SSE patch_elements response."""
+def fragment_response(template_name, context, request=None, signals=None, **kwargs):
+    """Render template to HTML, return as Datastar SSE patch_elements response.
+
+    Pass ``signals`` to also emit a patch_signals event (e.g. to reset inline-edit
+    state after a swap, independent of how the morph re-applies data-signals).
+    """
     html = render_to_string(template_name, context, request=request)
-    return DatastarResponse(SSE.patch_elements(html, **kwargs))
+    events = [SSE.patch_elements(html, **kwargs)]
+    if signals:
+        events.append(SSE.patch_signals(signals))
+    return DatastarResponse(events)
 
 
 def redirect_response(url):

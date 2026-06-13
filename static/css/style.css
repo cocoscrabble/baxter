@@ -253,6 +253,16 @@ h3 { font-size: 1.02rem; margin: var(--space-md) 0 var(--space-sm); }
     color: var(--color-error-text);
 }
 
+/* Inline validation error (e.g. an inline-edit form), highlighted like a flash
+   message but usable on its own outside the .messages list. */
+.error {
+    background-color: var(--color-error-bg);
+    color: var(--color-error-text);
+    border: 1px solid var(--color-danger);
+    border-radius: var(--radius);
+    padding: 8px 12px;
+}
+
 /* ── Forms ─────────────────────────────────────────────────── */
 form p {
     margin-bottom: 15px;

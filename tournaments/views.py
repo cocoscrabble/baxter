@@ -232,6 +232,41 @@ class DivisionRestoreView(LoginRequiredMixin, CanEditDivisionMixin, View):
         return redirect("tournament_detail", pk=tournament_pk)
 
 
+class DivisionRenameView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    """Rename a division inline from the tournament detail page (datastar)."""
+
+    def post(self, request, pk):
+        division = self.get_division()
+        tournament = division.tournament
+        data = (read_signals(request) or {}) if is_datastar(request) else request.POST
+        name = (data.get("name") or "").strip()
+        error = None
+        if not name:
+            error = "Division name cannot be empty."
+        elif (
+            Division.all_objects.filter(tournament=tournament, name=name)
+            .exclude(pk=division.pk)
+            .exists()
+        ):
+            error = f"A division named “{name}” already exists."
+        else:
+            division.name = name
+            division.save(update_fields=["name"])
+
+        if is_datastar(request):
+            context = {"tournament": tournament, "can_edit": True, "rename_error": error}
+            context.update(tournament.division_buckets())
+            # Reset the inline-edit signals so the swapped-in table shows the
+            # display state regardless of how the morph re-applies data-signals.
+            return fragment_response(
+                "tournaments/_division_management.html", context, request=request,
+                signals={"renamingPk": 0, "renameName": ""},
+            )
+        if error:
+            messages.error(request, error)
+        return redirect("tournament_detail", pk=tournament.pk)
+
+
 class DivisionDetailView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
     model = Division
     template_name = "tournaments/division_detail.html"

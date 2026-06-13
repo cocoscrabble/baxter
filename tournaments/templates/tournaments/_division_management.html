@@ -1,4 +1,6 @@
-<div data-signals="{showForm: ''}">
+<div id="division-management" data-signals="{showForm: '', renamingPk: 0, renameName: ''}">
+
+{% if rename_error %}<p class="error">{{ rename_error }}</p>{% endif %}
 
 <div class="division-toolbar">
     <button class="btn-secondary" data-on:click="$showForm = ($showForm === 'regular' ? '' : 'regular')">+ Add Division</button>
@@ -37,20 +39,22 @@
     <tbody>
         {% for division in regular_divisions %}
         <tr>
-            <td><a href="{% url 'division_detail' division.pk %}">{{ division.name }}</a></td>
+            {% include "tournaments/_division_name_cell.html" %}
             <td></td>
             <td></td>
             <td>
+                <a href="#" data-on:click__prevent="$renamingPk = {{ division.pk }}; $renameName = '{{ division.name|escapejs }}'">Rename</a>
                 <a href="{% url 'division_delete' division.pk %}">Delete</a>
             </td>
         </tr>
         {% endfor %}
         {% for division in test_divisions %}
         <tr class="division-test">
-            <td><a href="{% url 'division_detail' division.pk %}">{{ division.name }}</a></td>
+            {% include "tournaments/_division_name_cell.html" %}
             <td><input type="checkbox" checked disabled></td>
             <td></td>
             <td>
+                <a href="#" data-on:click__prevent="$renamingPk = {{ division.pk }}; $renameName = '{{ division.name|escapejs }}'">Rename</a>
                 <a href="{% url 'division_delete' division.pk %}">Delete</a>
             </td>
         </tr>
