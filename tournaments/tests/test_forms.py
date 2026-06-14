@@ -179,6 +179,14 @@ class ResultSlipFormTests(TestCase):
         form = ResultSlipForm(division=self.division, pairings_by_round=self._pbr())
         self.assertEqual(form.fields["loser_score"].label, "Opponent score")
 
+    def test_winner_options_map_entrants_to_their_pairings(self):
+        # Each entrant is offered as a winner only for the pairing(s) they play
+        # in, so the template can filter the dropdown to the selected pairing.
+        form = ResultSlipForm(division=self.division, pairings_by_round=self._pbr())
+        options = {pk: (name, pairings) for pk, name, pairings in form.winner_options}
+        self.assertEqual(options[self.entrant1.pk], ("Alice", [self.pairing.pk]))
+        self.assertEqual(options[self.entrant2.pk], ("Bob", [self.pairing.pk]))
+
     def test_valid_form(self):
         form = ResultSlipForm(
             data={
