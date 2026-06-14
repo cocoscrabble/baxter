@@ -232,6 +232,41 @@ class ResultSlipFormTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn("Winner must be one of the players in the pairing", str(form.errors))
 
+    def test_winner_score_below_opponent_rejected(self):
+        form = ResultSlipForm(
+            data={
+                "round": 1,
+                "pairing": self.pairing.pk,
+                "winner": self.entrant1.pk,
+                "winner_score": 380,
+                "loser_score": 450,
+                "winner_started": True,
+            },
+            division=self.division,
+            pairings_by_round=self._pbr(),
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn(
+            "Winner score must be greater than or equal to the opponent score",
+            str(form.errors),
+        )
+
+    def test_equal_scores_allowed(self):
+        # A tie is recorded with the winner and opponent on the same score.
+        form = ResultSlipForm(
+            data={
+                "round": 1,
+                "pairing": self.pairing.pk,
+                "winner": self.entrant1.pk,
+                "winner_score": 400,
+                "loser_score": 400,
+                "winner_started": True,
+            },
+            division=self.division,
+            pairings_by_round=self._pbr(),
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+
     def test_invalid_pairing_pk(self):
         form = ResultSlipForm(
             data={
