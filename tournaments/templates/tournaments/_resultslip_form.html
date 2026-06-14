@@ -1,12 +1,18 @@
 <div id="resultslip-form-container"
      data-signals="{selectedRound: '', selectedPairing: '', selectedWinner: '', pairingsData: {{ pairings_json }}}">
-{% if success_message %}<p class="success">{{ success_message }}</p>{% endif %}
+{% if saved_result %}
+<div class="result-saved">
+    <span class="success">✓ Saved: {{ saved_result.summary }}</span>
+    <button type="button" class="btn-cancel"
+        data-on:click="@get('{{ saved_result.edit_url }}')">Edit</button>
+</div>
+{% endif %}
 {% if form.non_field_errors %}
 <ul class="errorlist">
     {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
 </ul>
 {% endif %}
-<form method="post" data-on:submit__prevent="@post('{% url 'resultslip_create' division.pk %}', {headers: {'X-CSRFToken': $_csrfToken}})">
+<form method="post" data-on:submit__prevent="@post('{{ form_action }}', {headers: {'X-CSRFToken': $_csrfToken}})">
     {% csrf_token %}
     <p>
         <label for="id_round">Round:</label>
@@ -39,6 +45,9 @@
         {% if form.winner_started.errors %}<ul class="errorlist">{% for e in form.winner_started.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
     </p>
     <button type="submit" class="btn-save">Save</button>
-    {% if success_message %}<button type="button" onclick="window.location='{% url 'division_detail' division.pk %}'">Done</button>{% endif %}
+    {% if editing %}
+    <button type="button" class="btn-cancel"
+        data-on:click="@get('{% url 'resultslip_create' division.pk %}')">Cancel edit</button>
+    {% endif %}
 </form>
 </div>

@@ -90,9 +90,12 @@ class ResultSlipForm(forms.Form):
     loser_score = forms.IntegerField(label="Opponent score")
     winner_started = forms.BooleanField(required=False)
 
-    def __init__(self, *args, division=None, pairings_by_round=None, **kwargs):
+    def __init__(self, *args, division=None, pairings_by_round=None, instance=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._division = division
+        # When set, the form edits this existing ResultSlip in place instead of
+        # creating a new one.
+        self.instance = instance
         # pairings_by_round: {round_num: [(pairing_pk, first_pk, first_name, second_pk, second_name), ...]}
         self._pairings_by_round = pairings_by_round or {}
         self._pairing_lookup = {}  # pk -> Pairing data
@@ -143,7 +146,10 @@ class ResultSlipForm(forms.Form):
             pairing_obj = Pairing.objects.get(pk=pairing_pk)
         except Pairing.DoesNotExist:
             raise forms.ValidationError("Pairing not found.")
-        if hasattr(pairing_obj, "result") and pairing_obj.result is not None:
+        existing = pairing_obj.result if hasattr(pairing_obj, "result") else None
+        if existing is not None and not (
+            self.instance is not None and existing.pk == self.instance.pk
+        ):
             raise forms.ValidationError("This pairing already has a result.")
         return pairing_obj
 
@@ -173,7 +179,7 @@ class ResultSlipForm(forms.Form):
         winner = self.cleaned_data["winner"]
         loser = pairing.first if winner.pk == pairing.second_id else pairing.second
         rp = pairing.round_pairings
-        return ResultSlip.objects.create(
+        fields = dict(
             division=rp.division,
             round=rp.round,
             pairing=pairing,
@@ -183,6 +189,12 @@ class ResultSlipForm(forms.Form):
             loser_score=self.cleaned_data["loser_score"],
             winner_started=self.cleaned_data["winner_started"],
         )
+        if self.instance is not None:
+            for name, value in fields.items():
+                setattr(self.instance, name, value)
+            self.instance.save()
+            return self.instance
+        return ResultSlip.objects.create(**fields)
 
 
 class RoundCountForm(forms.Form):

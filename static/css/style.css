@@ -263,6 +263,19 @@ h3 { font-size: 1.02rem; margin: var(--space-md) 0 var(--space-sm); }
     padding: 8px 12px;
 }
 
+/* Confirmation shown after a result is saved, with an Edit button to fix it. */
+.result-saved {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    background-color: var(--color-success-bg);
+    color: var(--color-success-text);
+    border-radius: var(--radius);
+    padding: 8px 12px;
+    margin-bottom: 15px;
+}
+
 /* ── Forms ─────────────────────────────────────────────────── */
 form p {
     margin-bottom: 15px;

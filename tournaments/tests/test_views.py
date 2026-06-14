@@ -508,10 +508,70 @@ class ResultSlipCreateViewTests(TestCase):
             },
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Result saved")
+        # The saved result is confirmed with an Edit button rather than a
+        # Save-then-Done confirmation step.
+        self.assertContains(response, "Saved:")
+        self.assertContains(response, "Edit")
         self.assertEqual(self.division.result_slips.count(), 1)
         rs = self.division.result_slips.first()
         self.assertEqual(rs.pairing, self.pairing)
+
+    def test_edit_existing_result_slip(self):
+        rs = ResultSlip.objects.create(
+            division=self.division,
+            round=1,
+            pairing=self.pairing,
+            winner=self.entrant1,
+            winner_score=450,
+            loser=self.entrant2,
+            loser_score=380,
+            winner_started=True,
+        )
+        response = self.client.post(
+            reverse(
+                "resultslip_edit",
+                kwargs={"pk": self.division.pk, "result_pk": rs.pk},
+            ),
+            {
+                "round": 1,
+                "pairing": self.pairing.pk,
+                "winner": self.entrant2.pk,
+                "winner_score": 500,
+                "loser_score": 400,
+                "winner_started": False,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        # No new slip is created; the existing one is updated in place.
+        self.assertEqual(self.division.result_slips.count(), 1)
+        rs.refresh_from_db()
+        self.assertEqual(rs.winner, self.entrant2)
+        self.assertEqual(rs.winner_score, 500)
+        self.assertEqual(rs.loser, self.entrant1)
+        self.assertEqual(rs.loser_score, 400)
+
+    def test_edit_form_prefills_existing_result(self):
+        rs = ResultSlip.objects.create(
+            division=self.division,
+            round=1,
+            pairing=self.pairing,
+            winner=self.entrant1,
+            winner_score=450,
+            loser=self.entrant2,
+            loser_score=380,
+            winner_started=True,
+        )
+        response = self.client.get(
+            reverse(
+                "resultslip_edit",
+                kwargs={"pk": self.division.pk, "result_pk": rs.pk},
+            )
+        )
+        self.assertEqual(response.status_code, 200)
+        # The pairing whose result is being edited is offered even though it
+        # already has a result, so the form can render its current selection.
+        self.assertContains(response, "Alice")
+        self.assertContains(response, "Bob")
 
     def test_form_shows_pairing_options(self):
         response = self.client.get(
