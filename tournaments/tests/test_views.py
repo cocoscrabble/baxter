@@ -4,7 +4,18 @@ from datetime import date
 from django.test import TestCase, tag
 from django.urls import reverse
 
-from tournaments.models import Division, DivisionSettings, Entrant, FixedPairing, FixedTable, Pairing, Player, ResultSlip, RoundPairings, Tournament
+from tournaments.models import (
+    Division,
+    DivisionSettings,
+    Entrant,
+    FixedPairing,
+    FixedTable,
+    Pairing,
+    Player,
+    ResultSlip,
+    RoundPairings,
+    Tournament,
+)
 from tournaments.views import edit_key
 from editgrid.models import EditPresence, EditVersion
 from users.models import User
@@ -22,7 +33,9 @@ def setUpTournament(target):
     )
     target.tournament.editors.add(target.owner)
     target.division = Division.objects.create(name="Open", tournament=target.tournament)
-    target.player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
+    target.player1 = Player.objects.create(
+        name="Alice", player_number="001", rating=1600
+    )
     target.player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
     target.entrant1 = Entrant.objects.create(
         division=target.division, player=target.player1, number=1
@@ -89,7 +102,9 @@ class DivisionCreateDeleteViewTests(TestCase):
             reverse("division_create", kwargs={"tournament_pk": self.tournament.pk}),
             {"name": "Open", "is_test": "0"},
         )
-        self.assertTrue(self.tournament.divisions.filter(name="Open", is_test=False).exists())
+        self.assertTrue(
+            self.tournament.divisions.filter(name="Open", is_test=False).exists()
+        )
 
     def test_create_test_division(self):
         self.client.login(username="owner", password="testpass123")
@@ -97,7 +112,9 @@ class DivisionCreateDeleteViewTests(TestCase):
             reverse("division_create", kwargs={"tournament_pk": self.tournament.pk}),
             {"name": "Sandbox", "is_test": "1"},
         )
-        self.assertTrue(self.tournament.divisions.filter(name="Sandbox", is_test=True).exists())
+        self.assertTrue(
+            self.tournament.divisions.filter(name="Sandbox", is_test=True).exists()
+        )
 
     def test_create_division_non_editor_forbidden(self):
         self.client.login(username="other", password="testpass123")
@@ -132,7 +149,9 @@ class DivisionCreateDeleteViewTests(TestCase):
         self.client.login(username="owner", password="testpass123")
         self.client.post(reverse("division_delete", kwargs={"pk": self.division.pk}))
         self.assertFalse(Division.objects.filter(pk=self.division.pk).exists())
-        self.assertTrue(Division.all_objects.filter(pk=self.division.pk, is_deleted=True).exists())
+        self.assertTrue(
+            Division.all_objects.filter(pk=self.division.pk, is_deleted=True).exists()
+        )
 
     def test_delete_division_non_editor_forbidden(self):
         self.client.login(username="other", password="testpass123")
@@ -155,7 +174,9 @@ class DivisionCreateDeleteViewTests(TestCase):
         self.division.soft_delete()
         self.client.login(username="owner", password="testpass123")
         self.client.post(reverse("division_restore", kwargs={"pk": self.division.pk}))
-        self.assertTrue(Division.objects.filter(pk=self.division.pk, is_deleted=False).exists())
+        self.assertTrue(
+            Division.objects.filter(pk=self.division.pk, is_deleted=False).exists()
+        )
 
     def test_restore_division_non_editor_forbidden(self):
         self.division.soft_delete()
@@ -164,7 +185,9 @@ class DivisionCreateDeleteViewTests(TestCase):
             reverse("division_restore", kwargs={"pk": self.division.pk}),
         )
         self.assertEqual(response.status_code, 403)
-        self.assertTrue(Division.all_objects.filter(pk=self.division.pk, is_deleted=True).exists())
+        self.assertTrue(
+            Division.all_objects.filter(pk=self.division.pk, is_deleted=True).exists()
+        )
 
 
 class DivisionRenameViewTests(TestCase):
@@ -259,7 +282,9 @@ class DivisionRenameViewTests(TestCase):
 class TournamentUpdateViewTests(TestCase):
     def setUp(self):
         setUpTournament(self)
-        self.editor = User.objects.create_user(username="editor", password="testpass123")
+        self.editor = User.objects.create_user(
+            username="editor", password="testpass123"
+        )
         self.tournament.editors.add(self.editor)
 
     def test_owner_can_edit(self):
@@ -305,7 +330,9 @@ class TournamentUpdateViewTests(TestCase):
 class TournamentDeleteViewTests(TestCase):
     def setUp(self):
         setUpTournament(self)
-        self.editor = User.objects.create_user(username="editor", password="testpass123")
+        self.editor = User.objects.create_user(
+            username="editor", password="testpass123"
+        )
         self.tournament.editors.add(self.editor)
 
     def test_owner_can_delete(self):
@@ -390,8 +417,11 @@ class BulkImportEntrantsViewTests(TestCase):
     def _upload(self, csv_content):
         from io import BytesIO
         from django.core.files.uploadedfile import SimpleUploadedFile
+
         self.client.login(username="owner", password="testpass123")
-        f = SimpleUploadedFile("import.csv", csv_content.encode("utf-8"), content_type="text/csv")
+        f = SimpleUploadedFile(
+            "import.csv", csv_content.encode("utf-8"), content_type="text/csv"
+        )
         return self.client.post(
             reverse("bulk_import_entrants", kwargs={"pk": self.division.pk}),
             {"csv_file": f},
@@ -416,7 +446,9 @@ class BulkImportEntrantsViewTests(TestCase):
         self.assertEqual(len(data["skipped"]), 1)
 
     def test_import_existing_player_not_in_division(self):
-        other_player = Player.objects.create(name="Eve", player_number="003", rating=1200)
+        other_player = Player.objects.create(
+            name="Eve", player_number="003", rating=1200
+        )
         response = self._upload("Eve,1200\n")
         data = response.json()
         self.assertTrue(data["ok"])
@@ -450,11 +482,16 @@ class ResultSlipCreateViewTests(TestCase):
     def setUpTestData(cls):
         setUpTournament(cls)
         cls.rp = RoundPairings.objects.create(
-            division=cls.division, round=1, status=RoundPairings.PUBLISHED,
+            division=cls.division,
+            round=1,
+            status=RoundPairings.PUBLISHED,
         )
         cls.pairing = Pairing.objects.create(
-            division=cls.division, round=1, round_pairings=cls.rp,
-            first=cls.entrant1, second=cls.entrant2,
+            division=cls.division,
+            round=1,
+            round_pairings=cls.rp,
+            first=cls.entrant1,
+            second=cls.entrant2,
             table=1,
         )
 
@@ -484,8 +521,12 @@ class ResultSlipCreateViewTests(TestCase):
         self.assertContains(response, "Bob")
 
     def test_invalid_winner_not_in_pairing(self):
-        other_player = Player.objects.create(name="Charlie", player_number="003", rating=1400)
-        other_entrant = Entrant.objects.create(division=self.division, player=other_player, number=3)
+        other_player = Player.objects.create(
+            name="Charlie", player_number="003", rating=1400
+        )
+        other_entrant = Entrant.objects.create(
+            division=self.division, player=other_player, number=3
+        )
         response = self.client.post(
             reverse("resultslip_create", kwargs={"pk": self.division.pk}),
             {
@@ -498,7 +539,9 @@ class ResultSlipCreateViewTests(TestCase):
             },
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Winner must be one of the players in the pairing")
+        self.assertContains(
+            response, "Winner must be one of the players in the pairing"
+        )
 
 
 @tag("slow")
@@ -509,12 +552,22 @@ class DivisionDetailLatestResultsTests(TestCase):
 
     def test_shows_only_max_round_results(self):
         ResultSlip.objects.create(
-            division=self.division, round=1, winner=self.entrant1,
-            winner_score=400, loser=self.entrant2, loser_score=350, winner_started=True,
+            division=self.division,
+            round=1,
+            winner=self.entrant1,
+            winner_score=400,
+            loser=self.entrant2,
+            loser_score=350,
+            winner_started=True,
         )
         ResultSlip.objects.create(
-            division=self.division, round=2, winner=self.entrant2,
-            winner_score=420, loser=self.entrant1, loser_score=390, winner_started=False,
+            division=self.division,
+            round=2,
+            winner=self.entrant2,
+            winner_score=420,
+            loser=self.entrant1,
+            loser_score=390,
+            winner_started=False,
         )
         response = self.client.get(
             reverse("division_detail", kwargs={"pk": self.division.pk})
@@ -547,8 +600,13 @@ class DivisionStandingsViewTests(TestCase):
 
     def test_standings_with_results(self):
         ResultSlip.objects.create(
-            division=self.division, round=1, winner=self.entrant1,
-            winner_score=450, loser=self.entrant2, loser_score=380, winner_started=True,
+            division=self.division,
+            round=1,
+            winner=self.entrant1,
+            winner_score=450,
+            loser=self.entrant2,
+            loser_score=380,
+            winner_started=True,
         )
         response = self.client.get(
             reverse("division_standings", kwargs={"pk": self.division.pk})
@@ -558,15 +616,27 @@ class DivisionStandingsViewTests(TestCase):
 
     def test_standings_for_specific_round(self):
         ResultSlip.objects.create(
-            division=self.division, round=1, winner=self.entrant1,
-            winner_score=450, loser=self.entrant2, loser_score=380, winner_started=True,
+            division=self.division,
+            round=1,
+            winner=self.entrant1,
+            winner_score=450,
+            loser=self.entrant2,
+            loser_score=380,
+            winner_started=True,
         )
         ResultSlip.objects.create(
-            division=self.division, round=2, winner=self.entrant2,
-            winner_score=420, loser=self.entrant1, loser_score=390, winner_started=False,
+            division=self.division,
+            round=2,
+            winner=self.entrant2,
+            winner_score=420,
+            loser=self.entrant1,
+            loser_score=390,
+            winner_started=False,
         )
         response = self.client.get(
-            reverse("division_standings_round", kwargs={"pk": self.division.pk, "round": 1})
+            reverse(
+                "division_standings_round", kwargs={"pk": self.division.pk, "round": 1}
+            )
         )
         self.assertEqual(response.status_code, 200)
         # After round 1 only, Alice has 1 win
@@ -574,19 +644,31 @@ class DivisionStandingsViewTests(TestCase):
 
     def test_round_links(self):
         ResultSlip.objects.create(
-            division=self.division, round=1, winner=self.entrant1,
-            winner_score=450, loser=self.entrant2, loser_score=380, winner_started=True,
+            division=self.division,
+            round=1,
+            winner=self.entrant1,
+            winner_score=450,
+            loser=self.entrant2,
+            loser_score=380,
+            winner_started=True,
         )
         ResultSlip.objects.create(
-            division=self.division, round=2, winner=self.entrant2,
-            winner_score=420, loser=self.entrant1, loser_score=390, winner_started=False,
+            division=self.division,
+            round=2,
+            winner=self.entrant2,
+            winner_score=420,
+            loser=self.entrant1,
+            loser_score=390,
+            winner_started=False,
         )
         response = self.client.get(
             reverse("division_standings", kwargs={"pk": self.division.pk})
         )
         self.assertContains(
             response,
-            reverse("division_standings_round", kwargs={"pk": self.division.pk, "round": 1}),
+            reverse(
+                "division_standings_round", kwargs={"pk": self.division.pk, "round": 1}
+            ),
         )
 
 
@@ -634,44 +716,69 @@ class DivisionRoundPairingsEditViewTests(TestCase):
         )
         self.client.login(username="owner", password="testpass123")
         blocks = json.loads(self.client.get(self.url).context["blocks_json"])
-        self.assertEqual(blocks, [
-            {"pairing": "Swiss", "rounds": 2, "pair_from": 1},
-            {"pairing": "KotH", "rounds": 1, "pair_from": 1},
-        ])
+        self.assertEqual(
+            blocks,
+            [
+                {"pairing": "Swiss", "rounds": 2, "pair_from": 1},
+                {"pairing": "KotH", "rounds": 1, "pair_from": 1},
+            ],
+        )
 
     def test_post_saves_blocks_and_derives_round_pairings(self):
         self.client.login(username="owner", password="testpass123")
-        payload = {"blocks": [
-            {"pairing": "KotH", "rounds": 3, "pair_from": 1},
-            {"pairing": "Swiss", "rounds": 2, "pair_from": 2},
-        ]}
-        response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
+        payload = {
+            "blocks": [
+                {"pairing": "KotH", "rounds": 3, "pair_from": 1},
+                {"pairing": "Swiss", "rounds": 2, "pair_from": 2},
+            ]
+        }
+        response = self.client.post(
+            self.url, json.dumps(payload), content_type="application/json"
+        )
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["ok"])
         s = DivisionSettings.objects.get(division=self.division)
         self.assertEqual(s.pairing_blocks, payload["blocks"])
-        rounds = [(rp["round"], rp["pairing"], rp["start_round"]) for rp in s.round_pairings]
-        self.assertEqual(rounds, [
-            (1, "KotH", 0), (2, "KotH", 1), (3, "KotH", 2),  # sliding: round - 1
-            (4, "Swiss", 2), (5, "Swiss", 3),                # sliding: round - 2
-        ])
+        rounds = [
+            (rp["round"], rp["pairing"], rp["start_round"]) for rp in s.round_pairings
+        ]
+        self.assertEqual(
+            rounds,
+            [
+                (1, "KotH", 0),
+                (2, "KotH", 1),
+                (3, "KotH", 2),  # sliding: round - 1
+                (4, "Swiss", 2),
+                (5, "Swiss", 3),  # sliding: round - 2
+            ],
+        )
 
     def test_post_invalid_pairing_rejected(self):
         self.client.login(username="owner", password="testpass123")
         payload = {"blocks": [{"pairing": "Nope", "rounds": 2, "pair_from": 1}]}
-        response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
+        response = self.client.post(
+            self.url, json.dumps(payload), content_type="application/json"
+        )
         self.assertEqual(response.status_code, 400)
         self.assertIn("errors", response.json())
 
     def test_preview_expands_without_saving(self):
         self.client.login(username="owner", password="testpass123")
-        url = reverse("division_round_pairings_preview", kwargs={"pk": self.division.pk})
-        payload = {"blocks": [{"pairing": "Quads_Clustered", "rounds": 3, "pair_from": 1}]}
-        response = self.client.post(url, json.dumps(payload), content_type="application/json")
+        url = reverse(
+            "division_round_pairings_preview", kwargs={"pk": self.division.pk}
+        )
+        payload = {
+            "blocks": [{"pairing": "Quads_Clustered", "rounds": 3, "pair_from": 1}]
+        }
+        response = self.client.post(
+            url, json.dumps(payload), content_type="application/json"
+        )
         self.assertEqual(response.status_code, 200)
         # Quads pair off one fixed snapshot: start_round = blockStart - 1 = 0 for all.
         self.assertEqual([r["start_round"] for r in response.json()["rows"]], [0, 0, 0])
-        self.assertFalse(DivisionSettings.objects.filter(division=self.division).exists())
+        self.assertFalse(
+            DivisionSettings.objects.filter(division=self.division).exists()
+        )
 
 
 @tag("slow")
@@ -692,8 +799,11 @@ class DivisionPairingsViewTests(TestCase):
             round_pairings=[{"round": 1, "pairing": "KotH", "start_round": 0}],
         )
         Pairing.objects.create(
-            division=self.division, round=1,
-            first=self.entrant1, second=self.entrant2, repeats=0,
+            division=self.division,
+            round=1,
+            first=self.entrant1,
+            second=self.entrant2,
+            repeats=0,
         )
         response = self.client.get(
             reverse("division_pairings", kwargs={"pk": self.division.pk})
@@ -718,8 +828,11 @@ class DivisionPairingsViewTests(TestCase):
         )
         # Round 1 pairing in DB, round 2 not yet generated
         Pairing.objects.create(
-            division=self.division, round=1,
-            first=self.entrant1, second=self.entrant2, repeats=0,
+            division=self.division,
+            round=1,
+            first=self.entrant1,
+            second=self.entrant2,
+            repeats=0,
         )
         response = self.client.get(
             reverse("division_pairings", kwargs={"pk": self.division.pk})
@@ -765,8 +878,12 @@ class DivisionPairingsRoundContentTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         setUpTournament(cls)
-        cls.player3 = Player.objects.create(name="Carol", player_number="003", rating=1400)
-        cls.player4 = Player.objects.create(name="Dave", player_number="004", rating=1300)
+        cls.player3 = Player.objects.create(
+            name="Carol", player_number="003", rating=1400
+        )
+        cls.player4 = Player.objects.create(
+            name="Dave", player_number="004", rating=1300
+        )
         cls.entrant3 = Entrant.objects.create(
             division=cls.division, player=cls.player3, number=3
         )
@@ -784,26 +901,42 @@ class DivisionPairingsRoundContentTests(TestCase):
     def _create_round(self, round_num, status, pairs):
         """Create a RoundPairings with two Pairing rows for the given round."""
         rp = RoundPairings.objects.create(
-            division=self.division, round=round_num, status=status,
+            division=self.division,
+            round=round_num,
+            status=status,
         )
         pairings = []
         for table, (first, second) in enumerate(pairs, start=1):
-            pairings.append(Pairing.objects.create(
-                division=self.division, round=round_num, round_pairings=rp,
-                first=first, second=second, table=table,
-            ))
+            pairings.append(
+                Pairing.objects.create(
+                    division=self.division,
+                    round=round_num,
+                    round_pairings=rp,
+                    first=first,
+                    second=second,
+                    table=table,
+                )
+            )
         return rp, pairings
 
-    def _create_slip(self, round_num, pairing, winner, loser, winner_score, loser_score):
+    def _create_slip(
+        self, round_num, pairing, winner, loser, winner_score, loser_score
+    ):
         return ResultSlip.objects.create(
-            division=self.division, round=round_num, pairing=pairing,
-            winner=winner, winner_score=winner_score,
-            loser=loser, loser_score=loser_score, winner_started=True,
+            division=self.division,
+            round=round_num,
+            pairing=pairing,
+            winner=winner,
+            winner_score=winner_score,
+            loser=loser,
+            loser_score=loser_score,
+            winner_started=True,
         )
 
     def test_in_progress_round_shows_played_and_unplayed_pairings(self):
         _, pairings = self._create_round(
-            1, RoundPairings.IN_PROGRESS,
+            1,
+            RoundPairings.IN_PROGRESS,
             [(self.entrant1, self.entrant2), (self.entrant3, self.entrant4)],
         )
         self._create_slip(1, pairings[0], self.entrant1, self.entrant2, 450, 380)
@@ -821,7 +954,8 @@ class DivisionPairingsRoundContentTests(TestCase):
 
     def test_finished_round_shows_all_pairings_with_results(self):
         _, pairings = self._create_round(
-            1, RoundPairings.FINISHED,
+            1,
+            RoundPairings.FINISHED,
             [(self.entrant1, self.entrant2), (self.entrant3, self.entrant4)],
         )
         self._create_slip(1, pairings[0], self.entrant1, self.entrant2, 450, 380)
@@ -841,7 +975,8 @@ class DivisionPairingsRoundContentTests(TestCase):
     def test_finished_round_with_unplayed_pairing_still_lists_it(self):
         """All Pairing rows must appear even if a slip is missing for one."""
         _, pairings = self._create_round(
-            1, RoundPairings.FINISHED,
+            1,
+            RoundPairings.FINISHED,
             [(self.entrant1, self.entrant2), (self.entrant3, self.entrant4)],
         )
         self._create_slip(1, pairings[0], self.entrant1, self.entrant2, 450, 380)
@@ -862,9 +997,14 @@ class DivisionPairingsRoundContentTests(TestCase):
     def test_error_status_when_results_but_no_pairing_records(self):
         """Partial slips with no Pairing rows surfaces as error_no_pairings, not in_progress."""
         ResultSlip.objects.create(
-            division=self.division, round=1, pairing=None,
-            winner=self.entrant1, winner_score=450,
-            loser=self.entrant2, loser_score=380, winner_started=True,
+            division=self.division,
+            round=1,
+            pairing=None,
+            winner=self.entrant1,
+            winner_score=450,
+            loser=self.entrant2,
+            loser_score=380,
+            winner_started=True,
         )
         response = self.client.get(
             reverse("round_pairings_tab", kwargs={"pk": self.division.pk, "round": 1})
@@ -875,13 +1015,15 @@ class DivisionPairingsRoundContentTests(TestCase):
 
     def test_published_pairings_page_excludes_finished_rounds(self):
         _, r1_pairings = self._create_round(
-            1, RoundPairings.FINISHED,
+            1,
+            RoundPairings.FINISHED,
             [(self.entrant1, self.entrant2), (self.entrant3, self.entrant4)],
         )
         self._create_slip(1, r1_pairings[0], self.entrant1, self.entrant2, 450, 380)
         self._create_slip(1, r1_pairings[1], self.entrant3, self.entrant4, 500, 400)
         self._create_round(
-            2, RoundPairings.PUBLISHED,
+            2,
+            RoundPairings.PUBLISHED,
             [(self.entrant1, self.entrant3), (self.entrant2, self.entrant4)],
         )
 
@@ -893,7 +1035,8 @@ class DivisionPairingsRoundContentTests(TestCase):
 
     def test_published_round_shows_published_tab_status(self):
         self._create_round(
-            1, RoundPairings.PUBLISHED,
+            1,
+            RoundPairings.PUBLISHED,
             [(self.entrant1, self.entrant2), (self.entrant3, self.entrant4)],
         )
         response = self.client.get(
@@ -905,7 +1048,8 @@ class DivisionPairingsRoundContentTests(TestCase):
 
     def test_published_round_not_regenerated_and_future_round_left_alone(self):
         _, pairings = self._create_round(
-            1, RoundPairings.PUBLISHED,
+            1,
+            RoundPairings.PUBLISHED,
             [(self.entrant1, self.entrant2), (self.entrant3, self.entrant4)],
         )
         original_pks = sorted(p.pk for p in pairings)
@@ -925,7 +1069,8 @@ class DivisionPairingsRoundContentTests(TestCase):
 
     def test_add_fixed_pairing_redrafts_published_round(self):
         _, pairings = self._create_round(
-            1, RoundPairings.PUBLISHED,
+            1,
+            RoundPairings.PUBLISHED,
             [(self.entrant1, self.entrant2), (self.entrant3, self.entrant4)],
         )
         original_pks = sorted(p.pk for p in pairings)
@@ -954,7 +1099,8 @@ class DivisionPairingsRoundContentTests(TestCase):
 
     def test_add_fixed_pairing_blocked_when_round_has_results(self):
         _, pairings = self._create_round(
-            1, RoundPairings.IN_PROGRESS,
+            1,
+            RoundPairings.IN_PROGRESS,
             [(self.entrant1, self.entrant2), (self.entrant3, self.entrant4)],
         )
         self._create_slip(1, pairings[0], self.entrant1, self.entrant2, 450, 380)
@@ -969,13 +1115,16 @@ class DivisionPairingsRoundContentTests(TestCase):
 
     def test_remove_fixed_pairing_blocked_when_affected_round_has_results(self):
         _, pairings = self._create_round(
-            1, RoundPairings.IN_PROGRESS,
+            1,
+            RoundPairings.IN_PROGRESS,
             [(self.entrant1, self.entrant2), (self.entrant3, self.entrant4)],
         )
         self._create_slip(1, pairings[0], self.entrant1, self.entrant2, 450, 380)
         fp = FixedPairing.objects.create(
-            division=self.division, round_number=1,
-            entrant1=self.entrant3, entrant2=self.entrant4,
+            division=self.division,
+            round_number=1,
+            entrant1=self.entrant3,
+            entrant2=self.entrant4,
         )
 
         self.client.login(username="owner", password="testpass123")
@@ -988,7 +1137,8 @@ class DivisionPairingsRoundContentTests(TestCase):
 
     def test_has_published_rounds_false_when_only_finished(self):
         _, pairings = self._create_round(
-            1, RoundPairings.FINISHED,
+            1,
+            RoundPairings.FINISHED,
             [(self.entrant1, self.entrant2), (self.entrant3, self.entrant4)],
         )
         self._create_slip(1, pairings[0], self.entrant1, self.entrant2, 450, 380)
@@ -1000,13 +1150,15 @@ class DivisionPairingsRoundContentTests(TestCase):
 
     def test_in_progress_round_selected_when_earlier_round_finished(self):
         _, r1_pairings = self._create_round(
-            1, RoundPairings.FINISHED,
+            1,
+            RoundPairings.FINISHED,
             [(self.entrant1, self.entrant2), (self.entrant3, self.entrant4)],
         )
         self._create_slip(1, r1_pairings[0], self.entrant1, self.entrant2, 450, 380)
         self._create_slip(1, r1_pairings[1], self.entrant3, self.entrant4, 500, 400)
         _, r2_pairings = self._create_round(
-            2, RoundPairings.IN_PROGRESS,
+            2,
+            RoundPairings.IN_PROGRESS,
             [(self.entrant1, self.entrant3), (self.entrant2, self.entrant4)],
         )
         self._create_slip(2, r2_pairings[0], self.entrant1, self.entrant3, 420, 410)
@@ -1032,10 +1184,18 @@ class InlineFixedPairingTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         setUpTournament(cls)
-        cls.player3 = Player.objects.create(name="Carol", player_number="003", rating=1400)
-        cls.player4 = Player.objects.create(name="Dave", player_number="004", rating=1300)
-        cls.entrant3 = Entrant.objects.create(division=cls.division, player=cls.player3, number=3)
-        cls.entrant4 = Entrant.objects.create(division=cls.division, player=cls.player4, number=4)
+        cls.player3 = Player.objects.create(
+            name="Carol", player_number="003", rating=1400
+        )
+        cls.player4 = Player.objects.create(
+            name="Dave", player_number="004", rating=1300
+        )
+        cls.entrant3 = Entrant.objects.create(
+            division=cls.division, player=cls.player3, number=3
+        )
+        cls.entrant4 = Entrant.objects.create(
+            division=cls.division, player=cls.player4, number=4
+        )
         DivisionSettings.objects.create(
             division=cls.division,
             round_pairings=[
@@ -1075,8 +1235,10 @@ class InlineFixedPairingTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         fp = self.division.fixed_pairings.get(round_number=1)
-        self.assertEqual({fp.entrant1_id, fp.entrant2_id}, {self.entrant1.pk, self.entrant3.pk})
-        self.assertContains(response, "Alice vs Carol")
+        self.assertEqual(
+            {fp.entrant1_id, fp.entrant2_id}, {self.entrant1.pk, self.entrant3.pk}
+        )
+        self.assertContains(response, "Alice vs. Carol")
         # The round was regenerated with the fix honoured.
         paired = self.division.pairings.filter(round=1).filter(
             first__in=[self.entrant1, self.entrant3],
@@ -1087,8 +1249,10 @@ class InlineFixedPairingTests(TestCase):
     def test_datastar_add_duplicate_player_renders_error(self):
         self.client.login(username="owner", password="testpass123")
         FixedPairing.objects.create(
-            division=self.division, round_number=1,
-            entrant1=self.entrant1, entrant2=self.entrant2,
+            division=self.division,
+            round_number=1,
+            entrant1=self.entrant1,
+            entrant2=self.entrant2,
         )
         response = self._datastar_post(
             "add_fixed_pairing",
@@ -1101,8 +1265,10 @@ class InlineFixedPairingTests(TestCase):
     def test_datastar_remove_single_pairing(self):
         self.client.login(username="owner", password="testpass123")
         fp = FixedPairing.objects.create(
-            division=self.division, round_number=1,
-            entrant1=self.entrant1, entrant2=self.entrant3,
+            division=self.division,
+            round_number=1,
+            entrant1=self.entrant1,
+            entrant2=self.entrant3,
         )
         response = self._datastar_post(
             "remove_fixed_pairing", {"fp_id": fp.pk, "round": 1}
@@ -1119,17 +1285,28 @@ class InlineFixedPairingTests(TestCase):
             division=self.division, round=1, status=RoundPairings.IN_PROGRESS
         )
         pairing = Pairing.objects.create(
-            division=self.division, round=1, round_pairings=rp,
-            first=self.entrant1, second=self.entrant2, table=1,
+            division=self.division,
+            round=1,
+            round_pairings=rp,
+            first=self.entrant1,
+            second=self.entrant2,
+            table=1,
         )
         ResultSlip.objects.create(
-            division=self.division, round=1, pairing=pairing,
-            winner=self.entrant1, winner_score=450,
-            loser=self.entrant2, loser_score=380, winner_started=True,
+            division=self.division,
+            round=1,
+            pairing=pairing,
+            winner=self.entrant1,
+            winner_score=450,
+            loser=self.entrant2,
+            loser_score=380,
+            winner_started=True,
         )
         fp = FixedPairing.objects.create(
-            division=self.division, round_number=1,
-            entrant1=self.entrant3, entrant2=self.entrant4,
+            division=self.division,
+            round_number=1,
+            entrant1=self.entrant3,
+            entrant2=self.entrant4,
         )
         response = self._datastar_post(
             "remove_fixed_pairing", {"fp_id": fp.pk, "round": 1}
@@ -1195,8 +1372,13 @@ class DivisionEditResultsViewTests(TestCase):
 
     def test_get_returns_json_context(self):
         ResultSlip.objects.create(
-            division=self.division, round=1, winner=self.entrant1,
-            winner_score=450, loser=self.entrant2, loser_score=380, winner_started=True,
+            division=self.division,
+            round=1,
+            winner=self.entrant1,
+            winner_score=450,
+            loser=self.entrant2,
+            loser_score=380,
+            winner_started=True,
         )
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(self.url)
@@ -1213,8 +1395,11 @@ class DivisionEditResultsViewTests(TestCase):
 
     def _make_pairing(self, round_num, first, second, table=1):
         return Pairing.objects.create(
-            division=self.division, round=round_num,
-            first=first, second=second, table=table,
+            division=self.division,
+            round=round_num,
+            first=first,
+            second=second,
+            table=table,
         )
 
     def test_post_saves_results(self):
@@ -1247,8 +1432,13 @@ class DivisionEditResultsViewTests(TestCase):
     def test_post_replaces_existing_results(self):
         self._make_pairing(2, self.entrant1, self.entrant2)
         ResultSlip.objects.create(
-            division=self.division, round=1, winner=self.entrant1,
-            winner_score=400, loser=self.entrant2, loser_score=350, winner_started=True,
+            division=self.division,
+            round=1,
+            winner=self.entrant1,
+            winner_score=400,
+            loser=self.entrant2,
+            loser_score=350,
+            winner_started=True,
         )
         self.client.login(username="owner", password="testpass123")
         payload = {
@@ -1426,8 +1616,10 @@ class DivisionFixedTablesEditViewTests(TestCase):
 
     def test_get_returns_existing_fixed_tables(self):
         FixedTable.objects.create(
-            division=self.division, round_number=1,
-            entrant=self.entrant1, table_number=2,
+            division=self.division,
+            round_number=1,
+            entrant=self.entrant1,
+            table_number=2,
         )
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(self.url)
@@ -1438,8 +1630,14 @@ class DivisionFixedTablesEditViewTests(TestCase):
 
     def test_post_saves_fixed_table(self):
         self.client.login(username="owner", password="testpass123")
-        payload = {"rows": [{"round_number": 1, "entrant": self.entrant1.pk, "table_number": 2}]}
-        response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
+        payload = {
+            "rows": [
+                {"round_number": 1, "entrant": self.entrant1.pk, "table_number": 2}
+            ]
+        }
+        response = self.client.post(
+            self.url, json.dumps(payload), content_type="application/json"
+        )
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["ok"])
         self.assertEqual(self.division.fixed_tables.count(), 1)
@@ -1449,19 +1647,34 @@ class DivisionFixedTablesEditViewTests(TestCase):
 
     def test_post_all_sentinel_round(self):
         self.client.login(username="owner", password="testpass123")
-        payload = {"rows": [{"round_number": -1, "entrant": self.entrant1.pk, "table_number": 1}]}
-        response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
+        payload = {
+            "rows": [
+                {"round_number": -1, "entrant": self.entrant1.pk, "table_number": 1}
+            ]
+        }
+        response = self.client.post(
+            self.url, json.dumps(payload), content_type="application/json"
+        )
         self.assertEqual(response.status_code, 200)
         ft = self.division.fixed_tables.first()
         self.assertEqual(ft.round_number, -1)
 
     def test_post_replaces_existing(self):
         FixedTable.objects.create(
-            division=self.division, round_number=1, entrant=self.entrant1, table_number=1,
+            division=self.division,
+            round_number=1,
+            entrant=self.entrant1,
+            table_number=1,
         )
         self.client.login(username="owner", password="testpass123")
-        payload = {"rows": [{"round_number": 2, "entrant": self.entrant2.pk, "table_number": 3}]}
-        response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
+        payload = {
+            "rows": [
+                {"round_number": 2, "entrant": self.entrant2.pk, "table_number": 3}
+            ]
+        }
+        response = self.client.post(
+            self.url, json.dumps(payload), content_type="application/json"
+        )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.division.fixed_tables.count(), 1)
         ft = self.division.fixed_tables.first()
@@ -1469,8 +1682,12 @@ class DivisionFixedTablesEditViewTests(TestCase):
 
     def test_post_missing_fields_returns_error(self):
         self.client.login(username="owner", password="testpass123")
-        payload = {"rows": [{"round_number": 1, "entrant": self.entrant1.pk}]}  # missing table_number
-        response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
+        payload = {
+            "rows": [{"round_number": 1, "entrant": self.entrant1.pk}]
+        }  # missing table_number
+        response = self.client.post(
+            self.url, json.dumps(payload), content_type="application/json"
+        )
         self.assertEqual(response.status_code, 400)
         self.assertIn("errors", response.json())
         self.assertEqual(self.division.fixed_tables.count(), 0)
@@ -1478,7 +1695,9 @@ class DivisionFixedTablesEditViewTests(TestCase):
     def test_post_invalid_entrant_returns_error(self):
         self.client.login(username="owner", password="testpass123")
         payload = {"rows": [{"round_number": 1, "entrant": 99999, "table_number": 1}]}
-        response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
+        response = self.client.post(
+            self.url, json.dumps(payload), content_type="application/json"
+        )
         self.assertEqual(response.status_code, 400)
         self.assertIn("errors", response.json())
         self.assertEqual(self.division.fixed_tables.count(), 0)
@@ -1491,7 +1710,9 @@ class DivisionFixedTablesEditViewTests(TestCase):
                 {"round_number": 1, "entrant": self.entrant1.pk, "table_number": 2},
             ]
         }
-        response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
+        response = self.client.post(
+            self.url, json.dumps(payload), content_type="application/json"
+        )
         self.assertEqual(response.status_code, 400)
         self.assertIn("errors", response.json())
         self.assertEqual(self.division.fixed_tables.count(), 0)
@@ -1504,7 +1725,9 @@ class DivisionFixedTablesEditViewTests(TestCase):
                 {"round_number": 2, "entrant": self.entrant1.pk, "table_number": 2},
             ]
         }
-        response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
+        response = self.client.post(
+            self.url, json.dumps(payload), content_type="application/json"
+        )
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["ok"])
         self.assertEqual(self.division.fixed_tables.count(), 2)
@@ -1545,44 +1768,62 @@ class DivisionBoardTableMapEditViewTests(TestCase):
 
     def test_post_saves_map(self):
         self.client.login(username="owner", password="testpass123")
-        payload = {"rows": [
-            {"board": 1, "table": 1},
-            {"board": 2, "table": 1},
-            {"board": 3, "table": 2},
-        ]}
-        response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
+        payload = {
+            "rows": [
+                {"board": 1, "table": 1},
+                {"board": 2, "table": 1},
+                {"board": 3, "table": 2},
+            ]
+        }
+        response = self.client.post(
+            self.url, json.dumps(payload), content_type="application/json"
+        )
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["ok"])
         self.division.refresh_from_db()
         self.assertEqual(
             self.division.settings.board_table_map,
-            [{"board": 1, "table": 1}, {"board": 2, "table": 1}, {"board": 3, "table": 2}],
+            [
+                {"board": 1, "table": 1},
+                {"board": 2, "table": 1},
+                {"board": 3, "table": 2},
+            ],
         )
 
     def test_post_sorts_by_board(self):
         self.client.login(username="owner", password="testpass123")
-        payload = {"rows": [
-            {"board": 3, "table": 2},
-            {"board": 1, "table": 1},
-        ]}
-        response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
+        payload = {
+            "rows": [
+                {"board": 3, "table": 2},
+                {"board": 1, "table": 1},
+            ]
+        }
+        response = self.client.post(
+            self.url, json.dumps(payload), content_type="application/json"
+        )
         self.assertEqual(response.status_code, 200)
         boards = [r["board"] for r in self.division.settings.board_table_map]
         self.assertEqual(boards, [1, 3])
 
     def test_post_rejects_duplicate_boards(self):
         self.client.login(username="owner", password="testpass123")
-        payload = {"rows": [
-            {"board": 1, "table": 1},
-            {"board": 1, "table": 2},
-        ]}
-        response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
+        payload = {
+            "rows": [
+                {"board": 1, "table": 1},
+                {"board": 1, "table": 2},
+            ]
+        }
+        response = self.client.post(
+            self.url, json.dumps(payload), content_type="application/json"
+        )
         self.assertEqual(response.status_code, 400)
 
     def test_post_rejects_non_positive(self):
         self.client.login(username="owner", password="testpass123")
         payload = {"rows": [{"board": 0, "table": 1}]}
-        response = self.client.post(self.url, json.dumps(payload), content_type="application/json")
+        response = self.client.post(
+            self.url, json.dumps(payload), content_type="application/json"
+        )
         self.assertEqual(response.status_code, 400)
 
 
@@ -1603,11 +1844,17 @@ class SimulateMatchViewTests(TestCase):
 
     def _publish_round_one(self):
         rp = RoundPairings.objects.create(
-            division=self.test_division, round=1, status=RoundPairings.PUBLISHED,
+            division=self.test_division,
+            round=1,
+            status=RoundPairings.PUBLISHED,
         )
         Pairing.objects.create(
-            division=self.test_division, round=1, round_pairings=rp,
-            first=self.test_entrant1, second=self.test_entrant2, table=1,
+            division=self.test_division,
+            round=1,
+            round_pairings=rp,
+            first=self.test_entrant1,
+            second=self.test_entrant2,
+            table=1,
         )
 
     def test_creates_result_slip(self):
@@ -1639,7 +1886,9 @@ class SimulateMatchViewTests(TestCase):
 
     def test_rejected_when_round_is_draft(self):
         RoundPairings.objects.create(
-            division=self.test_division, round=1, status=RoundPairings.DRAFT,
+            division=self.test_division,
+            round=1,
+            status=RoundPairings.DRAFT,
         )
         self.client.login(username="owner", password="testpass123")
         response = self.client.post(
@@ -1683,7 +1932,9 @@ class SimulateButtonVisibilityTests(TestCase):
     def setUpTestData(cls):
         setUpTournament(cls)
         cls.test_division = Division.objects.create(
-            name="Test Div", tournament=cls.tournament, is_test=True,
+            name="Test Div",
+            tournament=cls.tournament,
+            is_test=True,
         )
         cls.e1 = Entrant.objects.create(
             division=cls.test_division, player=cls.player1, number=1
@@ -1707,15 +1958,23 @@ class SimulateButtonVisibilityTests(TestCase):
 
     def test_simulate_shown_on_published_round(self):
         rp = RoundPairings.objects.create(
-            division=self.test_division, round=1, status=RoundPairings.PUBLISHED,
+            division=self.test_division,
+            round=1,
+            status=RoundPairings.PUBLISHED,
         )
         Pairing.objects.create(
-            division=self.test_division, round=1, round_pairings=rp,
-            first=self.e1, second=self.e2, table=1,
+            division=self.test_division,
+            round=1,
+            round_pairings=rp,
+            first=self.e1,
+            second=self.e2,
+            table=1,
         )
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(
-            reverse("round_pairings_tab", kwargs={"pk": self.test_division.pk, "round": 1})
+            reverse(
+                "round_pairings_tab", kwargs={"pk": self.test_division.pk, "round": 1}
+            )
         )
         self.assertEqual(response.context["selected_status"], "published")
         self.assertContains(response, ">simulate<")
@@ -1727,7 +1986,9 @@ class DivisionEntrantsEditViewTests(TestCase):
     def setUp(self):
         setUpTournament(self)
         self.division.entrants.all().delete()
-        self.player3 = Player.objects.create(name="Charlie", player_number="003", rating=1400)
+        self.player3 = Player.objects.create(
+            name="Charlie", player_number="003", rating=1400
+        )
         self.url = reverse("division_entrants_edit", kwargs={"pk": self.division.pk})
 
     def test_editor_can_access(self):
@@ -1826,9 +2087,7 @@ class DivisionEntrantsEditViewTests(TestCase):
 
     def _save(self, players, version=None):
         payload = {
-            "rows": [
-                {"number": i + 1, "player": p.pk} for i, p in enumerate(players)
-            ]
+            "rows": [{"number": i + 1, "player": p.pk} for i, p in enumerate(players)]
         }
         if version is not None:
             payload["_version"] = version
@@ -1961,10 +2220,16 @@ class DivisionFixturesEditViewTests(TestCase):
     def test_each_grid_saves_via_its_own_endpoint(self):
         # The combined page is GET-only; saves go to the per-grid endpoints.
         self.client.login(username="owner", password="testpass123")
-        pairings_url = reverse("division_fixed_pairings", kwargs={"pk": self.division.pk})
+        pairings_url = reverse(
+            "division_fixed_pairings", kwargs={"pk": self.division.pk}
+        )
         payload = {
             "rows": [
-                {"round_number": 1, "entrant1": self.entrant1.pk, "entrant2": self.entrant2.pk}
+                {
+                    "round_number": 1,
+                    "entrant1": self.entrant1.pk,
+                    "entrant2": self.entrant2.pk,
+                }
             ]
         }
         response = self.client.post(

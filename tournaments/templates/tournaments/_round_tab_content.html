@@ -70,7 +70,7 @@
         <ul class="fixed-pairings-list">
             {% for fp in fixed_pairings_for_round %}
             <li>
-                <span>{{ fp.entrant1.name }} vs {{ fp.entrant2.name }}</span>
+                <span>{{ fp.entrant1.name }} vs. {{ fp.entrant2.name }}</span>
                 <button type="button" class="fixed-pairing-remove" title="Remove fixed pairing"
                     data-on:click="@post('{% url 'remove_fixed_pairing' division.pk %}', {headers: {'X-CSRFToken': $_csrfToken}, payload: {fp_id: {{ fp.id }}, round: {{ selected_round }}}})">&#x2715;</button>
             </li>
@@ -84,7 +84,7 @@
                 <option value="">— player —</option>
                 {% for e in entrants %}<option value="{{ e.pk }}">{{ e.name }}</option>{% endfor %}
             </select>
-            <span>vs</span>
+            <span>vs.</span>
             <select data-bind="fixedSecond">
                 <option value="">— player —</option>
                 {% for e in entrants %}<option value="{{ e.pk }}">{{ e.name }}</option>{% endfor %}
