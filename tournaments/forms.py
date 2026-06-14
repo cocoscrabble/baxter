@@ -99,7 +99,7 @@ class ResultSlipForm(forms.Form):
 
         round_choices = [("", "---")]
         for r in sorted(self._pairings_by_round.keys()):
-            round_choices.append((r, f"Round {r}"))
+            round_choices.append((r, str(r)))
         self.fields["round"].widget = forms.Select(choices=round_choices)
 
         # Build flat pairing choices and lookup.
