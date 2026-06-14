@@ -26,7 +26,14 @@
     </p>
     <p>
         <label for="id_winner">Winner:</label>
-        {{ form.winner }}
+        {# Each option is shown only when the selected pairing is one this #}
+        {# entrant plays in, restricting the choices to that pairing's two players. #}
+        <select name="winner" id="id_winner" data-bind="winner">
+            <option value="">---</option>
+            {% for opt_pk, opt_name, opt_pairings in form.winner_options %}
+            <option value="{{ opt_pk }}" data-show="{{ opt_pairings }}.includes(Number($pairing))">{{ opt_name }}</option>
+            {% endfor %}
+        </select>
         {% if form.winner.errors %}<ul class="errorlist">{% for e in form.winner.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
     </p>
     <p>

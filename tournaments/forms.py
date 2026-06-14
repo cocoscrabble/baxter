@@ -107,7 +107,9 @@ class ResultSlipForm(forms.Form):
 
         # Build flat pairing choices and lookup.
         pairing_choices = [("", "---")]
-        winner_choices = [("", "---")]
+        # entrant pk -> (name, [pairing pks the entrant plays in]). Drives the
+        # winner dropdown, which is filtered client-side to the selected pairing.
+        winner_options = {}
         for r, pairing_list in sorted(self._pairings_by_round.items()):
             for p_pk, first_pk, first_name, second_pk, second_name in pairing_list:
                 label = f"{first_name} vs. {second_name}"
@@ -119,21 +121,28 @@ class ResultSlipForm(forms.Form):
                     second_name,
                     r,
                 )
-                winner_choices.append((first_pk, first_name))
-                winner_choices.append((second_pk, second_name))
+                for ent_pk, ent_name in ((first_pk, first_name), (second_pk, second_name)):
+                    entry = winner_options.setdefault(ent_pk, (ent_name, []))
+                    entry[1].append(p_pk)
 
         self.fields["pairing"].widget = forms.Select(choices=pairing_choices)
-        # Deduplicate winner choices.
-        seen = set()
-        unique_winner_choices = [("", "---")]
-        for val, label in winner_choices[1:]:
-            if val not in seen:
-                seen.add(val)
-                unique_winner_choices.append((val, label))
-        self.fields["winner"].widget = forms.Select(choices=unique_winner_choices)
+        # (pk, name, [pairing pks]) per entrant, for rendering the winner options.
+        self.winner_options = [
+            (ent_pk, name, pairings) for ent_pk, (name, pairings) in winner_options.items()
+        ]
+        # The winner field accepts any entrant pk; the Select widget is only for
+        # non-JS fallback (the template renders its own filtered options).
+        self.fields["winner"].widget = forms.Select(
+            choices=[("", "---")] + [(pk, name) for pk, name, _ in self.winner_options]
+        )
 
         for field_name, field in self.fields.items():
             field.widget.attrs["data-bind"] = field_name
+
+        # Picking a different pairing clears any winner chosen for the previous
+        # one; the winner dropdown is restricted client-side to the two players
+        # in the selected pairing (see _resultslip_form.html).
+        self.fields["pairing"].widget.attrs["data-on:change"] = "$winner = ''"
 
     def clean_pairing(self):
         pairing_pk = self.cleaned_data.get("pairing")
