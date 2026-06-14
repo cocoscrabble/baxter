@@ -52,6 +52,7 @@ urlpatterns = [
     path("division/<int:pk>/entrants/", DivisionEntrantsView.as_view(), name="division_entrants"),
     path("division/<int:pk>/results/", DivisionAllResultsView.as_view(), name="division_all_results"),
     path("division/<int:pk>/add-result/", ResultSlipCreateView.as_view(), name="resultslip_create"),
+    path("division/<int:pk>/edit-result/<int:result_pk>/", ResultSlipCreateView.as_view(), name="resultslip_edit"),
     path("division/<int:pk>/standings/", DivisionStandingsView.as_view(), name="division_standings"),
     path("division/<int:pk>/standings/<int:round>/", DivisionStandingsView.as_view(), name="division_standings_round"),
     path("division/<int:pk>/pairings/", DivisionPairingsView.as_view(), name="division_pairings"),

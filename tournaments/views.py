@@ -30,7 +30,7 @@ from .fixed_pairings import (
 )
 from .match_simulation import simulate_match, simulate_round
 from .grids import BoardTableMapGrid, EntrantsGrid, FixedPairingsGrid, FixedTablesGrid, ResultsGrid
-from .models import EDIT_SCOPES, Division, DivisionSettings, Pairing, Player, RoundPairings, Tournament
+from .models import EDIT_SCOPES, Division, DivisionSettings, Pairing, Player, ResultSlip, RoundPairings, Tournament
 from editgrid.concurrency import check_conflict
 from editgrid.models import EditVersion
 from editgrid.views import BaseEditGridView, EditPresenceBaseView, build_grid_context
@@ -845,11 +845,17 @@ class EditPresenceView(LoginRequiredMixin, CanEditDivisionMixin, EditPresenceBas
         return edit_key(self.get_division(), scope)
 
 
-def _pairings_by_round(division):
+def _pairing_tuple(p):
+    return (p.pk, p.first_id, p.first.player.name, p.second_id, p.second.player.name)
+
+
+def _pairings_by_round(division, include_pairing=None):
     """Build pairings data grouped by round for the ResultSlipForm.
 
     Returns {round_num: [(pairing_pk, first_pk, first_name, second_pk, second_name), ...]}
-    Only includes rounds with published/in_progress status and pairings without results.
+    Only includes rounds with published/in_progress status and pairings without
+    results. ``include_pairing`` forces a specific pairing into the result even if
+    it already has one — used when editing that pairing's existing result.
     """
     rp_objs = (
         division.round_pairings_set
@@ -870,16 +876,49 @@ def _pairings_by_round(division):
         for p in rp.pairings.all():
             if hasattr(p, "result"):
                 continue
-            pairing_list.append((
-                p.pk,
-                p.first_id,
-                p.first.player.name,
-                p.second_id,
-                p.second.player.name,
-            ))
+            pairing_list.append(_pairing_tuple(p))
         if pairing_list:
             result[rp.round] = pairing_list
+    if include_pairing is not None:
+        bucket = result.setdefault(include_pairing.round, [])
+        if all(entry[0] != include_pairing.pk for entry in bucket):
+            bucket.append(_pairing_tuple(include_pairing))
     return result
+
+
+_BLANK_RESULT_SIGNALS = {
+    "round": "", "pairing": "", "winner": "",
+    "winner_score": "", "loser_score": "", "winner_started": False,
+}
+
+
+def _result_initial(result):
+    return {
+        "round": result.round,
+        "pairing": result.pairing_id,
+        "winner": result.winner_id,
+        "winner_score": result.winner_score,
+        "loser_score": result.loser_score,
+        "winner_started": result.winner_started,
+    }
+
+
+def _result_signals(result):
+    return {
+        "round": str(result.round),
+        "pairing": str(result.pairing_id),
+        "winner": str(result.winner_id),
+        "winner_score": result.winner_score,
+        "loser_score": result.loser_score,
+        "winner_started": result.winner_started,
+    }
+
+
+def _result_summary(result):
+    return (
+        f"R{result.round}: {result.winner_name} {result.winner_score}"
+        f"–{result.loser_score} {result.loser_name}"
+    )
 
 
 class ResultSlipCreateView(View):
@@ -890,7 +929,24 @@ class ResultSlipCreateView(View):
         _ensure_visible_division(division, self.request.user)
         return division
 
-    def _form_context(self, division, form, success_message=None):
+    def get_result(self, division):
+        """Return the ResultSlip being edited, or None when adding a new one."""
+        result_pk = self.kwargs.get("result_pk")
+        if result_pk is None:
+            return None
+        return get_object_or_404(
+            ResultSlip.objects.select_related(
+                "pairing__first__player",
+                "pairing__second__player",
+                "pairing__round_pairings",
+                "winner__player",
+                "loser__player",
+            ),
+            pk=result_pk,
+            division=division,
+        )
+
+    def _form_context(self, division, form, *, editing=False, result=None, saved=None):
         pbr = form._pairings_by_round
         # Build JSON-safe pairings data for datastar client-side filtering.
         pairings_json = {}
@@ -900,53 +956,76 @@ class ResultSlipCreateView(View):
                  "second_pk": s_pk, "second_name": s_name}
                 for p_pk, f_pk, f_name, s_pk, s_name in pairing_list
             ]
+        if editing and result is not None:
+            form_action = reverse("resultslip_edit", args=[division.pk, result.pk])
+        else:
+            form_action = reverse("resultslip_create", args=[division.pk])
         context = {
             "form": form,
             "division": division,
             "pairings_json": json.dumps(pairings_json),
             "active_tab": "add_result",
             "can_edit": division.tournament.can_edit(self.request.user),
+            "editing": editing,
+            "form_action": form_action,
         }
-        if success_message:
-            context["success_message"] = success_message
+        if saved is not None:
+            context["saved_result"] = {
+                "summary": _result_summary(saved),
+                "edit_url": reverse("resultslip_edit", args=[division.pk, saved.pk]),
+            }
         return context
 
-    def get(self, request, pk):
+    def _render(self, request, context, signals=None):
+        if is_datastar(request):
+            return fragment_response(
+                "tournaments/_resultslip_form.html", context,
+                request=request, signals=signals,
+            )
+        return render(request, self.template_name, context)
+
+    def get(self, request, *args, **kwargs):
         division = self.get_division()
+        result = self.get_result(division)
+        if result is not None:
+            pbr = _pairings_by_round(division, include_pairing=result.pairing)
+            form = ResultSlipForm(
+                division=division, pairings_by_round=pbr,
+                instance=result, initial=_result_initial(result),
+            )
+            context = self._form_context(division, form, editing=True, result=result)
+            return self._render(request, context, signals=_result_signals(result))
         pbr = _pairings_by_round(division)
         form = ResultSlipForm(division=division, pairings_by_round=pbr)
         context = self._form_context(division, form)
-        return render(request, self.template_name, context)
+        return self._render(request, context, signals=_BLANK_RESULT_SIGNALS)
 
-    def post(self, request, pk):
+    def post(self, request, *args, **kwargs):
         division = self.get_division()
-        pbr = _pairings_by_round(division)
+        result = self.get_result(division)
+        include = result.pairing if result is not None and result.pairing_id else None
+        pbr = _pairings_by_round(division, include_pairing=include)
         if is_datastar(request):
             data = read_signals(request) or {}
         else:
             data = request.POST
-        form = ResultSlipForm(data, division=division, pairings_by_round=pbr)
+        form = ResultSlipForm(
+            data, division=division, pairings_by_round=pbr, instance=result,
+        )
         if form.is_valid():
             rs = form.save()
             if rs.pairing and rs.pairing.round_pairings:
                 rs.pairing.round_pairings.update_status()
+            # Reset to a blank form for the next entry, surfacing the saved
+            # result with an Edit button to correct it if needed.
             fresh_pbr = _pairings_by_round(division)
             fresh_form = ResultSlipForm(division=division, pairings_by_round=fresh_pbr)
-            context = self._form_context(
-                division, fresh_form,
-                success_message="Result saved. If there are any mistakes, edit the form and click save again. If everything looks correct, hit Done to close the form.",
-            )
-            if is_datastar(request):
-                return fragment_response(
-                    "tournaments/_resultslip_form.html", context, request=request,
-                )
-            return render(request, self.template_name, context)
-        context = self._form_context(division, form)
-        if is_datastar(request):
-            return fragment_response(
-                "tournaments/_resultslip_form.html", context, request=request,
-            )
-        return render(request, self.template_name, context)
+            context = self._form_context(division, fresh_form, saved=rs)
+            return self._render(request, context, signals=_BLANK_RESULT_SIGNALS)
+        context = self._form_context(
+            division, form, editing=result is not None, result=result,
+        )
+        return self._render(request, context)
 
 
 class DivisionEditResultsView(DivisionEditGridView):
