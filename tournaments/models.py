@@ -1,4 +1,3 @@
-
 from django.conf import settings
 from django.db import models
 from django.urls import reverse
@@ -89,9 +88,9 @@ class Division(models.Model):
         self.save()
 
     def max_round(self):
-        return self.result_slips.aggregate(
-            max_round=models.Max("round")
-        )["max_round"] or 0
+        return (
+            self.result_slips.aggregate(max_round=models.Max("round"))["max_round"] or 0
+        )
 
     def pairings_by_round_pair(self):
         """Return {(round, frozenset({first_id, second_id})): Pairing} for all pairings."""
@@ -105,7 +104,7 @@ class Division(models.Model):
         try:
             rps = self.settings.round_pairings
             return sorted({rp["round"] for rp in rps})
-        except (AttributeError, KeyError, TypeError, DivisionSettings.DoesNotExist):
+        except AttributeError, KeyError, TypeError, DivisionSettings.DoesNotExist:
             return list(default)
 
 
@@ -145,7 +144,7 @@ def next_temp_player_number():
         is_provisional=True, player_number__startswith=TEMP_NUMBER_PREFIX
     ).values_list("player_number", flat=True):
         try:
-            max_n = max(max_n, int(number[len(TEMP_NUMBER_PREFIX):]))
+            max_n = max(max_n, int(number[len(TEMP_NUMBER_PREFIX) :]))
         except ValueError:
             continue
     return f"{TEMP_NUMBER_PREFIX}{max_n + 1}"
@@ -180,7 +179,7 @@ class Player(models.Model):
             return None, f"A player named '{name}' already exists."
         try:
             rating = int(rating)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             rating = 0
         player = cls.objects.create(
             name=name,
@@ -332,7 +331,11 @@ class RoundPairings(models.Model):
         elif 0 < with_results < total and self.status == RoundPairings.PUBLISHED:
             self.status = RoundPairings.IN_PROGRESS
             self.save(update_fields=["status"])
-        elif total > 0 and with_results == total and self.status in (RoundPairings.PUBLISHED, RoundPairings.IN_PROGRESS):
+        elif (
+            total > 0
+            and with_results == total
+            and self.status in (RoundPairings.PUBLISHED, RoundPairings.IN_PROGRESS)
+        ):
             # `total > 0` guards against an unpaired round (e.g. a round-robin
             # block round created up front but not yet paired): with no pairings
             # `with_results == total` is vacuously true, which would otherwise
@@ -374,30 +377,40 @@ class Pairing(models.Model):
         ordering = ["round", "table"]
 
     def __str__(self):
-        return f"R{self.round}: {self.first.name} vs {self.second.name}"
+        return f"R{self.round}: {self.first.name} vs. {self.second.name}"
 
 
 class FixedPairing(models.Model):
     """A fixed (pre-set) pairing for a division round."""
 
-    division = models.ForeignKey(Division, on_delete=models.CASCADE, related_name="fixed_pairings")
+    division = models.ForeignKey(
+        Division, on_delete=models.CASCADE, related_name="fixed_pairings"
+    )
     round_number = models.IntegerField()
-    entrant1 = models.ForeignKey(Entrant, on_delete=models.CASCADE, related_name="fixed_pairings_as_first")
-    entrant2 = models.ForeignKey(Entrant, on_delete=models.CASCADE, related_name="fixed_pairings_as_second")
+    entrant1 = models.ForeignKey(
+        Entrant, on_delete=models.CASCADE, related_name="fixed_pairings_as_first"
+    )
+    entrant2 = models.ForeignKey(
+        Entrant, on_delete=models.CASCADE, related_name="fixed_pairings_as_second"
+    )
 
     class Meta:
         ordering = ["round_number"]
 
     def __str__(self):
-        return f"R{self.round_number}: {self.entrant1.name} vs {self.entrant2.name}"
+        return f"R{self.round_number}: {self.entrant1.name} vs. {self.entrant2.name}"
 
 
 class FixedTable(models.Model):
     """A fixed (pre-set) table assignment for an entrant in a division round."""
 
-    division = models.ForeignKey(Division, on_delete=models.CASCADE, related_name="fixed_tables")
+    division = models.ForeignKey(
+        Division, on_delete=models.CASCADE, related_name="fixed_tables"
+    )
     round_number = models.IntegerField()
-    entrant = models.ForeignKey(Entrant, on_delete=models.CASCADE, related_name="fixed_tables")
+    entrant = models.ForeignKey(
+        Entrant, on_delete=models.CASCADE, related_name="fixed_tables"
+    )
     table_number = models.IntegerField()
 
     class Meta:
@@ -411,5 +424,12 @@ class FixedTable(models.Model):
 # (see ``edit_key`` in views) for the optimistic-concurrency token and editing
 # presence, both of which now live in the reusable ``editgrid`` app.
 EDIT_SCOPES = frozenset(
-    {"entrants", "results", "fixed_pairings", "fixed_tables", "board_table_map", "round_pairings"}
+    {
+        "entrants",
+        "results",
+        "fixed_pairings",
+        "fixed_tables",
+        "board_table_map",
+        "round_pairings",
+    }
 )

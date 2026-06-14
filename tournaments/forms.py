@@ -107,9 +107,15 @@ class ResultSlipForm(forms.Form):
         winner_choices = [("", "---")]
         for r, pairing_list in sorted(self._pairings_by_round.items()):
             for p_pk, first_pk, first_name, second_pk, second_name in pairing_list:
-                label = f"{first_name} vs {second_name}"
+                label = f"{first_name} vs. {second_name}"
                 pairing_choices.append((p_pk, label))
-                self._pairing_lookup[p_pk] = (first_pk, first_name, second_pk, second_name, r)
+                self._pairing_lookup[p_pk] = (
+                    first_pk,
+                    first_name,
+                    second_pk,
+                    second_name,
+                    r,
+                )
                 winner_choices.append((first_pk, first_name))
                 winner_choices.append((second_pk, second_name))
 
@@ -157,7 +163,9 @@ class ResultSlipForm(forms.Form):
         if pairing and winner:
             valid_ids = {pairing.first_id, pairing.second_id}
             if winner.pk not in valid_ids:
-                raise forms.ValidationError("Winner must be one of the players in the pairing.")
+                raise forms.ValidationError(
+                    "Winner must be one of the players in the pairing."
+                )
         return cleaned_data
 
     def save(self):
@@ -202,5 +210,3 @@ class RoundPairingForm(forms.Form):
 
 
 RoundPairingFormSet = formset_factory(RoundPairingForm, extra=0)
-
-
