@@ -175,8 +175,8 @@ class BoardTableMapGrid(JsonBlobGrid):
     template_name = "tournaments/division_board_table_map_edit.html"
     focus_field = "table"
     columns = [
-        Column("board", "Board", kind="number", min=1, width=120, align="center", auto_increment=True),
         Column("table", "Table", kind="number", min=1, width=120, align="center"),
+        Column("board", "Board", kind="number", min=1, width=120, align="center", auto_increment=True),
     ]
 
     def validate(self, rows, division):
