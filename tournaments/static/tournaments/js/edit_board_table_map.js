@@ -1,5 +1,5 @@
 import { initGrid } from "/static/editgrid/js/grid.js";
-import { tagRows } from "/static/editgrid/js/table_helpers.js";
+import { tagRows, markDirty } from "/static/editgrid/js/table_helpers.js";
 
 const gridId = "board-table-map-table";
 const table = initGrid(gridId);
@@ -32,4 +32,5 @@ document.getElementById("generate-btn").addEventListener("click", function() {
     const boardCount = parseInt(document.getElementById("board-count").value) || 0;
     if (boardCount < 1) return;
     table.setData(tagRows(generateMapping(singleTables, boardCount)));
+    markDirty(gridId);
 });

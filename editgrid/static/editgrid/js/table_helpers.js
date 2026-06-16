@@ -218,6 +218,15 @@ function control(gridId, action) {
     );
 }
 
+// Flag the grid's Save button as having unsaved changes. The `dataChanged`
+// event covers inline edits and row add/delete, but a wholesale
+// `table.setData()` (e.g. a Generate button) doesn't fire it, so those callers
+// must mark the button dirty themselves.
+export function markDirty(gridId) {
+    const saveBtn = control(gridId, "save");
+    if (saveBtn) saveBtn.classList.add("is-dirty");
+}
+
 // Wire the Save button to serialize rows and POST them. Rows flagged for
 // deletion are dropped from the payload. The button tracks dirty state: red
 // while there are unsaved changes, grey once a save succeeds (see style.css).
@@ -231,7 +240,7 @@ export function wireSaveButton({ table, gridId, serializeRow, beforeSave }) {
     // Held in the shared (keyed) edit-version store so the presence heartbeat
     // can spot when someone else has saved and warn before this user hits Save.
     setEditVersion(gridId, cfg.version);
-    table.on("dataChanged", () => saveBtn.classList.add("is-dirty"));
+    table.on("dataChanged", () => markDirty(gridId));
     saveBtn.addEventListener("click", function() {
         if (beforeSave) beforeSave();
         const rows = table.getData()

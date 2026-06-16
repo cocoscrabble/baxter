@@ -9,12 +9,21 @@
 {% include "tournaments/_tabulator_head.html" %}
 {% editgrid_presence grid %}
 
-<div class="toolbar">
-    <label>Single tables: <input type="number" id="single-tables" min="0" value="0" class="input-narrow"></label>
-    <label>Total boards: <input type="number" id="board-count" min="1" value="{{ default_board_count }}" class="input-narrow"></label>
-    <button id="generate-btn" type="button">Generate</button>
-</div>
+<div class="board-table-map-layout">
+    <div class="board-table-map-main">
+        <div class="toolbar">
+            <label>Total boards: <input type="number" id="board-count" min="1" value="{{ default_board_count }}" class="input-narrow"></label>
+            <label>Single tables: <input type="number" id="single-tables" min="0" value="0" class="input-narrow"></label>
+            <button id="generate-btn" type="button">Generate</button>
+        </div>
 
-{% editgrid_toolbar grid %}
-{% editgrid_table grid %}
+        {% editgrid_toolbar grid %}
+        {% editgrid_table grid %}
+    </div>
+
+    <figure class="board-table-map-explainer">
+        <figcaption>Example: <span class="example-value">9</span> total boards, the first <span class="example-value">3</span> are single boards</figcaption>
+        <img src="{% static 'img/board_table_map.svg' %}" alt="Diagram of how boards are mapped to tables: the first few boards are allocated one to a table, the rest two to a table.">
+    </figure>
+</div>
 {% endblock %}
