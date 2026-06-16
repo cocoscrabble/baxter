@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 470 740" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+  <style>
+    .table  { fill: #f1f5f9; stroke: #475569; stroke-width: 2; }
+    .board  { fill: #c7d2fe; stroke: #4338ca; stroke-width: 2; }
+    .bnum   { fill: #312e81; font-size: 18px; font-weight: 600; text-anchor: middle; }
+    .tlabel { fill: #334155; font-size: 14px; text-anchor: start; }
+    .bracket{ fill: none; stroke: #475569; stroke-width: 2; }
+    .blabel { fill: #334155; font-size: 15px; font-weight: 600; text-anchor: middle; }
+    .break  { fill: none; stroke: #94a3b8; stroke-width: 2; stroke-linejoin: round; }
+    .cap    { fill: #1e293b; font-size: 15px; text-anchor: middle; }
+  </style>
+
+  <!-- ===================== SINGLE TABLES (one board each) ===================== -->
+
+  <!-- Table 1 -->
+  <rect class="table" x="180" y="70"  width="170" height="66" rx="6"/>
+  <rect class="board" x="242" y="80"  width="46"  height="46" rx="4"/>
+  <text class="bnum"  x="265" y="110">1</text>
+  <text class="tlabel" x="362" y="108">Table 1</text>
+
+  <!-- Table 2 -->
+  <rect class="table" x="180" y="156" width="170" height="66" rx="6"/>
+  <rect class="board" x="242" y="166" width="46"  height="46" rx="4"/>
+  <text class="bnum"  x="265" y="196">2</text>
+  <text class="tlabel" x="362" y="194">Table 2</text>
+
+  <!-- Table 3 -->
+  <rect class="table" x="180" y="242" width="170" height="66" rx="6"/>
+  <rect class="board" x="242" y="252" width="46"  height="46" rx="4"/>
+  <text class="bnum"  x="265" y="282">3</text>
+  <text class="tlabel" x="362" y="280">Table 3</text>
+
+  <!-- "Single tables" bracket spanning tables 1-3 -->
+  <path class="bracket" d="M 168 70 L 154 70 L 154 188 L 142 189 L 154 190 L 154 308 L 168 308"/>
+  <text class="blabel" x="124" y="189" transform="rotate(-90, 124, 189)">Single tables</text>
+
+  <!-- break mark: more single tables below -->
+  <polyline class="break" points="175,330 195,323 215,337 235,323 255,337 275,323 295,337 315,323 335,337 355,330"/>
+
+  <!-- ===================== DOUBLE TABLES (two boards each) ===================== -->
+
+  <!-- Table 4 -->
+  <rect class="table" x="180" y="372" width="170" height="66" rx="6"/>
+  <rect class="board" x="212" y="382" width="46"  height="46" rx="4"/>
+  <rect class="board" x="272" y="382" width="46"  height="46" rx="4"/>
+  <text class="bnum"  x="235" y="412">4</text>
+  <text class="bnum"  x="295" y="412">5</text>
+  <text class="tlabel" x="362" y="410">Table 4</text>
+
+  <!-- Table 5 -->
+  <rect class="table" x="180" y="458" width="170" height="66" rx="6"/>
+  <rect class="board" x="212" y="468" width="46"  height="46" rx="4"/>
+  <rect class="board" x="272" y="468" width="46"  height="46" rx="4"/>
+  <text class="bnum"  x="235" y="498">6</text>
+  <text class="bnum"  x="295" y="498">7</text>
+  <text class="tlabel" x="362" y="496">Table 5</text>
+
+  <!-- Table 6 -->
+  <rect class="table" x="180" y="544" width="170" height="66" rx="6"/>
+  <rect class="board" x="212" y="554" width="46"  height="46" rx="4"/>
+  <rect class="board" x="272" y="554" width="46"  height="46" rx="4"/>
+  <text class="bnum"  x="235" y="584">8</text>
+  <text class="bnum"  x="295" y="584">9</text>
+  <text class="tlabel" x="362" y="582">Table 6</text>
+
+  <!-- break mark: more double tables below -->
+  <polyline class="break" points="175,632 195,625 215,639 235,625 255,639 275,625 295,639 315,625 335,639 355,632"/>
+
+  <!-- ===================== caption ===================== -->
+  <text class="cap" x="235" y="684">The first few boards are allocated one to a table, and the</text>
+  <text class="cap" x="235" y="706">remainder are allocated two to a table until all the boards</text>
+  <text class="cap" x="235" y="728">have a table assignment</text>
+</svg>

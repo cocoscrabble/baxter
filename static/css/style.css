@@ -911,6 +911,39 @@ dd {
     gap: var(--space-md);
 }
 
+.board-table-map-layout {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-lg);
+}
+
+.board-table-map-main {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.board-table-map-explainer {
+    flex: 0 0 auto;
+    margin: 0;
+}
+
+.board-table-map-explainer figcaption {
+    margin-bottom: var(--space-sm);
+    font-size: 0.9rem;
+    max-width: 220px;
+}
+
+.board-table-map-explainer .example-value {
+    color: #dc2626;
+    font-weight: 600;
+}
+
+.board-table-map-explainer img {
+    width: 220px;
+    max-width: 100%;
+    height: auto;
+}
+
 .empty-state {
     color: var(--color-muted);
     font-style: italic;
