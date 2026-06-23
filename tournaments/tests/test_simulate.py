@@ -116,6 +116,28 @@ class PairingCountTests(TestCase):
 
 
 @tag("slow")
+class SwissNeverShortRoundTests(TestCase):
+    """Regression: Swiss must pair the whole field every round.
+
+    The Swiss matcher used to abandon the last win-group when it couldn't be
+    paired without a repeat — bumping the repeat allowance but then breaking
+    instead of retrying — which dropped players and produced a short round. That
+    short round never "finished", so it stalled multi-round simulation. These
+    combinations each triggered the bug before the fix.
+    """
+
+    def test_full_field_paired_across_sizes_and_seeds(self):
+        rps = _rp_dicts("SW:15")
+        for n_entrants in (8, 10, 16, 30):
+            expected_games = n_entrants // 2
+            for seed in range(8):
+                rounds, _, _ = simulate(rps, n_entrants, seed=seed)
+                for round in rounds:
+                    with self.subTest(n=n_entrants, seed=seed, round=round.number):
+                        self.assertEqual(len(round.pairings), expected_games)
+
+
+@tag("slow")
 class AllPlayersAppearTests(TestCase):
     """Verify every player appears in every round."""
 

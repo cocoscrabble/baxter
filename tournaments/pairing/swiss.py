@@ -148,6 +148,11 @@ def _pair_swiss_players(players: Standings, repeats: Repeats) -> Pairings:
     names = {p.name: p for p in players}
     groups = Groups.from_standings(players)
     nrep = 1
+    # Termination guard: a pair can have met at most as many times as rounds
+    # played, which is bounded by the field size. Once nrep exceeds this, raising
+    # it further can't unlock any more edges, so a still-incomplete group is
+    # genuinely unpairable (e.g. blocked by the distance cap) and we give up.
+    max_nrep = len(players) + 1
     paired = []
 
     # Don't have too small a bottom group
@@ -155,6 +160,8 @@ def _pair_swiss_players(players: Standings, repeats: Repeats) -> Pairings:
         while len(groups.bottom) < 6:
             groups.merge_bottom()
     while groups.length > 0:
+        if nrep > max_nrep:
+            break
         candidates = pair_swiss_top(groups, repeats, nrep)
         if any(len(x) == 0 for x in candidates):
             if groups.length == 1:
@@ -170,10 +177,11 @@ def _pair_swiss_players(players: Standings, repeats: Repeats) -> Pairings:
             pairs = pair_candidates(candidates)
             groups.compact()
             if not pairs or len(pairs) != len(candidates) // 2:
-                # We have an unpaired candidate; increase the rep count
+                # Couldn't fully pair the top group at this repeat limit. Allow
+                # one more repeat and retry — including when it's the last group
+                # left. (Previously the last group was abandoned here, dropping
+                # those players and producing a short round.)
                 nrep += 1
-                if groups.length == 1:
-                    break
                 continue
             groups.groups.popleft()
             paired.append(pairs)
