@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}Create Test Tournament - Baxter{% endblock %}
+
+{% block page_class %}page--narrow{% endblock %}
+
+{% block content %}
+<h1>Create Test Tournament</h1>
+
+<p>Generates a tournament filled with random players, sets every round to King of
+the Hill, and simulates all but the final round &mdash; which is left ready to pair.</p>
+
+<form method="post">
+    {% csrf_token %}
+    <p>
+        {{ form.name.label_tag }}
+        {{ form.name }}
+        {{ form.name.errors }}
+    </p>
+    <p>
+        {{ form.num_players.label_tag }}
+        {{ form.num_players }}
+        {{ form.num_players.errors }}
+    </p>
+    <p>
+        {{ form.num_rounds.label_tag }}
+        {{ form.num_rounds }}
+        {{ form.num_rounds.errors }}
+    </p>
+    <button type="submit" class="btn-save">Create</button>
+</form>
+
+<p><a href="{% url 'tournament_list' %}">Cancel</a></p>
+{% endblock %}

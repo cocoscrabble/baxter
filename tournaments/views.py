@@ -20,9 +20,11 @@ from django.views.generic import (
 from .datastar_utils import fragment_response, is_datastar
 from datastar_py.django import read_signals
 from .forms import (
+    FakeTournamentForm,
     ResultSlipForm,
     TournamentForm,
 )
+from .fake_tournament import create_fake_tournament, default_fake_tournament_name
 from .fixed_pairings import (
     add_fixed_pairing,
     remove_fixed_pairing,
@@ -57,6 +59,15 @@ class TournamentListView(ListView):
     template_name = "tournaments/tournament_list.html"
     context_object_name = "tournaments"
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Drives the per-row delete link, shown only for fake tournaments the
+        # current user is allowed to remove.
+        user = self.request.user
+        for tournament in context["tournaments"]:
+            tournament.user_can_delete = tournament.can_delete(user)
+        return context
+
 
 class TournamentDetailView(DetailView):
     model = Tournament
@@ -88,6 +99,34 @@ class TournamentCreateView(LoginRequiredMixin, CreateView):
 
     def get_success_url(self):
         return self.object.get_absolute_url()
+
+
+class FakeTournamentCreateView(LoginRequiredMixin, View):
+    """Generate a fully-simulated test tournament from random players."""
+
+    template_name = "tournaments/fake_tournament_form.html"
+
+    def get(self, request):
+        form = FakeTournamentForm(
+            initial={"name": default_fake_tournament_name()}
+        )
+        return render(request, self.template_name, {"form": form})
+
+    def post(self, request):
+        form = FakeTournamentForm(request.POST)
+        if not form.is_valid():
+            return render(request, self.template_name, {"form": form})
+        num_players = form.cleaned_data["num_players"]
+        num_rounds = form.cleaned_data["num_rounds"]
+        division = create_fake_tournament(
+            request.user, num_players, num_rounds, name=form.cleaned_data["name"]
+        )
+        messages.success(
+            request,
+            f"Created test tournament “{division.tournament.name}” "
+            f"with {num_players} players over {num_rounds} rounds.",
+        )
+        return redirect("division_pairings", pk=division.pk)
 
 
 class CanEditTournamentMixin(UserPassesTestMixin):
@@ -177,15 +216,15 @@ class TournamentUpdateView(LoginRequiredMixin, CanEditTournamentMixin, UpdateVie
         return self.object.get_absolute_url()
 
 
-class IsOwnerMixin(UserPassesTestMixin):
-    """Mixin that checks if user is the tournament owner."""
+class CanDeleteTournamentMixin(UserPassesTestMixin):
+    """Mixin that checks whether the user may delete the tournament."""
 
     def test_func(self):
         tournament = self.get_object()
-        return self.request.user == tournament.owner
+        return tournament.can_delete(self.request.user)
 
 
-class TournamentDeleteView(LoginRequiredMixin, IsOwnerMixin, DeleteView):
+class TournamentDeleteView(LoginRequiredMixin, CanDeleteTournamentMixin, DeleteView):
     model = Tournament
     template_name = "tournaments/tournament_confirm_delete.html"
     context_object_name = "tournament"
