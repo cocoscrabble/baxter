@@ -67,6 +67,9 @@ def simulate_round(division, round_num) -> int:
     for pairing in pairings:
         if frozenset({pairing.first_id, pairing.second_id}) in played:
             continue
+        # Byes are auto-resolved when the round is published, not simulated.
+        if pairing.first.player.is_bye or pairing.second.player.is_bye:
+            continue
         _build_slip(division, round_num, pairing.first, pairing.second, pairing)
         created += 1
 

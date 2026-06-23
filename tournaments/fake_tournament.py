@@ -9,14 +9,13 @@ import random
 from django.db import transaction
 from django.utils import timezone
 
-from .generate_pairings import regenerate_pairings
+from .generate_pairings import publish_rounds, regenerate_pairings
 from .match_simulation import simulate_round
 from .models import (
     Division,
     DivisionSettings,
     Entrant,
     Player,
-    RoundPairings,
     Tournament,
 )
 from .pairing.round_pairing import RP, blocks_to_round_pairings
@@ -41,7 +40,7 @@ def create_fake_tournament(user, num_players, num_rounds, name=None):
     which never finishes and would stall the round-at-a-time loop.
 
     The caller is responsible for validating that at least ``num_players``
-    players exist and that ``num_players`` is even (KotH pairs the field in twos).
+    players exist. Odd fields are fine — the engine adds a bye each round.
     """
     now = timezone.now()
     tournament = Tournament.objects.create(
@@ -79,9 +78,7 @@ def create_fake_tournament(user, num_players, num_rounds, name=None):
     # leaves it pairable but unpaired.
     for round_num in range(1, num_rounds):
         regenerate_pairings(division)
-        division.round_pairings_set.filter(
-            round=round_num, status=RoundPairings.DRAFT
-        ).update(status=RoundPairings.PUBLISHED)
+        publish_rounds(division, [round_num])
         simulate_round(division, round_num)
 
     return division

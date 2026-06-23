@@ -108,6 +108,17 @@ class Division(models.Model):
             self.result_slips.aggregate(max_round=models.Max("round"))["max_round"] or 0
         )
 
+    def bye_entrant(self):
+        """Get or create this division's bye entrant (one per division, all
+        referencing the singleton bye Player). Hidden from ``entrants`` by the
+        default manager; used as the opponent in a bye pairing/result."""
+        bye, _ = Entrant.all_objects.get_or_create(
+            division=self,
+            player=Player.get_bye(),
+            defaults={"number": 0},
+        )
+        return bye
+
     def pairings_by_round_pair(self):
         """Return {(round, frozenset({first_id, second_id})): Pairing} for all pairings."""
         return {
@@ -166,6 +177,12 @@ def next_temp_player_number():
     return f"{TEMP_NUMBER_PREFIX}{max_n + 1}"
 
 
+# The singleton bye player's name and reserved number. The engine recognises a
+# bye by name (Player.is_bye → name == "bye"), so this name must stay "Bye".
+BYE_PLAYER_NAME = "Bye"
+BYE_PLAYER_NUMBER = "BYE"
+
+
 class Player(models.Model):
     """A tournament player."""
 
@@ -175,12 +192,29 @@ class Player(models.Model):
     # True for players created locally that the registry has not yet seen; their
     # player_number is a temporary T- value the registry replaces on upload.
     is_provisional = models.BooleanField(default=False)
+    # The single synthetic "bye" opponent. Exactly one such Player exists (see
+    # get_bye); it is never sent to the registry and never shown as a competitor.
+    is_bye = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["name"]
 
     def __str__(self):
         return self.name
+
+    @classmethod
+    def get_bye(cls):
+        """Return the singleton bye player, creating it once if needed."""
+        player, _ = cls.objects.get_or_create(
+            is_bye=True,
+            defaults={
+                "name": BYE_PLAYER_NAME,
+                "player_number": BYE_PLAYER_NUMBER,
+                "rating": 0,
+                "is_provisional": True,
+            },
+        )
+        return player
 
     @classmethod
     def create_unique(cls, name, rating=0):
@@ -206,6 +240,20 @@ class Player(models.Model):
         return player, None
 
 
+class RealEntrantManager(models.Manager):
+    """Default manager that hides the synthetic bye entrant.
+
+    Every ``division.entrants`` query (the reverse relation uses this manager)
+    therefore sees only real competitors, so the bye never appears in rosters,
+    counts, edit grids, exports, or pairing data. The bye entrant is reached
+    explicitly via ``Entrant.all_objects`` / ``Division.bye_entrant`` and through
+    forward FK access (``pairing.first``), which uses the unfiltered base manager.
+    """
+
+    def get_queryset(self):
+        return super().get_queryset().filter(player__is_bye=False)
+
+
 class Entrant(models.Model):
     """A player entered in a division."""
 
@@ -221,9 +269,13 @@ class Entrant(models.Model):
     )
     number = models.IntegerField()
 
+    objects = RealEntrantManager()
+    all_objects = models.Manager()
+
     class Meta:
         ordering = ["number"]
         unique_together = [("division", "number"), ("division", "player")]
+        base_manager_name = "all_objects"
 
     def __str__(self):
         return f"{self.number}: {self.player.name}"

@@ -87,9 +87,9 @@ class ExportDivision:
             ],
             results=[
                 ExportResult.from_db(r)
-                for r in division.result_slips.select_related(
-                    "winner__player", "loser__player"
-                )
+                for r in division.result_slips.exclude(
+                    loser__player__is_bye=True
+                ).select_related("winner__player", "loser__player")
             ],
         )
 
@@ -110,7 +110,7 @@ class ExportTournament:
         # a player entered in two divisions is described only once.
         players = Player.objects.filter(
             entries__division__in=divisions
-        ).distinct().order_by("player_number")
+        ).exclude(is_bye=True).distinct().order_by("player_number")
         return cls(
             name=tournament.name,
             location=tournament.location,
