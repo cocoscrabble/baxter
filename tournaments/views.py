@@ -43,7 +43,7 @@ from .pairing.round_pairing import (
 )
 from .player_sync import import_players
 from users.models import User
-from .generate_pairings import regenerate_pairings
+from .generate_pairings import publish_rounds, regenerate_pairings
 from .pairing.base import PairingData, standings_after_round
 from .pairing.pair import STRATEGY_TYPES
 from .pairings_view import PairingsPresenter, PublishedPairingsPresenter
@@ -402,9 +402,7 @@ class PublishPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
 
     def post(self, request, pk):
         division = self.get_division()
-        division.round_pairings_set.filter(
-            status=RoundPairings.DRAFT
-        ).update(status=RoundPairings.PUBLISHED)
+        publish_rounds(division)
         return _pairings_body_response(request, division)
 
 
@@ -415,9 +413,7 @@ class PublishRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
         division = self.get_division()
         data = (read_signals(request) or {}) if is_datastar(request) else request.POST
         round_number = int(data["round"])
-        division.round_pairings_set.filter(
-            round=round_number, status=RoundPairings.DRAFT
-        ).update(status=RoundPairings.PUBLISHED)
+        publish_rounds(division, [round_number])
         return _pairings_body_response(request, division, select_round=round_number)
 
 
@@ -590,8 +586,14 @@ class DivisionScorecardsDownloadView(VisibleDivisionMixin, DetailView):
         opponents = defaultdict(dict)
         starts = defaultdict(dict)
         for p in pairings:
-            if p.first_id == p.second_id:
-                continue  # bye — nothing to prefill
+            # A bye: record "Bye" as the real player's opponent, with no start,
+            # and nothing for the bye entrant itself (it has no scorecard).
+            if p.first.player.is_bye:
+                opponents[p.second_id][p.round] = p.first.name
+                continue
+            if p.second.player.is_bye:
+                opponents[p.first_id][p.round] = p.second.name
+                continue
             opponents[p.first_id][p.round] = p.second.name
             opponents[p.second_id][p.round] = p.first.name
             starts[p.first_id][p.round] = "1st"

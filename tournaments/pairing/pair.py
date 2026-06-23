@@ -28,6 +28,47 @@ from tournaments.pairing.quads import (
 from tournaments.pairing.swiss import pair_swiss, pair_swiss_plus_random
 
 
+# Name of the synthetic bye opponent. Matches Player.is_bye (name == "bye"),
+# so the engine's start-balancing and bye bookkeeping recognise it.
+BYE_NAME = "Bye"
+
+
+def _byes_so_far(pd: PairingData) -> dict[str, int]:
+    """Count how many byes each player has already received, from result history."""
+    byes: dict[str, int] = defaultdict(int)
+    for slip in pd.result_slips:
+        if slip.winner_name.lower() == BYE_NAME.lower():
+            byes[slip.loser_name] += 1
+        elif slip.loser_name.lower() == BYE_NAME.lower():
+            byes[slip.winner_name] += 1
+    return byes
+
+
+def bye_pairing(pd: PairingData, rp, fixed_pairs) -> tuple[str, str] | None:
+    """Return a (player, "Bye") pair to force when the field is odd, else None.
+
+    The bye goes to the lowest-ranked player who has had the fewest byes so far
+    (rotating, so nobody gets a second bye until everyone has had one). Players
+    already in a fixed pairing this round are not eligible. Round-robin and quad
+    strategies have their own (not-yet-implemented) odd-field handling and are
+    skipped here.
+    """
+    if RP.is_round_robin(rp.pairing) or RP.is_quad(rp.pairing):
+        return None
+    field = standings_after_round(pd, rp.start_round)
+    fixed_names = {name for pair in fixed_pairs for name in pair}
+    eligible = [p for p in field if p.name not in fixed_names]
+    if len(eligible) % 2 == 0:
+        return None
+    byes = _byes_so_far(pd)
+    fewest = min(byes[p.name] for p in eligible)
+    # Lowest-ranked (standings run best-first) among those with the fewest byes.
+    for p in reversed(eligible):
+        if byes[p.name] == fewest:
+            return (p.name, BYE_NAME)
+    return (eligible[-1].name, BYE_NAME)
+
+
 def can_pair(rp, status) -> bool:
     stat = status[rp.round]
     if stat in (RoundStatus.Finished, RoundStatus.Partial):
@@ -40,7 +81,13 @@ def can_pair(rp, status) -> bool:
 
 
 def pair_round(pd: PairingData, rp) -> Pairings:
-    fixed_pairs = pd.fixed_pairings.get(rp.round, [])
+    fixed_pairs = list(pd.fixed_pairings.get(rp.round, []))
+
+    # Make an odd field even by forcing a bye for the chosen player. Treated as
+    # just another fixed pairing, so the strategy only ever sees an even subset.
+    bye = bye_pairing(pd, rp, fixed_pairs)
+    if bye is not None:
+        fixed_pairs.append(bye)
 
     if fixed_pairs:
         # Temporarily exclude fixed players from standings so the strategy only sees
@@ -66,7 +113,11 @@ def pair_round(pd: PairingData, rp) -> Pairings:
 
 def round_status(pd: PairingData) -> dict[int, RoundStatus]:
     counts = defaultdict(lambda: RoundStatus.Empty)
-    n_games = len(pd.entrants) // 2
+    # Count real entrants only; an odd field gets a bye, which adds one more game
+    # (the bye result), so the number of games is ceil(real / 2). The persisted
+    # bye entrant, if any, is excluded here.
+    n_real = sum(1 for e in pd.entrants if e.player.name.lower() != BYE_NAME.lower())
+    n_games = (n_real + 1) // 2
     round_counts = defaultdict(int)
     for slip in pd.result_slips:
         round_counts[slip.round] += 1

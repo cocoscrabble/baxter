@@ -225,10 +225,7 @@ class FakeTournamentForm(forms.Form):
 
     def clean_num_players(self):
         num = self.cleaned_data["num_players"]
-        if num % 2 != 0:
-            raise forms.ValidationError(
-                "Number of players must be even (the field is paired in twos)."
-            )
+        # Odd fields are fine now — the pairing engine adds a bye automatically.
         # Provisional players are excluded from fake tournaments, so only count
         # the eligible roster here (matches create_fake_tournament).
         available = Player.objects.filter(is_provisional=False).count()

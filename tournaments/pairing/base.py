@@ -285,26 +285,6 @@ class Starts:
         return p if p1_starts else Pairing(p.second, p.first)
 
 
-class Byes:
-    def __init__(self):
-        self.byes = defaultdict(int)
-
-    def add(self, name) -> None:
-        self.byes[name] += 1
-
-    def get(self, name) -> int:
-        return self.byes[name]
-
-    def update(self, pairing) -> None:
-        if pairing.first.is_bye:
-            self.add(pairing.second.name)
-        if pairing.second.is_bye:
-            self.add(pairing.first.name)
-
-    def reset(self) -> None:
-        self.byes = defaultdict(int)
-
-
 class Pairings:
     pairings: list[Pairing]
 
@@ -351,6 +331,10 @@ def standings_after_round(pd: PairingData, round: int) -> Standings:
         s = seedings(pd)
     else:
         s = results_after_round(pd, round).standings()
+    # The bye is never a competitor: it must not appear in any pairing field or
+    # in displayed standings. (It is added back as a forced pairing for an odd
+    # field — see pair_round.)
+    s = [p for p in s if not p.is_bye]
     if pd.excluded_names:
         s = [p for p in s if p.name not in pd.excluded_names]
     return s

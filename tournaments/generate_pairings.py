@@ -4,10 +4,70 @@ Generates pairings from the pairing algorithm, resolves fixed table assignments,
 assigns table numbers, and persists RoundPairings + Pairing records.
 """
 
+from django.db.models import Q
+
 from .assign_tables import assign_tables, parse_board_table_map
-from .models import DivisionSettings, Pairing, RoundPairings
+from .models import BYE_PLAYER_NAME, DivisionSettings, Pairing, ResultSlip, RoundPairings
 from .pairing.base import PairingData, standings_after_round
 from .pairing.pair import pair
+
+# A bye is scored as a win with a fixed +50 spread (50–0), no game played.
+BYE_WINNER_SCORE = 50
+BYE_LOSER_SCORE = 0
+
+
+def _is_bye_name(name):
+    return name.lower() == BYE_PLAYER_NAME.lower()
+
+
+def materialize_byes(division, round_num):
+    """Record the automatic win for each byed player in a round (idempotent).
+
+    Called when a round is published, so the round can reach 'finished' without
+    the director entering the bye by hand. The byed (real) player wins at a fixed
+    spread; the bye entrant is the notional starter, so the real player is not
+    charged a start.
+    """
+    bye_pairings = (
+        division.pairings.filter(round=round_num, result__isnull=True)
+        .filter(Q(first__player__is_bye=True) | Q(second__player__is_bye=True))
+        .select_related("first__player", "second__player")
+    )
+    for p in bye_pairings:
+        if p.first.player.is_bye:
+            bye_entrant, real_entrant = p.first, p.second
+        else:
+            bye_entrant, real_entrant = p.second, p.first
+        ResultSlip.objects.create(
+            division=division,
+            round=round_num,
+            pairing=p,
+            winner=real_entrant,
+            winner_score=BYE_WINNER_SCORE,
+            loser=bye_entrant,
+            loser_score=BYE_LOSER_SCORE,
+            winner_started=False,
+        )
+
+
+def publish_rounds(division, round_numbers=None):
+    """Publish draft rounds, auto-record their byes, and refresh round status.
+
+    ``round_numbers=None`` publishes every draft round. Returns the rounds
+    actually published. Centralises publishing so a bye is always recorded the
+    moment its round goes live.
+    """
+    qs = division.round_pairings_set.filter(status=RoundPairings.DRAFT)
+    if round_numbers is not None:
+        qs = qs.filter(round__in=round_numbers)
+    published = list(qs.values_list("round", flat=True))
+    qs.update(status=RoundPairings.PUBLISHED)
+    for round_num in published:
+        materialize_byes(division, round_num)
+        rp = division.round_pairings_set.filter(round=round_num).first()
+        if rp:
+            rp.update_status()
+    return published
 
 
 def get_fixed_table(fixed_table_lookup, entrant_id, round_num):
@@ -53,6 +113,17 @@ def regenerate_pairings(division):
         e.player.name: e
         for e in division.entrants.select_related("player")
     }
+    # Lazily resolve the bye opponent (created on first odd round) and map its
+    # engine name to the division's bye entrant.
+    bye_entrant = None
+
+    def resolve_entrant(name):
+        nonlocal bye_entrant
+        if _is_bye_name(name):
+            if bye_entrant is None:
+                bye_entrant = division.bye_entrant()
+            return bye_entrant
+        return entrant_by_name.get(name)
     start_round_by_round = {rp.round: rp.start_round for rp in pd.round_pairings}
     fixed_table_lookup = {
         (ft.entrant_id, ft.round_number): ft.table_number
@@ -65,6 +136,16 @@ def regenerate_pairings(division):
     board_table_map = parse_board_table_map(raw_btm)
     # Only delete draft rounds (cascades to their Pairing objects).
     # Also clean up any legacy pairings not linked to a RoundPairings.
+    draft_rounds = list(
+        division.round_pairings_set.filter(status=RoundPairings.DRAFT)
+        .values_list("round", flat=True)
+    )
+    # Auto-created bye results live in draft rounds until published; drop them so
+    # the round can be re-paired cleanly (a draft round with a lingering bye
+    # result would read as Partial and block regeneration).
+    ResultSlip.objects.filter(
+        division=division, round__in=draft_rounds, loser__player__is_bye=True
+    ).delete()
     division.round_pairings_set.filter(status=RoundPairings.DRAFT).delete()
     division.pairings.filter(round_pairings__isnull=True).delete()
 
@@ -94,12 +175,18 @@ def regenerate_pairings(division):
         for name, seed in seed_rank.items():
             rank.setdefault(name, len(standings) + seed)
 
-        # Resolve entrants and effective fixed table for each pairing.
+        # Resolve entrants and effective fixed table for each pairing. Bye
+        # pairings are set aside: they get no table and don't participate in the
+        # board-ordering sort.
         resolved = []
+        bye_pairings = []
         for p in round_pairings:
-            first_entrant = entrant_by_name.get(p.first.name)
-            second_entrant = entrant_by_name.get(p.second.name)
+            first_entrant = resolve_entrant(p.first.name)
+            second_entrant = resolve_entrant(p.second.name)
             if not first_entrant or not second_entrant:
+                continue
+            if _is_bye_name(p.first.name) or _is_bye_name(p.second.name):
+                bye_pairings.append((p, first_entrant, second_entrant))
                 continue
             first_ft = get_fixed_table(fixed_table_lookup, first_entrant.pk, round_num)
             second_ft = get_fixed_table(fixed_table_lookup, second_entrant.pk, round_num)
@@ -135,4 +222,20 @@ def regenerate_pairings(division):
                 second=second_entrant,
                 repeats=p.repeats,
                 table=table_by_id[i],
+            )
+
+        # Bye pairings carry no table; the bye result is recorded when the round
+        # is published (see materialize_byes). Show the real player first for
+        # readability — orientation is display-only, the result encodes the win.
+        for p, first_entrant, second_entrant in bye_pairings:
+            if _is_bye_name(p.first.name):
+                first_entrant, second_entrant = second_entrant, first_entrant
+            Pairing.objects.create(
+                division=division,
+                round=round_num,
+                round_pairings=rp_obj,
+                first=first_entrant,
+                second=second_entrant,
+                repeats=p.repeats,
+                table=0,
             )

@@ -19,10 +19,13 @@ from .models import Player
 
 
 def export_players():
-    """Return every player as a plain dict, ordered by player_number."""
+    """Return every player as a plain dict, ordered by player_number.
+
+    The synthetic bye player is excluded — it is internal and never syncs to the
+    registry."""
     return [
         {"player_number": p.player_number, "name": p.name, "rating": p.rating}
-        for p in Player.objects.order_by("player_number")
+        for p in Player.objects.filter(is_bye=False).order_by("player_number")
     ]
 
 
