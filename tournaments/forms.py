@@ -4,7 +4,7 @@ from users.models import User
 
 from django.forms import formset_factory
 
-from .models import Entrant, Pairing, ResultSlip, RoundPairings, Tournament
+from .models import Entrant, Pairing, Player, ResultSlip, RoundPairings, Tournament
 from .pairing.pair import STRATEGY_TYPES
 
 
@@ -214,6 +214,29 @@ class ResultSlipForm(forms.Form):
             self.instance.save()
             return self.instance
         return ResultSlip.objects.create(**fields)
+
+
+class FakeTournamentForm(forms.Form):
+    """Parameters for generating a fully-simulated test tournament."""
+
+    name = forms.CharField(max_length=200, label="Tournament name")
+    num_players = forms.IntegerField(min_value=2, label="Number of players")
+    num_rounds = forms.IntegerField(min_value=1, label="Number of rounds")
+
+    def clean_num_players(self):
+        num = self.cleaned_data["num_players"]
+        if num % 2 != 0:
+            raise forms.ValidationError(
+                "Number of players must be even (the field is paired in twos)."
+            )
+        # Provisional players are excluded from fake tournaments, so only count
+        # the eligible roster here (matches create_fake_tournament).
+        available = Player.objects.filter(is_provisional=False).count()
+        if num > available:
+            raise forms.ValidationError(
+                f"Only {available} non-provisional player(s) available to choose from."
+            )
+        return num
 
 
 class RoundCountForm(forms.Form):

@@ -6,7 +6,11 @@
 <h1>Tournaments</h1>
 
 {% if user.is_authenticated %}
-<p><a href="{% url 'tournament_create' %}">Create Tournament</a></p>
+<p>
+    <a href="{% url 'tournament_create' %}">Create Tournament</a>
+    &middot;
+    <a href="{% url 'fake_tournament_create' %}">Create Test Tournament</a>
+</p>
 {% endif %}
 
 {% if tournaments %}
@@ -16,6 +20,7 @@
             <th>Name</th>
             <th>Location</th>
             <th>Date</th>
+            <th></th>
         </tr>
     </thead>
     <tbody>
@@ -24,6 +29,11 @@
             <td><a href="{% url 'tournament_detail' tournament.pk %}">{{ tournament.name }}</a></td>
             <td>{{ tournament.location }}</td>
             <td>{{ tournament.start_date }}</td>
+            <td>
+                {% if tournament.is_fake and tournament.user_can_delete %}
+                <a href="{% url 'tournament_delete' tournament.pk %}">Delete</a>
+                {% endif %}
+            </td>
         </tr>
         {% endfor %}
     </tbody>
