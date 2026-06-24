@@ -21,6 +21,7 @@ class Column:
     kind:
       - ``display`` — read-only text
       - ``number``  — integer editor (``min`` floor)
+      - ``text``    — free-text string editor (use ``value_type="str"``)
       - ``choice``  — list editor over a value->label map: either ``lookup``
         (a key into the grid's ``lookups``) or a static ``values`` map;
         ``autocomplete`` for large sets.
@@ -39,6 +40,7 @@ class Column:
     value_type: str = "int"  # int | bool | str — how the client serializes it
     auto_increment: bool = False  # new rows get max(field) + 1
     new_row: object = None  # default value for this field in a new row
+    hidden: bool = False  # kept in row data + serialized, but not shown
 
 
 def parse_rows(dto_cls, rows, *validate_args):

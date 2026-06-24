@@ -1679,20 +1679,20 @@ class DivisionFixedTablesEditViewTests(TestCase):
             division=self.division,
             round_number=1,
             entrant=self.entrant1,
-            table_number=2,
+            table_label="S2",
         )
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(self.url)
         fixed_tables = response.context["grid"].rows
         self.assertEqual(len(fixed_tables), 1)
         self.assertEqual(fixed_tables[0]["entrant"], self.entrant1.pk)
-        self.assertEqual(fixed_tables[0]["table_number"], 2)
+        self.assertEqual(fixed_tables[0]["table_label"], "S2")
 
     def test_post_saves_fixed_table(self):
         self.client.login(username="owner", password="testpass123")
         payload = {
             "rows": [
-                {"round_number": 1, "entrant": self.entrant1.pk, "table_number": 2}
+                {"round_number": 1, "entrant": self.entrant1.pk, "table_label": "S2"}
             ]
         }
         response = self.client.post(
@@ -1703,13 +1703,13 @@ class DivisionFixedTablesEditViewTests(TestCase):
         self.assertEqual(self.division.fixed_tables.count(), 1)
         ft = self.division.fixed_tables.first()
         self.assertEqual(ft.entrant, self.entrant1)
-        self.assertEqual(ft.table_number, 2)
+        self.assertEqual(ft.table_label, "S2")
 
     def test_post_all_sentinel_round(self):
         self.client.login(username="owner", password="testpass123")
         payload = {
             "rows": [
-                {"round_number": -1, "entrant": self.entrant1.pk, "table_number": 1}
+                {"round_number": -1, "entrant": self.entrant1.pk, "table_label": "1"}
             ]
         }
         response = self.client.post(
@@ -1724,12 +1724,12 @@ class DivisionFixedTablesEditViewTests(TestCase):
             division=self.division,
             round_number=1,
             entrant=self.entrant1,
-            table_number=1,
+            table_label="1",
         )
         self.client.login(username="owner", password="testpass123")
         payload = {
             "rows": [
-                {"round_number": 2, "entrant": self.entrant2.pk, "table_number": 3}
+                {"round_number": 2, "entrant": self.entrant2.pk, "table_label": "3"}
             ]
         }
         response = self.client.post(
@@ -1744,7 +1744,7 @@ class DivisionFixedTablesEditViewTests(TestCase):
         self.client.login(username="owner", password="testpass123")
         payload = {
             "rows": [{"round_number": 1, "entrant": self.entrant1.pk}]
-        }  # missing table_number
+        }  # missing table_label
         response = self.client.post(
             self.url, json.dumps(payload), content_type="application/json"
         )
@@ -1754,7 +1754,7 @@ class DivisionFixedTablesEditViewTests(TestCase):
 
     def test_post_invalid_entrant_returns_error(self):
         self.client.login(username="owner", password="testpass123")
-        payload = {"rows": [{"round_number": 1, "entrant": 99999, "table_number": 1}]}
+        payload = {"rows": [{"round_number": 1, "entrant": 99999, "table_label": "1"}]}
         response = self.client.post(
             self.url, json.dumps(payload), content_type="application/json"
         )
@@ -1766,8 +1766,8 @@ class DivisionFixedTablesEditViewTests(TestCase):
         self.client.login(username="owner", password="testpass123")
         payload = {
             "rows": [
-                {"round_number": 1, "entrant": self.entrant1.pk, "table_number": 1},
-                {"round_number": 1, "entrant": self.entrant1.pk, "table_number": 2},
+                {"round_number": 1, "entrant": self.entrant1.pk, "table_label": "1"},
+                {"round_number": 1, "entrant": self.entrant1.pk, "table_label": "2"},
             ]
         }
         response = self.client.post(
@@ -1781,8 +1781,8 @@ class DivisionFixedTablesEditViewTests(TestCase):
         self.client.login(username="owner", password="testpass123")
         payload = {
             "rows": [
-                {"round_number": 1, "entrant": self.entrant1.pk, "table_number": 1},
-                {"round_number": 2, "entrant": self.entrant1.pk, "table_number": 2},
+                {"round_number": 1, "entrant": self.entrant1.pk, "table_label": "1"},
+                {"round_number": 2, "entrant": self.entrant1.pk, "table_label": "2"},
             ]
         }
         response = self.client.post(
@@ -1830,9 +1830,9 @@ class DivisionBoardTableMapEditViewTests(TestCase):
         self.client.login(username="owner", password="testpass123")
         payload = {
             "rows": [
-                {"board": 1, "table": 1},
-                {"board": 2, "table": 1},
-                {"board": 3, "table": 2},
+                {"board": 1, "table": 1, "label": "S1"},
+                {"board": 2, "table": 2, "label": "1"},
+                {"board": 3, "table": 2, "label": "1"},
             ]
         }
         response = self.client.post(
@@ -1844,10 +1844,23 @@ class DivisionBoardTableMapEditViewTests(TestCase):
         self.assertEqual(
             self.division.settings.board_table_map,
             [
-                {"board": 1, "table": 1},
-                {"board": 2, "table": 1},
-                {"board": 3, "table": 2},
+                {"board": 1, "table": 1, "label": "S1"},
+                {"board": 2, "table": 2, "label": "1"},
+                {"board": 3, "table": 2, "label": "1"},
             ],
+        )
+
+    def test_post_defaults_missing_label_to_table(self):
+        self.client.login(username="owner", password="testpass123")
+        payload = {"rows": [{"board": 1, "table": 5}]}
+        response = self.client.post(
+            self.url, json.dumps(payload), content_type="application/json"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.division.refresh_from_db()
+        self.assertEqual(
+            self.division.settings.board_table_map,
+            [{"board": 1, "table": 5, "label": "5"}],
         )
 
     def test_post_sorts_by_board(self):

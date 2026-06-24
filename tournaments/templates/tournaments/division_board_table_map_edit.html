@@ -13,7 +13,14 @@
     <div class="board-table-map-main">
         <div class="toolbar">
             <label>Total boards: <input type="number" id="board-count" min="1" value="{{ default_board_count }}" class="input-narrow"></label>
+            <label>Streamed tables: <input type="number" id="streamed-tables" min="0" value="0" class="input-narrow"></label>
             <label>Single tables: <input type="number" id="single-tables" min="0" value="0" class="input-narrow"></label>
+            <label>Streamed numbering:
+                <select id="streamed-numbering">
+                    <option value="continuous">Continuous (1, 2, 3, 4…)</option>
+                    <option value="separate">Separate (S1, S2, S3 + 1, 2, 3…)</option>
+                </select>
+            </label>
             <button id="generate-btn" type="button">Generate</button>
         </div>
 
@@ -22,8 +29,8 @@
     </div>
 
     <figure class="board-table-map-explainer">
-        <figcaption>Example: <span class="example-value">9</span> total boards, the first <span class="example-value">3</span> are single boards</figcaption>
-        <img src="{% static 'img/board_table_map.svg' %}" alt="Diagram of how boards are mapped to tables: the first few boards are allocated one to a table, the rest two to a table.">
+        <figcaption>Example: <span class="example-value">9</span> total boards — the top <span class="example-value">2</span> are streamed tables, the next <span class="example-value">1</span> a single table, the rest doubled</figcaption>
+        <img src="{% static 'img/board_table_map.svg' %}" alt="Diagram of how boards are mapped to tables: the top boards are streamed (one game per table), the next few single (one game per table), the rest two games to a table.">
     </figure>
 </div>
 {% endblock %}

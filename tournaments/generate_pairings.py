@@ -71,7 +71,7 @@ def publish_rounds(division, round_numbers=None):
 
 
 def get_fixed_table(fixed_table_lookup, entrant_id, round_num):
-    """Return (table_number, is_all) for an entrant in a round, or None.
+    """Return (table_label, is_all) for an entrant in a round, or None.
 
     Round-specific assignments take priority over 'all' (-1) assignments.
     """
@@ -126,7 +126,7 @@ def regenerate_pairings(division):
         return entrant_by_name.get(name)
     start_round_by_round = {rp.round: rp.start_round for rp in pd.round_pairings}
     fixed_table_lookup = {
-        (ft.entrant_id, ft.round_number): ft.table_number
+        (ft.entrant_id, ft.round_number): ft.table_label
         for ft in division.fixed_tables.all()
     }
     try:
@@ -214,6 +214,7 @@ def regenerate_pairings(division):
         table_by_id = assign_tables(ids, fixed_by_id, board_table_map)
 
         for i, (p, first_entrant, second_entrant, _) in enumerate(resolved):
+            table_order, table_label = table_by_id[i]
             Pairing.objects.create(
                 division=division,
                 round=round_num,
@@ -221,7 +222,8 @@ def regenerate_pairings(division):
                 first=first_entrant,
                 second=second_entrant,
                 repeats=p.repeats,
-                table=table_by_id[i],
+                table=table_order,
+                table_label=table_label,
             )
 
         # Bye pairings carry no table; the bye result is recorded when the round

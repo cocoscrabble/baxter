@@ -321,12 +321,17 @@ function syncUndoRedo(table, gridId) {
 // code (e.g. create-player) can extend it live.
 function columnFromSpec(c, cfg) {
     const col = { title: c.title, field: c.field };
+    // Hidden columns stay in the row data (so they serialize on save) but are
+    // not rendered.
+    if (c.hidden) col.visible = false;
     if (c.width) col.width = c.width;
     if (c.min_width) col.minWidth = c.min_width;
     if (c.align) col.hozAlign = c.align;
     if (c.kind === "number") {
         col.editor = "number";
         col.editorParams = { min: c.min != null ? c.min : 0 };
+    } else if (c.kind === "text") {
+        col.editor = "input";
     } else if (c.kind === "choice") {
         const map = c.values || buildLookup(cfg.lookups[c.lookup] || []);
         cfg._lookups[c.field] = map;

@@ -37,7 +37,7 @@
         <tbody>
             {% for entry in round_pairings %}
             <tr>
-                <td class="num-left">{{ entry.pairing.table }}</td>
+                <td class="num-left">{{ entry.pairing.table_label|default:entry.pairing.table }}</td>
                 <td>{{ entry.pairing.first.name }}</td>
                 <td>{% if entry.is_fixed %}&#x1F512;{% endif %}</td>
                 <td>{{ entry.pairing.second.name }}</td>
@@ -111,7 +111,7 @@
         <tbody>
             {% for entry in round_pairings %}
             <tr>
-                <td class="num-left">{{ entry.pairing.table }}</td>
+                <td class="num-left">{{ entry.pairing.table_label|default:entry.pairing.table }}</td>
                 <td>{{ entry.pairing.first.name }}</td>
                 <td>{% if entry.is_fixed %}&#x1F512;{% endif %}</td>
                 <td>{{ entry.pairing.second.name }}</td>

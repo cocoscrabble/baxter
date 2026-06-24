@@ -135,17 +135,20 @@ class FixedPairingDTO(DataClassJsonMixin):
 class FixedTableDTO(DataClassJsonMixin):
     round_number: int
     entrant: int  # entrant pk
-    table_number: int
+    table_label: str
 
     @classmethod
     def from_json(cls, row: dict) -> "FixedTableDTO | None":
         if any(row.get(f.name) is None for f in fields(cls)):
             return None
+        label = str(row["table_label"]).strip()
+        if not label:
+            return None
         try:
             return cls(
                 round_number=int(row["round_number"]),
                 entrant=int(row["entrant"]),
-                table_number=int(row["table_number"]),
+                table_label=label,
             )
         except (ValueError, TypeError):
             return None
@@ -166,5 +169,5 @@ class FixedTableDTO(DataClassJsonMixin):
         return {
             "round_number": self.round_number,
             "entrant_id": self.entrant,
-            "table_number": self.table_number,
+            "table_label": self.table_label,
         }

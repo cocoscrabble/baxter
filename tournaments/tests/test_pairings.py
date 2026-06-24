@@ -528,7 +528,7 @@ class FixedTableIntegrationTests(PairingDBTestBase):
             division=self.division,
             round_number=round_number,
             entrant=self.entrants[entrant_idx],
-            table_number=table_number,
+            table_label=str(table_number),
         )
 
     def _regenerate(self):
