@@ -83,14 +83,14 @@ class FixedTablesGrid(EditGrid):
     columns = [
         Column("round_number", "Round", kind="choice", lookup="roundValues", width=100, align="center", new_row=-1),
         Column("entrant", "Player", kind="choice", lookup="entrantValues", autocomplete=True, min_width=200),
-        Column("table_number", "Table", kind="number", min=1, width=100, align="center"),
+        Column("table_label", "Table", kind="text", value_type="str", width=100, align="center"),
     ]
 
     def serialize_row(self, ft):
         return {
             "round_number": ft.round_number,
             "entrant": ft.entrant_id,
-            "table_number": ft.table_number,
+            "table_label": ft.table_label,
         }
 
     def lookups(self, division):
@@ -173,9 +173,12 @@ class BoardTableMapGrid(JsonBlobGrid):
     dom_id = "board-table-map-table"
     js_module = "tournaments/js/edit_board_table_map.js"  # custom: generate button
     template_name = "tournaments/division_board_table_map_edit.html"
-    focus_field = "table"
+    focus_field = "label"
     columns = [
-        Column("table", "Table", kind="number", min=1, width=120, align="center"),
+        Column("label", "Table", kind="text", value_type="str", width=120, align="center"),
+        # Order index: kept in the row data (groups boards on a shared double
+        # table, sorts pairings) but not shown to organizers.
+        Column("table", "Order", kind="number", min=1, hidden=True),
         Column("board", "Board", kind="number", min=1, width=120, align="center", auto_increment=True),
     ]
 
@@ -188,15 +191,16 @@ class BoardTableMapGrid(JsonBlobGrid):
                 board = int(row["board"])
                 table = int(row["table"])
             except (KeyError, TypeError, ValueError):
-                errors.append(f"Row {i + 1}: board and table must be integers.")
+                errors.append(f"Row {i + 1}: board and order must be integers.")
                 continue
             if board < 1 or table < 1:
-                errors.append(f"Row {i + 1}: board and table must be positive.")
+                errors.append(f"Row {i + 1}: board and order must be positive.")
                 continue
             if board in seen_boards:
                 errors.append(f"Row {i + 1}: duplicate board {board}.")
                 continue
+            label = str(row.get("label") or "").strip() or str(table)
             seen_boards.add(board)
-            validated.append({"board": board, "table": table})
+            validated.append({"board": board, "table": table, "label": label})
         validated.sort(key=lambda r: r["board"])
         return validated, errors

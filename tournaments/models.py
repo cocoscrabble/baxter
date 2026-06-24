@@ -439,7 +439,11 @@ class Pairing(models.Model):
         related_name="pairings_as_second",
     )
     repeats = models.IntegerField(default=0)
+    # ``table`` is the integer order index (also groups boards that share a
+    # physical double table). ``table_label`` is the display string shown to
+    # organizers (e.g. "S1" for a streamed table); empty falls back to ``table``.
     table = models.IntegerField(default=0)
+    table_label = models.CharField(max_length=8, default="", blank=True)
 
     class Meta:
         ordering = ["round", "table"]
@@ -479,13 +483,14 @@ class FixedTable(models.Model):
     entrant = models.ForeignKey(
         Entrant, on_delete=models.CASCADE, related_name="fixed_tables"
     )
-    table_number = models.IntegerField()
+    # The display label of the table this entrant is pinned to (e.g. "S1", "4").
+    table_label = models.CharField(max_length=8)
 
     class Meta:
-        ordering = ["round_number", "table_number"]
+        ordering = ["round_number", "table_label"]
 
     def __str__(self):
-        return f"R{self.round_number}: {self.entrant.player.name} at table {self.table_number}"
+        return f"R{self.round_number}: {self.entrant.player.name} at table {self.table_label}"
 
 
 # The bulk-editable grids. Used as the ``scope`` half of the editgrid key

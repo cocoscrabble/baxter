@@ -14,7 +14,7 @@
     <tbody>
         {% for entry in round_pairings %}
         <tr>
-            <td>{{ entry.pairing.table }}</td>
+            <td>{{ entry.pairing.table_label|default:entry.pairing.table }}</td>
             <td>{{ entry.pairing.first.name }}</td>
             <td>{{ entry.pairing.second.name }}</td>
         </tr>

@@ -38,7 +38,7 @@ class RoundPairingsAdmin(admin.ModelAdmin):
 
 @admin.register(Pairing)
 class PairingAdmin(admin.ModelAdmin):
-    list_display = ("round", "first", "second", "table", "division")
+    list_display = ("round", "first", "second", "table", "table_label", "division")
     list_filter = ("division", "round")
 
 
