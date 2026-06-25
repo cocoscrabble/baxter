@@ -73,3 +73,6 @@ node_modules/
 # quick experiments and temp files
 tmp/
 t.py
+
+# Rust build artifacts (scrabble-pairing crate)
+scrabble-pairing/target/

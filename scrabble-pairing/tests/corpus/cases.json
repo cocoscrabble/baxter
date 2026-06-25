@@ -1,0 +1,2789 @@
+[
+  {
+    "name": "koth_r1_n8",
+    "deterministic": true,
+    "input": {
+      "players": [
+        {
+          "name": "P01",
+          "rating": 2000
+        },
+        {
+          "name": "P02",
+          "rating": 1990
+        },
+        {
+          "name": "P03",
+          "rating": 1980
+        },
+        {
+          "name": "P04",
+          "rating": 1970
+        },
+        {
+          "name": "P05",
+          "rating": 1960
+        },
+        {
+          "name": "P06",
+          "rating": 1950
+        },
+        {
+          "name": "P07",
+          "rating": 1940
+        },
+        {
+          "name": "P08",
+          "rating": 1930
+        }
+      ],
+      "result_slips": [],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "KotH"
+        }
+      ],
+      "fixed_pairings": {},
+      "seed": 0
+    },
+    "expected": [
+      {
+        "round": 1,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P02",
+            "repeats": 1
+          },
+          {
+            "first": "P03",
+            "second": "P04",
+            "repeats": 1
+          },
+          {
+            "first": "P05",
+            "second": "P06",
+            "repeats": 1
+          },
+          {
+            "first": "P07",
+            "second": "P08",
+            "repeats": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "qoth_r1_n8",
+    "deterministic": true,
+    "input": {
+      "players": [
+        {
+          "name": "P01",
+          "rating": 2000
+        },
+        {
+          "name": "P02",
+          "rating": 1990
+        },
+        {
+          "name": "P03",
+          "rating": 1980
+        },
+        {
+          "name": "P04",
+          "rating": 1970
+        },
+        {
+          "name": "P05",
+          "rating": 1960
+        },
+        {
+          "name": "P06",
+          "rating": 1950
+        },
+        {
+          "name": "P07",
+          "rating": 1940
+        },
+        {
+          "name": "P08",
+          "rating": 1930
+        }
+      ],
+      "result_slips": [],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "QotH"
+        }
+      ],
+      "fixed_pairings": {},
+      "seed": 0
+    },
+    "expected": [
+      {
+        "round": 1,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P03",
+            "repeats": 1
+          },
+          {
+            "first": "P02",
+            "second": "P04",
+            "repeats": 1
+          },
+          {
+            "first": "P05",
+            "second": "P07",
+            "repeats": 1
+          },
+          {
+            "first": "P06",
+            "second": "P08",
+            "repeats": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "qoth_r1_n10",
+    "deterministic": true,
+    "input": {
+      "players": [
+        {
+          "name": "P01",
+          "rating": 2000
+        },
+        {
+          "name": "P02",
+          "rating": 1990
+        },
+        {
+          "name": "P03",
+          "rating": 1980
+        },
+        {
+          "name": "P04",
+          "rating": 1970
+        },
+        {
+          "name": "P05",
+          "rating": 1960
+        },
+        {
+          "name": "P06",
+          "rating": 1950
+        },
+        {
+          "name": "P07",
+          "rating": 1940
+        },
+        {
+          "name": "P08",
+          "rating": 1930
+        },
+        {
+          "name": "P09",
+          "rating": 1920
+        },
+        {
+          "name": "P10",
+          "rating": 1910
+        }
+      ],
+      "result_slips": [],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "QotH"
+        }
+      ],
+      "fixed_pairings": {},
+      "seed": 0
+    },
+    "expected": [
+      {
+        "round": 1,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P03",
+            "repeats": 1
+          },
+          {
+            "first": "P02",
+            "second": "P04",
+            "repeats": 1
+          },
+          {
+            "first": "P05",
+            "second": "P08",
+            "repeats": 1
+          },
+          {
+            "first": "P06",
+            "second": "P09",
+            "repeats": 1
+          },
+          {
+            "first": "P07",
+            "second": "P10",
+            "repeats": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "swiss_initial_n8",
+    "deterministic": true,
+    "input": {
+      "players": [
+        {
+          "name": "P01",
+          "rating": 2000
+        },
+        {
+          "name": "P02",
+          "rating": 1990
+        },
+        {
+          "name": "P03",
+          "rating": 1980
+        },
+        {
+          "name": "P04",
+          "rating": 1970
+        },
+        {
+          "name": "P05",
+          "rating": 1960
+        },
+        {
+          "name": "P06",
+          "rating": 1950
+        },
+        {
+          "name": "P07",
+          "rating": 1940
+        },
+        {
+          "name": "P08",
+          "rating": 1930
+        }
+      ],
+      "result_slips": [],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "Swiss"
+        }
+      ],
+      "fixed_pairings": {},
+      "seed": 0
+    },
+    "expected": [
+      {
+        "round": 1,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P05",
+            "repeats": 1
+          },
+          {
+            "first": "P02",
+            "second": "P06",
+            "repeats": 1
+          },
+          {
+            "first": "P03",
+            "second": "P07",
+            "repeats": 1
+          },
+          {
+            "first": "P04",
+            "second": "P08",
+            "repeats": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "round_robin_n6",
+    "deterministic": true,
+    "input": {
+      "players": [
+        {
+          "name": "P01",
+          "rating": 2000
+        },
+        {
+          "name": "P02",
+          "rating": 1990
+        },
+        {
+          "name": "P03",
+          "rating": 1980
+        },
+        {
+          "name": "P04",
+          "rating": 1970
+        },
+        {
+          "name": "P05",
+          "rating": 1960
+        },
+        {
+          "name": "P06",
+          "rating": 1950
+        }
+      ],
+      "result_slips": [],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "RoundRobin"
+        },
+        {
+          "round": 2,
+          "start_round": 0,
+          "pairing": "RoundRobin"
+        },
+        {
+          "round": 3,
+          "start_round": 0,
+          "pairing": "RoundRobin"
+        },
+        {
+          "round": 4,
+          "start_round": 0,
+          "pairing": "RoundRobin"
+        },
+        {
+          "round": 5,
+          "start_round": 0,
+          "pairing": "RoundRobin"
+        }
+      ],
+      "fixed_pairings": {},
+      "seed": 0
+    },
+    "expected": [
+      {
+        "round": 1,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P06",
+            "repeats": 1
+          },
+          {
+            "first": "P02",
+            "second": "P05",
+            "repeats": 1
+          },
+          {
+            "first": "P03",
+            "second": "P04",
+            "repeats": 1
+          }
+        ]
+      },
+      {
+        "round": 2,
+        "pairings": [
+          {
+            "first": "P05",
+            "second": "P01",
+            "repeats": 1
+          },
+          {
+            "first": "P06",
+            "second": "P04",
+            "repeats": 1
+          },
+          {
+            "first": "P02",
+            "second": "P03",
+            "repeats": 1
+          }
+        ]
+      },
+      {
+        "round": 3,
+        "pairings": [
+          {
+            "first": "P04",
+            "second": "P01",
+            "repeats": 1
+          },
+          {
+            "first": "P03",
+            "second": "P05",
+            "repeats": 1
+          },
+          {
+            "first": "P06",
+            "second": "P02",
+            "repeats": 1
+          }
+        ]
+      },
+      {
+        "round": 4,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P03",
+            "repeats": 1
+          },
+          {
+            "first": "P04",
+            "second": "P02",
+            "repeats": 1
+          },
+          {
+            "first": "P05",
+            "second": "P06",
+            "repeats": 1
+          }
+        ]
+      },
+      {
+        "round": 5,
+        "pairings": [
+          {
+            "first": "P02",
+            "second": "P01",
+            "repeats": 1
+          },
+          {
+            "first": "P03",
+            "second": "P06",
+            "repeats": 1
+          },
+          {
+            "first": "P04",
+            "second": "P05",
+            "repeats": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "round_robin_n8",
+    "deterministic": true,
+    "input": {
+      "players": [
+        {
+          "name": "P01",
+          "rating": 2000
+        },
+        {
+          "name": "P02",
+          "rating": 1990
+        },
+        {
+          "name": "P03",
+          "rating": 1980
+        },
+        {
+          "name": "P04",
+          "rating": 1970
+        },
+        {
+          "name": "P05",
+          "rating": 1960
+        },
+        {
+          "name": "P06",
+          "rating": 1950
+        },
+        {
+          "name": "P07",
+          "rating": 1940
+        },
+        {
+          "name": "P08",
+          "rating": 1930
+        }
+      ],
+      "result_slips": [],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "RoundRobin"
+        },
+        {
+          "round": 2,
+          "start_round": 0,
+          "pairing": "RoundRobin"
+        },
+        {
+          "round": 3,
+          "start_round": 0,
+          "pairing": "RoundRobin"
+        },
+        {
+          "round": 4,
+          "start_round": 0,
+          "pairing": "RoundRobin"
+        },
+        {
+          "round": 5,
+          "start_round": 0,
+          "pairing": "RoundRobin"
+        },
+        {
+          "round": 6,
+          "start_round": 0,
+          "pairing": "RoundRobin"
+        },
+        {
+          "round": 7,
+          "start_round": 0,
+          "pairing": "RoundRobin"
+        }
+      ],
+      "fixed_pairings": {},
+      "seed": 0
+    },
+    "expected": [
+      {
+        "round": 1,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P08",
+            "repeats": 1
+          },
+          {
+            "first": "P02",
+            "second": "P07",
+            "repeats": 1
+          },
+          {
+            "first": "P03",
+            "second": "P06",
+            "repeats": 1
+          },
+          {
+            "first": "P04",
+            "second": "P05",
+            "repeats": 1
+          }
+        ]
+      },
+      {
+        "round": 2,
+        "pairings": [
+          {
+            "first": "P07",
+            "second": "P01",
+            "repeats": 1
+          },
+          {
+            "first": "P08",
+            "second": "P06",
+            "repeats": 1
+          },
+          {
+            "first": "P05",
+            "second": "P02",
+            "repeats": 1
+          },
+          {
+            "first": "P03",
+            "second": "P04",
+            "repeats": 1
+          }
+        ]
+      },
+      {
+        "round": 3,
+        "pairings": [
+          {
+            "first": "P06",
+            "second": "P01",
+            "repeats": 1
+          },
+          {
+            "first": "P07",
+            "second": "P05",
+            "repeats": 1
+          },
+          {
+            "first": "P04",
+            "second": "P08",
+            "repeats": 1
+          },
+          {
+            "first": "P02",
+            "second": "P03",
+            "repeats": 1
+          }
+        ]
+      },
+      {
+        "round": 4,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P05",
+            "repeats": 1
+          },
+          {
+            "first": "P06",
+            "second": "P04",
+            "repeats": 1
+          },
+          {
+            "first": "P03",
+            "second": "P07",
+            "repeats": 1
+          },
+          {
+            "first": "P08",
+            "second": "P02",
+            "repeats": 1
+          }
+        ]
+      },
+      {
+        "round": 5,
+        "pairings": [
+          {
+            "first": "P04",
+            "second": "P01",
+            "repeats": 1
+          },
+          {
+            "first": "P05",
+            "second": "P03",
+            "repeats": 1
+          },
+          {
+            "first": "P02",
+            "second": "P06",
+            "repeats": 1
+          },
+          {
+            "first": "P07",
+            "second": "P08",
+            "repeats": 1
+          }
+        ]
+      },
+      {
+        "round": 6,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P03",
+            "repeats": 1
+          },
+          {
+            "first": "P04",
+            "second": "P02",
+            "repeats": 1
+          },
+          {
+            "first": "P08",
+            "second": "P05",
+            "repeats": 1
+          },
+          {
+            "first": "P06",
+            "second": "P07",
+            "repeats": 1
+          }
+        ]
+      },
+      {
+        "round": 7,
+        "pairings": [
+          {
+            "first": "P02",
+            "second": "P01",
+            "repeats": 1
+          },
+          {
+            "first": "P03",
+            "second": "P08",
+            "repeats": 1
+          },
+          {
+            "first": "P07",
+            "second": "P04",
+            "repeats": 1
+          },
+          {
+            "first": "P05",
+            "second": "P06",
+            "repeats": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "double_rr_n4",
+    "deterministic": true,
+    "input": {
+      "players": [
+        {
+          "name": "P01",
+          "rating": 2000
+        },
+        {
+          "name": "P02",
+          "rating": 1990
+        },
+        {
+          "name": "P03",
+          "rating": 1980
+        },
+        {
+          "name": "P04",
+          "rating": 1970
+        }
+      ],
+      "result_slips": [],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "DoubleRoundRobin"
+        },
+        {
+          "round": 2,
+          "start_round": 0,
+          "pairing": "DoubleRoundRobin"
+        },
+        {
+          "round": 3,
+          "start_round": 0,
+          "pairing": "DoubleRoundRobin"
+        },
+        {
+          "round": 4,
+          "start_round": 0,
+          "pairing": "DoubleRoundRobin"
+        },
+        {
+          "round": 5,
+          "start_round": 0,
+          "pairing": "DoubleRoundRobin"
+        },
+        {
+          "round": 6,
+          "start_round": 0,
+          "pairing": "DoubleRoundRobin"
+        }
+      ],
+      "fixed_pairings": {},
+      "seed": 0
+    },
+    "expected": [
+      {
+        "round": 1,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P04",
+            "repeats": 1
+          },
+          {
+            "first": "P02",
+            "second": "P03",
+            "repeats": 1
+          }
+        ]
+      },
+      {
+        "round": 2,
+        "pairings": [
+          {
+            "first": "P04",
+            "second": "P01",
+            "repeats": 2
+          },
+          {
+            "first": "P03",
+            "second": "P02",
+            "repeats": 2
+          }
+        ]
+      },
+      {
+        "round": 3,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P03",
+            "repeats": 1
+          },
+          {
+            "first": "P02",
+            "second": "P04",
+            "repeats": 1
+          }
+        ]
+      },
+      {
+        "round": 4,
+        "pairings": [
+          {
+            "first": "P03",
+            "second": "P01",
+            "repeats": 2
+          },
+          {
+            "first": "P04",
+            "second": "P02",
+            "repeats": 2
+          }
+        ]
+      },
+      {
+        "round": 5,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P02",
+            "repeats": 1
+          },
+          {
+            "first": "P03",
+            "second": "P04",
+            "repeats": 1
+          }
+        ]
+      },
+      {
+        "round": 6,
+        "pairings": [
+          {
+            "first": "P02",
+            "second": "P01",
+            "repeats": 2
+          },
+          {
+            "first": "P04",
+            "second": "P03",
+            "repeats": 2
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "charlottesville_n8",
+    "deterministic": true,
+    "input": {
+      "players": [
+        {
+          "name": "P01",
+          "rating": 2000
+        },
+        {
+          "name": "P02",
+          "rating": 1990
+        },
+        {
+          "name": "P03",
+          "rating": 1980
+        },
+        {
+          "name": "P04",
+          "rating": 1970
+        },
+        {
+          "name": "P05",
+          "rating": 1960
+        },
+        {
+          "name": "P06",
+          "rating": 1950
+        },
+        {
+          "name": "P07",
+          "rating": 1940
+        },
+        {
+          "name": "P08",
+          "rating": 1930
+        }
+      ],
+      "result_slips": [],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "Charlottesville"
+        },
+        {
+          "round": 2,
+          "start_round": 0,
+          "pairing": "Charlottesville"
+        },
+        {
+          "round": 3,
+          "start_round": 0,
+          "pairing": "Charlottesville"
+        },
+        {
+          "round": 4,
+          "start_round": 0,
+          "pairing": "Charlottesville"
+        }
+      ],
+      "fixed_pairings": {},
+      "seed": 0
+    },
+    "expected": [
+      {
+        "round": 1,
+        "pairings": [
+          {
+            "first": "P02",
+            "second": "P07",
+            "repeats": 1
+          },
+          {
+            "first": "P04",
+            "second": "P05",
+            "repeats": 1
+          },
+          {
+            "first": "P06",
+            "second": "P03",
+            "repeats": 1
+          },
+          {
+            "first": "P08",
+            "second": "P01",
+            "repeats": 1
+          }
+        ]
+      },
+      {
+        "round": 2,
+        "pairings": [
+          {
+            "first": "P05",
+            "second": "P02",
+            "repeats": 1
+          },
+          {
+            "first": "P03",
+            "second": "P04",
+            "repeats": 1
+          },
+          {
+            "first": "P01",
+            "second": "P06",
+            "repeats": 1
+          },
+          {
+            "first": "P07",
+            "second": "P08",
+            "repeats": 1
+          }
+        ]
+      },
+      {
+        "round": 3,
+        "pairings": [
+          {
+            "first": "P02",
+            "second": "P03",
+            "repeats": 1
+          },
+          {
+            "first": "P04",
+            "second": "P01",
+            "repeats": 1
+          },
+          {
+            "first": "P06",
+            "second": "P07",
+            "repeats": 1
+          },
+          {
+            "first": "P08",
+            "second": "P05",
+            "repeats": 1
+          }
+        ]
+      },
+      {
+        "round": 4,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P02",
+            "repeats": 1
+          },
+          {
+            "first": "P07",
+            "second": "P04",
+            "repeats": 1
+          },
+          {
+            "first": "P05",
+            "second": "P06",
+            "repeats": 1
+          },
+          {
+            "first": "P03",
+            "second": "P08",
+            "repeats": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "quads_clustered_n8",
+    "deterministic": true,
+    "input": {
+      "players": [
+        {
+          "name": "P01",
+          "rating": 2000
+        },
+        {
+          "name": "P02",
+          "rating": 1990
+        },
+        {
+          "name": "P03",
+          "rating": 1980
+        },
+        {
+          "name": "P04",
+          "rating": 1970
+        },
+        {
+          "name": "P05",
+          "rating": 1960
+        },
+        {
+          "name": "P06",
+          "rating": 1950
+        },
+        {
+          "name": "P07",
+          "rating": 1940
+        },
+        {
+          "name": "P08",
+          "rating": 1930
+        }
+      ],
+      "result_slips": [],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "Quads_Clustered"
+        },
+        {
+          "round": 2,
+          "start_round": 0,
+          "pairing": "Quads_Clustered"
+        },
+        {
+          "round": 3,
+          "start_round": 0,
+          "pairing": "Quads_Clustered"
+        }
+      ],
+      "fixed_pairings": {},
+      "seed": 0
+    },
+    "expected": [
+      {
+        "round": 1,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P04",
+            "repeats": 1
+          },
+          {
+            "first": "P02",
+            "second": "P03",
+            "repeats": 1
+          },
+          {
+            "first": "P05",
+            "second": "P08",
+            "repeats": 1
+          },
+          {
+            "first": "P06",
+            "second": "P07",
+            "repeats": 1
+          }
+        ]
+      },
+      {
+        "round": 2,
+        "pairings": [
+          {
+            "first": "P03",
+            "second": "P01",
+            "repeats": 1
+          },
+          {
+            "first": "P04",
+            "second": "P02",
+            "repeats": 1
+          },
+          {
+            "first": "P07",
+            "second": "P05",
+            "repeats": 1
+          },
+          {
+            "first": "P08",
+            "second": "P06",
+            "repeats": 1
+          }
+        ]
+      },
+      {
+        "round": 3,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P02",
+            "repeats": 1
+          },
+          {
+            "first": "P03",
+            "second": "P04",
+            "repeats": 1
+          },
+          {
+            "first": "P05",
+            "second": "P06",
+            "repeats": 1
+          },
+          {
+            "first": "P07",
+            "second": "P08",
+            "repeats": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "quads_distributed_n12",
+    "deterministic": true,
+    "input": {
+      "players": [
+        {
+          "name": "P01",
+          "rating": 2000
+        },
+        {
+          "name": "P02",
+          "rating": 1990
+        },
+        {
+          "name": "P03",
+          "rating": 1980
+        },
+        {
+          "name": "P04",
+          "rating": 1970
+        },
+        {
+          "name": "P05",
+          "rating": 1960
+        },
+        {
+          "name": "P06",
+          "rating": 1950
+        },
+        {
+          "name": "P07",
+          "rating": 1940
+        },
+        {
+          "name": "P08",
+          "rating": 1930
+        },
+        {
+          "name": "P09",
+          "rating": 1920
+        },
+        {
+          "name": "P10",
+          "rating": 1910
+        },
+        {
+          "name": "P11",
+          "rating": 1900
+        },
+        {
+          "name": "P12",
+          "rating": 1890
+        }
+      ],
+      "result_slips": [],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "Quads_Distributed"
+        },
+        {
+          "round": 2,
+          "start_round": 0,
+          "pairing": "Quads_Distributed"
+        },
+        {
+          "round": 3,
+          "start_round": 0,
+          "pairing": "Quads_Distributed"
+        }
+      ],
+      "fixed_pairings": {},
+      "seed": 0
+    },
+    "expected": [
+      {
+        "round": 1,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P10",
+            "repeats": 1
+          },
+          {
+            "first": "P04",
+            "second": "P07",
+            "repeats": 1
+          },
+          {
+            "first": "P02",
+            "second": "P11",
+            "repeats": 1
+          },
+          {
+            "first": "P05",
+            "second": "P08",
+            "repeats": 1
+          },
+          {
+            "first": "P03",
+            "second": "P12",
+            "repeats": 1
+          },
+          {
+            "first": "P06",
+            "second": "P09",
+            "repeats": 1
+          }
+        ]
+      },
+      {
+        "round": 2,
+        "pairings": [
+          {
+            "first": "P07",
+            "second": "P01",
+            "repeats": 1
+          },
+          {
+            "first": "P10",
+            "second": "P04",
+            "repeats": 1
+          },
+          {
+            "first": "P08",
+            "second": "P02",
+            "repeats": 1
+          },
+          {
+            "first": "P11",
+            "second": "P05",
+            "repeats": 1
+          },
+          {
+            "first": "P09",
+            "second": "P03",
+            "repeats": 1
+          },
+          {
+            "first": "P12",
+            "second": "P06",
+            "repeats": 1
+          }
+        ]
+      },
+      {
+        "round": 3,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P04",
+            "repeats": 1
+          },
+          {
+            "first": "P07",
+            "second": "P10",
+            "repeats": 1
+          },
+          {
+            "first": "P02",
+            "second": "P05",
+            "repeats": 1
+          },
+          {
+            "first": "P08",
+            "second": "P11",
+            "repeats": 1
+          },
+          {
+            "first": "P03",
+            "second": "P06",
+            "repeats": 1
+          },
+          {
+            "first": "P09",
+            "second": "P12",
+            "repeats": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "quads_equalized_n12",
+    "deterministic": true,
+    "input": {
+      "players": [
+        {
+          "name": "P01",
+          "rating": 2000
+        },
+        {
+          "name": "P02",
+          "rating": 1990
+        },
+        {
+          "name": "P03",
+          "rating": 1980
+        },
+        {
+          "name": "P04",
+          "rating": 1970
+        },
+        {
+          "name": "P05",
+          "rating": 1960
+        },
+        {
+          "name": "P06",
+          "rating": 1950
+        },
+        {
+          "name": "P07",
+          "rating": 1940
+        },
+        {
+          "name": "P08",
+          "rating": 1930
+        },
+        {
+          "name": "P09",
+          "rating": 1920
+        },
+        {
+          "name": "P10",
+          "rating": 1910
+        },
+        {
+          "name": "P11",
+          "rating": 1900
+        },
+        {
+          "name": "P12",
+          "rating": 1890
+        }
+      ],
+      "result_slips": [],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "Quads_Equalized"
+        },
+        {
+          "round": 2,
+          "start_round": 0,
+          "pairing": "Quads_Equalized"
+        },
+        {
+          "round": 3,
+          "start_round": 0,
+          "pairing": "Quads_Equalized"
+        }
+      ],
+      "fixed_pairings": {},
+      "seed": 0
+    },
+    "expected": [
+      {
+        "round": 1,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P12",
+            "repeats": 1
+          },
+          {
+            "first": "P06",
+            "second": "P07",
+            "repeats": 1
+          },
+          {
+            "first": "P02",
+            "second": "P11",
+            "repeats": 1
+          },
+          {
+            "first": "P05",
+            "second": "P08",
+            "repeats": 1
+          },
+          {
+            "first": "P03",
+            "second": "P10",
+            "repeats": 1
+          },
+          {
+            "first": "P04",
+            "second": "P09",
+            "repeats": 1
+          }
+        ]
+      },
+      {
+        "round": 2,
+        "pairings": [
+          {
+            "first": "P07",
+            "second": "P01",
+            "repeats": 1
+          },
+          {
+            "first": "P12",
+            "second": "P06",
+            "repeats": 1
+          },
+          {
+            "first": "P08",
+            "second": "P02",
+            "repeats": 1
+          },
+          {
+            "first": "P11",
+            "second": "P05",
+            "repeats": 1
+          },
+          {
+            "first": "P09",
+            "second": "P03",
+            "repeats": 1
+          },
+          {
+            "first": "P10",
+            "second": "P04",
+            "repeats": 1
+          }
+        ]
+      },
+      {
+        "round": 3,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P06",
+            "repeats": 1
+          },
+          {
+            "first": "P07",
+            "second": "P12",
+            "repeats": 1
+          },
+          {
+            "first": "P02",
+            "second": "P05",
+            "repeats": 1
+          },
+          {
+            "first": "P08",
+            "second": "P11",
+            "repeats": 1
+          },
+          {
+            "first": "P03",
+            "second": "P04",
+            "repeats": 1
+          },
+          {
+            "first": "P09",
+            "second": "P10",
+            "repeats": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "quads_clustered_hex_n10",
+    "deterministic": true,
+    "input": {
+      "players": [
+        {
+          "name": "P01",
+          "rating": 2000
+        },
+        {
+          "name": "P02",
+          "rating": 1990
+        },
+        {
+          "name": "P03",
+          "rating": 1980
+        },
+        {
+          "name": "P04",
+          "rating": 1970
+        },
+        {
+          "name": "P05",
+          "rating": 1960
+        },
+        {
+          "name": "P06",
+          "rating": 1950
+        },
+        {
+          "name": "P07",
+          "rating": 1940
+        },
+        {
+          "name": "P08",
+          "rating": 1930
+        },
+        {
+          "name": "P09",
+          "rating": 1920
+        },
+        {
+          "name": "P10",
+          "rating": 1910
+        }
+      ],
+      "result_slips": [],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "Quads_Clustered"
+        },
+        {
+          "round": 2,
+          "start_round": 0,
+          "pairing": "Quads_Clustered"
+        },
+        {
+          "round": 3,
+          "start_round": 0,
+          "pairing": "Quads_Clustered"
+        }
+      ],
+      "fixed_pairings": {},
+      "seed": 0
+    },
+    "expected": [
+      {
+        "round": 1,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P04",
+            "repeats": 1
+          },
+          {
+            "first": "P02",
+            "second": "P03",
+            "repeats": 1
+          },
+          {
+            "first": "P05",
+            "second": "P06",
+            "repeats": 1
+          },
+          {
+            "first": "P07",
+            "second": "P08",
+            "repeats": 1
+          },
+          {
+            "first": "P09",
+            "second": "P10",
+            "repeats": 1
+          }
+        ]
+      },
+      {
+        "round": 2,
+        "pairings": [
+          {
+            "first": "P03",
+            "second": "P01",
+            "repeats": 1
+          },
+          {
+            "first": "P04",
+            "second": "P02",
+            "repeats": 1
+          },
+          {
+            "first": "P05",
+            "second": "P07",
+            "repeats": 1
+          },
+          {
+            "first": "P08",
+            "second": "P09",
+            "repeats": 1
+          },
+          {
+            "first": "P06",
+            "second": "P10",
+            "repeats": 1
+          }
+        ]
+      },
+      {
+        "round": 3,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P02",
+            "repeats": 1
+          },
+          {
+            "first": "P03",
+            "second": "P04",
+            "repeats": 1
+          },
+          {
+            "first": "P08",
+            "second": "P05",
+            "repeats": 1
+          },
+          {
+            "first": "P09",
+            "second": "P06",
+            "repeats": 1
+          },
+          {
+            "first": "P10",
+            "second": "P07",
+            "repeats": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sixes_n12",
+    "deterministic": true,
+    "input": {
+      "players": [
+        {
+          "name": "P01",
+          "rating": 2000
+        },
+        {
+          "name": "P02",
+          "rating": 1990
+        },
+        {
+          "name": "P03",
+          "rating": 1980
+        },
+        {
+          "name": "P04",
+          "rating": 1970
+        },
+        {
+          "name": "P05",
+          "rating": 1960
+        },
+        {
+          "name": "P06",
+          "rating": 1950
+        },
+        {
+          "name": "P07",
+          "rating": 1940
+        },
+        {
+          "name": "P08",
+          "rating": 1930
+        },
+        {
+          "name": "P09",
+          "rating": 1920
+        },
+        {
+          "name": "P10",
+          "rating": 1910
+        },
+        {
+          "name": "P11",
+          "rating": 1900
+        },
+        {
+          "name": "P12",
+          "rating": 1890
+        }
+      ],
+      "result_slips": [],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "Sixes"
+        },
+        {
+          "round": 2,
+          "start_round": 0,
+          "pairing": "Sixes"
+        },
+        {
+          "round": 3,
+          "start_round": 0,
+          "pairing": "Sixes"
+        }
+      ],
+      "fixed_pairings": {},
+      "seed": 0
+    },
+    "expected": [
+      {
+        "round": 1,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P04",
+            "repeats": 1
+          },
+          {
+            "first": "P05",
+            "second": "P08",
+            "repeats": 1
+          },
+          {
+            "first": "P09",
+            "second": "P12",
+            "repeats": 1
+          },
+          {
+            "first": "P02",
+            "second": "P03",
+            "repeats": 1
+          },
+          {
+            "first": "P06",
+            "second": "P07",
+            "repeats": 1
+          },
+          {
+            "first": "P10",
+            "second": "P11",
+            "repeats": 1
+          }
+        ]
+      },
+      {
+        "round": 2,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P05",
+            "repeats": 1
+          },
+          {
+            "first": "P08",
+            "second": "P09",
+            "repeats": 1
+          },
+          {
+            "first": "P04",
+            "second": "P12",
+            "repeats": 1
+          },
+          {
+            "first": "P02",
+            "second": "P06",
+            "repeats": 1
+          },
+          {
+            "first": "P07",
+            "second": "P10",
+            "repeats": 1
+          },
+          {
+            "first": "P03",
+            "second": "P11",
+            "repeats": 1
+          }
+        ]
+      },
+      {
+        "round": 3,
+        "pairings": [
+          {
+            "first": "P08",
+            "second": "P01",
+            "repeats": 1
+          },
+          {
+            "first": "P09",
+            "second": "P04",
+            "repeats": 1
+          },
+          {
+            "first": "P12",
+            "second": "P05",
+            "repeats": 1
+          },
+          {
+            "first": "P07",
+            "second": "P02",
+            "repeats": 1
+          },
+          {
+            "first": "P10",
+            "second": "P03",
+            "repeats": 1
+          },
+          {
+            "first": "P11",
+            "second": "P06",
+            "repeats": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "koth_r2_n8",
+    "deterministic": true,
+    "input": {
+      "players": [
+        {
+          "name": "P01",
+          "rating": 2000
+        },
+        {
+          "name": "P02",
+          "rating": 1990
+        },
+        {
+          "name": "P03",
+          "rating": 1980
+        },
+        {
+          "name": "P04",
+          "rating": 1970
+        },
+        {
+          "name": "P05",
+          "rating": 1960
+        },
+        {
+          "name": "P06",
+          "rating": 1950
+        },
+        {
+          "name": "P07",
+          "rating": 1940
+        },
+        {
+          "name": "P08",
+          "rating": 1930
+        }
+      ],
+      "result_slips": [
+        {
+          "round": 1,
+          "winner_name": "P01",
+          "loser_name": "P02",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P03",
+          "loser_name": "P04",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P05",
+          "loser_name": "P06",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P07",
+          "loser_name": "P08",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        }
+      ],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "KotH"
+        },
+        {
+          "round": 2,
+          "start_round": 1,
+          "pairing": "KotH"
+        }
+      ],
+      "fixed_pairings": {},
+      "seed": 0
+    },
+    "expected": [
+      {
+        "round": 2,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P03",
+            "repeats": 1
+          },
+          {
+            "first": "P05",
+            "second": "P07",
+            "repeats": 1
+          },
+          {
+            "first": "P02",
+            "second": "P04",
+            "repeats": 1
+          },
+          {
+            "first": "P06",
+            "second": "P08",
+            "repeats": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "swiss_r2_n8",
+    "deterministic": true,
+    "input": {
+      "players": [
+        {
+          "name": "P01",
+          "rating": 2000
+        },
+        {
+          "name": "P02",
+          "rating": 1990
+        },
+        {
+          "name": "P03",
+          "rating": 1980
+        },
+        {
+          "name": "P04",
+          "rating": 1970
+        },
+        {
+          "name": "P05",
+          "rating": 1960
+        },
+        {
+          "name": "P06",
+          "rating": 1950
+        },
+        {
+          "name": "P07",
+          "rating": 1940
+        },
+        {
+          "name": "P08",
+          "rating": 1930
+        }
+      ],
+      "result_slips": [
+        {
+          "round": 1,
+          "winner_name": "P01",
+          "loser_name": "P02",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P03",
+          "loser_name": "P04",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P05",
+          "loser_name": "P06",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P07",
+          "loser_name": "P08",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        }
+      ],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "Swiss"
+        },
+        {
+          "round": 2,
+          "start_round": 1,
+          "pairing": "Swiss"
+        }
+      ],
+      "fixed_pairings": {},
+      "seed": 0
+    },
+    "expected": [
+      {
+        "round": 2,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P03",
+            "repeats": 1
+          },
+          {
+            "first": "P07",
+            "second": "P05",
+            "repeats": 1
+          },
+          {
+            "first": "P02",
+            "second": "P04",
+            "repeats": 1
+          },
+          {
+            "first": "P08",
+            "second": "P06",
+            "repeats": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "swiss_r2_n12",
+    "deterministic": true,
+    "input": {
+      "players": [
+        {
+          "name": "P01",
+          "rating": 2000
+        },
+        {
+          "name": "P02",
+          "rating": 1990
+        },
+        {
+          "name": "P03",
+          "rating": 1980
+        },
+        {
+          "name": "P04",
+          "rating": 1970
+        },
+        {
+          "name": "P05",
+          "rating": 1960
+        },
+        {
+          "name": "P06",
+          "rating": 1950
+        },
+        {
+          "name": "P07",
+          "rating": 1940
+        },
+        {
+          "name": "P08",
+          "rating": 1930
+        },
+        {
+          "name": "P09",
+          "rating": 1920
+        },
+        {
+          "name": "P10",
+          "rating": 1910
+        },
+        {
+          "name": "P11",
+          "rating": 1900
+        },
+        {
+          "name": "P12",
+          "rating": 1890
+        }
+      ],
+      "result_slips": [
+        {
+          "round": 1,
+          "winner_name": "P01",
+          "loser_name": "P02",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P03",
+          "loser_name": "P04",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P05",
+          "loser_name": "P06",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P07",
+          "loser_name": "P08",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P09",
+          "loser_name": "P10",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P11",
+          "loser_name": "P12",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        }
+      ],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "Swiss"
+        },
+        {
+          "round": 2,
+          "start_round": 1,
+          "pairing": "Swiss"
+        }
+      ],
+      "fixed_pairings": {},
+      "seed": 0
+    },
+    "expected": [
+      {
+        "round": 2,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P03",
+            "repeats": 1
+          },
+          {
+            "first": "P07",
+            "second": "P05",
+            "repeats": 1
+          },
+          {
+            "first": "P11",
+            "second": "P09",
+            "repeats": 1
+          },
+          {
+            "first": "P02",
+            "second": "P04",
+            "repeats": 1
+          },
+          {
+            "first": "P08",
+            "second": "P06",
+            "repeats": 1
+          },
+          {
+            "first": "P12",
+            "second": "P10",
+            "repeats": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "koth_bye_n5",
+    "deterministic": true,
+    "input": {
+      "players": [
+        {
+          "name": "P01",
+          "rating": 2000
+        },
+        {
+          "name": "P02",
+          "rating": 1990
+        },
+        {
+          "name": "P03",
+          "rating": 1980
+        },
+        {
+          "name": "P04",
+          "rating": 1970
+        },
+        {
+          "name": "P05",
+          "rating": 1960
+        }
+      ],
+      "result_slips": [],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "KotH"
+        }
+      ],
+      "fixed_pairings": {},
+      "seed": 0
+    },
+    "expected": [
+      {
+        "round": 1,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P02",
+            "repeats": 1
+          },
+          {
+            "first": "P03",
+            "second": "P04",
+            "repeats": 1
+          },
+          {
+            "first": "Bye",
+            "second": "P05",
+            "repeats": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "swiss_bye_n7",
+    "deterministic": true,
+    "input": {
+      "players": [
+        {
+          "name": "P01",
+          "rating": 2000
+        },
+        {
+          "name": "P02",
+          "rating": 1990
+        },
+        {
+          "name": "P03",
+          "rating": 1980
+        },
+        {
+          "name": "P04",
+          "rating": 1970
+        },
+        {
+          "name": "P05",
+          "rating": 1960
+        },
+        {
+          "name": "P06",
+          "rating": 1950
+        },
+        {
+          "name": "P07",
+          "rating": 1940
+        }
+      ],
+      "result_slips": [],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "Swiss"
+        }
+      ],
+      "fixed_pairings": {},
+      "seed": 0
+    },
+    "expected": [
+      {
+        "round": 1,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P04",
+            "repeats": 1
+          },
+          {
+            "first": "P02",
+            "second": "P05",
+            "repeats": 1
+          },
+          {
+            "first": "P03",
+            "second": "P06",
+            "repeats": 1
+          },
+          {
+            "first": "Bye",
+            "second": "P07",
+            "repeats": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "koth_fixed_n6",
+    "deterministic": true,
+    "input": {
+      "players": [
+        {
+          "name": "P01",
+          "rating": 2000
+        },
+        {
+          "name": "P02",
+          "rating": 1990
+        },
+        {
+          "name": "P03",
+          "rating": 1980
+        },
+        {
+          "name": "P04",
+          "rating": 1970
+        },
+        {
+          "name": "P05",
+          "rating": 1960
+        },
+        {
+          "name": "P06",
+          "rating": 1950
+        }
+      ],
+      "result_slips": [],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "KotH"
+        }
+      ],
+      "fixed_pairings": {
+        "1": [
+          [
+            "P01",
+            "P06"
+          ]
+        ]
+      },
+      "seed": 0
+    },
+    "expected": [
+      {
+        "round": 1,
+        "pairings": [
+          {
+            "first": "P02",
+            "second": "P03",
+            "repeats": 1
+          },
+          {
+            "first": "P04",
+            "second": "P05",
+            "repeats": 1
+          },
+          {
+            "first": "P01",
+            "second": "P06",
+            "repeats": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "random_r1_n8",
+    "deterministic": false,
+    "input": {
+      "players": [
+        {
+          "name": "P01",
+          "rating": 2000
+        },
+        {
+          "name": "P02",
+          "rating": 1990
+        },
+        {
+          "name": "P03",
+          "rating": 1980
+        },
+        {
+          "name": "P04",
+          "rating": 1970
+        },
+        {
+          "name": "P05",
+          "rating": 1960
+        },
+        {
+          "name": "P06",
+          "rating": 1950
+        },
+        {
+          "name": "P07",
+          "rating": 1940
+        },
+        {
+          "name": "P08",
+          "rating": 1930
+        }
+      ],
+      "result_slips": [],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "Random"
+        }
+      ],
+      "fixed_pairings": {},
+      "seed": 0
+    }
+  },
+  {
+    "name": "random_no_repeats_r2_n10",
+    "deterministic": false,
+    "input": {
+      "players": [
+        {
+          "name": "P01",
+          "rating": 2000
+        },
+        {
+          "name": "P02",
+          "rating": 1990
+        },
+        {
+          "name": "P03",
+          "rating": 1980
+        },
+        {
+          "name": "P04",
+          "rating": 1970
+        },
+        {
+          "name": "P05",
+          "rating": 1960
+        },
+        {
+          "name": "P06",
+          "rating": 1950
+        },
+        {
+          "name": "P07",
+          "rating": 1940
+        },
+        {
+          "name": "P08",
+          "rating": 1930
+        },
+        {
+          "name": "P09",
+          "rating": 1920
+        },
+        {
+          "name": "P10",
+          "rating": 1910
+        }
+      ],
+      "result_slips": [
+        {
+          "round": 1,
+          "winner_name": "P01",
+          "loser_name": "P02",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P03",
+          "loser_name": "P04",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P05",
+          "loser_name": "P06",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P07",
+          "loser_name": "P08",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P09",
+          "loser_name": "P10",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        }
+      ],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "RandomNoRepeats"
+        },
+        {
+          "round": 2,
+          "start_round": 1,
+          "pairing": "RandomNoRepeats"
+        }
+      ],
+      "fixed_pairings": {},
+      "seed": 0
+    }
+  },
+  {
+    "name": "swiss_plus_random_r2_n14",
+    "deterministic": false,
+    "input": {
+      "players": [
+        {
+          "name": "P01",
+          "rating": 2000
+        },
+        {
+          "name": "P02",
+          "rating": 1990
+        },
+        {
+          "name": "P03",
+          "rating": 1980
+        },
+        {
+          "name": "P04",
+          "rating": 1970
+        },
+        {
+          "name": "P05",
+          "rating": 1960
+        },
+        {
+          "name": "P06",
+          "rating": 1950
+        },
+        {
+          "name": "P07",
+          "rating": 1940
+        },
+        {
+          "name": "P08",
+          "rating": 1930
+        },
+        {
+          "name": "P09",
+          "rating": 1920
+        },
+        {
+          "name": "P10",
+          "rating": 1910
+        },
+        {
+          "name": "P11",
+          "rating": 1900
+        },
+        {
+          "name": "P12",
+          "rating": 1890
+        },
+        {
+          "name": "P13",
+          "rating": 1880
+        },
+        {
+          "name": "P14",
+          "rating": 1870
+        }
+      ],
+      "result_slips": [
+        {
+          "round": 1,
+          "winner_name": "P01",
+          "loser_name": "P02",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P03",
+          "loser_name": "P04",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P05",
+          "loser_name": "P06",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P07",
+          "loser_name": "P08",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P09",
+          "loser_name": "P10",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P11",
+          "loser_name": "P12",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P13",
+          "loser_name": "P14",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        }
+      ],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "SwissPlusRandom"
+        },
+        {
+          "round": 2,
+          "start_round": 1,
+          "pairing": "SwissPlusRandom"
+        }
+      ],
+      "fixed_pairings": {},
+      "seed": 0
+    }
+  }
+]
