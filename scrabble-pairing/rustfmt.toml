@@ -1,0 +1,2 @@
+# Keep vendored third-party code (src/vendor/) byte-for-byte as upstream.
+ignore = ["src/vendor"]
