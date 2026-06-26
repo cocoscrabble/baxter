@@ -7,7 +7,7 @@
     <h1>All Results: {{ division.name }}</h1>
 </div>
 
-{% if division.result_slips.all %}
+{% if result_slips %}
 <div class="table-scroll table-narrow">
 <table>
     <thead>
@@ -20,7 +20,7 @@
         </tr>
     </thead>
     <tbody>
-        {% for slip in division.result_slips.all %}
+        {% for slip in result_slips %}
         <tr>
             <td class="num">{{ slip.round }}</td>
             <td>{{ slip.winner.player.name }}</td>
