@@ -856,6 +856,10 @@ class DivisionPairingsViewTests(TestCase):
     def setUpTestData(cls):
         setUpTournament(cls)
 
+    def setUp(self):
+        # The pairings tab is editor-only.
+        self.client.login(username="owner", password="testpass123")
+
     def test_no_pairings_configured_shows_message(self):
         response = self.client.get(
             reverse("division_pairings", kwargs=self.division.slug_kwargs())
@@ -926,6 +930,7 @@ class DivisionPairingsViewTests(TestCase):
             division=self.division,
             round_pairings=[{"round": 1, "pairing": "KotH", "start_round": 0}],
         )
+        self.client.logout()  # the pairings tab is editor-only
         self.client.get(reverse("division_pairings", kwargs=self.division.slug_kwargs()))
         self.assertEqual(Pairing.objects.filter(division=self.division).count(), 0)
 
@@ -966,6 +971,10 @@ class DivisionPairingsRoundContentTests(TestCase):
                 {"round": 2, "pairing": "KotH", "start_round": 1},
             ],
         )
+
+    def setUp(self):
+        # The pairings tab is editor-only.
+        self.client.login(username="owner", password="testpass123")
 
     def _create_round(self, round_num, status, pairs):
         """Create a RoundPairings with two Pairing rows for the given round."""
@@ -1289,12 +1298,13 @@ class InlineFixedPairingTests(TestCase):
         self.assertEqual(response.context["selected_status"], "pairable")
         self.assertContains(response, "Add fixed pairing")
 
-    def test_section_hidden_for_non_editor(self):
+    def test_pairings_page_forbidden_for_non_editor(self):
+        # The whole pairings tab is editor-only.
+        self.client.login(username="other", password="testpass123")
         response = self.client.get(
             reverse("division_pairings", kwargs=self.division.slug_kwargs())
         )
-        self.assertEqual(response.context["selected_status"], "pairable")
-        self.assertNotContains(response, "Add fixed pairing")
+        self.assertEqual(response.status_code, 403)
 
     def test_datastar_add_creates_pairing_and_renders_it(self):
         self.client.login(username="owner", password="testpass123")
