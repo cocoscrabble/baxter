@@ -272,8 +272,12 @@ export function wireSaveButton({ table, gridId, serializeRow, beforeSave }) {
 // Wire the Add Row button. `template` is a row dict, or a function (table) => dict
 // to compute one from current data. Every new row gets a `_rid` so it previews
 // as added. If `focusField` is set, the new row's cell for that field is opened.
+// Grids with a custom add flow (e.g. entrants) have no generic add button; skip
+// wiring rather than throwing on the missing control.
 export function wireAddRowButton({ table, gridId, template, focusField }) {
-    control(gridId, "add").addEventListener("click", function() {
+    const addBtn = control(gridId, "add");
+    if (!addBtn) return;
+    addBtn.addEventListener("click", function() {
         const base = typeof template === "function" ? template(table) : { ...template };
         const promise = table.addRow({ ...base, _rid: nextRid() });
         if (focusField) {
