@@ -37,11 +37,20 @@ let out_json: String = pair_json(json)?;
 ### Output
 
 ```jsonc
-[{"round": 1, "pairings": [{"first": "Alice", "second": "Bob", "repeats": 0}]}]
+[{"round": 1, "pairings": [{"first": "Alice", "second": "Bob", "repeats": 0}], "error": null}]
 ```
 
 `first` is the player who starts; `repeats` is how many times the two have met.
 An odd field gets a synthetic `"Bye"` opponent.
+
+Each round carries an `error` field. On an invalid condition — an unknown
+strategy string, or a field too small for the chosen format (e.g. quads with
+fewer than three players) — that round comes back with empty `pairings` and the
+reason in `error`:
+
+```jsonc
+[{"round": 1, "pairings": [], "error": "field too small for quads"}]
+```
 
 ## Determinism
 

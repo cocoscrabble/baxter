@@ -22,9 +22,10 @@ fn status_of(status: &HashMap<i32, RoundStatus>, round: i32) -> RoundStatus {
     *status.get(&round).unwrap_or(&RoundStatus::Empty)
 }
 
-/// Dispatch to the strategy for this round.
-fn run_strategy(rp: &RoundPairing, ctx: &mut Ctx) -> Pairings {
-    match rp.pairing {
+/// Dispatch to the strategy for this round. Returns `Err` for an invalid
+/// condition (unknown strategy, or a field too small for the format).
+fn run_strategy(rp: &RoundPairing, ctx: &mut Ctx) -> Result<Pairings, String> {
+    Ok(match rp.pairing {
         RP::KotH => basic::pair_koth(ctx, rp),
         RP::QotH => basic::pair_qoth(ctx, rp),
         RP::Swiss => swiss::pair_swiss(ctx, rp),
@@ -32,15 +33,14 @@ fn run_strategy(rp: &RoundPairing, ctx: &mut Ctx) -> Pairings {
         RP::DoubleRoundRobin => basic::pair_double_round_robin(ctx, rp),
         RP::Random => basic::pair_random(ctx, rp),
         RP::RandomNoRepeats => basic::pair_random_no_repeats(ctx, rp),
-        RP::QuadsClustered => quads::pair_clustered_quads(ctx, rp),
-        RP::QuadsDistributed => quads::pair_distributed_quads(ctx, rp),
-        RP::QuadsEqualized => quads::pair_equalized_quads(ctx, rp),
-        RP::Sixes => quads::pair_sixes(ctx, rp),
+        RP::QuadsClustered => quads::pair_clustered_quads(ctx, rp)?,
+        RP::QuadsDistributed => quads::pair_distributed_quads(ctx, rp)?,
+        RP::QuadsEqualized => quads::pair_equalized_quads(ctx, rp)?,
+        RP::Sixes => quads::pair_sixes(ctx, rp)?,
         RP::Charlottesville => basic::pair_charlottesville(ctx, rp),
         RP::SwissPlusRandom => swiss::pair_swiss_plus_random(ctx, rp),
-        // Unknown strategy: pair nobody, like a `STRATEGIES.get` miss.
-        RP::Unknown => Pairings::new(),
-    }
+        RP::Unknown => return Err("unknown pairing strategy".to_string()),
+    })
 }
 
 /// Count how many byes each player has already received, from result history.
@@ -154,7 +154,7 @@ fn pair_round(
     repeats: &Repeats,
     rng: &mut ChaCha8Rng,
     rp: &RoundPairing,
-) -> Pairings {
+) -> Result<Pairings, String> {
     let mut fixed_pairs: Vec<(String, String)> =
         fixed_map.get(&rp.round).cloned().unwrap_or_default();
 
@@ -178,7 +178,7 @@ fn pair_round(
             repeats,
             rng,
         };
-        run_strategy(rp, &mut ctx)
+        run_strategy(rp, &mut ctx)?
     };
 
     if !fixed_pairs.is_empty() {
@@ -199,7 +199,7 @@ fn pair_round(
         }
     }
 
-    result
+    Ok(result)
 }
 
 /// Pair a whole tournament round by round. The public entry point.
@@ -224,7 +224,7 @@ pub fn pair(input: &PairingInput) -> Vec<RoundResult> {
                 starts.register(&p, rp.round);
             }
         } else if can_pair(rp, &status) {
-            let paired = pair_round(
+            match pair_round(
                 players,
                 slips,
                 &rps,
@@ -232,21 +232,31 @@ pub fn pair(input: &PairingInput) -> Vec<RoundResult> {
                 &repeats,
                 &mut rng,
                 rp,
-            );
-            let mut out_pairings = Vec::new();
-            for p in paired.pairings {
-                let reps = repeats.add(&p);
-                let oriented = starts.add(&p, rp.round);
-                out_pairings.push(OutPairing {
-                    first: oriented.first.name,
-                    second: oriented.second.name,
-                    repeats: reps,
-                });
+            ) {
+                Ok(paired) => {
+                    let mut out_pairings = Vec::new();
+                    for p in paired.pairings {
+                        let reps = repeats.add(&p);
+                        let oriented = starts.add(&p, rp.round);
+                        out_pairings.push(OutPairing {
+                            first: oriented.first.name,
+                            second: oriented.second.name,
+                            repeats: reps,
+                        });
+                    }
+                    ret.push(RoundResult {
+                        round: rp.round,
+                        pairings: out_pairings,
+                        error: None,
+                    });
+                }
+                // Invalid condition: emit an empty round carrying the reason.
+                Err(error) => ret.push(RoundResult {
+                    round: rp.round,
+                    pairings: Vec::new(),
+                    error: Some(error),
+                }),
             }
-            ret.push(RoundResult {
-                round: rp.round,
-                pairings: out_pairings,
-            });
         }
     }
     ret
@@ -527,5 +537,55 @@ mod tests {
                 ("P1".to_string(), "P2".to_string()),
             ]
         );
+    }
+
+    #[test]
+    fn quads_too_few_players_report_error() {
+        // Two players can't form a quad: the round comes back empty with an error.
+        let inp = input(
+            r#"{
+                "players": [
+                    {"name": "A", "rating": 1900},
+                    {"name": "B", "rating": 1800}
+                ],
+                "round_pairings": [{"round": 1, "start_round": 0, "pairing": "Quads_Clustered"}]
+            }"#,
+        );
+        let out = pair(&inp);
+        assert_eq!(out.len(), 1);
+        assert!(out[0].pairings.is_empty());
+        assert_eq!(out[0].error.as_deref(), Some("field too small for quads"));
+    }
+
+    #[test]
+    fn unknown_strategy_reports_error() {
+        let inp = input(
+            r#"{
+                "players": [
+                    {"name": "A", "rating": 1900},
+                    {"name": "B", "rating": 1800}
+                ],
+                "round_pairings": [{"round": 1, "start_round": 0, "pairing": "Bogus"}]
+            }"#,
+        );
+        let out = pair(&inp);
+        assert_eq!(out.len(), 1);
+        assert!(out[0].pairings.is_empty());
+        assert_eq!(out[0].error.as_deref(), Some("unknown pairing strategy"));
+    }
+
+    #[test]
+    fn valid_round_has_no_error() {
+        let inp = input(
+            r#"{
+                "players": [
+                    {"name": "A", "rating": 1900},
+                    {"name": "B", "rating": 1800}
+                ],
+                "round_pairings": [{"round": 1, "start_round": 0, "pairing": "KotH"}]
+            }"#,
+        );
+        let out = pair(&inp);
+        assert_eq!(out[0].error, None);
     }
 }

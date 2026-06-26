@@ -107,13 +107,11 @@ fn maybe_add_quads(hexes: &mut Vec<Vec<Player>>, standings: &[Player], last_hex:
     }
 }
 
-pub fn pair_clustered_quads(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
+pub fn pair_clustered_quads(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings, String> {
     let pos = quad_position(rp, ctx.round_pairings);
     let standings = quad_standings(ctx, rp);
-    let last_quad = match last_quad_position(standings.len()) {
-        Some(v) => v,
-        None => return Pairings::new(),
-    };
+    let last_quad = last_quad_position(standings.len())
+        .ok_or_else(|| "field too small for quads".to_string())?;
     let mut quads: Vec<Vec<Player>> = Vec::new();
     let mut i = 0;
     while i < last_quad {
@@ -121,32 +119,28 @@ pub fn pair_clustered_quads(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
         i += 4;
     }
     maybe_add_hex(&mut quads, &standings, last_quad);
-    pair_groups_at_position(&quads, pos)
+    Ok(pair_groups_at_position(&quads, pos))
 }
 
-pub fn pair_distributed_quads(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
+pub fn pair_distributed_quads(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings, String> {
     let pos = quad_position(rp, ctx.round_pairings);
     let standings = quad_standings(ctx, rp);
-    let last_quad = match last_quad_position(standings.len()) {
-        Some(v) => v,
-        None => return Pairings::new(),
-    };
+    let last_quad = last_quad_position(standings.len())
+        .ok_or_else(|| "field too small for quads".to_string())?;
     let stride = last_quad / 4;
     let mut quads: Vec<Vec<Player>> = vec![Vec::new(); stride];
     for (i, p) in standings.iter().take(last_quad).enumerate() {
         quads[i % stride].push(p.clone());
     }
     maybe_add_hex(&mut quads, &standings, last_quad);
-    pair_groups_at_position(&quads, pos)
+    Ok(pair_groups_at_position(&quads, pos))
 }
 
-pub fn pair_equalized_quads(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
+pub fn pair_equalized_quads(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings, String> {
     let pos = quad_position(rp, ctx.round_pairings);
     let standings = quad_standings(ctx, rp);
-    let last_quad = match last_quad_position(standings.len()) {
-        Some(v) => v,
-        None => return Pairings::new(),
-    };
+    let last_quad = last_quad_position(standings.len())
+        .ok_or_else(|| "field too small for quads".to_string())?;
     let stride = last_quad / 4;
     let new_standings = snake(&standings, last_quad, stride);
     let mut quads: Vec<Vec<Player>> = vec![Vec::new(); stride];
@@ -154,16 +148,14 @@ pub fn pair_equalized_quads(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
         quads[i % stride].push(p.clone());
     }
     maybe_add_hex(&mut quads, &standings, last_quad);
-    pair_groups_at_position(&quads, pos)
+    Ok(pair_groups_at_position(&quads, pos))
 }
 
-pub fn pair_sixes(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
+pub fn pair_sixes(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings, String> {
     let pos = quad_position(rp, ctx.round_pairings);
     let standings = quad_standings(ctx, rp);
-    let last_hex = match last_hex_position(standings.len()) {
-        Some(v) => v,
-        None => return Pairings::new(),
-    };
+    let last_hex = last_hex_position(standings.len())
+        .ok_or_else(|| "field too small for sixes".to_string())?;
     let stride = last_hex / 6;
     let new_standings = snake(&standings, last_hex, stride);
     let mut hexes: Vec<Vec<Player>> = vec![Vec::new(); stride];
@@ -171,7 +163,7 @@ pub fn pair_sixes(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
         hexes[i % stride].push(p.clone());
     }
     maybe_add_quads(&mut hexes, &standings, last_hex);
-    pair_groups_at_position(&hexes, pos)
+    Ok(pair_groups_at_position(&hexes, pos))
 }
 
 /// Snake-reorder the first `count` players in chunks of `stride`, flipping every
