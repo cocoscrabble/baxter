@@ -8,11 +8,8 @@ use rand_chacha::ChaCha8Rng;
 use crate::model::{OutPairing, PairingInput, PlayerData, ResultSlipData, RoundResult};
 use crate::rng::seeded;
 use crate::round_pairing::{normalize_round_robin_start_rounds, RoundPairing, RP};
-use crate::standings::{standings_after_round, Pairings, Player, Repeats, Starts};
+use crate::standings::{standings_after_round, Pairings, Player, Repeats, Starts, BYE_NAME};
 use crate::strategies::{basic, quads, swiss, Ctx};
-
-/// Name of the synthetic bye opponent (matches `Player::is_bye`).
-const BYE_NAME: &str = "Bye";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RoundStatus {
@@ -345,5 +342,190 @@ mod tests {
         // 1 vs 3, 2 vs 4 (top half vs bottom half).
         assert!(pairs.contains(&("A".into(), "C".into())));
         assert!(pairs.contains(&("B".into(), "D".into())));
+    }
+
+    #[test]
+    fn odd_round_robin_byes_each_player_once_with_no_repeats() {
+        // 5 players over a full 5-round rotation. With the ghost-bye fix, each
+        // player should bye exactly once and meet every other player exactly once.
+        let inp = input(
+            r#"{
+                "players": [
+                    {"name": "A", "rating": 1990},
+                    {"name": "B", "rating": 1980},
+                    {"name": "C", "rating": 1970},
+                    {"name": "D", "rating": 1960},
+                    {"name": "E", "rating": 1950}
+                ],
+                "round_pairings": [
+                    {"round": 1, "start_round": 0, "pairing": "RoundRobin"},
+                    {"round": 2, "start_round": 0, "pairing": "RoundRobin"},
+                    {"round": 3, "start_round": 0, "pairing": "RoundRobin"},
+                    {"round": 4, "start_round": 0, "pairing": "RoundRobin"},
+                    {"round": 5, "start_round": 0, "pairing": "RoundRobin"}
+                ]
+            }"#,
+        );
+        let out = pair(&inp);
+        assert_eq!(out.len(), 5);
+
+        let mut byes: HashMap<String, i32> = HashMap::new();
+        let mut meetings: HashMap<(String, String), i32> = HashMap::new();
+        for round in &out {
+            // 5 players -> 1 ghost -> 6 slots -> 3 games (one is a bye game).
+            assert_eq!(round.pairings.len(), 3, "round {}", round.round);
+            for p in &round.pairings {
+                let (a, b) = (p.first.clone(), p.second.clone());
+                if a == "Bye" {
+                    *byes.entry(b).or_default() += 1;
+                } else if b == "Bye" {
+                    *byes.entry(a).or_default() += 1;
+                } else {
+                    let key = if a < b { (a, b) } else { (b, a) };
+                    *meetings.entry(key).or_default() += 1;
+                }
+            }
+        }
+
+        for name in ["A", "B", "C", "D", "E"] {
+            assert_eq!(byes.get(name).copied().unwrap_or(0), 1, "{name} bye count");
+        }
+        // C(5,2) = 10 distinct pairs, each met exactly once.
+        assert_eq!(meetings.len(), 10);
+        assert!(meetings.values().all(|&c| c == 1), "repeats: {meetings:?}");
+    }
+
+    #[test]
+    fn odd_charlottesville_byes_each_round_no_repeats() {
+        // 5 players over a full rotation (len(g2) = 3 rounds): one player byes
+        // per round, all distinct, and no real pair repeats.
+        let inp = input(
+            r#"{
+                "players": [
+                    {"name": "A", "rating": 1990},
+                    {"name": "B", "rating": 1980},
+                    {"name": "C", "rating": 1970},
+                    {"name": "D", "rating": 1960},
+                    {"name": "E", "rating": 1950}
+                ],
+                "round_pairings": [
+                    {"round": 1, "start_round": 0, "pairing": "Charlottesville"},
+                    {"round": 2, "start_round": 0, "pairing": "Charlottesville"},
+                    {"round": 3, "start_round": 0, "pairing": "Charlottesville"}
+                ]
+            }"#,
+        );
+        let out = pair(&inp);
+        assert_eq!(out.len(), 3);
+
+        let mut byes: HashMap<String, i32> = HashMap::new();
+        let mut meetings: HashMap<(String, String), i32> = HashMap::new();
+        for round in &out {
+            assert_eq!(round.pairings.len(), 3, "round {}", round.round);
+            let mut seen: HashSet<String> = HashSet::new();
+            for p in &round.pairings {
+                assert!(seen.insert(p.first.clone()));
+                assert!(seen.insert(p.second.clone()));
+                let (a, b) = (p.first.clone(), p.second.clone());
+                if a == "Bye" {
+                    *byes.entry(b).or_default() += 1;
+                } else if b == "Bye" {
+                    *byes.entry(a).or_default() += 1;
+                } else {
+                    let key = if a < b { (a, b) } else { (b, a) };
+                    *meetings.entry(key).or_default() += 1;
+                }
+            }
+        }
+        assert_eq!(byes.values().sum::<i32>(), 3);
+        assert!(byes.values().all(|&c| c == 1), "byes: {byes:?}");
+        assert!(meetings.values().all(|&c| c == 1), "repeats: {meetings:?}");
+    }
+
+    #[test]
+    fn odd_quads_one_bye_per_round_no_repeats() {
+        // An odd field gets a bye so it divides into whole quads/hexes. Across
+        // all four quad/sixes strategies: exactly one player byes per round, each
+        // round is a valid matching, and no real pair repeats within the block.
+        for (n, strat) in [
+            (7, "Quads_Clustered"),
+            (5, "Quads_Clustered"),
+            (7, "Quads_Distributed"),
+            (9, "Quads_Equalized"),
+            (5, "Sixes"),
+            (7, "Sixes"),
+        ] {
+            let players: Vec<String> = (0..n)
+                .map(|i| format!(r#"{{"name":"P{}","rating":{}}}"#, i + 1, 2000 - 10 * i))
+                .collect();
+            let rounds: Vec<String> = (1..=3)
+                .map(|r| format!(r#"{{"round":{r},"start_round":0,"pairing":"{strat}"}}"#))
+                .collect();
+            let json = format!(
+                r#"{{"players":[{}],"round_pairings":[{}]}}"#,
+                players.join(","),
+                rounds.join(",")
+            );
+            let out = pair(&input(&json));
+            assert_eq!(out.len(), 3, "{strat} n{n}");
+
+            let mut meetings: HashMap<(String, String), i32> = HashMap::new();
+            for round in &out {
+                let mut seen: HashSet<String> = HashSet::new();
+                let mut byes_this_round = 0;
+                for p in &round.pairings {
+                    assert!(seen.insert(p.first.clone()), "{strat} n{n}");
+                    assert!(seen.insert(p.second.clone()), "{strat} n{n}");
+                    let (a, b) = (p.first.clone(), p.second.clone());
+                    if a == "Bye" || b == "Bye" {
+                        byes_this_round += 1;
+                    } else {
+                        let key = if a < b { (a, b) } else { (b, a) };
+                        *meetings.entry(key).or_default() += 1;
+                    }
+                }
+                assert_eq!(byes_this_round, 1, "{strat} n{n} round {}", round.round);
+            }
+            assert!(
+                meetings.values().all(|&c| c == 1),
+                "{strat} n{n} repeats: {meetings:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn qoth_small_field_falls_back_to_koth() {
+        // Fewer than 4 players can't form Queen-of-the-Hill groups of four, so it
+        // falls back to KotH-style consecutive pairing (with a bye for an odd
+        // field) instead of panicking.
+        let inp = input(
+            r#"{
+                "players": [
+                    {"name": "P1", "rating": 1990},
+                    {"name": "P2", "rating": 1980},
+                    {"name": "P3", "rating": 1970}
+                ],
+                "round_pairings": [{"round": 1, "start_round": 0, "pairing": "QotH"}]
+            }"#,
+        );
+        let out = pair(&inp);
+        assert_eq!(out.len(), 1);
+        let mut pairs: Vec<(String, String)> = out[0]
+            .pairings
+            .iter()
+            .map(|p| {
+                let mut n = [p.first.clone(), p.second.clone()];
+                n.sort();
+                (n[0].clone(), n[1].clone())
+            })
+            .collect();
+        pairs.sort();
+        assert_eq!(
+            pairs,
+            vec![
+                ("Bye".to_string(), "P3".to_string()),
+                ("P1".to_string(), "P2".to_string()),
+            ]
+        );
     }
 }

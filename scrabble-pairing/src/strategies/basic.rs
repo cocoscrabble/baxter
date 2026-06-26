@@ -18,6 +18,10 @@ pub fn pair_koth(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
 pub fn pair_qoth(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
     let s = ctx.standings(rp.start_round);
     let n = s.len();
+    if n < 4 {
+        // Too few players for Queen-of-the-Hill groups of four; fall back to KotH.
+        return chunk_pairs(&s);
+    }
     let mut out = Pairings::new();
     if n % 4 == 2 {
         let last = n - 6;
@@ -46,27 +50,40 @@ pub fn pair_qoth(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
 /// initial seedings (round 0), never the start-round standings — a round-robin
 /// block rotates off a fixed ordering and ignores results.
 pub fn pair_round_robin(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
-    let standings = ctx.standings(0);
-    let n = standings.len();
     let pos = rp.round - rp.start_round;
-    pair_rr_into(&standings, n, pos)
+    round_robin(ctx.standings(0), pos)
 }
 
 /// Double round robin: consecutive pairs of rounds share one round-robin game.
 pub fn pair_double_round_robin(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
-    let standings = ctx.standings(0);
-    let n = standings.len();
     let pos = (rp.round - rp.start_round) / 2;
+    round_robin(ctx.standings(0), pos)
+}
+
+/// Run the round-robin rotation over `standings` for game `pos`. For an odd
+/// field a synthetic bye player is appended so the rotation runs over an even
+/// number of slots; whoever is drawn against the bye sits the round out. Over a
+/// full rotation this gives each real player exactly one bye and every pair
+/// exactly one game.
+fn round_robin(mut standings: Vec<Player>, pos: i32) -> Pairings {
+    if !standings.len().is_multiple_of(2) {
+        standings.push(Player::bye());
+    }
+    let n = standings.len();
     pair_rr_into(&standings, n, pos)
 }
 
 /// Charlottesville: split the field into two snaking groups and rotate one group
-/// against the other.
+/// against the other. An odd field gets a bye player so the two groups are equal;
+/// whoever is drawn against the bye sits the round out.
 pub fn pair_charlottesville(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
-    let seeding = ctx.standings(0);
+    let mut seeding = ctx.standings(0);
+    if !seeding.len().is_multiple_of(2) {
+        seeding.push(Player::bye());
+    }
     let mut g1: Vec<usize> = Vec::new();
     let mut g2: Vec<usize> = Vec::new();
-    for i in 0..ctx.players.len() {
+    for i in 0..seeding.len() {
         if i % 4 == 1 || i % 4 == 3 {
             g1.push(i);
         } else {
