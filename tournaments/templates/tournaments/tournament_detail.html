@@ -4,7 +4,7 @@
 
 {% block breadcrumbs %}
 <span class="nav-sep">/</span>
-<a href="{% url 'tournament_detail' tournament.pk %}">{{ tournament.name }}</a>
+<a href="{% url 'tournament_detail' tournament.slug %}">{{ tournament.name }}</a>
 {% endblock %}
 
 {% block content %}
@@ -12,9 +12,9 @@
     <h1>{{ tournament.name }}</h1>
     {% if can_edit %}
     <div class="page-head-actions">
-        <a href="{% url 'tournament_edit' tournament.pk %}">Edit</a>
+        <a href="{% url 'tournament_edit' tournament.slug %}">Edit</a>
         {% if user == tournament.owner %}
-        <a href="{% url 'tournament_delete' tournament.pk %}">Delete</a>
+        <a href="{% url 'tournament_delete' tournament.slug %}">Delete</a>
         {% endif %}
     </div>
     {% endif %}
@@ -27,7 +27,7 @@
             {% include "tournaments/_division_management.html" %}
         {% else %}
             {% for division in divisions %}
-                <div><a href="{% url 'division_detail' division.pk %}">{{ division.name }}</a>{% if division.is_test %} <span class="test-badge">test</span>{% endif %}</div>
+                <div><a href="{% url 'division_detail' division.tournament.slug division.slug %}">{{ division.name }}</a>{% if division.is_test %} <span class="test-badge">test</span>{% endif %}</div>
             {% empty %}
                 None
             {% endfor %}

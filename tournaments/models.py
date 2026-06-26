@@ -2,12 +2,33 @@ from django.conf import settings
 from django.db import models
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.text import slugify
+
+# Slugs that would shadow a sibling static route's own detail page (the static
+# routes themselves always win at request time thanks to URL ordering; this set
+# only stops a generated slug from making an object's own page unreachable).
+RESERVED_SLUGS = {"create", "fake-tournament", "create-player", "players"}
+
+
+def unique_slug(base, queryset, max_length, fallback):
+    """A unique slug for ``base``, deduped against ``queryset`` (which must
+    already exclude the object being saved). A reserved or empty slugify result
+    is treated as a collision and gets a numeric ``-2``/``-3``… suffix."""
+    root = slugify(base)[:max_length] or fallback
+    candidate = root
+    n = 2
+    while candidate in RESERVED_SLUGS or queryset.filter(slug=candidate).exists():
+        suffix = f"-{n}"
+        candidate = f"{root[:max_length - len(suffix)]}{suffix}"
+        n += 1
+    return candidate
 
 
 class Tournament(models.Model):
     """A scrabble tournament."""
 
     name = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=220, unique=True, editable=False)
     location = models.CharField(max_length=200)
     start_date = models.DateField()
     owner = models.ForeignKey(
@@ -33,8 +54,29 @@ class Tournament(models.Model):
     def __str__(self):
         return self.name
 
+    def slug_kwargs(self):
+        """URL kwargs identifying this tournament. Spread into ``reverse``/
+        ``redirect`` for any tournament-scoped route."""
+        return {"tournament_slug": self.slug}
+
+    def save(self, *args, **kwargs):
+        old_slug = self.slug if self.pk else None
+        self.slug = unique_slug(
+            self.name, Tournament.objects.exclude(pk=self.pk), 220, "tournament"
+        )
+        if kwargs.get("update_fields") is not None:
+            kwargs["update_fields"] = set(kwargs["update_fields"]) | {"slug"}
+        super().save(*args, **kwargs)
+        if old_slug and old_slug != self.slug:
+            # New canonical reclaims its slug from any stale alias; the old slug
+            # becomes an alias so its URLs 301 to the new one.
+            TournamentSlugAlias.objects.filter(slug=self.slug).delete()
+            TournamentSlugAlias.objects.update_or_create(
+                slug=old_slug, defaults={"tournament": self}
+            )
+
     def get_absolute_url(self):
-        return reverse("tournament_detail", kwargs={"pk": self.pk})
+        return reverse("tournament_detail", kwargs=self.slug_kwargs())
 
     def can_edit(self, user):
         """Check if user can edit this tournament. Anonymous users always return False."""
@@ -74,6 +116,7 @@ class Division(models.Model):
     """A division within a tournament."""
 
     name = models.CharField(max_length=100)
+    slug = models.SlugField(max_length=120, editable=False)
     tournament = models.ForeignKey(
         Tournament,
         on_delete=models.CASCADE,
@@ -88,10 +131,35 @@ class Division(models.Model):
 
     class Meta:
         ordering = ["name"]
-        unique_together = ["tournament", "name"]
+        unique_together = [["tournament", "name"], ["tournament", "slug"]]
 
     def __str__(self):
         return self.name
+
+    def slug_kwargs(self):
+        """URL kwargs identifying this division: its tournament and own slug.
+        Spread into ``reverse``/``redirect`` for any division-scoped route."""
+        return {"tournament_slug": self.tournament.slug, "division_slug": self.slug}
+
+    def save(self, *args, **kwargs):
+        old_slug = self.slug if self.pk else None
+        self.slug = unique_slug(
+            self.name,
+            # all_objects so a soft-deleted sibling's slug isn't reused.
+            Division.all_objects.filter(tournament=self.tournament).exclude(pk=self.pk),
+            120,
+            "division",
+        )
+        if kwargs.get("update_fields") is not None:
+            kwargs["update_fields"] = set(kwargs["update_fields"]) | {"slug"}
+        super().save(*args, **kwargs)
+        if old_slug and old_slug != self.slug:
+            DivisionSlugAlias.objects.filter(
+                tournament=self.tournament, slug=self.slug
+            ).delete()
+            DivisionSlugAlias.objects.update_or_create(
+                tournament=self.tournament, slug=old_slug, defaults={"division": self}
+            )
 
     def soft_delete(self):
         self.is_deleted = True
@@ -133,6 +201,38 @@ class Division(models.Model):
             return sorted({rp["round"] for rp in rps})
         except AttributeError, KeyError, TypeError, DivisionSettings.DoesNotExist:
             return list(default)
+
+
+class TournamentSlugAlias(models.Model):
+    """A previous slug of a tournament, kept so its old-slug URLs can 301-redirect
+    to the current slug after a rename."""
+
+    tournament = models.ForeignKey(
+        Tournament, on_delete=models.CASCADE, related_name="slug_aliases"
+    )
+    slug = models.SlugField(max_length=220, unique=True)
+
+    def __str__(self):
+        return self.slug
+
+
+class DivisionSlugAlias(models.Model):
+    """A previous slug of a division (per-tournament namespace); see
+    :class:`TournamentSlugAlias`."""
+
+    division = models.ForeignKey(
+        Division, on_delete=models.CASCADE, related_name="slug_aliases"
+    )
+    tournament = models.ForeignKey(
+        Tournament, on_delete=models.CASCADE, related_name="division_slug_aliases"
+    )
+    slug = models.SlugField(max_length=120)
+
+    class Meta:
+        unique_together = ["tournament", "slug"]
+
+    def __str__(self):
+        return self.slug
 
 
 class DivisionSettings(models.Model):

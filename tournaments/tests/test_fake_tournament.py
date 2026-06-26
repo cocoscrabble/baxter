@@ -117,7 +117,7 @@ class FakeTournamentDeleteTest(TestCase):
     def test_admin_can_delete_fake_tournament_via_view(self):
         self.client.login(username="admin_ft", password="p")
         response = self.client.post(
-            reverse("tournament_delete", kwargs={"pk": self.fake.pk})
+            reverse("tournament_delete", kwargs={"tournament_slug": self.fake.slug})
         )
         self.assertRedirects(response, reverse("tournament_list"))
         self.assertFalse(Tournament.objects.filter(pk=self.fake.pk).exists())
@@ -125,7 +125,7 @@ class FakeTournamentDeleteTest(TestCase):
     def test_admin_cannot_delete_real_tournament_via_view(self):
         self.client.login(username="admin_ft", password="p")
         response = self.client.post(
-            reverse("tournament_delete", kwargs={"pk": self.real.pk})
+            reverse("tournament_delete", kwargs={"tournament_slug": self.real.slug})
         )
         self.assertEqual(response.status_code, 403)
         self.assertTrue(Tournament.objects.filter(pk=self.real.pk).exists())
@@ -134,8 +134,8 @@ class FakeTournamentDeleteTest(TestCase):
         self.client.login(username="admin_ft", password="p")
         html = self.client.get(reverse("tournament_list")).content.decode()
         self.assertIn(
-            reverse("tournament_delete", kwargs={"pk": self.fake.pk}), html
+            reverse("tournament_delete", kwargs={"tournament_slug": self.fake.slug}), html
         )
         self.assertNotIn(
-            reverse("tournament_delete", kwargs={"pk": self.real.pk}), html
+            reverse("tournament_delete", kwargs={"tournament_slug": self.real.slug}), html
         )

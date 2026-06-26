@@ -11,9 +11,9 @@
 
 <p>
 {% if editing %}
-<a href="{% url 'division_edit_results' division.pk %}">Cancel</a>
+<a href="{% url 'division_edit_results' division.tournament.slug division.slug %}">Cancel</a>
 {% else %}
-<a href="{% url 'division_detail' division.pk %}">Cancel</a>
+<a href="{% url 'division_detail' division.tournament.slug division.slug %}">Cancel</a>
 {% endif %}
 </p>
 {% endblock %}

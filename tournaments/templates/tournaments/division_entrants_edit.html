@@ -55,7 +55,7 @@
 <script>
 const entrantsExtra = {
     createPlayerUrl: "{% url 'create_player' %}",
-    bulkImportUrl: "{% url 'bulk_import_entrants' division.pk %}",
+    bulkImportUrl: "{% url 'bulk_import_entrants' division.tournament.slug division.slug %}",
 };
 </script>
 {% editgrid_table grid %}

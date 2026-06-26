@@ -9,7 +9,7 @@
 are pre-filled from the pairings where available, and each card includes a QR code
 linking to the published pairings page.</p>
 
-<form method="get" action="{% url 'division_scorecards_download' division.pk %}">
+<form method="get" action="{% url 'division_scorecards_download' division.tournament.slug division.slug %}">
     <button type="submit">Generate and download scorecards</button>
 </form>
 {% endblock %}

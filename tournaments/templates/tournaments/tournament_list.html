@@ -26,12 +26,12 @@
     <tbody>
         {% for tournament in tournaments %}
         <tr>
-            <td><a href="{% url 'tournament_detail' tournament.pk %}">{{ tournament.name }}</a></td>
+            <td><a href="{% url 'tournament_detail' tournament.slug %}">{{ tournament.name }}</a></td>
             <td>{{ tournament.location }}</td>
             <td>{{ tournament.start_date }}</td>
             <td>
                 {% if tournament.is_fake and tournament.user_can_delete %}
-                <a href="{% url 'tournament_delete' tournament.pk %}">Delete</a>
+                <a href="{% url 'tournament_delete' tournament.slug %}">Delete</a>
                 {% endif %}
             </td>
         </tr>

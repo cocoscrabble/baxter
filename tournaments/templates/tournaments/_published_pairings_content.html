@@ -18,7 +18,7 @@
             <td>{{ entry.pairing.table_label|default:entry.pairing.table }}</td>
             <td>{{ entry.pairing.first.name }}</td>
             <td>{{ entry.pairing.second.name }}</td>
-            <td><a href="{% url 'resultslip_create' division.pk %}?pairing={{ entry.pairing.pk }}">Submit results</a></td>
+            <td><a href="{% url 'resultslip_create' division.tournament.slug division.slug %}?pairing={{ entry.pairing.pk }}">Submit results</a></td>
         </tr>
         {% endfor %}
     </tbody>

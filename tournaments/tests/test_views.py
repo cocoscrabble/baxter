@@ -54,16 +54,16 @@ class TournamentDetailViewTests(TestCase):
     def test_shows_edit_link_for_owner(self):
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(
-            reverse("tournament_detail", kwargs={"pk": self.tournament.pk})
+            reverse("tournament_detail", kwargs={"tournament_slug": self.tournament.slug})
         )
-        edit_url = reverse("tournament_edit", kwargs={"pk": self.tournament.pk})
+        edit_url = reverse("tournament_edit", kwargs={"tournament_slug": self.tournament.slug})
         self.assertContains(response, edit_url)
 
     def test_no_edit_link_for_anonymous(self):
         response = self.client.get(
-            reverse("tournament_detail", kwargs={"pk": self.tournament.pk})
+            reverse("tournament_detail", kwargs={"tournament_slug": self.tournament.slug})
         )
-        edit_url = reverse("tournament_edit", kwargs={"pk": self.tournament.pk})
+        edit_url = reverse("tournament_edit", kwargs={"tournament_slug": self.tournament.slug})
         self.assertNotContains(response, edit_url)
 
 
@@ -86,7 +86,7 @@ class TournamentCreateViewTests(TestCase):
         )
         tournament = Tournament.objects.get(name="New Tournament")
         self.assertRedirects(
-            response, reverse("tournament_detail", kwargs={"pk": tournament.pk})
+            response, reverse("tournament_detail", kwargs={"tournament_slug": tournament.slug})
         )
         self.assertEqual(tournament.owner, self.owner)
 
@@ -99,7 +99,7 @@ class DivisionCreateDeleteViewTests(TestCase):
     def test_create_division(self):
         self.client.login(username="owner", password="testpass123")
         self.client.post(
-            reverse("division_create", kwargs={"tournament_pk": self.tournament.pk}),
+            reverse("division_create", kwargs={"tournament_slug": self.tournament.slug}),
             {"name": "Open", "is_test": "0"},
         )
         self.assertTrue(
@@ -109,7 +109,7 @@ class DivisionCreateDeleteViewTests(TestCase):
     def test_create_test_division(self):
         self.client.login(username="owner", password="testpass123")
         self.client.post(
-            reverse("division_create", kwargs={"tournament_pk": self.tournament.pk}),
+            reverse("division_create", kwargs={"tournament_slug": self.tournament.slug}),
             {"name": "Sandbox", "is_test": "1"},
         )
         self.assertTrue(
@@ -119,7 +119,7 @@ class DivisionCreateDeleteViewTests(TestCase):
     def test_create_division_non_editor_forbidden(self):
         self.client.login(username="other", password="testpass123")
         response = self.client.post(
-            reverse("division_create", kwargs={"tournament_pk": self.tournament.pk}),
+            reverse("division_create", kwargs={"tournament_slug": self.tournament.slug}),
             {"name": "Novice", "is_test": "0"},
         )
         self.assertEqual(response.status_code, 403)
@@ -128,17 +128,17 @@ class DivisionCreateDeleteViewTests(TestCase):
     def test_create_redirects_to_tournament_detail(self):
         self.client.login(username="owner", password="testpass123")
         response = self.client.post(
-            reverse("division_create", kwargs={"tournament_pk": self.tournament.pk}),
+            reverse("division_create", kwargs={"tournament_slug": self.tournament.slug}),
             {"name": "Open", "is_test": "0"},
         )
         self.assertRedirects(
-            response, reverse("tournament_detail", kwargs={"pk": self.tournament.pk})
+            response, reverse("tournament_detail", kwargs={"tournament_slug": self.tournament.slug})
         )
 
     def test_delete_confirmation_page_renders(self):
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(
-            reverse("division_delete", kwargs={"pk": self.division.pk})
+            reverse("division_delete", kwargs=self.division.slug_kwargs())
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, self.division.name)
@@ -147,7 +147,7 @@ class DivisionCreateDeleteViewTests(TestCase):
 
     def test_delete_division_soft_deletes(self):
         self.client.login(username="owner", password="testpass123")
-        self.client.post(reverse("division_delete", kwargs={"pk": self.division.pk}))
+        self.client.post(reverse("division_delete", kwargs=self.division.slug_kwargs()))
         self.assertFalse(Division.objects.filter(pk=self.division.pk).exists())
         self.assertTrue(
             Division.all_objects.filter(pk=self.division.pk, is_deleted=True).exists()
@@ -156,7 +156,7 @@ class DivisionCreateDeleteViewTests(TestCase):
     def test_delete_division_non_editor_forbidden(self):
         self.client.login(username="other", password="testpass123")
         response = self.client.post(
-            reverse("division_delete", kwargs={"pk": self.division.pk}),
+            reverse("division_delete", kwargs=self.division.slug_kwargs()),
         )
         self.assertEqual(response.status_code, 403)
         self.assertTrue(Division.objects.filter(pk=self.division.pk).exists())
@@ -164,16 +164,16 @@ class DivisionCreateDeleteViewTests(TestCase):
     def test_delete_redirects_to_tournament_detail(self):
         self.client.login(username="owner", password="testpass123")
         response = self.client.post(
-            reverse("division_delete", kwargs={"pk": self.division.pk}),
+            reverse("division_delete", kwargs=self.division.slug_kwargs()),
         )
         self.assertRedirects(
-            response, reverse("tournament_detail", kwargs={"pk": self.tournament.pk})
+            response, reverse("tournament_detail", kwargs={"tournament_slug": self.tournament.slug})
         )
 
     def test_restore_division(self):
         self.division.soft_delete()
         self.client.login(username="owner", password="testpass123")
-        self.client.post(reverse("division_restore", kwargs={"pk": self.division.pk}))
+        self.client.post(reverse("division_restore", kwargs=self.division.slug_kwargs()))
         self.assertTrue(
             Division.objects.filter(pk=self.division.pk, is_deleted=False).exists()
         )
@@ -182,7 +182,7 @@ class DivisionCreateDeleteViewTests(TestCase):
         self.division.soft_delete()
         self.client.login(username="other", password="testpass123")
         response = self.client.post(
-            reverse("division_restore", kwargs={"pk": self.division.pk}),
+            reverse("division_restore", kwargs=self.division.slug_kwargs()),
         )
         self.assertEqual(response.status_code, 403)
         self.assertTrue(
@@ -197,11 +197,11 @@ class DivisionRenameViewTests(TestCase):
     def test_rename_division(self):
         self.client.login(username="owner", password="testpass123")
         response = self.client.post(
-            reverse("division_rename", kwargs={"pk": self.division.pk}),
+            reverse("division_rename", kwargs=self.division.slug_kwargs()),
             {"name": "Championship"},
         )
         self.assertRedirects(
-            response, reverse("tournament_detail", kwargs={"pk": self.tournament.pk})
+            response, reverse("tournament_detail", kwargs={"tournament_slug": self.tournament.slug})
         )
         self.division.refresh_from_db()
         self.assertEqual(self.division.name, "Championship")
@@ -209,7 +209,7 @@ class DivisionRenameViewTests(TestCase):
     def test_rename_strips_whitespace(self):
         self.client.login(username="owner", password="testpass123")
         self.client.post(
-            reverse("division_rename", kwargs={"pk": self.division.pk}),
+            reverse("division_rename", kwargs=self.division.slug_kwargs()),
             {"name": "  Trimmed  "},
         )
         self.division.refresh_from_db()
@@ -218,7 +218,7 @@ class DivisionRenameViewTests(TestCase):
     def test_rename_empty_name_rejected(self):
         self.client.login(username="owner", password="testpass123")
         self.client.post(
-            reverse("division_rename", kwargs={"pk": self.division.pk}),
+            reverse("division_rename", kwargs=self.division.slug_kwargs()),
             {"name": "   "},
         )
         self.division.refresh_from_db()
@@ -228,7 +228,7 @@ class DivisionRenameViewTests(TestCase):
         Division.objects.create(name="Expert", tournament=self.tournament)
         self.client.login(username="owner", password="testpass123")
         self.client.post(
-            reverse("division_rename", kwargs={"pk": self.division.pk}),
+            reverse("division_rename", kwargs=self.division.slug_kwargs()),
             {"name": "Expert"},
         )
         self.division.refresh_from_db()
@@ -237,7 +237,7 @@ class DivisionRenameViewTests(TestCase):
     def test_rename_non_editor_forbidden(self):
         self.client.login(username="other", password="testpass123")
         response = self.client.post(
-            reverse("division_rename", kwargs={"pk": self.division.pk}),
+            reverse("division_rename", kwargs=self.division.slug_kwargs()),
             {"name": "Hacked"},
         )
         self.assertEqual(response.status_code, 403)
@@ -248,7 +248,7 @@ class DivisionRenameViewTests(TestCase):
         Division.objects.create(name="Expert", tournament=self.tournament)
         self.client.login(username="owner", password="testpass123")
         response = self.client.post(
-            reverse("division_rename", kwargs={"pk": self.division.pk}),
+            reverse("division_rename", kwargs=self.division.slug_kwargs()),
             data=json.dumps({"name": "Expert"}),
             content_type="application/json",
             headers={"datastar-request": "true"},
@@ -263,7 +263,7 @@ class DivisionRenameViewTests(TestCase):
     def test_rename_datastar_returns_management_fragment(self):
         self.client.login(username="owner", password="testpass123")
         response = self.client.post(
-            reverse("division_rename", kwargs={"pk": self.division.pk}),
+            reverse("division_rename", kwargs=self.division.slug_kwargs()),
             data=json.dumps({"name": "Masters"}),
             content_type="application/json",
             headers={"datastar-request": "true"},
@@ -290,28 +290,28 @@ class TournamentUpdateViewTests(TestCase):
     def test_owner_can_edit(self):
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(
-            reverse("tournament_edit", kwargs={"pk": self.tournament.pk})
+            reverse("tournament_edit", kwargs={"tournament_slug": self.tournament.slug})
         )
         self.assertEqual(response.status_code, 200)
 
     def test_editor_can_edit(self):
         self.client.login(username="editor", password="testpass123")
         response = self.client.get(
-            reverse("tournament_edit", kwargs={"pk": self.tournament.pk})
+            reverse("tournament_edit", kwargs={"tournament_slug": self.tournament.slug})
         )
         self.assertEqual(response.status_code, 200)
 
     def test_other_user_forbidden(self):
         self.client.login(username="other", password="testpass123")
         response = self.client.get(
-            reverse("tournament_edit", kwargs={"pk": self.tournament.pk})
+            reverse("tournament_edit", kwargs={"tournament_slug": self.tournament.slug})
         )
         self.assertEqual(response.status_code, 403)
 
     def test_update_tournament(self):
         self.client.login(username="owner", password="testpass123")
         response = self.client.post(
-            reverse("tournament_edit", kwargs={"pk": self.tournament.pk}),
+            reverse("tournament_edit", kwargs={"tournament_slug": self.tournament.slug}),
             {
                 "name": "Updated Tournament",
                 "location": "Updated Location",
@@ -319,10 +319,12 @@ class TournamentUpdateViewTests(TestCase):
                 "editor_usernames": "",
             },
         )
-        self.assertRedirects(
-            response, reverse("tournament_detail", kwargs={"pk": self.tournament.pk})
-        )
+        # Renaming re-syncs the slug, so the redirect targets the new slug.
         self.tournament.refresh_from_db()
+        self.assertEqual(self.tournament.slug, "updated-tournament")
+        self.assertRedirects(
+            response, reverse("tournament_detail", kwargs={"tournament_slug": self.tournament.slug})
+        )
         self.assertEqual(self.tournament.name, "Updated Tournament")
 
 
@@ -338,7 +340,7 @@ class TournamentDeleteViewTests(TestCase):
     def test_owner_can_delete(self):
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(
-            reverse("tournament_delete", kwargs={"pk": self.tournament.pk})
+            reverse("tournament_delete", kwargs={"tournament_slug": self.tournament.slug})
         )
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "tournaments/tournament_confirm_delete.html")
@@ -346,14 +348,14 @@ class TournamentDeleteViewTests(TestCase):
     def test_editor_cannot_delete(self):
         self.client.login(username="editor", password="testpass123")
         response = self.client.get(
-            reverse("tournament_delete", kwargs={"pk": self.tournament.pk})
+            reverse("tournament_delete", kwargs={"tournament_slug": self.tournament.slug})
         )
         self.assertEqual(response.status_code, 403)
 
     def test_delete_tournament(self):
         self.client.login(username="owner", password="testpass123")
         response = self.client.post(
-            reverse("tournament_delete", kwargs={"pk": self.tournament.pk})
+            reverse("tournament_delete", kwargs={"tournament_slug": self.tournament.slug})
         )
         self.assertRedirects(response, reverse("tournament_list"))
         self.assertFalse(Tournament.objects.filter(pk=self.tournament.pk).exists())
@@ -423,7 +425,7 @@ class BulkImportEntrantsViewTests(TestCase):
             "import.csv", csv_content.encode("utf-8"), content_type="text/csv"
         )
         return self.client.post(
-            reverse("bulk_import_entrants", kwargs={"pk": self.division.pk}),
+            reverse("bulk_import_entrants", kwargs=self.division.slug_kwargs()),
             {"csv_file": f},
         )
 
@@ -497,7 +499,7 @@ class ResultSlipCreateViewTests(TestCase):
 
     def test_create_result_slip(self):
         response = self.client.post(
-            reverse("resultslip_create", kwargs={"pk": self.division.pk}),
+            reverse("resultslip_create", kwargs=self.division.slug_kwargs()),
             {
                 "round": 1,
                 "pairing": self.pairing.pk,
@@ -531,7 +533,7 @@ class ResultSlipCreateViewTests(TestCase):
         response = self.client.post(
             reverse(
                 "resultslip_edit",
-                kwargs={"pk": self.division.pk, "result_pk": rs.pk},
+                kwargs={**self.division.slug_kwargs(), "result_pk": rs.pk},
             ),
             {
                 "round": 1,
@@ -566,7 +568,7 @@ class ResultSlipCreateViewTests(TestCase):
         response = self.client.get(
             reverse(
                 "resultslip_edit",
-                kwargs={"pk": self.division.pk, "result_pk": rs.pk},
+                kwargs={**self.division.slug_kwargs(), "result_pk": rs.pk},
             )
         )
         self.assertEqual(response.status_code, 200)
@@ -577,7 +579,7 @@ class ResultSlipCreateViewTests(TestCase):
 
     def test_form_shows_pairing_options(self):
         response = self.client.get(
-            reverse("resultslip_create", kwargs={"pk": self.division.pk})
+            reverse("resultslip_create", kwargs=self.division.slug_kwargs())
         )
         self.assertContains(response, "Alice")
         self.assertContains(response, "Bob")
@@ -586,7 +588,7 @@ class ResultSlipCreateViewTests(TestCase):
         # The published-pairings "Submit results" link deep-links a match via
         # ?pairing=<pk>; the form opens with that round and pairing selected.
         response = self.client.get(
-            reverse("resultslip_create", kwargs={"pk": self.division.pk})
+            reverse("resultslip_create", kwargs=self.division.slug_kwargs())
             + f"?pairing={self.pairing.pk}"
         )
         self.assertContains(response, 'value="1" selected')
@@ -600,7 +602,7 @@ class ResultSlipCreateViewTests(TestCase):
             division=self.division, player=other_player, number=3
         )
         response = self.client.post(
-            reverse("resultslip_create", kwargs={"pk": self.division.pk}),
+            reverse("resultslip_create", kwargs=self.division.slug_kwargs()),
             {
                 "round": 1,
                 "pairing": self.pairing.pk,
@@ -643,7 +645,7 @@ class DivisionDetailLatestResultsTests(TestCase):
             winner_started=False,
         )
         response = self.client.get(
-            reverse("division_detail", kwargs={"pk": self.division.pk})
+            reverse("division_detail", kwargs=self.division.slug_kwargs())
         )
         # Round 2 scores should appear, round 1 scores should not
         self.assertContains(response, "420")
@@ -652,15 +654,15 @@ class DivisionDetailLatestResultsTests(TestCase):
     def test_settings_link_shown_for_editor(self):
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(
-            reverse("division_detail", kwargs={"pk": self.division.pk})
+            reverse("division_detail", kwargs=self.division.slug_kwargs())
         )
         self.assertContains(
-            response, reverse("division_settings", kwargs={"pk": self.division.pk})
+            response, reverse("division_settings", kwargs=self.division.slug_kwargs())
         )
 
     def test_settings_link_hidden_for_anonymous(self):
         response = self.client.get(
-            reverse("division_detail", kwargs={"pk": self.division.pk})
+            reverse("division_detail", kwargs=self.division.slug_kwargs())
         )
         self.assertNotContains(response, "Settings")
 
@@ -682,7 +684,7 @@ class DivisionStandingsViewTests(TestCase):
             winner_started=True,
         )
         response = self.client.get(
-            reverse("division_standings", kwargs={"pk": self.division.pk})
+            reverse("division_standings", kwargs=self.division.slug_kwargs())
         )
         self.assertContains(response, "Alice")
         self.assertContains(response, "Bob")
@@ -707,9 +709,7 @@ class DivisionStandingsViewTests(TestCase):
             winner_started=False,
         )
         response = self.client.get(
-            reverse(
-                "division_standings_round", kwargs={"pk": self.division.pk, "round": 1}
-            )
+            reverse("division_standings_round", kwargs={**self.division.slug_kwargs(), "round": 1})
         )
         self.assertEqual(response.status_code, 200)
         # After round 1 only, Alice has 1 win
@@ -735,13 +735,11 @@ class DivisionStandingsViewTests(TestCase):
             winner_started=False,
         )
         response = self.client.get(
-            reverse("division_standings", kwargs={"pk": self.division.pk})
+            reverse("division_standings", kwargs=self.division.slug_kwargs())
         )
         self.assertContains(
             response,
-            reverse(
-                "division_standings_round", kwargs={"pk": self.division.pk, "round": 1}
-            ),
+            reverse("division_standings_round", kwargs={**self.division.slug_kwargs(), "round": 1}),
         )
 
 
@@ -749,7 +747,7 @@ class DivisionStandingsViewTests(TestCase):
 class DivisionSettingsEditViewTests(TestCase):
     def setUp(self):
         setUpTournament(self)
-        self.url = reverse("division_settings", kwargs={"pk": self.division.pk})
+        self.url = reverse("division_settings", kwargs=self.division.slug_kwargs())
 
     def test_editor_sees_placeholder(self):
         self.client.login(username="owner", password="testpass123")
@@ -765,7 +763,7 @@ class DivisionSettingsEditViewTests(TestCase):
 class DivisionRoundPairingsEditViewTests(TestCase):
     def setUp(self):
         setUpTournament(self)
-        self.url = reverse("division_round_pairings", kwargs={"pk": self.division.pk})
+        self.url = reverse("division_round_pairings", kwargs=self.division.slug_kwargs())
 
     def test_non_editor_forbidden(self):
         self.client.login(username="other", password="testpass123")
@@ -837,9 +835,7 @@ class DivisionRoundPairingsEditViewTests(TestCase):
 
     def test_preview_expands_without_saving(self):
         self.client.login(username="owner", password="testpass123")
-        url = reverse(
-            "division_round_pairings_preview", kwargs={"pk": self.division.pk}
-        )
+        url = reverse("division_round_pairings_preview", kwargs=self.division.slug_kwargs())
         payload = {
             "blocks": [{"pairing": "Quads_Clustered", "rounds": 3, "pair_from": 1}]
         }
@@ -862,7 +858,7 @@ class DivisionPairingsViewTests(TestCase):
 
     def test_no_pairings_configured_shows_message(self):
         response = self.client.get(
-            reverse("division_pairings", kwargs={"pk": self.division.pk})
+            reverse("division_pairings", kwargs=self.division.slug_kwargs())
         )
         self.assertContains(response, "No round pairings configured")
 
@@ -879,7 +875,7 @@ class DivisionPairingsViewTests(TestCase):
             repeats=0,
         )
         response = self.client.get(
-            reverse("division_pairings", kwargs={"pk": self.division.pk})
+            reverse("division_pairings", kwargs=self.division.slug_kwargs())
         )
         round_pairings = response.context["round_pairings"]
         self.assertEqual(len(round_pairings), 1)
@@ -908,7 +904,7 @@ class DivisionPairingsViewTests(TestCase):
             repeats=0,
         )
         response = self.client.get(
-            reverse("division_pairings", kwargs={"pk": self.division.pk})
+            reverse("division_pairings", kwargs=self.division.slug_kwargs())
         )
         # Selected round should be round 1 (pairable)
         self.assertEqual(response.context["selected_round"], 1)
@@ -922,7 +918,7 @@ class DivisionPairingsViewTests(TestCase):
         )
         self.client.login(username="owner", password="testpass123")
         # Viewing the pairings tab auto-generates the pairable round's pairings.
-        self.client.get(reverse("division_pairings", kwargs={"pk": self.division.pk}))
+        self.client.get(reverse("division_pairings", kwargs=self.division.slug_kwargs()))
         self.assertEqual(Pairing.objects.filter(division=self.division).count(), 1)
 
     def test_pairings_not_autogenerated_for_non_editor(self):
@@ -930,16 +926,16 @@ class DivisionPairingsViewTests(TestCase):
             division=self.division,
             round_pairings=[{"round": 1, "pairing": "KotH", "start_round": 0}],
         )
-        self.client.get(reverse("division_pairings", kwargs={"pk": self.division.pk}))
+        self.client.get(reverse("division_pairings", kwargs=self.division.slug_kwargs()))
         self.assertEqual(Pairing.objects.filter(division=self.division).count(), 0)
 
     def test_pairings_link_on_division_detail(self):
         response = self.client.get(
-            reverse("division_detail", kwargs={"pk": self.division.pk})
+            reverse("division_detail", kwargs=self.division.slug_kwargs())
         )
         self.assertContains(
             response,
-            reverse("division_pairings", kwargs={"pk": self.division.pk}),
+            reverse("division_pairings", kwargs=self.division.slug_kwargs()),
         )
 
 
@@ -1015,7 +1011,7 @@ class DivisionPairingsRoundContentTests(TestCase):
         self._create_slip(1, pairings[0], self.entrant1, self.entrant2, 450, 380)
 
         response = self.client.get(
-            reverse("division_pairings", kwargs={"pk": self.division.pk})
+            reverse("division_pairings", kwargs=self.division.slug_kwargs())
         )
         self.assertEqual(response.context["selected_round"], 1)
         self.assertEqual(response.context["selected_status"], "in_progress")
@@ -1036,7 +1032,7 @@ class DivisionPairingsRoundContentTests(TestCase):
 
         # Navigate directly to round 1 so we don't get auto-routed to a pairable later round.
         response = self.client.get(
-            reverse("round_pairings_tab", kwargs={"pk": self.division.pk, "round": 1})
+            reverse("round_pairings_tab", kwargs={**self.division.slug_kwargs(), "round": 1})
         )
         self.assertEqual(response.context["selected_round"], 1)
         self.assertEqual(response.context["selected_status"], "finished")
@@ -1058,7 +1054,7 @@ class DivisionPairingsRoundContentTests(TestCase):
         # round 1 has lifecycle status FINISHED), so default selection would
         # land on round 2 instead.
         response = self.client.get(
-            reverse("round_pairings_tab", kwargs={"pk": self.division.pk, "round": 1})
+            reverse("round_pairings_tab", kwargs={**self.division.slug_kwargs(), "round": 1})
         )
         self.assertEqual(response.context["selected_status"], "finished")
         round_pairings = response.context["round_pairings"]
@@ -1080,7 +1076,7 @@ class DivisionPairingsRoundContentTests(TestCase):
             winner_started=True,
         )
         response = self.client.get(
-            reverse("round_pairings_tab", kwargs={"pk": self.division.pk, "round": 1})
+            reverse("round_pairings_tab", kwargs={**self.division.slug_kwargs(), "round": 1})
         )
         tabs_by_round = {t["round"]: t for t in response.context["round_tabs"]}
         self.assertEqual(tabs_by_round[1]["status"], "error_no_pairings")
@@ -1101,7 +1097,7 @@ class DivisionPairingsRoundContentTests(TestCase):
         )
 
         response = self.client.get(
-            reverse("published_pairings", kwargs={"pk": self.division.pk})
+            reverse("published_pairings", kwargs=self.division.slug_kwargs())
         )
         rounds_shown = [r for r, _ in response.context["pairings"]]
         self.assertEqual(rounds_shown, [2])
@@ -1113,7 +1109,7 @@ class DivisionPairingsRoundContentTests(TestCase):
             [(self.entrant1, self.entrant2), (self.entrant3, self.entrant4)],
         )
         response = self.client.get(
-            reverse("division_pairings", kwargs={"pk": self.division.pk})
+            reverse("division_pairings", kwargs=self.division.slug_kwargs())
         )
         tabs_by_round = {t["round"]: t for t in response.context["round_tabs"]}
         self.assertEqual(tabs_by_round[1]["status"], "published")
@@ -1128,7 +1124,7 @@ class DivisionPairingsRoundContentTests(TestCase):
         original_pks = sorted(p.pk for p in pairings)
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(
-            reverse("division_pairings", kwargs={"pk": self.division.pk})
+            reverse("division_pairings", kwargs=self.division.slug_kwargs())
         )
         # The manual Generate button is gone.
         self.assertNotContains(response, "Generate Pairings")
@@ -1150,7 +1146,7 @@ class DivisionPairingsRoundContentTests(TestCase):
 
         self.client.login(username="owner", password="testpass123")
         response = self.client.post(
-            reverse("add_fixed_pairing", kwargs={"pk": self.division.pk}),
+            reverse("add_fixed_pairing", kwargs=self.division.slug_kwargs()),
             {"round": 1, "entrant1": self.entrant1.pk, "entrant2": self.entrant3.pk},
         )
         self.assertEqual(response.status_code, 302)
@@ -1180,7 +1176,7 @@ class DivisionPairingsRoundContentTests(TestCase):
 
         self.client.login(username="owner", password="testpass123")
         response = self.client.post(
-            reverse("add_fixed_pairing", kwargs={"pk": self.division.pk}),
+            reverse("add_fixed_pairing", kwargs=self.division.slug_kwargs()),
             {"round": 1, "entrant1": self.entrant3.pk, "entrant2": self.entrant4.pk},
         )
         self.assertEqual(response.status_code, 302)
@@ -1202,7 +1198,7 @@ class DivisionPairingsRoundContentTests(TestCase):
 
         self.client.login(username="owner", password="testpass123")
         response = self.client.post(
-            reverse("remove_fixed_pairings", kwargs={"pk": self.division.pk}),
+            reverse("remove_fixed_pairings", kwargs=self.division.slug_kwargs()),
             {"keep": []},
         )
         self.assertEqual(response.status_code, 302)
@@ -1217,7 +1213,7 @@ class DivisionPairingsRoundContentTests(TestCase):
         self._create_slip(1, pairings[0], self.entrant1, self.entrant2, 450, 380)
         self._create_slip(1, pairings[1], self.entrant3, self.entrant4, 500, 400)
         response = self.client.get(
-            reverse("division_pairings", kwargs={"pk": self.division.pk})
+            reverse("division_pairings", kwargs=self.division.slug_kwargs())
         )
         self.assertFalse(response.context["has_published_rounds"])
 
@@ -1237,7 +1233,7 @@ class DivisionPairingsRoundContentTests(TestCase):
         self._create_slip(2, r2_pairings[0], self.entrant1, self.entrant3, 420, 410)
 
         response = self.client.get(
-            reverse("division_pairings", kwargs={"pk": self.division.pk})
+            reverse("division_pairings", kwargs=self.division.slug_kwargs())
         )
         self.assertEqual(response.context["selected_round"], 2)
         self.assertEqual(response.context["selected_status"], "in_progress")
@@ -1279,7 +1275,7 @@ class InlineFixedPairingTests(TestCase):
 
     def _datastar_post(self, name, payload):
         return self.client.post(
-            reverse(name, kwargs={"pk": self.division.pk}),
+            reverse(name, kwargs=self.division.slug_kwargs()),
             data=json.dumps(payload),
             content_type="application/json",
             headers=DATASTAR_HEADERS,
@@ -1288,14 +1284,14 @@ class InlineFixedPairingTests(TestCase):
     def test_section_shown_for_editor_on_pairable_round(self):
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(
-            reverse("division_pairings", kwargs={"pk": self.division.pk})
+            reverse("division_pairings", kwargs=self.division.slug_kwargs())
         )
         self.assertEqual(response.context["selected_status"], "pairable")
         self.assertContains(response, "Add fixed pairing")
 
     def test_section_hidden_for_non_editor(self):
         response = self.client.get(
-            reverse("division_pairings", kwargs={"pk": self.division.pk})
+            reverse("division_pairings", kwargs=self.division.slug_kwargs())
         )
         self.assertEqual(response.context["selected_status"], "pairable")
         self.assertNotContains(response, "Add fixed pairing")
@@ -1391,7 +1387,7 @@ class InlineFixedPairingTests(TestCase):
         self.client.login(username="owner", password="testpass123")
         # Viewing the tab auto-generates draft pairings for the pairable round.
         response = self.client.get(
-            reverse("division_pairings", kwargs={"pk": self.division.pk})
+            reverse("division_pairings", kwargs=self.division.slug_kwargs())
         )
         self.assertEqual(response.context["selected_status"], "pairable")
         self.assertContains(response, "Publish All")
@@ -1399,7 +1395,7 @@ class InlineFixedPairingTests(TestCase):
 
     def test_publish_round_publishes_only_that_round(self):
         self.client.login(username="owner", password="testpass123")
-        self.client.get(reverse("division_pairings", kwargs={"pk": self.division.pk}))
+        self.client.get(reverse("division_pairings", kwargs=self.division.slug_kwargs()))
         response = self._datastar_post("publish_round", {"round": 1})
         self.assertEqual(response.status_code, 200)
         rp = self.division.round_pairings_set.get(round=1)
@@ -1431,7 +1427,7 @@ class InlineFixedPairingTests(TestCase):
 class DivisionEditResultsViewTests(TestCase):
     def setUp(self):
         setUpTournament(self)
-        self.url = reverse("division_edit_results", kwargs={"pk": self.division.pk})
+        self.url = reverse("division_edit_results", kwargs=self.division.slug_kwargs())
 
     def test_editor_can_access(self):
         self.client.login(username="owner", password="testpass123")
@@ -1616,7 +1612,7 @@ class TestDivisionVisibilityTests(TestCase):
 
     def test_test_division_hidden_on_tournament_detail_for_non_editor(self):
         response = self.client.get(
-            reverse("tournament_detail", kwargs={"pk": self.tournament.pk})
+            reverse("tournament_detail", kwargs={"tournament_slug": self.tournament.slug})
         )
         self.assertContains(response, "Open")
         self.assertNotContains(response, "Test Div")
@@ -1624,27 +1620,27 @@ class TestDivisionVisibilityTests(TestCase):
     def test_test_division_shown_on_tournament_detail_for_editor(self):
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(
-            reverse("tournament_detail", kwargs={"pk": self.tournament.pk})
+            reverse("tournament_detail", kwargs={"tournament_slug": self.tournament.slug})
         )
         self.assertContains(response, "Open")
         self.assertContains(response, "Test Div")
 
     def test_test_division_detail_404_for_non_editor(self):
         response = self.client.get(
-            reverse("division_detail", kwargs={"pk": self.test_division.pk})
+            reverse("division_detail", kwargs=self.test_division.slug_kwargs())
         )
         self.assertEqual(response.status_code, 404)
 
     def test_test_division_detail_works_for_editor(self):
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(
-            reverse("division_detail", kwargs={"pk": self.test_division.pk})
+            reverse("division_detail", kwargs=self.test_division.slug_kwargs())
         )
         self.assertEqual(response.status_code, 200)
 
     def test_regular_division_visible_to_non_editor(self):
         response = self.client.get(
-            reverse("division_detail", kwargs={"pk": self.division.pk})
+            reverse("division_detail", kwargs=self.division.slug_kwargs())
         )
         self.assertEqual(response.status_code, 200)
 
@@ -1653,7 +1649,7 @@ class TestDivisionVisibilityTests(TestCase):
 class DivisionFixedTablesEditViewTests(TestCase):
     def setUp(self):
         setUpTournament(self)
-        self.url = reverse("division_fixed_tables", kwargs={"pk": self.division.pk})
+        self.url = reverse("division_fixed_tables", kwargs=self.division.slug_kwargs())
 
     def test_editor_can_access(self):
         self.client.login(username="owner", password="testpass123")
@@ -1810,7 +1806,7 @@ class DivisionFixedTablesEditViewTests(TestCase):
 class DivisionBoardTableMapEditViewTests(TestCase):
     def setUp(self):
         setUpTournament(self)
-        self.url = reverse("division_board_tables", kwargs={"pk": self.division.pk})
+        self.url = reverse("division_board_tables", kwargs=self.division.slug_kwargs())
 
     def test_editor_can_access(self):
         self.client.login(username="owner", password="testpass123")
@@ -1926,7 +1922,7 @@ class SimulateMatchViewTests(TestCase):
         self.test_entrant2 = Entrant.objects.create(
             division=self.test_division, player=self.player2, number=2
         )
-        self.url = reverse("simulate_match", kwargs={"pk": self.test_division.pk})
+        self.url = reverse("simulate_match", kwargs=self.test_division.slug_kwargs())
 
     def _publish_round_one(self):
         rp = RoundPairings.objects.create(
@@ -1987,7 +1983,7 @@ class SimulateMatchViewTests(TestCase):
 
     def test_forbidden_for_non_test_division(self):
         self.client.login(username="owner", password="testpass123")
-        url = reverse("simulate_match", kwargs={"pk": self.division.pk})
+        url = reverse("simulate_match", kwargs=self.division.slug_kwargs())
         response = self.client.post(
             url,
             json.dumps({"round": 1, "first": "Alice", "second": "Bob"}),
@@ -2036,7 +2032,7 @@ class SimulateButtonVisibilityTests(TestCase):
     def test_simulate_hidden_on_pairable_round(self):
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(
-            reverse("division_pairings", kwargs={"pk": self.test_division.pk})
+            reverse("division_pairings", kwargs=self.test_division.slug_kwargs())
         )
         self.assertEqual(response.context["selected_status"], "pairable")
         self.assertNotContains(response, ">simulate<")
@@ -2058,9 +2054,7 @@ class SimulateButtonVisibilityTests(TestCase):
         )
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(
-            reverse(
-                "round_pairings_tab", kwargs={"pk": self.test_division.pk, "round": 1}
-            )
+            reverse("round_pairings_tab", kwargs={**self.test_division.slug_kwargs(), "round": 1})
         )
         self.assertEqual(response.context["selected_status"], "published")
         self.assertContains(response, ">simulate<")
@@ -2072,10 +2066,8 @@ class DivisionEntrantsViewTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         setUpTournament(cls)
-        cls.url = reverse("division_entrants", kwargs={"pk": cls.division.pk})
-        cls.edit_url = reverse(
-            "division_entrants_edit", kwargs={"pk": cls.division.pk}
-        )
+        cls.url = reverse("division_entrants", kwargs=cls.division.slug_kwargs())
+        cls.edit_url = reverse("division_entrants_edit", kwargs=cls.division.slug_kwargs())
 
     def test_edit_entrants_button_shown_for_editor(self):
         self.client.login(username="owner", password="testpass123")
@@ -2095,7 +2087,7 @@ class DivisionEntrantsEditViewTests(TestCase):
         self.player3 = Player.objects.create(
             name="Charlie", player_number="003", rating=1400
         )
-        self.url = reverse("division_entrants_edit", kwargs={"pk": self.division.pk})
+        self.url = reverse("division_entrants_edit", kwargs=self.division.slug_kwargs())
 
     def test_editor_can_access(self):
         self.client.login(username="owner", password="testpass123")
@@ -2240,9 +2232,7 @@ class DivisionEntrantsEditViewTests(TestCase):
 class EditPresenceViewTests(TestCase):
     def setUp(self):
         setUpTournament(self)
-        self.url = reverse(
-            "edit_presence", kwargs={"pk": self.division.pk, "scope": "entrants"}
-        )
+        self.url = reverse("edit_presence", kwargs={**self.division.slug_kwargs(), "scope": "entrants"})
         self.key = edit_key(self.division, "entrants")
 
     def test_non_editor_forbidden(self):
@@ -2251,9 +2241,7 @@ class EditPresenceViewTests(TestCase):
 
     def test_unknown_scope_404(self):
         self.client.login(username="owner", password="testpass123")
-        url = reverse(
-            "edit_presence", kwargs={"pk": self.division.pk, "scope": "bogus"}
-        )
+        url = reverse("edit_presence", kwargs={**self.division.slug_kwargs(), "scope": "bogus"})
         self.assertEqual(self.client.post(url).status_code, 404)
 
     def test_heartbeat_records_self_and_returns_other_editors(self):
@@ -2299,7 +2287,7 @@ class EditPresenceViewTests(TestCase):
 class DivisionFixturesEditViewTests(TestCase):
     def setUp(self):
         setUpTournament(self)
-        self.url = reverse("division_fixtures", kwargs={"pk": self.division.pk})
+        self.url = reverse("division_fixtures", kwargs=self.division.slug_kwargs())
 
     def test_non_editor_forbidden(self):
         self.client.login(username="other", password="testpass123")
@@ -2316,19 +2304,17 @@ class DivisionFixturesEditViewTests(TestCase):
         self.assertEqual(tables.dom_id, "fixed-tables-table")
         self.assertEqual(
             pairings.save_url,
-            reverse("division_fixed_pairings", kwargs={"pk": self.division.pk}),
+            reverse("division_fixed_pairings", kwargs=self.division.slug_kwargs()),
         )
         self.assertEqual(
             tables.save_url,
-            reverse("division_fixed_tables", kwargs={"pk": self.division.pk}),
+            reverse("division_fixed_tables", kwargs=self.division.slug_kwargs()),
         )
 
     def test_each_grid_saves_via_its_own_endpoint(self):
         # The combined page is GET-only; saves go to the per-grid endpoints.
         self.client.login(username="owner", password="testpass123")
-        pairings_url = reverse(
-            "division_fixed_pairings", kwargs={"pk": self.division.pk}
-        )
+        pairings_url = reverse("division_fixed_pairings", kwargs=self.division.slug_kwargs())
         payload = {
             "rows": [
                 {
@@ -2343,3 +2329,57 @@ class DivisionFixturesEditViewTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.division.fixed_pairings.count(), 1)
+
+
+class SlugURLRedirectTests(TestCase):
+    """Old (aliased) slugs 301 to the canonical URL after a rename; stale numeric
+    URLs 404."""
+
+    def setUp(self):
+        self.owner = User.objects.create_user(username="o", password="p")
+        self.tournament = Tournament.objects.create(
+            name="Spring Open", location="x", start_date=date(2026, 1, 1), owner=self.owner
+        )
+        self.division = Division.objects.create(name="Open", tournament=self.tournament)
+
+    def test_old_division_slug_redirects_after_rename(self):
+        old_slug = self.division.slug
+        self.division.name = "Masters"
+        self.division.save()
+        url = reverse("division_entrants", kwargs={
+            "tournament_slug": self.tournament.slug, "division_slug": old_slug,
+        })
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 301)
+        self.assertEqual(
+            response["Location"],
+            reverse("division_entrants", kwargs=self.division.slug_kwargs()),
+        )
+
+    def test_old_tournament_slug_redirects_after_rename(self):
+        old_slug = self.tournament.slug
+        self.tournament.name = "Summer Open"
+        self.tournament.save()
+        response = self.client.get(
+            reverse("tournament_detail", kwargs={"tournament_slug": old_slug})
+        )
+        self.assertEqual(response.status_code, 301)
+        self.assertEqual(
+            response["Location"],
+            reverse("tournament_detail", kwargs={"tournament_slug": self.tournament.slug}),
+        )
+
+    def test_query_string_preserved_on_redirect(self):
+        old_slug = self.division.slug
+        self.division.name = "Masters"
+        self.division.save()
+        url = reverse("resultslip_create", kwargs={
+            "tournament_slug": self.tournament.slug, "division_slug": old_slug,
+        }) + "?pairing=5"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 301)
+        self.assertTrue(response["Location"].endswith("?pairing=5"))
+
+    def test_stale_numeric_tournament_url_404s(self):
+        response = self.client.get(f"/tournaments/{self.tournament.pk}/")
+        self.assertEqual(response.status_code, 404)

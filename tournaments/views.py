@@ -32,7 +32,18 @@ from .fixed_pairings import (
 )
 from .match_simulation import simulate_match, simulate_round
 from .grids import BoardTableMapGrid, EntrantsGrid, FixedPairingsGrid, FixedTablesGrid, ResultsGrid
-from .models import EDIT_SCOPES, Division, DivisionSettings, Pairing, Player, ResultSlip, RoundPairings, Tournament
+from .models import (
+    EDIT_SCOPES,
+    Division,
+    DivisionSettings,
+    DivisionSlugAlias,
+    Pairing,
+    Player,
+    ResultSlip,
+    RoundPairings,
+    Tournament,
+    TournamentSlugAlias,
+)
 from editgrid.concurrency import check_conflict
 from editgrid.models import EditVersion
 from editgrid.views import BaseEditGridView, EditPresenceBaseView, build_grid_context
@@ -66,23 +77,6 @@ class TournamentListView(ListView):
         user = self.request.user
         for tournament in context["tournaments"]:
             tournament.user_can_delete = tournament.can_delete(user)
-        return context
-
-
-class TournamentDetailView(DetailView):
-    model = Tournament
-    template_name = "tournaments/tournament_detail.html"
-    context_object_name = "tournament"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        user = self.request.user
-        can_edit = self.object.can_edit(user)
-        context["can_edit"] = can_edit
-        if can_edit:
-            context.update(self.object.division_buckets())
-        else:
-            context["divisions"] = self.object.divisions.filter(is_test=False)
         return context
 
 
@@ -126,26 +120,111 @@ class FakeTournamentCreateView(LoginRequiredMixin, View):
             f"Created test tournament “{division.tournament.name}” "
             f"with {num_players} players over {num_rounds} rounds.",
         )
-        return redirect("division_pairings", pk=division.pk)
+        return redirect("division_pairings", **division.slug_kwargs())
+
+
+def _resolve_tournament(slug):
+    """``(tournament, is_canonical)``: resolve a tournament by its current slug,
+    then by a :class:`TournamentSlugAlias`. ``(None, False)`` if nothing matches."""
+    tournament = Tournament.objects.filter(slug=slug).first()
+    if tournament is not None:
+        return tournament, True
+    alias = (
+        TournamentSlugAlias.objects.select_related("tournament").filter(slug=slug).first()
+    )
+    if alias is not None:
+        return alias.tournament, False
+    return None, False
+
+
+def _resolve_division(tournament_slug, division_slug, manager=None):
+    """``(division, is_canonical)`` from the two URL slugs, following tournament and
+    division slug aliases. ``is_canonical`` is False when either slug was an alias
+    (caller should 301 to the canonical URL). Raises ``Http404`` if unresolved."""
+    manager = manager or Division.objects
+    tournament, t_canon = _resolve_tournament(tournament_slug)
+    if tournament is None:
+        raise Http404
+    division = manager.filter(tournament=tournament, slug=division_slug).first()
+    d_canon = division is not None
+    if division is None:
+        alias = DivisionSlugAlias.objects.filter(
+            tournament=tournament, slug=division_slug
+        ).first()
+        if alias is not None:
+            division = manager.filter(pk=alias.division_id).first()
+    if division is None:
+        raise Http404
+    return division, (t_canon and d_canon)
+
+
+def _redirect_to_canonical(request, kwargs, *, division=None, tournament=None):
+    """301 to the current view with canonical slug(s), preserving the other kwargs
+    and the query string. Used when an old (aliased) slug is requested."""
+    new_kwargs = dict(kwargs)
+    if division is not None:
+        new_kwargs.update(division.slug_kwargs())
+    elif tournament is not None:
+        new_kwargs.update(tournament.slug_kwargs())
+    url = reverse(request.resolver_match.url_name, kwargs=new_kwargs)
+    query = request.META.get("QUERY_STRING")
+    if query:
+        url = f"{url}?{query}"
+    return redirect(url, permanent=True)
+
+
+class TournamentURLMixin:
+    """Resolve a tournament from the ``tournament_slug`` URL kwarg (following slug
+    aliases, 301-ing an old slug to the canonical one) and expose it as the view's
+    object."""
+
+    def dispatch(self, request, *args, **kwargs):
+        self.tournament, canonical = _resolve_tournament(kwargs["tournament_slug"])
+        if self.tournament is None:
+            raise Http404
+        if not canonical:
+            return _redirect_to_canonical(request, kwargs, tournament=self.tournament)
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_object(self, queryset=None):
+        return self.tournament
 
 
 class CanEditTournamentMixin(UserPassesTestMixin):
     """Mixin that checks if user can edit the tournament."""
 
     def test_func(self):
-        tournament = self.get_object()
-        return tournament.can_edit(self.request.user)
+        return self.get_object().can_edit(self.request.user)
 
 
-class CanEditDivisionMixin(UserPassesTestMixin):
+class DivisionURLMixin:
+    """Resolve a division from the ``tournament_slug``/``division_slug`` URL kwargs
+    (following slug aliases, 301-ing old slugs to canonical) and expose it via
+    ``get_division`` / ``get_object``. Set ``division_manager`` to
+    ``Division.all_objects`` on views that act on soft-deleted divisions."""
+
+    division_manager = None
+
+    def dispatch(self, request, *args, **kwargs):
+        self.division, canonical = _resolve_division(
+            kwargs["tournament_slug"], kwargs["division_slug"], self.division_manager
+        )
+        if not canonical:
+            return _redirect_to_canonical(request, kwargs, division=self.division)
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_division(self):
+        return self.division
+
+    def get_object(self, queryset=None):
+        return self.division
+
+
+class CanEditDivisionMixin(DivisionURLMixin, UserPassesTestMixin):
     """Mixin that checks if user can edit the division's tournament."""
 
     def test_func(self):
-        division = self.get_division()
-        return division.tournament.can_edit(self.request.user)
-
-    def get_division(self):
-        return get_object_or_404(Division, pk=self.kwargs["pk"])
+        return self.division.tournament.can_edit(self.request.user)
 
 
 class IsAdminMixin(UserPassesTestMixin):
@@ -177,13 +256,13 @@ def edit_key(division, scope):
     return f"division:{division.pk}:{scope}"
 
 
-class VisibleDivisionMixin:
-    """Mixin that raises 404 for test divisions when user is not an editor."""
+class VisibleDivisionMixin(DivisionURLMixin):
+    """Resolve the division (via :class:`DivisionURLMixin`) and 404 for test
+    divisions the user is not allowed to see."""
 
     def get_object(self, queryset=None):
-        obj = super().get_object(queryset)
-        _ensure_visible_division(obj, self.request.user)
-        return obj
+        _ensure_visible_division(self.division, self.request.user)
+        return self.division
 
 
 class DivisionNavMixin:
@@ -201,7 +280,24 @@ class DivisionNavMixin:
         return context
 
 
-class TournamentUpdateView(LoginRequiredMixin, CanEditTournamentMixin, UpdateView):
+class TournamentDetailView(TournamentURLMixin, DetailView):
+    model = Tournament
+    template_name = "tournaments/tournament_detail.html"
+    context_object_name = "tournament"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        can_edit = self.object.can_edit(user)
+        context["can_edit"] = can_edit
+        if can_edit:
+            context.update(self.object.division_buckets())
+        else:
+            context["divisions"] = self.object.divisions.filter(is_test=False)
+        return context
+
+
+class TournamentUpdateView(TournamentURLMixin, LoginRequiredMixin, CanEditTournamentMixin, UpdateView):
     model = Tournament
     form_class = TournamentForm
     template_name = "tournaments/tournament_form.html"
@@ -224,7 +320,7 @@ class CanDeleteTournamentMixin(UserPassesTestMixin):
         return tournament.can_delete(self.request.user)
 
 
-class TournamentDeleteView(LoginRequiredMixin, CanDeleteTournamentMixin, DeleteView):
+class TournamentDeleteView(TournamentURLMixin, LoginRequiredMixin, CanDeleteTournamentMixin, DeleteView):
     model = Tournament
     template_name = "tournaments/tournament_confirm_delete.html"
     context_object_name = "tournament"
@@ -232,8 +328,8 @@ class TournamentDeleteView(LoginRequiredMixin, CanDeleteTournamentMixin, DeleteV
 
 
 class DivisionCreateView(LoginRequiredMixin, View):
-    def post(self, request, tournament_pk):
-        tournament = get_object_or_404(Tournament, pk=tournament_pk)
+    def post(self, request, tournament_slug):
+        tournament = get_object_or_404(Tournament, slug=tournament_slug)
         if not tournament.can_edit(request.user):
             from django.core.exceptions import PermissionDenied
             raise PermissionDenied
@@ -243,39 +339,35 @@ class DivisionCreateView(LoginRequiredMixin, View):
             Division.objects.get_or_create(
                 tournament=tournament, name=name, defaults={"is_test": is_test}
             )
-        return redirect("tournament_detail", pk=tournament_pk)
+        return redirect("tournament_detail", **tournament.slug_kwargs())
 
 
 class DivisionDeleteView(LoginRequiredMixin, CanEditDivisionMixin, View):
     template_name = "tournaments/division_confirm_delete.html"
 
-    def get(self, request, pk):
-        division = self.get_division()
-        return render(request, self.template_name, {"division": division})
+    def get(self, request, *args, **kwargs):
+        return render(request, self.template_name, {"division": self.division})
 
-    def post(self, request, pk):
-        division = self.get_division()
-        tournament_pk = division.tournament.pk
-        division.soft_delete()
-        return redirect("tournament_detail", pk=tournament_pk)
+    def post(self, request, *args, **kwargs):
+        tournament_slug = self.division.tournament.slug
+        self.division.soft_delete()
+        return redirect("tournament_detail", tournament_slug=tournament_slug)
 
 
 class DivisionRestoreView(LoginRequiredMixin, CanEditDivisionMixin, View):
-    def get_division(self):
-        return get_object_or_404(Division.all_objects, pk=self.kwargs["pk"])
+    division_manager = Division.all_objects
 
-    def post(self, request, pk):
-        division = self.get_division()
-        tournament_pk = division.tournament.pk
-        division.restore()
-        return redirect("tournament_detail", pk=tournament_pk)
+    def post(self, request, *args, **kwargs):
+        tournament_slug = self.division.tournament.slug
+        self.division.restore()
+        return redirect("tournament_detail", tournament_slug=tournament_slug)
 
 
 class DivisionRenameView(LoginRequiredMixin, CanEditDivisionMixin, View):
     """Rename a division inline from the tournament detail page (datastar)."""
 
-    def post(self, request, pk):
-        division = self.get_division()
+    def post(self, request, *args, **kwargs):
+        division = self.division
         tournament = division.tournament
         data = (read_signals(request) or {}) if is_datastar(request) else request.POST
         name = (data.get("name") or "").strip()
@@ -303,7 +395,7 @@ class DivisionRenameView(LoginRequiredMixin, CanEditDivisionMixin, View):
             )
         if error:
             messages.error(request, error)
-        return redirect("tournament_detail", pk=tournament.pk)
+        return redirect("tournament_detail", **tournament.slug_kwargs())
 
 
 class DivisionDetailView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
@@ -403,14 +495,14 @@ def _pairings_body_response(request, division, *, select_round=None, error=None)
         )
     if error:
         messages.error(request, error)
-    return redirect("division_pairings", pk=division.pk)
+    return redirect("division_pairings", **division.slug_kwargs())
 
 
 class PublishPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
     """Publish every draft round at once."""
 
-    def post(self, request, pk):
-        division = self.get_division()
+    def post(self, request, *args, **kwargs):
+        division = self.division
         publish_rounds(division)
         return _pairings_body_response(request, division)
 
@@ -418,7 +510,7 @@ class PublishPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
 class PublishRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
     """Publish a single draft round and live-swap the pairings body."""
 
-    def post(self, request, pk):
+    def post(self, request, *args, **kwargs):
         division = self.get_division()
         data = (read_signals(request) or {}) if is_datastar(request) else request.POST
         round_number = int(data["round"])
@@ -427,7 +519,7 @@ class PublishRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
 
 
 class AddFixedPairingView(LoginRequiredMixin, CanEditDivisionMixin, View):
-    def post(self, request, pk):
+    def post(self, request, *args, **kwargs):
         division = self.get_division()
         data = (read_signals(request) or {}) if is_datastar(request) else request.POST
         round_number = int(data["round"])
@@ -440,7 +532,7 @@ class AddFixedPairingView(LoginRequiredMixin, CanEditDivisionMixin, View):
 class RemoveFixedPairingView(LoginRequiredMixin, CanEditDivisionMixin, View):
     """Delete a single fixed pairing inline and live-regenerate its round."""
 
-    def post(self, request, pk):
+    def post(self, request, *args, **kwargs):
         division = self.get_division()
         data = (read_signals(request) or {}) if is_datastar(request) else request.POST
         fp_id = int(data["fp_id"])
@@ -450,13 +542,13 @@ class RemoveFixedPairingView(LoginRequiredMixin, CanEditDivisionMixin, View):
 
 
 class RemoveFixedPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
-    def post(self, request, pk):
+    def post(self, request, *args, **kwargs):
         division = self.get_division()
         keep_ids = set(request.POST.getlist("keep"))
         error = remove_fixed_pairings(division, keep_ids)
         if error:
             messages.error(request, error)
-        return redirect("division_pairings", pk=pk)
+        return redirect("division_pairings", **division.slug_kwargs())
 
 
 def _entrants_for_editing(division):
@@ -515,7 +607,7 @@ class RoundPairingsTabView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
     context_object_name = "division"
     active_tab = "pairings"
 
-    def get(self, request, pk, round):
+    def get(self, request, round, *args, **kwargs):
         self.object = self.get_object()
         context = self.get_context_data(object=self.object)
         if context.get("can_edit"):
@@ -562,7 +654,7 @@ class DivisionScorecardsDownloadView(VisibleDivisionMixin, DetailView):
         tournament = division.tournament
         rounds = make_rounds(division.configured_round_numbers())
         qr_url = self.request.build_absolute_uri(
-            reverse("published_pairings", args=[division.pk])
+            reverse("published_pairings", kwargs=division.slug_kwargs())
         )
         opponents, starts = self._prefills_by_entrant(division)
         specs = [
@@ -616,7 +708,7 @@ class DivisionSettingsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
 
     template_name = "tournaments/division_settings_edit.html"
 
-    def get(self, request, pk):
+    def get(self, request, *args, **kwargs):
         division = self.get_division()
         return render(request, self.template_name, {
             "division": division,
@@ -653,7 +745,7 @@ class DivisionRoundPairingsEditView(LoginRequiredMixin, CanEditDivisionMixin, Vi
 
     template_name = "tournaments/division_round_pairings_edit.html"
 
-    def get(self, request, pk):
+    def get(self, request, *args, **kwargs):
         division = self.get_division()
         settings_obj, _ = DivisionSettings.objects.get_or_create(division=division)
         blocks = settings_obj.pairing_blocks
@@ -670,14 +762,17 @@ class DivisionRoundPairingsEditView(LoginRequiredMixin, CanEditDivisionMixin, Vi
             "strategy_types_json": json.dumps([str(s) for s in STRATEGY_TYPES]),
             "edit_version": EditVersion.version_for(key),
             "presence_url": reverse(
-                "edit_presence", kwargs={"pk": division.pk, "scope": "round_pairings"}
+                "edit_presence",
+                kwargs={**division.slug_kwargs(), "scope": "round_pairings"},
             ),
-            "preview_url": reverse("division_round_pairings_preview", kwargs={"pk": division.pk}),
+            "preview_url": reverse(
+                "division_round_pairings_preview", kwargs=division.slug_kwargs()
+            ),
             "active_tab": "round_pairings",
             "can_edit": True,
         })
 
-    def post(self, request, pk):
+    def post(self, request, *args, **kwargs):
         division = self.get_division()
         try:
             data = json.loads(request.body)
@@ -701,7 +796,7 @@ class DivisionRoundPairingsPreviewView(LoginRequiredMixin, CanEditDivisionMixin,
     """Expand blocks into the per-round list without saving — drives the live
     preview table."""
 
-    def post(self, request, pk):
+    def post(self, request, *args, **kwargs):
         self.get_division()  # permission gate
         try:
             data = json.loads(request.body)
@@ -730,7 +825,8 @@ class DivisionEditGridView(LoginRequiredMixin, CanEditDivisionMixin, BaseEditGri
 
     def presence_url(self, division):
         return reverse(
-            "edit_presence", kwargs={"pk": division.pk, "scope": self.grid.scope}
+            "edit_presence",
+            kwargs={**division.slug_kwargs(), "scope": self.grid.scope},
         )
 
     def get_context_data(self, division):
@@ -808,7 +904,7 @@ class PlayerImportView(LoginRequiredMixin, IsAdminMixin, View):
 class BulkImportEntrantsView(LoginRequiredMixin, CanEditDivisionMixin, View):
     """Import entrants from a CSV file, creating new Players as needed."""
 
-    def post(self, request, pk):
+    def post(self, request, *args, **kwargs):
         from tournaments.import_entrants import import_entrants
 
         division = self.get_division()
@@ -858,18 +954,19 @@ class DivisionFixturesEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
         (FixedTablesGrid(), "division_fixed_tables", "tables_grid"),
     ]
 
-    def get(self, request, pk):
+    def get(self, request, *args, **kwargs):
         division = self.get_division()
         context = {"division": division, "active_tab": "fixtures", "can_edit": True}
+        slug_kwargs = division.slug_kwargs()
         for grid, route, ctx_name in self.GRIDS:
             context[ctx_name] = build_grid_context(
                 grid,
                 division,
                 key=edit_key(division, grid.scope),
                 presence_url=reverse(
-                    "edit_presence", kwargs={"pk": division.pk, "scope": grid.scope}
+                    "edit_presence", kwargs={**slug_kwargs, "scope": grid.scope}
                 ),
-                save_url=reverse(route, kwargs={"pk": division.pk}),
+                save_url=reverse(route, kwargs=slug_kwargs),
             )
         return render(request, self.template_name, context)
 
@@ -974,13 +1071,12 @@ def _result_summary(result):
     )
 
 
-class ResultSlipCreateView(View):
+class ResultSlipCreateView(DivisionURLMixin, View):
     template_name = "tournaments/resultslip_form.html"
 
     def get_division(self):
-        division = get_object_or_404(Division, pk=self.kwargs["pk"])
-        _ensure_visible_division(division, self.request.user)
-        return division
+        _ensure_visible_division(self.division, self.request.user)
+        return self.division
 
     def get_result(self, division):
         """Return the ResultSlip being edited, or None when adding a new one."""
@@ -1009,10 +1105,13 @@ class ResultSlipCreateView(View):
                  "second_pk": s_pk, "second_name": s_name}
                 for p_pk, f_pk, f_name, s_pk, s_name in pairing_list
             ]
+        slug_kwargs = division.slug_kwargs()
         if editing and result is not None:
-            form_action = reverse("resultslip_edit", args=[division.pk, result.pk])
+            form_action = reverse(
+                "resultslip_edit", kwargs={**slug_kwargs, "result_pk": result.pk}
+            )
         else:
-            form_action = reverse("resultslip_create", args=[division.pk])
+            form_action = reverse("resultslip_create", kwargs=slug_kwargs)
         context = {
             "form": form,
             "division": division,
@@ -1025,7 +1124,9 @@ class ResultSlipCreateView(View):
         if saved is not None:
             context["saved_result"] = {
                 "summary": _result_summary(saved),
-                "edit_url": reverse("resultslip_edit", args=[division.pk, saved.pk]),
+                "edit_url": reverse(
+                    "resultslip_edit", kwargs={**slug_kwargs, "result_pk": saved.pk}
+                ),
             }
         return context
 
@@ -1148,7 +1249,7 @@ def _require_published_round(division, round_num):
 class SimulateMatchView(LoginRequiredMixin, CanEditDivisionMixin, View):
     """Simulate a single match for a test division and create a result slip."""
 
-    def post(self, request, pk):
+    def post(self, request, *args, **kwargs):
         division = self.get_division()
         if not division.is_test:
             return JsonResponse(
@@ -1189,7 +1290,7 @@ class SimulateMatchView(LoginRequiredMixin, CanEditDivisionMixin, View):
 class SimulateRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
     """Simulate all remaining matches in a round for a test division."""
 
-    def post(self, request, pk):
+    def post(self, request, *args, **kwargs):
         division = self.get_division()
         if not division.is_test:
             return JsonResponse(

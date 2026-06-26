@@ -61,7 +61,7 @@
     <button type="submit" class="btn-save">Save</button>
     {% if editing %}
     <button type="button" class="btn-cancel"
-        data-on:click="@get('{% url 'resultslip_create' division.pk %}')">Cancel edit</button>
+        data-on:click="@get('{% url 'resultslip_create' division.tournament.slug division.slug %}')">Cancel edit</button>
     {% endif %}
 </form>
 </div>
