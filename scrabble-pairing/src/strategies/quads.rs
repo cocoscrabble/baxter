@@ -19,6 +19,17 @@ const PAIRINGS6: [[[usize; 2]; 3]; 3] = [
     [[0, 3], [1, 4], [2, 5]],
 ];
 
+/// Start-round standings for a quad/sixes round, with a bye appended for an odd
+/// field so it divides into whole quads/hexes. Whoever is grouped with the bye
+/// sits the round out (the bye follows the strategy's own distribution).
+fn quad_standings(ctx: &Ctx, rp: &RoundPairing) -> Vec<Player> {
+    let mut standings = ctx.standings(rp.start_round);
+    if !standings.len().is_multiple_of(2) {
+        standings.push(Player::bye());
+    }
+    standings
+}
+
 /// 0-based position of `rp` within its run of same-strategy, same-start_round
 /// entries — i.e. which game of the quad rotation this round is.
 fn quad_position(rp: &RoundPairing, round_pairings: &[RoundPairing]) -> usize {
@@ -98,7 +109,7 @@ fn maybe_add_quads(hexes: &mut Vec<Vec<Player>>, standings: &[Player], last_hex:
 
 pub fn pair_clustered_quads(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
     let pos = quad_position(rp, ctx.round_pairings);
-    let standings = ctx.standings(rp.start_round);
+    let standings = quad_standings(ctx, rp);
     let last_quad = match last_quad_position(standings.len()) {
         Some(v) => v,
         None => return Pairings::new(),
@@ -115,7 +126,7 @@ pub fn pair_clustered_quads(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
 
 pub fn pair_distributed_quads(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
     let pos = quad_position(rp, ctx.round_pairings);
-    let standings = ctx.standings(rp.start_round);
+    let standings = quad_standings(ctx, rp);
     let last_quad = match last_quad_position(standings.len()) {
         Some(v) => v,
         None => return Pairings::new(),
@@ -131,7 +142,7 @@ pub fn pair_distributed_quads(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
 
 pub fn pair_equalized_quads(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
     let pos = quad_position(rp, ctx.round_pairings);
-    let standings = ctx.standings(rp.start_round);
+    let standings = quad_standings(ctx, rp);
     let last_quad = match last_quad_position(standings.len()) {
         Some(v) => v,
         None => return Pairings::new(),
@@ -148,7 +159,7 @@ pub fn pair_equalized_quads(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
 
 pub fn pair_sixes(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
     let pos = quad_position(rp, ctx.round_pairings);
-    let standings = ctx.standings(rp.start_round);
+    let standings = quad_standings(ctx, rp);
     let last_hex = match last_hex_position(standings.len()) {
         Some(v) => v,
         None => return Pairings::new(),

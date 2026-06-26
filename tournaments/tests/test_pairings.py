@@ -28,7 +28,11 @@ from tournaments.pairing.base import (
     Starts,
     standings_after_round,
 )
-from tournaments.pairing.round_pairing import RP, RoundPairing
+from tournaments.pairing.round_pairing import (
+    RP,
+    RoundPairing,
+    normalize_round_robin_start_rounds,
+)
 from tournaments.pairing.pair import can_pair, extract_pairings, pair, pair_round, round_status
 from users.models import User
 
@@ -906,3 +910,112 @@ class RoundRobinUnplayedRoundsTests(PairingDBTestBase):
             for p in pairings:
                 names.update({p.first_id, p.second_id})
             self.assertEqual(len(names), 4)  # every entrant paired exactly once
+
+
+class OddFieldRotationTests(TestCase):
+    """Odd round-robin / Charlottesville fields get a synthetic bye player so the
+    rotation is over an even number of slots; whoever is drawn against the bye
+    sits the round out, and no real pair repeats."""
+
+    def _run(self, n_players, n_rounds, pairing):
+        entrants = [
+            EntrantData(PlayerData(f"P{i + 1}", 2000 - 10 * i)) for i in range(n_players)
+        ]
+        rps = [
+            RoundPairing(round=r, start_round=0, pairing=pairing)
+            for r in range(1, n_rounds + 1)
+        ]
+        normalize_round_robin_start_rounds(rps)
+        pd = PairingData(
+            result_slips=[],
+            entrants=entrants,
+            repeats=Repeats(),
+            round_pairings=rps,
+            fixed_pairings={},
+        )
+        return pair(pd)
+
+    def _tally(self, out, games_per_round):
+        byes = {}
+        meetings = {}
+        for _rnd, pairings in out:
+            self.assertEqual(len(pairings), games_per_round)
+            seen = set()
+            for p in pairings:
+                a, b = p.first.name, p.second.name
+                self.assertNotIn(a, seen)
+                self.assertNotIn(b, seen)
+                seen.update([a, b])
+                if a == "Bye":
+                    byes[b] = byes.get(b, 0) + 1
+                elif b == "Bye":
+                    byes[a] = byes.get(a, 0) + 1
+                else:
+                    key = tuple(sorted([a, b]))
+                    meetings[key] = meetings.get(key, 0) + 1
+        return byes, meetings
+
+    def test_round_robin_each_player_byes_once_no_repeats(self):
+        out = self._run(5, 5, RP.RoundRobin)
+        self.assertEqual(len(out), 5)
+        # 5 players + 1 ghost -> 6 slots -> 3 games (one is a bye game).
+        byes, meetings = self._tally(out, games_per_round=3)
+        for i in range(5):
+            self.assertEqual(byes.get(f"P{i + 1}", 0), 1)
+        # C(5, 2) = 10 distinct pairs, each met exactly once.
+        self.assertEqual(len(meetings), 10)
+        self.assertTrue(all(v == 1 for v in meetings.values()), meetings)
+
+    def test_charlottesville_odd_field_byes_and_no_repeats(self):
+        # 5 players over a full rotation (len(g2) = 3 rounds).
+        out = self._run(5, 3, RP.Charlottesville)
+        self.assertEqual(len(out), 3)
+        byes, meetings = self._tally(out, games_per_round=3)
+        # One bye per round, each to a distinct player; no real pair repeats.
+        self.assertEqual(sum(byes.values()), 3)
+        self.assertTrue(all(v == 1 for v in byes.values()), byes)
+        self.assertTrue(all(v == 1 for v in meetings.values()), meetings)
+
+    def test_odd_quads_one_bye_per_round_no_repeats(self):
+        # An odd field gets a bye so it divides into whole quads/hexes. Across
+        # all four quad/sixes strategies: exactly one player byes per round, each
+        # round is a valid matching, and no real pair repeats within the block.
+        cases = [
+            (7, RP.Quads_Clustered),
+            (5, RP.Quads_Clustered),
+            (7, RP.Quads_Distributed),
+            (9, RP.Quads_Equalized),
+            (5, RP.Sixes),
+            (7, RP.Sixes),
+        ]
+        for n, strat in cases:
+            out = self._run(n, 3, strat)
+            self.assertEqual(len(out), 3, (strat, n))
+            meetings = {}
+            for _rnd, pairings in out:
+                seen = set()
+                byes_this_round = 0
+                for p in pairings:
+                    a, b = p.first.name, p.second.name
+                    self.assertNotIn(a, seen, (strat, n))
+                    self.assertNotIn(b, seen, (strat, n))
+                    seen.update([a, b])
+                    if a == "Bye" or b == "Bye":
+                        byes_this_round += 1
+                    else:
+                        key = tuple(sorted([a, b]))
+                        meetings[key] = meetings.get(key, 0) + 1
+                self.assertEqual(byes_this_round, 1, (strat, n))
+            self.assertTrue(all(v == 1 for v in meetings.values()), (strat, meetings))
+
+    def test_qoth_small_field_falls_back_to_koth(self):
+        # Fewer than 4 players can't form Queen-of-the-Hill groups of four, so it
+        # falls back to KotH-style consecutive pairing (with a bye for an odd
+        # field) instead of crashing.
+        out = self._run(3, 1, RP.QotH)
+        self.assertEqual(len(out), 1)
+        pairs = {tuple(sorted([p.first.name, p.second.name])) for _, ps in out for p in ps}
+        self.assertEqual(pairs, {("P1", "P2"), ("Bye", "P3")})
+        out2 = self._run(2, 1, RP.QotH)
+        pairs2 = {tuple(sorted([p.first.name, p.second.name])) for _, ps in out2 for p in ps}
+        self.assertEqual(pairs2, {("P1", "P2")})

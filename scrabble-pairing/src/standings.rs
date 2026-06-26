@@ -11,6 +11,10 @@ use indexmap::IndexMap;
 use crate::model::{PlayerData, ResultSlipData};
 
 /// A competitor with their running record. `score` is `wins + 0.5*ties`.
+/// Name of the synthetic bye opponent. A player paired against this one sits the
+/// round out.
+pub const BYE_NAME: &str = "Bye";
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Player {
     pub name: String,
@@ -35,8 +39,13 @@ impl Player {
         }
     }
 
+    /// The synthetic bye opponent.
+    pub fn bye() -> Self {
+        Player::new(BYE_NAME)
+    }
+
     pub fn is_bye(&self) -> bool {
-        self.name.eq_ignore_ascii_case("bye")
+        self.name.eq_ignore_ascii_case(BYE_NAME)
     }
 }
 
