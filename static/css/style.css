@@ -617,41 +617,6 @@ td a:hover {
     }
 }
 
-/* Standings: table beside a compact round selector. */
-.standings-layout {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-lg);
-    align-items: flex-start;
-}
-
-.standings-rounds {
-    flex: 0 0 180px;
-}
-
-.standings-rounds h3 {
-    margin-top: 0;
-}
-
-.standings-main {
-    flex: 1 1 0;
-    min-width: 0;
-}
-
-.round-links {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-xs) var(--space-sm);
-}
-
-/* Narrow screens: stack into a single column with the rounds panel on top of
-   the standings table (it comes first in the DOM). */
-@media (max-width: 768px) {
-    .standings-rounds {
-        flex: 1 1 100%;
-    }
-}
-
 /* Settings formset: size the table to its content instead of stretching the
    full container width (which leaves large gaps between the few columns). */
 #settings-formset table {
