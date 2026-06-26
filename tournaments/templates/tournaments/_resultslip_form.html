@@ -51,6 +51,13 @@
         {{ form.winner_started }}
         {% if form.winner_started.errors %}<ul class="errorlist">{% for e in form.winner_started.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
     </p>
+    <p>
+        <label for="id_verified_by_opponent">
+            {{ form.verified_by_opponent }}
+            Verified by opponent
+        </label>
+        {% if form.verified_by_opponent.errors %}<ul class="errorlist">{% for e in form.verified_by_opponent.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+    </p>
     <button type="submit" class="btn-save">Save</button>
     {% if editing %}
     <button type="button" class="btn-cancel"

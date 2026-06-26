@@ -939,6 +939,7 @@ def _pairings_by_round(division, include_pairing=None):
 _BLANK_RESULT_SIGNALS = {
     "round": "", "pairing": "", "winner": "",
     "winner_score": "", "loser_score": "", "winner_started": False,
+    "verified_by_opponent": False,
 }
 
 
@@ -961,6 +962,8 @@ def _result_signals(result):
         "winner_score": result.winner_score,
         "loser_score": result.loser_score,
         "winner_started": result.winner_started,
+        # Always require re-confirmation, even when editing an existing result.
+        "verified_by_opponent": False,
     }
 
 

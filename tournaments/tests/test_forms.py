@@ -196,11 +196,30 @@ class ResultSlipFormTests(TestCase):
                 "winner_score": 450,
                 "loser_score": 380,
                 "winner_started": True,
+                "verified_by_opponent": True,
             },
             division=self.division,
             pairings_by_round=self._pbr(),
         )
         self.assertTrue(form.is_valid(), form.errors)
+
+    def test_unverified_result_rejected(self):
+        # The "verified by opponent" box must be checked to save a result.
+        form = ResultSlipForm(
+            data={
+                "round": 1,
+                "pairing": self.pairing.pk,
+                "winner": self.entrant1.pk,
+                "winner_score": 450,
+                "loser_score": 380,
+                "winner_started": True,
+                "verified_by_opponent": False,
+            },
+            division=self.division,
+            pairings_by_round=self._pbr(),
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("verified_by_opponent", form.errors)
 
     def test_accepts_negative_scores(self):
         # Scrabble scores can legitimately go negative (e.g. end-of-game
@@ -213,6 +232,7 @@ class ResultSlipFormTests(TestCase):
                 "winner_score": 5,
                 "loser_score": -20,
                 "winner_started": True,
+                "verified_by_opponent": True,
             },
             division=self.division,
             pairings_by_round=self._pbr(),
@@ -233,6 +253,7 @@ class ResultSlipFormTests(TestCase):
                 "winner_score": 450,
                 "loser_score": 380,
                 "winner_started": True,
+                "verified_by_opponent": True,
             },
             division=self.division,
             pairings_by_round=self._pbr(),
@@ -249,6 +270,7 @@ class ResultSlipFormTests(TestCase):
                 "winner_score": 380,
                 "loser_score": 450,
                 "winner_started": True,
+                "verified_by_opponent": True,
             },
             division=self.division,
             pairings_by_round=self._pbr(),
@@ -269,6 +291,7 @@ class ResultSlipFormTests(TestCase):
                 "winner_score": 400,
                 "loser_score": 400,
                 "winner_started": True,
+                "verified_by_opponent": True,
             },
             division=self.division,
             pairings_by_round=self._pbr(),
@@ -284,6 +307,7 @@ class ResultSlipFormTests(TestCase):
                 "winner_score": 450,
                 "loser_score": 380,
                 "winner_started": True,
+                "verified_by_opponent": True,
             },
             division=self.division,
             pairings_by_round=self._pbr(),
@@ -300,6 +324,7 @@ class ResultSlipFormTests(TestCase):
                 "winner_score": 450,
                 "loser_score": 380,
                 "winner_started": True,
+                "verified_by_opponent": True,
             },
             division=self.division,
             pairings_by_round=self._pbr(),
