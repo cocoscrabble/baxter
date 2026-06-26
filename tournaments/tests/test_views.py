@@ -505,6 +505,7 @@ class ResultSlipCreateViewTests(TestCase):
                 "winner_score": 450,
                 "loser_score": 380,
                 "winner_started": True,
+                "verified_by_opponent": True,
             },
         )
         self.assertEqual(response.status_code, 200)
@@ -539,6 +540,7 @@ class ResultSlipCreateViewTests(TestCase):
                 "winner_score": 500,
                 "loser_score": 400,
                 "winner_started": False,
+                "verified_by_opponent": True,
             },
         )
         self.assertEqual(response.status_code, 200)
@@ -596,6 +598,7 @@ class ResultSlipCreateViewTests(TestCase):
                 "winner_score": 450,
                 "loser_score": 380,
                 "winner_started": True,
+                "verified_by_opponent": True,
             },
         )
         self.assertEqual(response.status_code, 200)

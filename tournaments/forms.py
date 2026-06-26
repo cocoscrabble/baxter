@@ -89,6 +89,13 @@ class ResultSlipForm(forms.Form):
     winner_score = forms.IntegerField()
     loser_score = forms.IntegerField(label="Opponent score")
     winner_started = forms.BooleanField(required=False)
+    # Not stored: a gate forcing the submitter to confirm the opponent agreed the
+    # result before it can be saved. Required, so an unchecked box fails validation.
+    verified_by_opponent = forms.BooleanField(
+        required=True,
+        label="Verified by opponent",
+        error_messages={"required": "The result must be verified by the opponent before saving."},
+    )
 
     def __init__(self, *args, division=None, pairings_by_round=None, instance=None, **kwargs):
         super().__init__(*args, **kwargs)
