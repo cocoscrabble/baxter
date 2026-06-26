@@ -22,7 +22,7 @@ class EntrantsGrid(EditGrid):
     template_name = "tournaments/division_entrants_edit.html"
     focus_field = "player"
     columns = [
-        Column("number", "#", kind="display", width=60, align="center", auto_increment=True),
+        Column("number", "#", kind="display", width=60, auto_increment=True),
         Column("player", "Player", kind="choice", lookup="players", autocomplete=True),
     ]
 
@@ -52,7 +52,7 @@ class FixedPairingsGrid(EditGrid):
     template_name = "tournaments/division_fixed_pairings_edit.html"
     focus_field = "round_number"
     columns = [
-        Column("round_number", "Round", kind="number", min=1, width=100, align="center"),
+        Column("round_number", "Round", kind="number", min=1, width=100),
         Column("entrant1", "Player 1", kind="choice", lookup="entrantValues", autocomplete=True),
         Column("entrant2", "Player 2", kind="choice", lookup="entrantValues", autocomplete=True),
     ]
@@ -81,9 +81,9 @@ class FixedTablesGrid(EditGrid):
     template_name = "tournaments/division_fixed_tables_edit.html"
     focus_field = "round_number"
     columns = [
-        Column("round_number", "Round", kind="choice", lookup="roundValues", width=100, align="center", new_row=-1),
+        Column("round_number", "Round", kind="choice", lookup="roundValues", width=100, new_row=-1),
         Column("entrant", "Player", kind="choice", lookup="entrantValues", autocomplete=True, min_width=200),
-        Column("table_label", "Table", kind="text", value_type="str", width=100, align="center"),
+        Column("table_label", "Table", kind="text", value_type="str", width=100),
     ]
 
     def serialize_row(self, ft):
@@ -175,11 +175,11 @@ class BoardTableMapGrid(JsonBlobGrid):
     template_name = "tournaments/division_board_table_map_edit.html"
     focus_field = "label"
     columns = [
-        Column("label", "Table", kind="text", value_type="str", width=120, align="center"),
+        Column("label", "Table", kind="text", value_type="str", width=120),
         # Order index: kept in the row data (groups boards on a shared double
         # table, sorts pairings) but not shown to organizers.
         Column("table", "Order", kind="number", min=1, hidden=True),
-        Column("board", "Board", kind="number", min=1, width=120, align="center", auto_increment=True),
+        Column("board", "Board", kind="number", min=1, width=120, auto_increment=True),
     ]
 
     def validate(self, rows, division):

@@ -20,9 +20,9 @@ const previewTable = new Tabulator("#round-pairings-preview-table", {
     ...TABLE_DEFAULTS,
     data: pageData.preview,
     columns: [
-        { title: "Round", field: "round", width: 90, hozAlign: "center" },
+        { title: "Round", field: "round", width: 90 },
         { title: "Pairing", field: "pairing", minWidth: 160 },
-        { title: "Pairs from round", field: "start_round", width: 160, hozAlign: "center" },
+        { title: "Pairs from round", field: "start_round", width: 160 },
     ],
 });
 
@@ -38,13 +38,13 @@ const blocksTable = new Tabulator("#pairing-blocks-table", {
             editor: "list", editorParams: { values: pageData.strategyTypes, autocomplete: true, listOnEmpty: true },
         },
         {
-            title: "Rounds", field: "rounds", width: 100, hozAlign: "center",
+            title: "Rounds", field: "rounds", width: 100,
             editor: "number", editorParams: { min: 1 },
         },
         // Computed from the cumulative round count; not editable.
-        { title: "Range", field: "_range", headerSort: false, width: 110, hozAlign: "center" },
+        { title: "Range", field: "_range", headerSort: false, width: 110 },
         {
-            title: "Pair from", field: "pair_from", width: 130, hozAlign: "center",
+            title: "Pair from", field: "pair_from", width: 130,
             editor: "number", editorParams: { min: 1 },
             editable: cell => !isRoundRobin(cell.getRow().getData().pairing),
             formatter: cell => {

@@ -434,13 +434,10 @@ tbody tr:hover {
     background-color: var(--color-primary-light);
 }
 
-/* Right-align numeric columns (scores, wins, spread, ratings). */
-.num {
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-}
-
-/* Numeric, but left-aligned — table numbers read as identifiers, not quantities. */
+/* Numeric columns (scores, wins, spread, ratings): left-aligned like every
+   other column, with tabular figures so digits still line up. `.num-left` is a
+   kept alias for the same treatment. */
+.num,
 .num-left {
     text-align: left;
     font-variant-numeric: tabular-nums;
