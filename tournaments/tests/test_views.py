@@ -582,6 +582,16 @@ class ResultSlipCreateViewTests(TestCase):
         self.assertContains(response, "Alice")
         self.assertContains(response, "Bob")
 
+    def test_prefill_pairing_preselects_round_and_pairing(self):
+        # The published-pairings "Submit results" link deep-links a match via
+        # ?pairing=<pk>; the form opens with that round and pairing selected.
+        response = self.client.get(
+            reverse("resultslip_create", kwargs={"pk": self.division.pk})
+            + f"?pairing={self.pairing.pk}"
+        )
+        self.assertContains(response, 'value="1" selected')
+        self.assertContains(response, f'value="{self.pairing.pk}" selected')
+
     def test_invalid_winner_not_in_pairing(self):
         other_player = Player.objects.create(
             name="Charlie", player_number="003", rating=1400

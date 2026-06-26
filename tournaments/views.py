@@ -1037,6 +1037,19 @@ class ResultSlipCreateView(View):
             )
         return render(request, self.template_name, context)
 
+    def _prefill_pairing(self, division, pairing_pk):
+        """The pairing named by a ``?pairing=`` param, if it belongs to this
+        division. Lets the published pairings page deep-link a match into the
+        form with its round and pairing pre-selected."""
+        if not pairing_pk:
+            return None
+        return (
+            Pairing.objects
+            .select_related("first__player", "second__player", "round_pairings")
+            .filter(division=division, pk=pairing_pk)
+            .first()
+        )
+
     def get(self, request, *args, **kwargs):
         division = self.get_division()
         result = self.get_result(division)
@@ -1048,10 +1061,19 @@ class ResultSlipCreateView(View):
             )
             context = self._form_context(division, form, editing=True, result=result)
             return self._render(request, context, signals=_result_signals(result))
-        pbr = _pairings_by_round(division)
-        form = ResultSlipForm(division=division, pairings_by_round=pbr)
+        prefill = self._prefill_pairing(division, request.GET.get("pairing"))
+        pbr = _pairings_by_round(division, include_pairing=prefill)
+        signals = _BLANK_RESULT_SIGNALS
+        # Pre-select the match's round and pairing. ``initial`` drives the
+        # rendered <select>s for a full-page load (the published-pairings link);
+        # ``signals`` patches the same values for a datastar fragment load.
+        initial = None
+        if prefill is not None:
+            initial = {"round": prefill.round, "pairing": prefill.pk}
+            signals = {**signals, "round": str(prefill.round), "pairing": str(prefill.pk)}
+        form = ResultSlipForm(division=division, pairings_by_round=pbr, initial=initial)
         context = self._form_context(division, form)
-        return self._render(request, context, signals=_BLANK_RESULT_SIGNALS)
+        return self._render(request, context, signals=signals)
 
     def post(self, request, *args, **kwargs):
         division = self.get_division()
