@@ -141,12 +141,19 @@ def _resolve_division(tournament_slug, division_slug, manager=None):
     """``(division, is_canonical)`` from the two URL slugs, following tournament and
     division slug aliases. ``is_canonical`` is False when either slug was an alias
     (caller should 301 to the canonical URL). Raises ``Http404`` if unresolved."""
-    manager = manager or Division.objects
-    tournament, t_canon = _resolve_tournament(tournament_slug)
+    manager = (manager or Division.objects).select_related("tournament")
+    # Fast path: both slugs canonical — one query, with the tournament prefetched
+    # for the can_edit/redirect lookups every division view makes.
+    division = manager.filter(
+        tournament__slug=tournament_slug, slug=division_slug
+    ).first()
+    if division is not None:
+        return division, True
+    # Otherwise one or both slugs is an alias; resolve each namespace in turn.
+    tournament, _ = _resolve_tournament(tournament_slug)
     if tournament is None:
         raise Http404
     division = manager.filter(tournament=tournament, slug=division_slug).first()
-    d_canon = division is not None
     if division is None:
         alias = DivisionSlugAlias.objects.filter(
             tournament=tournament, slug=division_slug
@@ -155,17 +162,13 @@ def _resolve_division(tournament_slug, division_slug, manager=None):
             division = manager.filter(pk=alias.division_id).first()
     if division is None:
         raise Http404
-    return division, (t_canon and d_canon)
+    return division, False
 
 
-def _redirect_to_canonical(request, kwargs, *, division=None, tournament=None):
-    """301 to the current view with canonical slug(s), preserving the other kwargs
-    and the query string. Used when an old (aliased) slug is requested."""
-    new_kwargs = dict(kwargs)
-    if division is not None:
-        new_kwargs.update(division.slug_kwargs())
-    elif tournament is not None:
-        new_kwargs.update(tournament.slug_kwargs())
+def _redirect_to_canonical(request, kwargs, obj):
+    """301 to the current view with ``obj``'s canonical slug(s), preserving the
+    other kwargs and the query string. Used when an old (aliased) slug is requested."""
+    new_kwargs = {**kwargs, **obj.slug_kwargs()}
     url = reverse(request.resolver_match.url_name, kwargs=new_kwargs)
     query = request.META.get("QUERY_STRING")
     if query:
@@ -183,7 +186,7 @@ class TournamentURLMixin:
         if self.tournament is None:
             raise Http404
         if not canonical:
-            return _redirect_to_canonical(request, kwargs, tournament=self.tournament)
+            return _redirect_to_canonical(request, kwargs, self.tournament)
         return super().dispatch(request, *args, **kwargs)
 
     def get_object(self, queryset=None):
@@ -210,7 +213,7 @@ class DivisionURLMixin:
             kwargs["tournament_slug"], kwargs["division_slug"], self.division_manager
         )
         if not canonical:
-            return _redirect_to_canonical(request, kwargs, division=self.division)
+            return _redirect_to_canonical(request, kwargs, self.division)
         return super().dispatch(request, *args, **kwargs)
 
     def get_division(self):

@@ -24,6 +24,17 @@ def unique_slug(base, queryset, max_length, fallback):
     return candidate
 
 
+def record_slug_alias(alias_model, *, scope, old_slug, new_slug, owner):
+    """On rename, reclaim ``new_slug`` from any stale alias, then record
+    ``old_slug`` as an alias pointing back at the renamed object.
+
+    ``scope`` is the namespace filter (empty for the global tournament namespace,
+    ``{"tournament": …}`` for the per-tournament division namespace); ``owner`` is
+    the FK back to the object (e.g. ``{"division": self}``)."""
+    alias_model.objects.filter(**scope, slug=new_slug).delete()
+    alias_model.objects.update_or_create(**scope, slug=old_slug, defaults=owner)
+
+
 class Tournament(models.Model):
     """A scrabble tournament."""
 
@@ -68,11 +79,9 @@ class Tournament(models.Model):
             kwargs["update_fields"] = set(kwargs["update_fields"]) | {"slug"}
         super().save(*args, **kwargs)
         if old_slug and old_slug != self.slug:
-            # New canonical reclaims its slug from any stale alias; the old slug
-            # becomes an alias so its URLs 301 to the new one.
-            TournamentSlugAlias.objects.filter(slug=self.slug).delete()
-            TournamentSlugAlias.objects.update_or_create(
-                slug=old_slug, defaults={"tournament": self}
+            record_slug_alias(
+                TournamentSlugAlias, scope={},
+                old_slug=old_slug, new_slug=self.slug, owner={"tournament": self},
             )
 
     def get_absolute_url(self):
@@ -154,11 +163,9 @@ class Division(models.Model):
             kwargs["update_fields"] = set(kwargs["update_fields"]) | {"slug"}
         super().save(*args, **kwargs)
         if old_slug and old_slug != self.slug:
-            DivisionSlugAlias.objects.filter(
-                tournament=self.tournament, slug=self.slug
-            ).delete()
-            DivisionSlugAlias.objects.update_or_create(
-                tournament=self.tournament, slug=old_slug, defaults={"division": self}
+            record_slug_alias(
+                DivisionSlugAlias, scope={"tournament": self.tournament},
+                old_slug=old_slug, new_slug=self.slug, owner={"division": self},
             )
 
     def soft_delete(self):
