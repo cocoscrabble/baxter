@@ -256,6 +256,10 @@ class DivisionScorecardsViewTests(TestCase):
     def setUpTestData(cls):
         setUpTournament(cls)
 
+    def setUp(self):
+        # Scorecards are an organiser tool — editor-only.
+        self.client.login(username="owner", password="testpass123")
+
     def test_downloads_docx_attachment(self):
         response = self.client.get(
             reverse("division_scorecards_download", kwargs=self.division.slug_kwargs())
@@ -273,15 +277,14 @@ class DivisionScorecardsViewTests(TestCase):
         self.assertIn("test-tournament-open-scorecards.docx",
                       response["Content-Disposition"])
 
-    def test_test_division_hidden_from_non_editor(self):
-        self.division.is_test = True
-        self.division.save()
-        # Both the landing page and the download 404 for a hidden test division.
+    def test_forbidden_for_non_editor(self):
+        # The whole scorecards feature is editor-only.
+        self.client.login(username="other", password="testpass123")
         for name in ("division_scorecards", "division_scorecards_download"):
             response = self.client.get(
                 reverse(name, kwargs=self.division.slug_kwargs())
             )
-            self.assertEqual(response.status_code, 404)
+            self.assertEqual(response.status_code, 403)
 
     def test_opponents_prefilled_from_pairings(self):
         # Keep it to 3 rounds so each player's card is a single table.

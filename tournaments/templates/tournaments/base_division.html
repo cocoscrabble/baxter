@@ -11,18 +11,19 @@
 <div class="nav-tabs">
 <a href="{% url 'division_entrants' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'entrants' %} active{% endif %}">Entrants</a>
 <a href="{% url 'division_standings' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'standings' %} active{% endif %}">Standings</a>
-{% if can_edit %}<a href="{% url 'division_pairings' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'pairings' %} active{% endif %}">Pairings</a>{% endif %}
+<a href="{% url 'division_pairings' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'pairings' %} active{% endif %}">Pairings</a>
 <a href="{% url 'division_all_results' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'results' %} active{% endif %}">Results</a>
 <a href="{% url 'resultslip_create' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'add_result' %} active{% endif %}">Add Result</a>
-<a href="{% url 'division_scorecards' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'scorecards' %} active{% endif %}">Scorecards</a>
 {% if can_edit %}
 <span class="nav-tab-sep"></span>
+<a href="{% url 'division_pair_rounds' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'pair_rounds' %} active{% endif %}">Pair rounds</a>
 <a href="{% url 'division_edit_results' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'edit_results' %} active{% endif %}">Edit Results</a>
 <a href="{% url 'division_entrants_edit' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'edit_entrants' %} active{% endif %}">Edit Entrants</a>
 <a href="{% url 'division_round_pairings' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'round_pairings' %} active{% endif %}">Round Pairings</a>
 <a href="{% url 'division_settings' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'settings' %} active{% endif %}">Settings</a>
 <a href="{% url 'division_fixtures' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'fixtures' %} active{% endif %}">Fixtures</a>
 <a href="{% url 'division_board_tables' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'board_tables' %} active{% endif %}">Board Tables</a>
+<a href="{% url 'division_scorecards' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'scorecards' %} active{% endif %}">Scorecards</a>
 {% endif %}
 </div>
 {% endblock %}

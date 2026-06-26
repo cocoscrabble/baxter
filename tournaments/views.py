@@ -120,7 +120,7 @@ class FakeTournamentCreateView(LoginRequiredMixin, View):
             f"Created test tournament “{division.tournament.name}” "
             f"with {num_players} players over {num_rounds} rounds.",
         )
-        return redirect("division_pairings", **division.slug_kwargs())
+        return redirect("division_pair_rounds", **division.slug_kwargs())
 
 
 def _resolve_tournament(slug):
@@ -487,7 +487,7 @@ def _pairings_body_response(request, division, *, select_round=None, error=None)
         context = {
             "division": division,
             "can_edit": True,
-            "active_tab": "pairings",
+            "active_tab": "pair_rounds",
         }
         context.update(presenter.as_context())
         context.update(_editor_pairings_context(division, presenter))
@@ -498,7 +498,7 @@ def _pairings_body_response(request, division, *, select_round=None, error=None)
         )
     if error:
         messages.error(request, error)
-    return redirect("division_pairings", **division.slug_kwargs())
+    return redirect("division_pair_rounds", **division.slug_kwargs())
 
 
 class PublishPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
@@ -551,7 +551,7 @@ class RemoveFixedPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
         error = remove_fixed_pairings(division, keep_ids)
         if error:
             messages.error(request, error)
-        return redirect("division_pairings", **division.slug_kwargs())
+        return redirect("division_pair_rounds", **division.slug_kwargs())
 
 
 def _entrants_for_editing(division):
@@ -587,11 +587,13 @@ def _autogenerate_pairable_rounds(division):
 
 
 class DivisionPairingsView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixin, DetailView):
-    """Pairings are an organiser tool, so this tab is editor-only."""
+    """The "Pair rounds" tab — generating/publishing pairings is an organiser
+    tool, so it is editor-only. Players see published pairings on the public
+    "Pairings" tab (:class:`DivisionPublishedPairingsView`)."""
     model = Division
     template_name = "tournaments/division_pairings.html"
     context_object_name = "division"
-    active_tab = "pairings"
+    active_tab = "pair_rounds"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -609,7 +611,7 @@ class RoundPairingsTabView(LoginRequiredMixin, DivisionNavMixin, CanEditDivision
     model = Division
     template_name = "tournaments/division_pairings.html"
     context_object_name = "division"
-    active_tab = "pairings"
+    active_tab = "pair_rounds"
 
     def get(self, request, round, *args, **kwargs):
         self.object = self.get_object()
@@ -627,9 +629,10 @@ class RoundPairingsTabView(LoginRequiredMixin, DivisionNavMixin, CanEditDivision
         return self.render_to_response(context)
 
 
-class PublishedPairingsView(VisibleDivisionMixin, DetailView):
+class _PublishedPairingsMixin(VisibleDivisionMixin):
+    """Shared published-pairings context (the rounds + their pairings) for both the
+    in-nav tab and the standalone page. The two differ only in base template."""
     model = Division
-    template_name = "tournaments/published_pairings.html"
     context_object_name = "division"
 
     def get_context_data(self, **kwargs):
@@ -638,8 +641,21 @@ class PublishedPairingsView(VisibleDivisionMixin, DetailView):
         return context
 
 
-class DivisionScorecardsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
-    """Scorecards landing page with a generate-and-download action."""
+class PublishedPairingsView(_PublishedPairingsMixin, DetailView):
+    """Standalone (embeddable) published-pairings page — no division nav. Linked
+    from the editor tab and the scorecard QR code."""
+    template_name = "tournaments/published_pairings.html"
+
+
+class DivisionPublishedPairingsView(DivisionNavMixin, _PublishedPairingsMixin, DetailView):
+    """Public "Pairings" tab: the same published pairings shown inside the
+    division nav, visible to everyone (no editing controls)."""
+    template_name = "tournaments/division_published_pairings.html"
+    active_tab = "pairings"
+
+
+class DivisionScorecardsView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixin, DetailView):
+    """Scorecards landing page with a generate-and-download action (editor-only)."""
 
     model = Division
     template_name = "tournaments/division_scorecards.html"
@@ -647,8 +663,8 @@ class DivisionScorecardsView(DivisionNavMixin, VisibleDivisionMixin, DetailView)
     active_tab = "scorecards"
 
 
-class DivisionScorecardsDownloadView(VisibleDivisionMixin, DetailView):
-    """Download a .docx with a printable scorecard for every entrant."""
+class DivisionScorecardsDownloadView(LoginRequiredMixin, CanEditDivisionMixin, DetailView):
+    """Download a .docx with a printable scorecard for every entrant (editor-only)."""
 
     model = Division
     context_object_name = "division"
