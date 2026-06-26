@@ -2068,6 +2068,26 @@ class SimulateButtonVisibilityTests(TestCase):
 
 
 @tag("slow")
+class DivisionEntrantsViewTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        setUpTournament(cls)
+        cls.url = reverse("division_entrants", kwargs={"pk": cls.division.pk})
+        cls.edit_url = reverse(
+            "division_entrants_edit", kwargs={"pk": cls.division.pk}
+        )
+
+    def test_edit_entrants_button_shown_for_editor(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(self.url)
+        self.assertContains(response, self.edit_url)
+
+    def test_edit_entrants_button_hidden_for_non_editor(self):
+        self.client.login(username="other", password="testpass123")
+        response = self.client.get(self.url)
+        self.assertNotContains(response, self.edit_url)
+
+
 class DivisionEntrantsEditViewTests(TestCase):
     def setUp(self):
         setUpTournament(self)
