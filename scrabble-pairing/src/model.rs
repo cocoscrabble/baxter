@@ -50,11 +50,15 @@ pub struct OutPairing {
     pub repeats: i32,
 }
 
-/// The pairings produced for one round.
+/// The pairings produced for one round. On an invalid condition (an unknown
+/// strategy, or a field too small for the chosen format) `pairings` is empty and
+/// `error` carries the reason.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RoundResult {
     pub round: i32,
     pub pairings: Vec<OutPairing>,
+    #[serde(default)]
+    pub error: Option<String>,
 }
 
 #[cfg(test)]
