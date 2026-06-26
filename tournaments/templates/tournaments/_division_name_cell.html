@@ -1,12 +1,12 @@
 <td>
     <span data-class="{hidden: $renamingPk === {{ division.pk }}}">
-        <a href="{% url 'division_detail' division.pk %}">{{ division.name }}</a>
+        <a href="{% url 'division_detail' division.tournament.slug division.slug %}">{{ division.name }}</a>
     </span>
     <span class="hidden division-rename-form" data-class="{hidden: $renamingPk !== {{ division.pk }}}">
         <input type="text" data-bind="renameName" aria-label="Division name">
         <button type="button"
             data-attr-disabled="$renameName.trim() === ''"
-            data-on:click="@post('{% url 'division_rename' division.pk %}', {headers: {'X-CSRFToken': $_csrfToken}, payload: {name: $renameName}})">Save</button>
+            data-on:click="@post('{% url 'division_rename' division.tournament.slug division.slug %}', {headers: {'X-CSRFToken': $_csrfToken}, payload: {name: $renameName}})">Save</button>
         <button type="button" class="btn-cancel" data-on:click="$renamingPk = 0">Cancel</button>
     </span>
 </td>

@@ -4,7 +4,7 @@
 
 {% block breadcrumbs %}
 <span class="nav-sep">/</span>
-<a href="{% url 'tournament_detail' tournament.pk %}">{{ tournament.name }}</a>
+<a href="{% url 'tournament_detail' tournament.slug %}">{{ tournament.name }}</a>
 {% endblock %}
 
 {% block content %}
@@ -15,6 +15,6 @@
 <form method="post">
     {% csrf_token %}
     <button type="submit">Delete</button>
-    <a href="{% url 'tournament_detail' tournament.pk %}">Cancel</a>
+    <a href="{% url 'tournament_detail' tournament.slug %}">Cancel</a>
 </form>
 {% endblock %}

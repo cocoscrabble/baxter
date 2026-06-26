@@ -7,7 +7,7 @@
 
 <div class="page-head">
     <h2>Round {{ max_round }} Results</h2>
-    {% if latest_results %}<div class="page-head-actions"><a href="{% url 'division_all_results' division.pk %}">All results</a></div>{% endif %}
+    {% if latest_results %}<div class="page-head-actions"><a href="{% url 'division_all_results' division.tournament.slug division.slug %}">All results</a></div>{% endif %}
 </div>
 {% if latest_results %}
 <div class="table-scroll table-narrow">

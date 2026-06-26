@@ -4,7 +4,7 @@
     {% for r in rounds %}
     <a href="#"
        class="round-tab round-tab-finished{% if r == round %} active{% endif %}"
-       data-on:click__prevent="@get('{% url 'division_standings_round' division.pk r %}')">{{ r }}</a>
+       data-on:click__prevent="@get('{% url 'division_standings_round' division.tournament.slug division.slug r %}')">{{ r }}</a>
     {% endfor %}
 </div>
 {% endif %}

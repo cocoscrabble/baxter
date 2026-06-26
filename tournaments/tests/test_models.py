@@ -40,7 +40,7 @@ class TournamentModelTests(TestCase):
 
     def test_get_absolute_url(self):
         url = self.tournament.get_absolute_url()
-        self.assertEqual(url, f"/tournaments/{self.tournament.pk}/")
+        self.assertEqual(url, f"/tournaments/{self.tournament.slug}/")
 
     def test_owner_can_edit(self):
         self.assertTrue(self.tournament.can_edit(self.owner))
@@ -166,3 +166,63 @@ class NextTempPlayerNumberTests(TestCase):
     def test_fills_gap_above_current_max(self):
         Player.objects.create(name="A", player_number="T-5", rating=1500, is_provisional=True)
         self.assertEqual(next_temp_player_number(), "T-6")
+
+
+class SlugTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username="o", password="p")
+
+    def _tournament(self, name):
+        return Tournament.objects.create(
+            name=name, location="x", start_date=date(2026, 1, 1), owner=self.owner
+        )
+
+    def test_tournament_slug_from_name(self):
+        t = self._tournament("Spring Open 2026")
+        self.assertEqual(t.slug, "spring-open-2026")
+
+    def test_tournament_slug_deduped_globally(self):
+        a = self._tournament("Open")
+        b = self._tournament("Open")
+        self.assertEqual(a.slug, "open")
+        self.assertEqual(b.slug, "open-2")
+
+    def test_reserved_slug_avoided(self):
+        t = self._tournament("Create")
+        self.assertEqual(t.slug, "create-2")
+
+    def test_empty_slugify_falls_back(self):
+        t = self._tournament("!!!")
+        self.assertEqual(t.slug, "tournament")
+
+    def test_division_slug_deduped_within_tournament_only(self):
+        t1 = self._tournament("T1")
+        t2 = self._tournament("T2")
+        d1 = Division.objects.create(name="A", tournament=t1)
+        d1b = Division.objects.create(name="A B", tournament=t1)  # also slugifies near "a"
+        d2 = Division.objects.create(name="A", tournament=t2)
+        self.assertEqual(d1.slug, "a")
+        self.assertEqual(d2.slug, "a")  # different tournament, no clash
+        self.assertEqual(d1b.slug, "a-b")
+
+    def test_rename_resyncs_slug_and_records_alias(self):
+        t = self._tournament("Old Name")
+        d = Division.objects.create(name="Open", tournament=t)
+        old_t_slug, old_d_slug = t.slug, d.slug
+
+        t.name = "New Name"
+        t.save()
+        d.name = "Champs"
+        d.save()
+
+        self.assertEqual(t.slug, "new-name")
+        self.assertEqual(d.slug, "champs")
+        self.assertTrue(t.slug_aliases.filter(slug=old_t_slug).exists())
+        self.assertTrue(d.slug_aliases.filter(slug=old_d_slug).exists())
+
+    def test_rename_persists_slug_with_update_fields(self):
+        d = Division.objects.create(name="Open", tournament=self._tournament("T"))
+        d.name = "Closed"
+        d.save(update_fields=["name"])
+        d.refresh_from_db()
+        self.assertEqual(d.slug, "closed")

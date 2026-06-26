@@ -258,7 +258,7 @@ class DivisionScorecardsViewTests(TestCase):
 
     def test_downloads_docx_attachment(self):
         response = self.client.get(
-            reverse("division_scorecards_download", kwargs={"pk": self.division.pk})
+            reverse("division_scorecards_download", kwargs=self.division.slug_kwargs())
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], DOCX_CONTENT_TYPE)
@@ -268,7 +268,7 @@ class DivisionScorecardsViewTests(TestCase):
 
     def test_filename_is_slugified(self):
         response = self.client.get(
-            reverse("division_scorecards_download", kwargs={"pk": self.division.pk})
+            reverse("division_scorecards_download", kwargs=self.division.slug_kwargs())
         )
         self.assertIn("test-tournament-open-scorecards.docx",
                       response["Content-Disposition"])
@@ -279,7 +279,7 @@ class DivisionScorecardsViewTests(TestCase):
         # Both the landing page and the download 404 for a hidden test division.
         for name in ("division_scorecards", "division_scorecards_download"):
             response = self.client.get(
-                reverse(name, kwargs={"pk": self.division.pk})
+                reverse(name, kwargs=self.division.slug_kwargs())
             )
             self.assertEqual(response.status_code, 404)
 
@@ -294,7 +294,7 @@ class DivisionScorecardsViewTests(TestCase):
             first=self.entrant1, second=self.entrant2,
         )
         response = self.client.get(
-            reverse("division_scorecards_download", kwargs={"pk": self.division.pk})
+            reverse("division_scorecards_download", kwargs=self.division.slug_kwargs())
         )
         doc = Document(BytesIO(response.content))
         # Entrants order by number: table[0] is player1's card, table[1] player2's.
@@ -317,7 +317,7 @@ class DivisionScorecardsViewTests(TestCase):
             first=self.entrant1, second=self.entrant2,
         )
         response = self.client.get(
-            reverse("division_scorecards_download", kwargs={"pk": self.division.pk})
+            reverse("division_scorecards_download", kwargs=self.division.slug_kwargs())
         )
         doc = Document(BytesIO(response.content))
         # entrant1 went first, entrant2 second; round 1's Round cell is (1, 0).

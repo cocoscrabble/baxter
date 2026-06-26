@@ -8,7 +8,7 @@
 </div>
 
 <div class="division-inline-form hidden" data-class="{hidden: $showForm !== 'regular'}">
-    <form method="post" action="{% url 'division_create' tournament.pk %}">
+    <form method="post" action="{% url 'division_create' tournament.slug %}">
         {% csrf_token %}
         <input type="hidden" name="is_test" value="0">
         <input type="text" name="name" placeholder="Division name" required>
@@ -18,7 +18,7 @@
 </div>
 
 <div class="division-inline-form hidden" data-class="{hidden: $showForm !== 'test'}">
-    <form method="post" action="{% url 'division_create' tournament.pk %}">
+    <form method="post" action="{% url 'division_create' tournament.slug %}">
         {% csrf_token %}
         <input type="hidden" name="is_test" value="1">
         <input type="text" name="name" placeholder="Test division name" required>
@@ -44,7 +44,7 @@
             <td></td>
             <td>
                 <a href="#" data-on:click__prevent="$renamingPk = {{ division.pk }}; $renameName = '{{ division.name|escapejs }}'">Rename</a>
-                <a href="{% url 'division_delete' division.pk %}">Delete</a>
+                <a href="{% url 'division_delete' division.tournament.slug division.slug %}">Delete</a>
             </td>
         </tr>
         {% endfor %}
@@ -55,7 +55,7 @@
             <td></td>
             <td>
                 <a href="#" data-on:click__prevent="$renamingPk = {{ division.pk }}; $renameName = '{{ division.name|escapejs }}'">Rename</a>
-                <a href="{% url 'division_delete' division.pk %}">Delete</a>
+                <a href="{% url 'division_delete' division.tournament.slug division.slug %}">Delete</a>
             </td>
         </tr>
         {% endfor %}
@@ -65,7 +65,7 @@
             <td>{% if division.is_test %}<input type="checkbox" checked disabled>{% endif %}</td>
             <td><input type="checkbox" checked disabled></td>
             <td>
-                <form method="post" action="{% url 'division_restore' division.pk %}">
+                <form method="post" action="{% url 'division_restore' division.tournament.slug division.slug %}">
                     {% csrf_token %}<button type="submit">Restore</button>
                 </form>
             </td>
