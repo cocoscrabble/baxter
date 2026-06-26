@@ -586,7 +586,8 @@ def _autogenerate_pairable_rounds(division):
         regenerate_pairings(division)
 
 
-class DivisionPairingsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
+class DivisionPairingsView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixin, DetailView):
+    """Pairings are an organiser tool, so this tab is editor-only."""
     model = Division
     template_name = "tournaments/division_pairings.html"
     context_object_name = "division"
@@ -603,8 +604,8 @@ class DivisionPairingsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
         return context
 
 
-class RoundPairingsTabView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
-    """Datastar fragment endpoint for switching between round tabs."""
+class RoundPairingsTabView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixin, DetailView):
+    """Datastar fragment endpoint for switching between round tabs (editor-only)."""
     model = Division
     template_name = "tournaments/division_pairings.html"
     context_object_name = "division"
