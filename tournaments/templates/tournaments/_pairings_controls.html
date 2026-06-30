@@ -1,4 +1,5 @@
 <div id="pairings-controls">
+{% if pairing_error %}<p class="error">{{ pairing_error }}</p>{% endif %}
 {% if can_edit %}
 <p>
 {% if has_draft_rounds %}

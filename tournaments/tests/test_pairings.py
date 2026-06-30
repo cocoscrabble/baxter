@@ -20,6 +20,7 @@ from tournaments.pairing.base import (
     EntrantData,
     Pairing,
     PairingData,
+    PairingError,
     Player,
     PlayerData,
     Repeats,
@@ -511,6 +512,134 @@ class FixedPairingIntegrationTests(PairingDBTestBase):
         _, pairings = pair(self._pd())[0]
         alice_bob = next(p for p in pairings if {p.first.name, p.second.name} == {"Alice", "Bob"})
         self.assertEqual(alice_bob.repeats, 2)
+
+
+class RoundRobinFixedPairingLifecycleTests(PairingDBTestBase):
+    """add/remove fixed pairings on a round-robin round: the round permutation only
+    reshuffles unplayed rounds, so a fixed pairing can be added mid-event to any
+    not-yet-played round; only a played round (or an already-played pair) is
+    refused."""
+
+    def _rr_config(self):
+        rp = [{"round": i, "pairing": RP.RoundRobin, "start_round": 1} for i in range(1, 4)]
+        return DivisionSettings.objects.create(division=self.division, round_pairings=rp)
+
+    def _publish_all(self):
+        from tournaments.fixed_pairings import regenerate_pairings
+        regenerate_pairings(self.division)
+        self.division.round_pairings_set.update(status=RoundPairings.PUBLISHED)
+
+    def _round_pairs(self, round_number):
+        return {
+            frozenset({p.first.player.name, p.second.player.name})
+            for p in self.division.pairings.filter(round=round_number)
+        }
+
+    def _play_round(self, r):
+        for p in self.division.pairings.filter(round=r):
+            ResultSlip.objects.create(
+                division=self.division, round=r,
+                winner=p.first, winner_score=400, loser=p.second, loser_score=350,
+                winner_started=True,
+            )
+        self.division.round_pairings_set.filter(round=r).update(
+            status=RoundPairings.FINISHED
+        )
+
+    def _assert_complete_round_robin(self):
+        meetings = {}
+        for r in (1, 2, 3):
+            for pair in self._round_pairs(r):
+                meetings[pair] = meetings.get(pair, 0) + 1
+        self.assertEqual(len(meetings), 6)  # C(4, 2)
+        self.assertTrue(all(v == 1 for v in meetings.values()), meetings)
+
+    def test_add_honors_pairing_and_keeps_round_robin(self):
+        from tournaments.fixed_pairings import add_fixed_pairing
+        self._rr_config()
+        self._publish_all()
+
+        ok, err = add_fixed_pairing(
+            self.division, 1, self.entrants[0].pk, self.entrants[3].pk
+        )
+        self.assertTrue(ok, err)
+        self.assertIn(frozenset({"Alice", "Dave"}), self._round_pairs(1))
+        self._assert_complete_round_robin()
+
+    def test_mid_event_add_to_later_round(self):
+        from tournaments.fixed_pairings import add_fixed_pairing
+        self._rr_config()
+        self._publish_all()
+        round1_before = self._round_pairs(1)
+        self._play_round(1)
+
+        # Two players who have not met in round 1, fixed into (unplayed) round 3.
+        unmet = next(
+            (a, b)
+            for a in range(4) for b in range(4)
+            if a < b
+            and frozenset({self.entrants[a].player.name, self.entrants[b].player.name})
+            not in round1_before
+        )
+        ok, err = add_fixed_pairing(
+            self.division, 3, self.entrants[unmet[0]].pk, self.entrants[unmet[1]].pk
+        )
+        self.assertTrue(ok, err)
+        # Played round 1 is untouched; round 3 honors the new pairing.
+        self.assertEqual(self._round_pairs(1), round1_before)
+        names = frozenset(
+            {self.entrants[unmet[0]].player.name, self.entrants[unmet[1]].player.name}
+        )
+        self.assertIn(names, self._round_pairs(3))
+        self._assert_complete_round_robin()
+
+    def test_add_rejected_for_played_round(self):
+        from tournaments.fixed_pairings import add_fixed_pairing
+        self._rr_config()
+        self._publish_all()
+        self._play_round(1)
+
+        ok, err = add_fixed_pairing(
+            self.division, 1, self.entrants[0].pk, self.entrants[1].pk
+        )
+        self.assertFalse(ok)
+        self.assertIn("results", err)
+
+    def test_add_rejected_for_already_played_pair(self):
+        from tournaments.fixed_pairings import add_fixed_pairing
+        self._rr_config()
+        self._publish_all()
+        # Take a pair that actually played in round 1 and try to re-time it.
+        played = next(iter(self._round_pairs(1)))
+        self._play_round(1)
+        by_name = {e.player.name: e for e in self.entrants}
+        a, b = (by_name[n] for n in played)
+
+        ok, err = add_fixed_pairing(self.division, 3, a.pk, b.pk)
+        self.assertFalse(ok)
+        self.assertIn("already played", err)
+
+    def test_infeasible_stored_pairings_degrade_to_banner_not_500(self):
+        # A stored fixed-pairing set that can't be satisfied (one player pinned to
+        # two opponents in the same round) must render the Pair-rounds tab with a
+        # banner, not raise an uncaught PairingError (500).
+        self._rr_config()
+        DBFixedPairing.objects.create(
+            division=self.division, round_number=1,
+            entrant1=self.entrants[0], entrant2=self.entrants[1],
+        )
+        DBFixedPairing.objects.create(
+            division=self.division, round_number=1,
+            entrant1=self.entrants[0], entrant2=self.entrants[2],
+        )
+        self.client.login(username="owner", password="testpass123")
+        url = (
+            f"/tournaments/{self.tournament.slug}"
+            f"/division/{self.division.slug}/pair-rounds/"
+        )
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "conflict")
 
 
 # ── _regenerate_pairings with fixed tables ────────────────────────────────────
@@ -1019,3 +1148,123 @@ class OddFieldRotationTests(TestCase):
         out2 = self._run(2, 1, RP.QotH)
         pairs2 = {tuple(sorted([p.first.name, p.second.name])) for _, ps in out2 for p in ps}
         self.assertEqual(pairs2, {("P1", "P2")})
+
+
+class RoundRobinFixedPairingTests(TestCase):
+    """Round-robin honors fixed pairings by permuting which round template lands in
+    which round: it controls when a meeting (or a player's bye) happens while
+    keeping the all-play-all structure intact. Played rounds are fixed points, so
+    fixed pairings can be added to any unplayed round mid-event."""
+
+    def _run(self, n_players, n_rounds, pairing, fixed_pairings, result_slips=None):
+        entrants = [
+            EntrantData(PlayerData(f"P{i + 1}", 2000 - 10 * i)) for i in range(n_players)
+        ]
+        rps = [
+            RoundPairing(round=r, start_round=0, pairing=pairing)
+            for r in range(1, n_rounds + 1)
+        ]
+        normalize_round_robin_start_rounds(rps)
+        pd = PairingData(
+            result_slips=result_slips or [],
+            entrants=entrants,
+            repeats=Repeats(),
+            round_pairings=rps,
+            fixed_pairings=fixed_pairings,
+        )
+        return pair(pd)
+
+    def _slips_for_round(self, out, target):
+        """Result slips recording the (default) pairings of ``target`` as played,
+        so a later run sees that round as finished."""
+        return [
+            ResultSlipData(target, a, b, 400, 350, True)
+            for a, b in self._pairs_in_round(out, target)
+        ]
+
+    def _pairs_in_round(self, out, target):
+        return {
+            tuple(sorted([p.first.name, p.second.name]))
+            for rnd, ps in out if rnd == target for p in ps
+        }
+
+    def _all_meetings(self, out):
+        meetings = {}
+        for _rnd, ps in out:
+            for p in ps:
+                if p.first.name != "Bye" and p.second.name != "Bye":
+                    key = tuple(sorted([p.first.name, p.second.name]))
+                    meetings[key] = meetings.get(key, 0) + 1
+        return meetings
+
+    def test_fixed_pairing_meets_in_requested_round(self):
+        # 6 players, full RR (5 rounds). Force P1 vs P6 in round 1.
+        out = self._run(6, 5, RP.RoundRobin, {1: [("P1", "P6")]})
+        self.assertIn(("P1", "P6"), self._pairs_in_round(out, 1))
+
+    def test_all_play_all_preserved_with_fixed_pairing(self):
+        out = self._run(6, 5, RP.RoundRobin, {1: [("P1", "P6")]})
+        meetings = self._all_meetings(out)
+        self.assertEqual(len(meetings), 15)  # C(6, 2)
+        self.assertTrue(all(v == 1 for v in meetings.values()), meetings)
+
+    def test_single_player_fixed_in_two_rounds(self):
+        # One player's opponents pinned across two different rounds — both honored,
+        # schedule still a complete round robin.
+        out = self._run(6, 5, RP.RoundRobin, {1: [("P1", "P2")], 3: [("P1", "P4")]})
+        self.assertIn(("P1", "P2"), self._pairs_in_round(out, 1))
+        self.assertIn(("P1", "P4"), self._pairs_in_round(out, 3))
+        meetings = self._all_meetings(out)
+        self.assertEqual(len(meetings), 15)
+        self.assertTrue(all(v == 1 for v in meetings.values()), meetings)
+
+    def test_fixed_bye_for_odd_field(self):
+        # 5 players (+ ghost bye). Force P1 to bye in round 2 by fixing P1 vs Bye.
+        out = self._run(5, 5, RP.RoundRobin, {2: [("P1", "Bye")]})
+        self.assertIn(("Bye", "P1"), self._pairs_in_round(out, 2))
+
+    def test_conflicting_fixed_pairings_raise(self):
+        # A round plays exactly one template; fixing P1-P2 and P1-P3 in the same
+        # round demands two different templates there at once — must raise.
+        with self.assertRaises(PairingError):
+            self._run(6, 5, RP.RoundRobin, {1: [("P1", "P2"), ("P1", "P3")]})
+
+    def test_mid_event_fixed_pairing_after_results(self):
+        # Play round 1 (its default pairing), then add a fixed pairing for a later
+        # round. The later round honors the new pairing and, together with the
+        # already-played round 1, the block is still a complete round robin.
+        # (pair() returns only the rounds it (re)pairs, so round 1 — finished —
+        # isn't in the output; we fold its played games into the tally.)
+        baseline = self._run(6, 5, RP.RoundRobin, {})
+        round1 = self._pairs_in_round(baseline, 1)
+        slips = self._slips_for_round(baseline, 1)
+        x, y = next(
+            (a, b)
+            for a in ("P1", "P2", "P3", "P4", "P5", "P6")
+            for b in ("P1", "P2", "P3", "P4", "P5", "P6")
+            if a < b and (a, b) not in round1
+        )
+        out = self._run(6, 5, RP.RoundRobin, {4: [(x, y)]}, result_slips=slips)
+        self.assertIn(tuple(sorted((x, y))), self._pairs_in_round(out, 4))
+        meetings = self._all_meetings(out)
+        for pair in round1:
+            meetings[pair] = meetings.get(pair, 0) + 1
+        self.assertEqual(len(meetings), 15)
+        self.assertTrue(all(v == 1 for v in meetings.values()), meetings)
+
+    def test_double_round_robin_honors_fixed_pairing(self):
+        # DRR: rounds 1 & 2 share rotation pos 0. Fixing P1 vs P6 at round 1 pins
+        # that meeting for both copies of pos 0.
+        out = self._run(6, 10, RP.DoubleRoundRobin, {1: [("P1", "P6")]})
+        self.assertIn(("P1", "P6"), self._pairs_in_round(out, 1))
+        self.assertIn(("P1", "P6"), self._pairs_in_round(out, 2))
+        meetings = self._all_meetings(out)
+        self.assertEqual(len(meetings), 15)
+        self.assertTrue(all(v == 2 for v in meetings.values()), meetings)
+
+    def test_no_fixed_pairings_unchanged(self):
+        # Regression: empty fixed pairings give the same schedule as before.
+        baseline = self._run(6, 5, RP.RoundRobin, {})
+        meetings = self._all_meetings(baseline)
+        self.assertEqual(len(meetings), 15)
+        self.assertTrue(all(v == 1 for v in meetings.values()), meetings)

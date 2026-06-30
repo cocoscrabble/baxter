@@ -80,7 +80,20 @@ def can_pair(rp, status) -> bool:
         return rp.start_round == 0 or status[rp.start_round] == RoundStatus.Finished
 
 
+# Round-robin family that honors fixed pairings by permuting which round template
+# lands in which round (see basic._rr_block_pairings), rather than the
+# exclude-and-pair-the-rest path below — removing players from the rotation would
+# corrupt the schedule.
+_ROUND_ROBIN_FAMILY = {RP.RoundRobin, RP.DoubleRoundRobin}
+
+
 def pair_round(pd: PairingData, rp) -> Pairings:
+    if rp.pairing in _ROUND_ROBIN_FAMILY:
+        # The strategy reads pd.fixed_pairings itself and permutes the rounds; it
+        # must see the full field, so skip the exclude/append mechanism entirely.
+        strategy = STRATEGIES.get(rp.pairing)
+        return strategy(pd, rp) if strategy else Pairings()
+
     fixed_pairs = list(pd.fixed_pairings.get(rp.round, []))
 
     # Make an odd field even by forcing a bye for the chosen player. Treated as

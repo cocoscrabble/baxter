@@ -115,6 +115,12 @@ class PairingData:
         return cls(result_slips=slips, entrants=entrants, repeats=Repeats(), fixed_pairings=dict(fixed), round_pairings=rps)
 
 
+class PairingError(Exception):
+    """Raised when a round cannot be paired as configured — e.g. a set of fixed
+    pairings that can't all be satisfied by a round-robin slot assignment. The
+    message is surfaced to the organiser."""
+
+
 class DefaultDict(defaultdict):
     """A defaultdict that passes the missing key to the factory.
 

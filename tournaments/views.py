@@ -55,7 +55,7 @@ from .pairing.round_pairing import (
 from .player_sync import import_players
 from users.models import User
 from .generate_pairings import publish_rounds, regenerate_pairings
-from .pairing.base import PairingData, standings_after_round
+from .pairing.base import PairingData, PairingError, standings_after_round
 from .pairing.pair import STRATEGY_TYPES
 from .pairings_view import PairingsPresenter, PublishedPairingsPresenter
 from .scorecards import ScorecardSpec, make_rounds, render_scorecards
@@ -574,16 +574,24 @@ def _editor_pairings_context(division, presenter):
 
 
 def _autogenerate_pairable_rounds(division):
-    """Generate pairings for any pairable round that has none yet.
+    """Generate pairings for any pairable round that has none yet, returning an
+    error message if generation fails (else None).
 
     Makes 'pairable' imply 'has draft pairings', so the pairings tab only needs
     a Publish action rather than a manual Generate step. Regeneration only
     touches draft rounds and is idempotent for the deterministic strategies, so
     running it lazily on render is safe; it is a no-op once every pairable round
-    has pairings.
+    has pairings. A ``PairingError`` (e.g. a stored set of fixed pairings that
+    became unsatisfiable after the field changed) is caught here — regeneration
+    is atomic so the schedule is untouched — and surfaced as a banner instead of
+    a 500.
     """
     if PairingsPresenter(division).rounds_needing_generation:
-        regenerate_pairings(division)
+        try:
+            regenerate_pairings(division)
+        except PairingError as e:
+            return str(e)
+    return None
 
 
 class DivisionPairingsView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixin, DetailView):
@@ -597,12 +605,15 @@ class DivisionPairingsView(LoginRequiredMixin, DivisionNavMixin, CanEditDivision
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        pairing_error = None
         if context["can_edit"]:
-            _autogenerate_pairable_rounds(self.object)
+            pairing_error = _autogenerate_pairable_rounds(self.object)
         presenter = PairingsPresenter(self.object)
         context.update(presenter.as_context())
         if context["can_edit"]:
             context.update(_editor_pairings_context(self.object, presenter))
+        if pairing_error:
+            context["pairing_error"] = pairing_error
         return context
 
 
@@ -616,12 +627,15 @@ class RoundPairingsTabView(LoginRequiredMixin, DivisionNavMixin, CanEditDivision
     def get(self, request, round, *args, **kwargs):
         self.object = self.get_object()
         context = self.get_context_data(object=self.object)
+        pairing_error = None
         if context.get("can_edit"):
-            _autogenerate_pairable_rounds(self.object)
+            pairing_error = _autogenerate_pairable_rounds(self.object)
         presenter = PairingsPresenter(self.object).select(round)
         context.update(presenter.as_context())
         if context.get("can_edit"):
             context.update(_editor_pairings_context(self.object, presenter))
+        if pairing_error:
+            context["pairing_error"] = pairing_error
         if is_datastar(request):
             return fragment_response(
                 "tournaments/_pairings_body.html", context, request=request
