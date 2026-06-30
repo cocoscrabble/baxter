@@ -1,11 +1,17 @@
 """Add/remove fixed pairings with the surrounding lifecycle bookkeeping.
 
-Rounds with results are locked. Removing a fixed pairing from a published
-round drops the round back to draft so regenerate_pairings can rebuild it.
+A round with results is locked: you can't add or change a fixed pairing for it.
+For a round robin, results don't lock the whole block — the played rounds are
+fixed points of the round permutation, so a fixed pairing can still be added to
+any *unplayed* round and only those rounds are reverted to draft and regenerated.
 """
+
+from django.db.models import Q
 
 from .generate_pairings import regenerate_pairings
 from .models import FixedPairing
+from .pairing.base import PairingData, PairingError
+from .pairing.round_pairing import RP
 
 
 def rounds_with_results(division, round_numbers) -> set[int]:
@@ -18,6 +24,50 @@ def rounds_with_results(division, round_numbers) -> set[int]:
         .values_list("round", flat=True)
         .distinct()
     )
+
+
+# Round-robin family whose schedule is a permutation of round templates (see
+# pairing.basic). A fixed-pairing change re-permutes only the block's *unplayed*
+# rounds; the played rounds stay put as fixed points.
+_RR_FAMILY = {RP.RoundRobin, RP.DoubleRoundRobin}
+
+
+def round_robin_block_rounds(division, round_number) -> list[int] | None:
+    """The rounds of the round-robin block containing ``round_number``, or None if
+    that round isn't part of a round-robin block. The block is the run of
+    consecutive rounds sharing the strategy and start_round in the normalized
+    schedule."""
+    rps = PairingData.for_division(division).round_pairings
+    this = next((rp for rp in rps if rp.round == round_number), None)
+    if this is None or this.pairing not in _RR_FAMILY:
+        return None
+    return [
+        rp.round
+        for rp in rps
+        if rp.pairing == this.pairing and rp.start_round == this.start_round
+    ]
+
+
+def _rounds_to_regenerate(division, round_number) -> list[int]:
+    """Rounds to revert+regenerate for a fixed-pairing change at ``round_number``.
+
+    A plain round touches only itself. A round-robin round touches the block's
+    *unplayed* rounds — played rounds are fixed points of the permutation and must
+    keep their pairings."""
+    block = round_robin_block_rounds(division, round_number)
+    if block is None:
+        return [round_number]
+    played = rounds_with_results(division, block)
+    return [r for r in block if r not in played]
+
+
+def _already_played(division, entrant1_id, entrant2_id) -> bool:
+    """Whether these two entrants have already played each other (in a round robin
+    they meet exactly once, so a past meeting can't be re-timed)."""
+    return division.result_slips.filter(
+        Q(winner_id=entrant1_id, loser_id=entrant2_id)
+        | Q(winner_id=entrant2_id, loser_id=entrant1_id)
+    ).exists()
 
 
 def add_fixed_pairing(division, round_number, entrant1_id, entrant2_id) -> tuple[bool, str | None]:
@@ -36,6 +86,13 @@ def add_fixed_pairing(division, round_number, entrant1_id, entrant2_id) -> tuple
             "fixed pairings cannot be changed."
         )
 
+    # In a round robin the two players meet exactly once; if they already have,
+    # their meeting can't be moved to another round.
+    if round_robin_block_rounds(division, round_number) is not None and _already_played(
+        division, entrant1_id, entrant2_id
+    ):
+        return False, "Those two players have already played each other."
+
     already_fixed = set()
     for fp in division.fixed_pairings.filter(round_number=round_number):
         already_fixed.update([fp.entrant1_id, fp.entrant2_id])
@@ -48,11 +105,17 @@ def add_fixed_pairing(division, round_number, entrant1_id, entrant2_id) -> tuple
         entrant1_id=entrant1_id,
         entrant2_id=entrant2_id,
     )
-    division.round_pairings_set.revert_published_to_draft([round_number])
+    rounds = _rounds_to_regenerate(division, round_number)
+    division.round_pairings_set.revert_published_to_draft(rounds)
     try:
         regenerate_pairings(division)
+    except PairingError as e:
+        fp.delete()
+        regenerate_pairings(division)  # restore the prior schedule
+        return False, str(e)
     except Exception:
         fp.delete()
+        regenerate_pairings(division)
         return False, "Could not regenerate pairings with this fixed pairing."
     return True, None
 
@@ -63,15 +126,18 @@ def remove_fixed_pairing(division, fp_id) -> tuple[bool, str | None]:
     if fp is None:
         return False, None  # silent: already gone or wrong division
 
-    round_number = fp.round_number
-    if rounds_with_results(division, [round_number]):
+    # A plain round with results is locked; a round-robin round's results don't
+    # lock removal — only its unplayed rounds re-permute.
+    block = round_robin_block_rounds(division, fp.round_number)
+    if block is None and rounds_with_results(division, [fp.round_number]):
         return False, (
-            f"Round {round_number} already has results — "
+            f"Round {fp.round_number} already has results — "
             "fixed pairings cannot be changed."
         )
 
+    rounds = _rounds_to_regenerate(division, fp.round_number)
     fp.delete()
-    division.round_pairings_set.revert_published_to_draft([round_number])
+    division.round_pairings_set.revert_published_to_draft(rounds)
     regenerate_pairings(division)
     return True, None
 
@@ -79,14 +145,22 @@ def remove_fixed_pairing(division, fp_id) -> tuple[bool, str | None]:
 def remove_fixed_pairings(division, keep_ids) -> str | None:
     """Remove all fixed pairings not in keep_ids. Returns error message, or None."""
     to_remove = division.fixed_pairings.exclude(pk__in=keep_ids)
-    affected_rounds = set(to_remove.values_list("round_number", flat=True))
-    locked = rounds_with_results(division, affected_rounds)
+    fp_rounds = set(to_remove.values_list("round_number", flat=True))
+    locked = set()
+    rounds = set()
+    for r in fp_rounds:
+        if round_robin_block_rounds(division, r) is None and rounds_with_results(
+            division, [r]
+        ):
+            locked.add(r)
+        else:
+            rounds.update(_rounds_to_regenerate(division, r))
     if locked:
         return (
             "Cannot remove fixed pairings — rounds with results: "
             f"{', '.join(str(r) for r in sorted(locked))}."
         )
     to_remove.delete()
-    division.round_pairings_set.revert_published_to_draft(affected_rounds)
+    division.round_pairings_set.revert_published_to_draft(rounds)
     regenerate_pairings(division)
     return None

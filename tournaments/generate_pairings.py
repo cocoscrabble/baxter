@@ -4,6 +4,7 @@ Generates pairings from the pairing algorithm, resolves fixed table assignments,
 assigns table numbers, and persists RoundPairings + Pairing records.
 """
 
+from django.db import transaction
 from django.db.models import Q
 
 from .assign_tables import assign_tables, parse_board_table_map
@@ -97,11 +98,14 @@ def resolve_fixed_table(first_ft, second_ft, first_rank, second_rank):
     return first_ft[0] if first_rank < second_rank else second_ft[0]
 
 
+@transaction.atomic
 def regenerate_pairings(division):
     """Run the pairing algorithm and save results to the Pairing table.
 
     Only draft RoundPairings are deleted and recreated. Published, in-progress,
-    and finished rounds are preserved.
+    and finished rounds are preserved. Atomic, so a PairingError (unsatisfiable
+    fixed pairings) raised by ``pair()`` rolls back cleanly, leaving the existing
+    schedule untouched for the caller to surface the error.
     """
     pd = PairingData.for_division(division)
     if not pd.round_pairings:
