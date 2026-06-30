@@ -1,9 +1,11 @@
 //! The "basic" strategies: King/Queen of the Hill, round robin, double round
 //! robin, Charlottesville, and the two random pairings.
 
+use std::collections::{HashMap, HashSet};
+
 use crate::rng::shuffle;
 use crate::round_pairing::RoundPairing;
-use crate::standings::{Pairings, Player};
+use crate::standings::{Pairings, Player, BYE_NAME};
 
 use super::{pair_no_repeats_blossom, Ctx};
 
@@ -46,31 +48,202 @@ pub fn pair_qoth(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
     out
 }
 
-/// Round-robin pairing for game `pos` of the rotation. Always seeds from the
-/// initial seedings (round 0), never the start-round standings — a round-robin
-/// block rotates off a fixed ordering and ignores results.
-pub fn pair_round_robin(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
-    let pos = rp.round - rp.start_round;
-    round_robin(ctx.standings(0), pos)
+/// Round robin, honoring fixed pairings by permuting which round template lands
+/// in which round. Always seeds from the initial seedings (round 0), never the
+/// start-round standings — a round-robin block rotates off a fixed ordering.
+pub fn pair_round_robin(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings, String> {
+    rr_block_pairings(ctx, rp, 1)
 }
 
-/// Double round robin: consecutive pairs of rounds share one round-robin game.
-pub fn pair_double_round_robin(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
-    let pos = (rp.round - rp.start_round) / 2;
-    round_robin(ctx.standings(0), pos)
+/// Double round robin: each round template spans two consecutive calendar rounds
+/// (k=2).
+pub fn pair_double_round_robin(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings, String> {
+    rr_block_pairings(ctx, rp, 2)
 }
 
-/// Run the round-robin rotation over `standings` for game `pos`. For an odd
-/// field a synthetic bye player is appended so the rotation runs over an even
-/// number of slots; whoever is drawn against the bye sits the round out. Over a
-/// full rotation this gives each real player exactly one bye and every pair
-/// exactly one game.
-fn round_robin(mut standings: Vec<Player>, pos: i32) -> Pairings {
-    if !standings.len().is_multiple_of(2) {
-        standings.push(Player::bye());
+/// Seeding order with a `Bye` appended for odd fields, so the rotation runs over
+/// an even number of players. Players keep their seeding order; what varies is
+/// which round template lands in which calendar round (see `rr_permutation`).
+fn rr_players(ctx: &Ctx) -> Vec<Player> {
+    let mut players = ctx.standings(0);
+    if !players.len().is_multiple_of(2) {
+        players.push(Player::bye());
     }
-    let n = standings.len();
-    pair_rr_into(&standings, n, pos)
+    players
+}
+
+/// Canonical (sorted) key for an unordered name pair.
+fn canon(a: &str, b: &str) -> (String, String) {
+    if a <= b {
+        (a.to_string(), b.to_string())
+    } else {
+        (b.to_string(), a.to_string())
+    }
+}
+
+/// Map each unordered name-pair to the (unique) round-robin template it appears
+/// in, over `players` (even count). Template `t` is `pair_rr(n, t)`.
+fn rr_template_of_pair(players: &[Player]) -> HashMap<(String, String), usize> {
+    let n = players.len();
+    let mut map = HashMap::new();
+    for t in 0..(n - 1) {
+        let (h1, h2) = pair_rr(n, t as i32);
+        for i in 0..(n / 2) {
+            map.insert(canon(&players[h1[i]].name, &players[h2[i]].name), t);
+        }
+    }
+    map
+}
+
+/// The template index a played round used, from its (non-bye) game pairs. Every
+/// game in a round belongs to the same template, so any one pins it; we check
+/// they agree (else the field changed under a played round).
+fn identify_template(
+    pairset: &HashSet<(String, String)>,
+    template_of_pair: &HashMap<(String, String), usize>,
+) -> Result<usize, String> {
+    let mut indices: HashSet<usize> = HashSet::new();
+    for pair in pairset {
+        match template_of_pair.get(pair) {
+            Some(t) => {
+                indices.insert(*t);
+            }
+            None => {
+                return Err("A played round no longer matches the round-robin \
+                            schedule (did the entrants change?)."
+                    .to_string())
+            }
+        }
+    }
+    if indices.len() != 1 {
+        return Err(
+            "A played round is not a valid round-robin round; cannot place \
+                    fixed pairings around it."
+                .to_string(),
+        );
+    }
+    Ok(indices.into_iter().next().unwrap())
+}
+
+/// Move template `t` to `position` by transposing it with whatever sits there.
+/// A locked position (played, or set by an earlier fixed pairing) can't move.
+fn place_template(
+    assign: &mut [usize],
+    where_: &mut [usize],
+    locked: &mut HashSet<usize>,
+    position: usize,
+    t: usize,
+    err: &str,
+) -> Result<(), String> {
+    if assign[position] == t {
+        locked.insert(position);
+        return Ok(());
+    }
+    if locked.contains(&position) || locked.contains(&where_[t]) {
+        return Err(err.to_string());
+    }
+    let other = where_[t];
+    let t_old = assign[position];
+    assign[position] = t;
+    where_[t] = position;
+    assign[other] = t_old;
+    where_[t_old] = other;
+    locked.insert(position);
+    Ok(())
+}
+
+/// Bijection `position -> template index` for one round-robin block, where a
+/// position is a round (or round-pair, for double round robin) in the block.
+/// Start from the identity; pin each played position to the template it used
+/// (a fixed point); then move each fixed pairing's template to its position.
+/// Deterministic, so per-round callers recompute the same bijection.
+fn rr_permutation(
+    num_positions: usize,
+    template_of_pair: &HashMap<(String, String), usize>,
+    played: &HashMap<usize, usize>,
+    fixed: &[(usize, (String, String))],
+) -> Result<Vec<usize>, String> {
+    let mut assign: Vec<usize> = (0..num_positions).collect();
+    let mut where_: Vec<usize> = (0..num_positions).collect();
+    let mut locked: HashSet<usize> = HashSet::new();
+
+    let mut positions: Vec<usize> = played.keys().copied().collect();
+    positions.sort_unstable();
+    for position in positions {
+        place_template(
+            &mut assign,
+            &mut where_,
+            &mut locked,
+            position,
+            played[&position],
+            "Played round-robin rounds conflict with the fixed pairings.",
+        )?;
+    }
+    for (position, pair) in fixed {
+        let t = template_of_pair
+            .get(pair)
+            .ok_or_else(|| "A fixed pairing names players not in this round robin.".to_string())?;
+        place_template(
+            &mut assign,
+            &mut where_,
+            &mut locked,
+            *position,
+            *t,
+            "Fixed pairings conflict: cannot place all of them in their requested rounds.",
+        )?;
+    }
+    Ok(assign)
+}
+
+/// Round-robin family pairing for one calendar round, honoring fixed pairings by
+/// permuting which template lands in which round (`k` calendar rounds per
+/// template: 1 for round robin, 2 for double round robin).
+fn rr_block_pairings(ctx: &Ctx, rp: &RoundPairing, k: i32) -> Result<Pairings, String> {
+    let players = rr_players(ctx);
+    let num_positions = players.len() - 1;
+    let template_of_pair = rr_template_of_pair(&players);
+
+    let block_rounds: HashSet<i32> = ctx
+        .round_pairings
+        .iter()
+        .filter(|o| o.pairing == rp.pairing && o.start_round == rp.start_round)
+        .map(|o| o.round)
+        .collect();
+
+    let position_of = |round: i32| ((round - rp.start_round) / k) as usize;
+
+    // Played rounds become fixed points, identified from their recorded games.
+    let mut played_pairs: HashMap<usize, HashSet<(String, String)>> = HashMap::new();
+    for s in ctx.slips {
+        if block_rounds.contains(&s.round)
+            && !s.winner_name.eq_ignore_ascii_case(BYE_NAME)
+            && !s.loser_name.eq_ignore_ascii_case(BYE_NAME)
+        {
+            played_pairs
+                .entry(position_of(s.round))
+                .or_default()
+                .insert(canon(&s.winner_name, &s.loser_name));
+        }
+    }
+    let mut played: HashMap<usize, usize> = HashMap::new();
+    for (position, pairset) in &played_pairs {
+        played.insert(*position, identify_template(pairset, &template_of_pair)?);
+    }
+
+    let mut fixed: Vec<(usize, (String, String))> = Vec::new();
+    for (round, pairs) in ctx.fixed_pairings {
+        if block_rounds.contains(round) {
+            for (a, b) in pairs {
+                fixed.push((position_of(*round), canon(a, b)));
+            }
+        }
+    }
+    fixed.sort_by(|x, y| x.0.cmp(&y.0).then_with(|| x.1.cmp(&y.1)));
+
+    let assign = rr_permutation(num_positions, &template_of_pair, &played, &fixed)?;
+
+    let t = assign[position_of(rp.round)];
+    Ok(pair_rr_into(&players, players.len(), t as i32))
 }
 
 /// Charlottesville: split the field into two snaking groups and rotate one group

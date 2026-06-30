@@ -8,7 +8,7 @@ pub mod basic;
 pub mod quads;
 pub mod swiss;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use rand_chacha::ChaCha8Rng;
 use rand_core::RngCore;
@@ -25,12 +25,15 @@ use crate::standings::{standings_after_round, Pairing, Pairings, Player, Repeats
 const REPEAT_SCALE: i128 = 1_000_000;
 
 /// Everything a strategy needs: the tournament data, the set of names excluded
-/// this round (fixed players), the running repeat counts, and the RNG.
+/// this round (fixed players), the fixed pairings by round (read directly by the
+/// round-robin strategies, which permute rounds rather than excluding players),
+/// the running repeat counts, and the RNG.
 pub struct Ctx<'a> {
     pub players: &'a [PlayerData],
     pub slips: &'a [ResultSlipData],
     pub round_pairings: &'a [RoundPairing],
     pub excluded: &'a HashSet<String>,
+    pub fixed_pairings: &'a HashMap<i32, Vec<(String, String)>>,
     pub repeats: &'a Repeats,
     pub rng: &'a mut ChaCha8Rng,
 }
