@@ -106,10 +106,35 @@ class ByePairingTests(TestCase):
         # The byed player is the notional non-starter (bye "starts").
         self.assertFalse(slip.winner_started)
 
+    def test_publishing_an_odd_round_stays_published_not_in_progress(self):
+        # The auto bye isn't a played game, so a freshly published odd round is
+        # PUBLISHED, not IN_PROGRESS — only a real result moves it forward.
+        division = make_division(self.user, 5, 3)
+        regenerate_pairings(division)
+        publish_rounds(division, [1])
+        rp = division.round_pairings_set.get(round=1)
+        self.assertEqual(rp.status, RoundPairings.PUBLISHED)
+
+    def test_first_real_result_moves_odd_round_to_in_progress(self):
+        division = make_division(self.user, 5, 3)
+        regenerate_pairings(division)
+        publish_rounds(division, [1])
+        real = [
+            p for p in division.pairings.filter(round=1)
+            if not (p.first.player.is_bye or p.second.player.is_bye)
+        ][0]
+        ResultSlip.objects.create(
+            division=division, round=1, pairing=real,
+            winner=real.first, winner_score=450,
+            loser=real.second, loser_score=380, winner_started=True,
+        )
+        real.round_pairings.update_status()
+        rp = division.round_pairings_set.get(round=1)
+        self.assertEqual(rp.status, RoundPairings.IN_PROGRESS)
+
     def test_unpublishing_clears_the_bye_and_reverts_to_draft(self):
-        # An odd round is IN_PROGRESS the moment it's published (the bye counts as
-        # a partial result), but that auto bye isn't a real result, so the round
-        # can still be unpublished — and its bye slip is dropped for a clean draft.
+        # The auto bye isn't a real result, so the round can still be unpublished
+        # — and its bye slip is dropped for a clean draft.
         division = make_division(self.user, 5, 3)
         regenerate_pairings(division)
         publish_rounds(division, [1])
