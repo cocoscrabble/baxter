@@ -9,6 +9,13 @@
     {% block extra_head %}{% endblock %}
 </head>
 <body>
+    <header class="embed-header">
+        <a href="https://cocoscrabble.org" class="embed-logo-link">
+            <img src="{% static 'img/logo.png' %}" alt="COCO logo" class="embed-logo">
+        </a>
+    </header>
+    <main class="embed-page">
     {% block content %}{% endblock %}
+    </main>
 </body>
 </html>

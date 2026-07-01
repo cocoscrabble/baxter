@@ -321,14 +321,19 @@ class PublishedPairingsPresenter:
 
     def as_context(self) -> dict:
         context = {"division": self.division}
-        published_rounds = set(
+        published = list(
             self.division.round_pairings_set
             .filter(status__in=[RoundPairings.PUBLISHED, RoundPairings.IN_PROGRESS])
-            .values_list("round", flat=True)
+            .values_list("round", "updated_at")
         )
-        if not published_rounds:
+        if not published:
             context["pairings_message"] = "No pairings published yet."
             return context
+        published_rounds = {round_num for round_num, _ in published}
+        context["last_updated"] = max(
+            (updated for _, updated in published if updated is not None),
+            default=None,
+        )
         db_pairings = list(
             self.division.pairings
             .filter(round__in=published_rounds)
