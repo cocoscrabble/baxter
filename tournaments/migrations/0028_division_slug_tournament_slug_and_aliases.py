@@ -65,7 +65,14 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="tournament",
             name="slug",
-            field=models.SlugField(default="", editable=False, max_length=220),
+            # db_index=False here is deliberate: SlugField defaults to
+            # db_index=True, which on Postgres creates a `..._slug_..._like`
+            # pattern index. The later AlterField(unique=True) creates that same
+            # index again, so leaving the default makes this migration fail on
+            # Postgres with "relation ... already exists" (SQLite has no _like
+            # index, so it silently worked there). Adding the column unindexed
+            # lets the unique index be created exactly once.
+            field=models.SlugField(db_index=False, default="", editable=False, max_length=220),
             preserve_default=False,
         ),
         migrations.AddField(
