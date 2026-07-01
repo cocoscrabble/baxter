@@ -17,11 +17,11 @@
 </h2>
 {% if can_edit and selected_status == 'pairable' %}
 <button type="button" class="btn-publish-needed btn-publish-round"
-    data-on:click="@post('{% url 'publish_round' division.tournament.slug division.slug %}', {headers: {'X-CSRFToken': $_csrfToken}, payload: {round: {{ selected_round }}}})">Publish round {{ selected_round }}</button>
+    data-on:click="@post('{% url 'publish_round' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {round: {{ selected_round }}}})">Publish round {{ selected_round }}</button>
 {% endif %}
 {% if can_edit and can_unpublish_selected %}
 <button type="button" class="btn-unpublish-round"
-    data-on:click="@post('{% url 'unpublish_round' division.tournament.slug division.slug %}', {headers: {'X-CSRFToken': $_csrfToken}, payload: {round: {{ selected_round }}}})">Unpublish round {{ selected_round }}</button>
+    data-on:click="@post('{% url 'unpublish_round' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {round: {{ selected_round }}}})">Unpublish round {{ selected_round }}</button>
 {% endif %}
 </div>
 
@@ -49,7 +49,7 @@
                     {% if entry.result %}
                         {{ entry.result }}
                     {% elif division.is_test %}
-                        <button type="button" class="btn-sim" data-on:click="@post('{% url 'simulate_match' division.tournament.slug division.slug %}', {headers: {'X-CSRFToken': $_csrfToken}, payload: {round: {{ selected_round }}, first: '{{ entry.pairing.first.name }}', second: '{{ entry.pairing.second.name }}'}})">simulate</button>
+                        <button type="button" class="btn-sim" data-on:click="@post('{% url 'simulate_match' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {round: {{ selected_round }}, first: '{{ entry.pairing.first.name }}', second: '{{ entry.pairing.second.name }}'}})">simulate</button>
                     {% endif %}
                 </td>
             </tr>
@@ -76,7 +76,7 @@
             <li>
                 <span>{{ fp.entrant1.name }} vs. {{ fp.entrant2.name }}</span>
                 <button type="button" class="fixed-pairing-remove" title="Remove fixed pairing"
-                    data-on:click="@post('{% url 'remove_fixed_pairing' division.tournament.slug division.slug %}', {headers: {'X-CSRFToken': $_csrfToken}, payload: {fp_id: {{ fp.id }}, round: {{ selected_round }}}})">&#x2715;</button>
+                    data-on:click="@post('{% url 'remove_fixed_pairing' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {fp_id: {{ fp.id }}, round: {{ selected_round }}}})">&#x2715;</button>
             </li>
             {% endfor %}
         </ul>
@@ -95,7 +95,7 @@
             </select>
             <button type="button"
                 data-attr-disabled="$fixedFirst === '' || $fixedSecond === '' || $fixedFirst === $fixedSecond"
-                data-on:click="@post('{% url 'add_fixed_pairing' division.tournament.slug division.slug %}', {headers: {'X-CSRFToken': $_csrfToken}, payload: {round: {{ selected_round }}, entrant1: $fixedFirst, entrant2: $fixedSecond}})">Add fixed pairing</button>
+                data-on:click="@post('{% url 'add_fixed_pairing' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {round: {{ selected_round }}, entrant1: $fixedFirst, entrant2: $fixedSecond}})">Add fixed pairing</button>
         </div>
     </aside>
     {% endif %}
@@ -109,7 +109,7 @@
                 <th></th>
                 <th>Second Player</th>
                 <th class="num">Repeats</th>
-                <th>{% if division.is_test and selected_status == 'published' %}<button type="button" class="btn-sim" data-on:click="@post('{% url 'simulate_round' division.tournament.slug division.slug %}', {headers: {'X-CSRFToken': $_csrfToken}, payload: {round: {{ selected_round }}}})">simulate all</button>{% endif %}</th>
+                <th>{% if division.is_test and selected_status == 'published' %}<button type="button" class="btn-sim" data-on:click="@post('{% url 'simulate_round' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {round: {{ selected_round }}}})">simulate all</button>{% endif %}</th>
             </tr>
         </thead>
         <tbody>
@@ -124,7 +124,7 @@
                     {% if entry.result %}
                         {{ entry.result }}
                     {% elif division.is_test and selected_status == 'published' %}
-                        <button type="button" class="btn-sim" data-on:click="@post('{% url 'simulate_match' division.tournament.slug division.slug %}', {headers: {'X-CSRFToken': $_csrfToken}, payload: {round: {{ selected_round }}, first: '{{ entry.pairing.first.name }}', second: '{{ entry.pairing.second.name }}'}})">simulate</button>
+                        <button type="button" class="btn-sim" data-on:click="@post('{% url 'simulate_match' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {round: {{ selected_round }}, first: '{{ entry.pairing.first.name }}', second: '{{ entry.pairing.second.name }}'}})">simulate</button>
                     {% endif %}
                 </td>
             </tr>

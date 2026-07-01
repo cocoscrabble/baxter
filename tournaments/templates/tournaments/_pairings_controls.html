@@ -4,7 +4,7 @@
 <p>
 {% if has_draft_rounds %}
 <button type="button" class="btn-publish-needed"
-    data-on:click="@post('{% url 'publish_pairings' division.tournament.slug division.slug %}', {headers: {'X-CSRFToken': $_csrfToken}})">Publish All</button>
+    data-on:click="@post('{% url 'publish_pairings' division.tournament.slug division.slug %}', {headers: $_csrfHdr})">Publish All</button>
 {% endif %}
 {% if has_published_rounds %}
 <a href="{% url 'published_pairings' division.tournament.slug division.slug %}" target="_blank" rel="noopener">View published pairings page</a>
