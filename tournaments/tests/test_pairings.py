@@ -968,6 +968,40 @@ class RoundPairingsLifecycleTests(PairingDBTestBase):
         rp.refresh_from_db()
         self.assertEqual(rp.status, RoundPairings.PUBLISHED)
 
+    def test_unpublish_reverts_published_round_to_draft(self):
+        from tournaments.generate_pairings import publish_rounds, unpublish_rounds
+        self._koth_config(1)
+        self._regenerate()
+        publish_rounds(self.division, [1])
+        self.assertEqual(unpublish_rounds(self.division, [1]), [1])
+        rp = RoundPairings.objects.get(division=self.division, round=1)
+        self.assertEqual(rp.status, RoundPairings.DRAFT)
+        # Pairings are kept, so the round can be edited and republished.
+        self.assertTrue(rp.pairings.exists())
+
+    def test_unpublish_blocked_when_round_has_results(self):
+        from tournaments.generate_pairings import publish_rounds, unpublish_rounds
+        self._koth_config(1)
+        self._regenerate()
+        publish_rounds(self.division, [1])
+        rp = RoundPairings.objects.get(division=self.division, round=1)
+        pairing = rp.pairings.first()
+        ResultSlip.objects.create(
+            division=self.division, round=1, pairing=pairing,
+            winner=pairing.first, winner_score=450,
+            loser=pairing.second, loser_score=380, winner_started=True,
+        )
+        rp.update_status()
+        self.assertEqual(unpublish_rounds(self.division, [1]), [])
+        rp.refresh_from_db()
+        self.assertEqual(rp.status, RoundPairings.IN_PROGRESS)
+
+    def test_unpublish_ignores_draft_round(self):
+        from tournaments.generate_pairings import unpublish_rounds
+        self._koth_config(1)
+        self._regenerate()  # round 1 is DRAFT
+        self.assertEqual(unpublish_rounds(self.division, [1]), [])
+
     def test_unpaired_round_not_marked_finished(self):
         # Regression: a published round with no pairings has 0 results and 0
         # pairings, so `with_results == total` is vacuously true (0 == 0). It

@@ -54,7 +54,7 @@ from .pairing.round_pairing import (
 )
 from .player_sync import import_players
 from users.models import User
-from .generate_pairings import publish_rounds, regenerate_pairings
+from .generate_pairings import publish_rounds, regenerate_pairings, unpublish_rounds
 from .pairing.base import PairingData, PairingError, standings_after_round
 from .pairing.pair import STRATEGY_TYPES
 from .pairings_view import PairingsPresenter, PublishedPairingsPresenter
@@ -519,6 +519,23 @@ class PublishRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
         round_number = int(data["round"])
         publish_rounds(division, [round_number])
         return _pairings_body_response(request, division, select_round=round_number)
+
+
+class UnpublishRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    """Revert a published round with no results to draft so it can be edited and
+    republished, then live-swap the pairings body."""
+
+    def post(self, request, *args, **kwargs):
+        division = self.get_division()
+        data = (read_signals(request) or {}) if is_datastar(request) else request.POST
+        round_number = int(data["round"])
+        unpublished = unpublish_rounds(division, [round_number])
+        error = None if unpublished else (
+            f"Round {round_number} can't be unpublished — it already has results."
+        )
+        return _pairings_body_response(
+            request, division, select_round=round_number, error=error
+        )
 
 
 class AddFixedPairingView(LoginRequiredMixin, CanEditDivisionMixin, View):

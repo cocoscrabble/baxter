@@ -19,6 +19,10 @@
 <button type="button" class="btn-publish-needed btn-publish-round"
     data-on:click="@post('{% url 'publish_round' division.tournament.slug division.slug %}', {headers: {'X-CSRFToken': $_csrfToken}, payload: {round: {{ selected_round }}}})">Publish round {{ selected_round }}</button>
 {% endif %}
+{% if can_edit and can_unpublish_selected %}
+<button type="button" class="btn-unpublish-round"
+    data-on:click="@post('{% url 'unpublish_round' division.tournament.slug division.slug %}', {headers: {'X-CSRFToken': $_csrfToken}, payload: {round: {{ selected_round }}}})">Unpublish round {{ selected_round }}</button>
+{% endif %}
 </div>
 
 {% if selected_status == 'finished' or selected_status == 'in_progress' %}
