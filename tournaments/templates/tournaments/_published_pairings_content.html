@@ -1,7 +1,18 @@
 {% if pairings_message %}
 {% include "tournaments/_empty_state.html" with message=pairings_message %}
 {% elif pairings %}
+{% if last_updated %}
+<p class="pairings-updated">Last updated {{ last_updated|date:"M j, Y, g:i A" }}</p>
+{% endif %}
+{% if pairings|length > 1 %}
+<nav class="round-nav no-print" aria-label="Jump to round">
+    {% for round_num, round_pairings in pairings %}
+    <a href="#round-{{ round_num }}">Round {{ round_num }}</a>
+    {% endfor %}
+</nav>
+{% endif %}
 {% for round_num, round_pairings in pairings %}
+<section class="round-section" id="round-{{ round_num }}">
 <h2>Round {{ round_num }}</h2>
 <table>
     <thead>
@@ -9,7 +20,7 @@
             <th>Table</th>
             <th>First Player</th>
             <th>Second Player</th>
-            <th></th>
+            <th class="no-print"></th>
         </tr>
     </thead>
     <tbody>
@@ -18,10 +29,11 @@
             <td>{{ entry.pairing.table_label|default:entry.pairing.table }}</td>
             <td>{{ entry.pairing.first.name }}</td>
             <td>{{ entry.pairing.second.name }}</td>
-            <td><a href="{% url 'resultslip_create' division.tournament.slug division.slug %}?pairing={{ entry.pairing.pk }}">Submit results</a></td>
+            <td class="no-print"><a href="{% url 'resultslip_create' division.tournament.slug division.slug %}?pairing={{ entry.pairing.pk }}">Submit results</a></td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
+</section>
 {% endfor %}
 {% endif %}
