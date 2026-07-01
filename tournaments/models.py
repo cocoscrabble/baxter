@@ -501,10 +501,16 @@ class RoundPairings(models.Model):
         """Recompute lifecycle status from the current count of results."""
         total = self.pairings.count()
         with_results = self.pairings.filter(result__isnull=False).count()
-        if with_results == 0 and self.status == RoundPairings.IN_PROGRESS:
+        # A bye is auto-recorded at publish time but isn't a played game, so it
+        # doesn't make a round "in progress" — only a real (non-bye) result does.
+        # Byes still count toward `with_results` for reaching FINISHED below.
+        real_results = self.pairings.filter(result__isnull=False).exclude(
+            result__loser__player__is_bye=True
+        ).count()
+        if real_results == 0 and self.status == RoundPairings.IN_PROGRESS:
             self.status = RoundPairings.PUBLISHED
             self.save(update_fields=["status"])
-        elif 0 < with_results < total and self.status == RoundPairings.PUBLISHED:
+        elif 0 < real_results < total and self.status == RoundPairings.PUBLISHED:
             self.status = RoundPairings.IN_PROGRESS
             self.save(update_fields=["status"])
         elif (
