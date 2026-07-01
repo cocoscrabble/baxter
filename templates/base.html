@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
     {% block extra_head %}{% endblock %}
 </head>
-<body data-signals="{_csrfToken: '{{ csrf_token }}'}">
+<body data-signals="{_csrfHdr: {'X-CSRFToken': '{{ csrf_token }}'}}">
     <header class="app-header">
     <nav class="navbar">
         <div class="nav-top">

@@ -12,7 +12,7 @@
     {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
 </ul>
 {% endif %}
-<form method="post" data-on:submit__prevent="@post('{{ form_action }}', {headers: {'X-CSRFToken': $_csrfToken}})">
+<form method="post" data-on:submit__prevent="@post('{{ form_action }}', {headers: $_csrfHdr})">
     {% csrf_token %}
     <p>
         <label for="id_round">Round:</label>
