@@ -71,6 +71,44 @@ def publish_rounds(division, round_numbers=None):
     return published
 
 
+def unpublish_rounds(division, round_numbers=None):
+    """Revert published rounds with no real results back to draft.
+
+    A round is eligible when it is PUBLISHED or IN_PROGRESS and carries no
+    director-entered results — an auto-materialized bye (the only result a
+    freshly published round can have) does not count. The bye slips are deleted
+    so the round becomes a clean draft that ``regenerate_pairings`` can re-pair,
+    and its status is restored to DRAFT so the editor treats it as pairable
+    again. ``round_numbers=None`` considers every published round.
+
+    Returns the rounds actually unpublished (empty if none were eligible).
+    """
+    qs = division.round_pairings_set.filter(
+        status__in=[RoundPairings.PUBLISHED, RoundPairings.IN_PROGRESS]
+    )
+    if round_numbers is not None:
+        qs = qs.filter(round__in=round_numbers)
+    candidates = list(qs.values_list("round", flat=True))
+    if not candidates:
+        return []
+    rounds_with_real_results = set(
+        division.result_slips.filter(round__in=candidates)
+        .exclude(loser__player__is_bye=True)
+        .values_list("round", flat=True)
+    )
+    to_unpublish = [r for r in candidates if r not in rounds_with_real_results]
+    if not to_unpublish:
+        return []
+    with transaction.atomic():
+        ResultSlip.objects.filter(
+            division=division, round__in=to_unpublish, loser__player__is_bye=True
+        ).delete()
+        division.round_pairings_set.filter(round__in=to_unpublish).update(
+            status=RoundPairings.DRAFT
+        )
+    return to_unpublish
+
+
 def get_fixed_table(fixed_table_lookup, entrant_id, round_num):
     """Return (table_label, is_all) for an entrant in a round, or None.
 

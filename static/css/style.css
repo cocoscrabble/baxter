@@ -898,6 +898,16 @@ dd {
     padding: var(--space-xs) var(--space-md);
 }
 
+.btn-unpublish-round {
+    font-size: 0.85rem;
+    padding: var(--space-xs) var(--space-md);
+    background-color: var(--color-muted-bg);
+}
+
+.btn-unpublish-round:hover {
+    background-color: var(--color-muted);
+}
+
 .round-status-badge {
     display: inline-block;
     font-size: 0.6em;

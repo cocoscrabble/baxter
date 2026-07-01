@@ -128,6 +128,18 @@ class PairingsPresenter:
         return set(self.division.result_slips.values_list("round", flat=True).distinct())
 
     @cached_property
+    def rounds_with_real_results(self) -> set[int]:
+        """Rounds with a director-entered result. Auto-materialized bye slips
+        don't count, so a freshly published round (bye aside) reads as unplayed
+        and can still be unpublished."""
+        return set(
+            self.division.result_slips
+            .exclude(loser__player__is_bye=True)
+            .values_list("round", flat=True)
+            .distinct()
+        )
+
+    @cached_property
     def db_pairings(self):
         return list(
             self.division.pairings
@@ -305,6 +317,10 @@ class PairingsPresenter:
             context["round_label"] = sel["label"]
             if sel["status"] == "pairable":
                 context["fixed_pairings_for_round"] = self.fixed_for_selected
+            context["can_unpublish_selected"] = (
+                sel["status"] in ("published", "in_progress")
+                and sel["round"] not in self.rounds_with_real_results
+            )
         rows = self._rows_for_selected()
         if rows is not None:
             context["round_pairings"] = rows

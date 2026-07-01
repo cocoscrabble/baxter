@@ -10,6 +10,7 @@ from tournaments.generate_pairings import (
     BYE_WINNER_SCORE,
     publish_rounds,
     regenerate_pairings,
+    unpublish_rounds,
 )
 from tournaments.match_simulation import simulate_round
 from tournaments.models import (
@@ -18,6 +19,7 @@ from tournaments.models import (
     Entrant,
     Player,
     ResultSlip,
+    RoundPairings,
     Tournament,
 )
 from tournaments.pairing.base import PairingData, standings_after_round
@@ -103,6 +105,47 @@ class ByePairingTests(TestCase):
         self.assertEqual(slip.winner_score - slip.loser_score, BYE_WINNER_SCORE)
         # The byed player is the notional non-starter (bye "starts").
         self.assertFalse(slip.winner_started)
+
+    def test_unpublishing_clears_the_bye_and_reverts_to_draft(self):
+        # An odd round is IN_PROGRESS the moment it's published (the bye counts as
+        # a partial result), but that auto bye isn't a real result, so the round
+        # can still be unpublished — and its bye slip is dropped for a clean draft.
+        division = make_division(self.user, 5, 3)
+        regenerate_pairings(division)
+        publish_rounds(division, [1])
+        self.assertTrue(
+            division.result_slips.filter(round=1, loser__player__is_bye=True).exists()
+        )
+
+        unpublished = unpublish_rounds(division, [1])
+
+        self.assertEqual(unpublished, [1])
+        rp = division.round_pairings_set.get(round=1)
+        self.assertEqual(rp.status, RoundPairings.DRAFT)
+        self.assertFalse(division.result_slips.filter(round=1).exists())
+        # Pairings survive so the round can be edited and republished.
+        self.assertTrue(rp.pairings.exists())
+
+    def test_unpublishing_blocked_by_a_real_result(self):
+        division = make_division(self.user, 5, 3)
+        regenerate_pairings(division)
+        publish_rounds(division, [1])
+        # Enter a real game result alongside the auto bye.
+        real = [
+            p for p in division.pairings.filter(round=1)
+            if not (p.first.player.is_bye or p.second.player.is_bye)
+        ][0]
+        ResultSlip.objects.create(
+            division=division, round=1, pairing=real,
+            winner=real.first, winner_score=450,
+            loser=real.second, loser_score=380, winner_started=True,
+        )
+
+        self.assertEqual(unpublish_rounds(division, [1]), [])
+        # Round and both slips are untouched.
+        self.assertTrue(
+            division.result_slips.filter(round=1, loser__player__is_bye=True).exists()
+        )
 
     def test_even_field_has_no_bye(self):
         division = make_division(self.user, 6, 2)
