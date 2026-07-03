@@ -114,6 +114,10 @@ class ResultSlipForm(forms.Form):
 
         # Build flat pairing choices and lookup.
         pairing_choices = [("", "---")]
+        # (pk, label, round) per pairing, for rendering the pairing options.
+        # The template shows all of them and filters to the selected round
+        # client-side (data-show), so a JS failure just leaves the full list.
+        pairing_options = []
         # entrant pk -> (name, [pairing pks the entrant plays in]). Drives the
         # winner dropdown, which is filtered client-side to the selected pairing.
         winner_options = {}
@@ -121,6 +125,7 @@ class ResultSlipForm(forms.Form):
             for p_pk, first_pk, first_name, second_pk, second_name in pairing_list:
                 label = f"{first_name} vs. {second_name}"
                 pairing_choices.append((p_pk, label))
+                pairing_options.append((p_pk, label, r))
                 self._pairing_lookup[p_pk] = (
                     first_pk,
                     first_name,
@@ -132,6 +137,7 @@ class ResultSlipForm(forms.Form):
                     entry = winner_options.setdefault(ent_pk, (ent_name, []))
                     entry[1].append(p_pk)
 
+        self.pairing_options = pairing_options
         self.fields["pairing"].widget = forms.Select(choices=pairing_choices)
         # (pk, name, [pairing pks]) per entrant, for rendering the winner options.
         self.winner_options = [
@@ -150,6 +156,11 @@ class ResultSlipForm(forms.Form):
         # one; the winner dropdown is restricted client-side to the two players
         # in the selected pairing (see _resultslip_form.html).
         self.fields["pairing"].widget.attrs["data-on:change"] = "$winner = ''"
+        # Changing the round clears the pairing (and winner): the pairing
+        # dropdown is filtered to the selected round, so a pairing picked for a
+        # different round must not linger. JS-only refinement — without it the
+        # server-rendered options still all submit correctly.
+        self.fields["round"].widget.attrs["data-on:change"] = "$pairing = ''; $winner = ''"
 
     def clean_pairing(self):
         pairing_pk = self.cleaned_data.get("pairing")

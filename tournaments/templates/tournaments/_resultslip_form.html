@@ -21,7 +21,18 @@
     </p>
     <p>
         <label for="id_pairing">Pairing:</label>
-        {{ form.pairing }}
+        {# Rendered manually (not {{ form.pairing }}) so each option can be #}
+        {# filtered to the selected round with data-show. Every option is #}
+        {# server-rendered and visible by default; data-show only hides the #}
+        {# non-matching ones once datastar runs, so if JS fails the full list #}
+        {# still shows rather than an empty dropdown. `!$round` keeps them all #}
+        {# visible until a round is picked. #}
+        <select name="pairing" id="id_pairing" data-bind="pairing" data-on:change="$winner = ''">
+            <option value="">---</option>
+            {% for p_pk, p_label, p_round in form.pairing_options %}
+            <option value="{{ p_pk }}" data-show="!$round || Number($round) === {{ p_round }}">{{ p_label }}</option>
+            {% endfor %}
+        </select>
         {% if form.pairing.errors %}<ul class="errorlist">{% for e in form.pairing.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
     </p>
     <p>
