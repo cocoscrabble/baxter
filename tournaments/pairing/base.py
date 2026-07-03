@@ -221,7 +221,9 @@ class Results:
 
     def standings(self) -> Standings:
         standings = list(self.players.values())
-        standings.sort(key=lambda x: -x.score)
+        # Rank by wins, then spread as the tiebreaker (standard Scrabble order:
+        # among equal records, higher cumulative spread ranks higher).
+        standings.sort(key=lambda x: (-x.score, -x.spread))
         return standings
 
 
