@@ -187,6 +187,19 @@ class ResultSlipFormTests(TestCase):
         self.assertEqual(options[self.entrant1.pk], ("Alice", [self.pairing.pk]))
         self.assertEqual(options[self.entrant2.pk], ("Bob", [self.pairing.pk]))
 
+    def test_pairing_options_carry_their_round(self):
+        # The pairing dropdown is filtered to the selected round, so each option
+        # must know which round it belongs to.
+        pbr = {
+            1: [(self.pairing.pk, self.entrant1.pk, "Alice", self.entrant2.pk, "Bob")],
+            2: [(999, self.entrant1.pk, "Alice", self.entrant2.pk, "Bob")],
+        }
+        form = ResultSlipForm(division=self.division, pairings_by_round=pbr)
+        by_round = {p_round: (pk, label) for pk, label, p_round in form.pairing_options}
+        self.assertEqual(by_round[1], (self.pairing.pk, "Alice vs. Bob"))
+        self.assertEqual(by_round[2], (999, "Alice vs. Bob"))
+        self.assertEqual(len(form.pairing_options), 2)
+
     def test_valid_form(self):
         form = ResultSlipForm(
             data={
