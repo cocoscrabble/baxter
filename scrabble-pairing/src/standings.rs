@@ -151,11 +151,19 @@ impl Results {
         self.update_player(&Outcome::from_slip(slip, false));
     }
 
-    /// Players ordered by score (highest first); ties keep first-seen order.
+    /// Players ordered by score (highest first), then by spread (standard
+    /// Scrabble order: among equal records, higher cumulative spread ranks
+    /// higher); remaining ties keep first-seen order.
     pub fn standings(&self) -> Vec<Player> {
         let mut standings: Vec<Player> = self.players.values().cloned().collect();
-        // Stable sort by descending score (partial_cmp is fine — scores are finite).
-        standings.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+        // Stable sort by descending score, then descending spread (partial_cmp
+        // is fine — scores are finite).
+        standings.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap()
+                .then(b.spread.cmp(&a.spread))
+        });
         standings
     }
 }

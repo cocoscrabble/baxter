@@ -330,12 +330,14 @@ class PairTests(PairingDBTestBase):
         self.add_result(2, 1, 3, 410, 370, winner_started=False)
         result = pair(self._pd())
         _, pairings = result[0]
-        # After 2 rounds: Alice has 2 starts, Carol has 1, Dave has 1, Bob has 0.
-        # Round 3 KotH: Alice-Bob, Carol-Dave.
-        # Alice(2) vs Bob(0) → Bob starts. Carol(1) vs Dave(1) → Dave starts (h2h flip).
+        # After 2 rounds, standings rank by wins then spread:
+        #   Alice(2, +110), Carol(1, +10), Bob(1, -30), Dave(0, -90).
+        # Round 3 KotH pairs 1v2, 3v4: Alice-Carol, Bob-Dave.
+        # Starts so far: Alice 2, Carol 1, Dave 1, Bob 0.
+        # Alice(2) vs Carol(1) → Carol starts. Bob(0) vs Dave(1) → Bob starts.
         # first in DisplayPairing is the starter.
         starters = {p.first.name for p in pairings}
-        self.assertEqual(starters, {"Bob", "Dave"})
+        self.assertEqual(starters, {"Carol", "Bob"})
 
 
 # ── standings_after_round with excluded_names ────────────────────────────────
@@ -384,6 +386,22 @@ class StandingsExclusionTests(TestCase):
     def test_empty_excluded_names_returns_all(self):
         pd = _make_pd(["Alice", "Bob", "Carol", "Dave"])
         self.assertEqual(len(standings_after_round(pd, 0)), 4)
+
+
+class StandingsSpreadTiebreakTests(TestCase):
+    """Standings rank by wins, then spread (higher spread ranks higher)."""
+
+    def test_spread_breaks_ties_within_a_win_group(self):
+        # Round 1: Alice wins big (+200), Carol wins small (+20). Both 1-0, but
+        # Alice's higher spread must rank her above Carol; symmetrically Dave
+        # (-20) ranks above Bob (-200) among the 0-1 players.
+        slips = [
+            ResultSlipData(1, "Alice", "Bob", 500, 300, True),
+            ResultSlipData(1, "Carol", "Dave", 420, 400, True),
+        ]
+        pd = _make_pd(["Alice", "Bob", "Carol", "Dave"], result_slips=slips)
+        order = [p.name for p in standings_after_round(pd, 1)]
+        self.assertEqual(order, ["Alice", "Carol", "Dave", "Bob"])
 
 
 # ── pair_round with fixed pairings ───────────────────────────────────────────
