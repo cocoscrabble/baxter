@@ -52,9 +52,12 @@ QR_H_OFFSET, QR_V_OFFSET = 5789295, 7315
 # if a font change shifts where the ordinals land.
 CIRCLE_COLOR = "C00000"  # outline colour (dark red), like a pen mark
 CIRCLE_W, CIRCLE_H = 295000, 200000
-CIRCLE_V_OFFSET = -48000
-CIRCLE_FIRST_H_OFFSET = 72000
-CIRCLE_SECOND_H_OFFSET = 300000
+# Centred over the ordinal ink: the "1st"/"2nd" text sits at roughly ∓40pt from
+# the cell centre, so the ellipse's left edge (posOffset) is set to land its
+# centre there. Nudged down slightly so it sits on the ordinal line, not high.
+CIRCLE_V_OFFSET = -30000
+CIRCLE_FIRST_H_OFFSET = 2000
+CIRCLE_SECOND_H_OFFSET = 245000
 
 
 @dataclass(frozen=True)
