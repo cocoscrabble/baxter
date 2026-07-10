@@ -59,6 +59,7 @@ from .pairing.base import PairingData, PairingError, standings_after_round
 from .pairing.pair import STRATEGY_TYPES
 from .pairings_view import PairingsPresenter, PublishedPairingsPresenter
 from .scorecards import ScorecardSpec, make_rounds, render_scorecards
+from .results_export import ResultRow, render_results_csv
 
 DOCX_CONTENT_TYPE = (
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -751,6 +752,39 @@ class DivisionScorecardsDownloadView(LoginRequiredMixin, CanEditDivisionMixin, D
             starts[p.first_id][p.round] = "1st"
             starts[p.second_id][p.round] = "2nd"
         return opponents, starts
+
+
+class DivisionResultsExportView(LoginRequiredMixin, CanEditDivisionMixin, DetailView):
+    """Download a division's results as CSV in the coco-ratings format (editor-only)."""
+
+    model = Division
+    context_object_name = "division"
+
+    def render_to_response(self, context, **kwargs):
+        division = self.object
+        tournament = division.tournament
+        slips = division.result_slips.select_related(
+            "winner__player", "loser__player"
+        ).order_by("round", "created_at")
+        rows = [
+            ResultRow(
+                round=slip.round,
+                winner=slip.winner.name,
+                winner_score=slip.winner_score,
+                opponent=slip.loser.name,
+                opponent_score=slip.loser_score,
+                submitted_on=slip.created_at,
+            )
+            for slip in slips
+            # A bye is materialized as a result but isn't a played game; leave it
+            # out so it doesn't create a phantom "Bye" player in the ratings.
+            if not (slip.winner.player.is_bye or slip.loser.player.is_bye)
+        ]
+
+        response = HttpResponse(render_results_csv(rows), content_type="text/csv")
+        filename = slugify(f"{tournament.name}-{division.name}-results") + ".csv"
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
 
 
 class DivisionSettingsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
