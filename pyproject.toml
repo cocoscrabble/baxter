@@ -22,6 +22,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "django-debug-toolbar>=6.2.0",
+    "django-types>=0.24.0",
     "ipython>=9.10.0",
     "pandas>=3.0.0",
     "ruff>=0.15.0",
