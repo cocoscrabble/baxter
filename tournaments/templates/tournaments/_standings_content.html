@@ -20,9 +20,7 @@
         <tr>
             <th class="num">Rank</th>
             <th>Player</th>
-            <th class="num">Wins</th>
-            <th class="num">Losses</th>
-            <th class="num">Ties</th>
+            <th class="num">Score</th>
             <th class="num">Spread</th>
         </tr>
     </thead>
@@ -31,9 +29,7 @@
         <tr>
             <td class="num">{{ forloop.counter }}</td>
             <td>{{ player.name }}</td>
-            <td class="num">{{ player.wins }}</td>
-            <td class="num">{{ player.losses }}</td>
-            <td class="num">{{ player.ties }}</td>
+            <td class="num">{{ player.record }}</td>
             <td class="num">{{ player.spread }}</td>
         </tr>
         {% endfor %}
