@@ -155,6 +155,20 @@ class Player:
     def is_bye(self) -> bool:
         return self.name.lower() == "bye"
 
+    @property
+    def record(self) -> str:
+        """Win-loss record as "12-4", or "10.5-3.5" when ties are involved.
+
+        A tie counts half a win and half a loss for each player.
+        """
+        win_score = self.wins + 0.5 * self.ties
+        loss_score = self.losses + 0.5 * self.ties
+
+        def fmt(value: float) -> str:
+            return f"{value:.1f}".rstrip("0").rstrip(".")
+
+        return f"{fmt(win_score)}-{fmt(loss_score)}"
+
 
 @dataclass(frozen=True)
 class Pairing:
