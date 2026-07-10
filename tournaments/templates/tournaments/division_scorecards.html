@@ -12,4 +12,14 @@ linking to the published pairings page.</p>
 <form method="get" action="{% url 'division_scorecards_download' division.tournament.slug division.slug %}">
     <button type="submit">Generate and download scorecards</button>
 </form>
+
+<h2>Results export</h2>
+
+<p>Download this division's game results as a CSV in the coco-ratings format
+(<code>Submitted On, Round, Winner, Winners Score, Opponent, Opponents Score</code>),
+ready to feed into the ratings tooling. Byes are omitted.</p>
+
+<form method="get" action="{% url 'division_results_export' division.tournament.slug division.slug %}">
+    <button type="submit">Download results CSV</button>
+</form>
 {% endblock %}
