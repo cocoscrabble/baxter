@@ -151,6 +151,23 @@ h3 { font-size: 1.02rem; margin: var(--space-md) 0 var(--space-sm); }
     font-size: 0.9rem;
 }
 
+/* Give every round's pairings table identical column widths. Default (auto)
+   layout sizes each table to its own content, so rounds with longer names get
+   wider columns and the tables don't line up with each other. A fixed layout
+   with set widths for the Table number and action columns leaves the two name
+   columns to split the remaining space equally, identically in every table. */
+.round-section table {
+    table-layout: fixed;
+}
+
+.round-section th:first-child {
+    width: 5rem;
+}
+
+.round-section th.no-print {
+    width: 12rem;
+}
+
 /* Keep the round heading visible while scrolling that round's table.
    Scoped to the embed page: the in-nav tab has its own sticky app header
    that this would slide behind. */
