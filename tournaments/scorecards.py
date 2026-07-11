@@ -160,15 +160,19 @@ def _set_cell_shading(cell, fill):
     shd.set(qn("w:val"), "clear")
     shd.set(qn("w:color"), "auto")
     shd.set(qn("w:fill"), fill)
-    cell._tc.get_or_add_tcPr().append(shd)
+    # w:shd must precede everything after it in the CT_TcPr sequence, or Word
+    # rejects the file (LibreOffice tolerates out-of-order children).
+    cell._tc.get_or_add_tcPr().insert_element_before(
+        shd,
+        "w:noWrap", "w:tcMar", "w:textDirection", "w:tcFitText",
+        "w:vAlign", "w:hideMark", "w:cellIns", "w:cellDel",
+        "w:cellMerge", "w:tcPrChange",
+    )
 
 
 def _set_cell_width(cell, dxa):
-    tcPr = cell._tc.get_or_add_tcPr()
-    tcW = tcPr.find(qn("w:tcW"))
-    if tcW is None:
-        tcW = OxmlElement("w:tcW")
-        tcPr.append(tcW)
+    # get_or_add_tcW places w:tcW at its correct CT_TcPr sequence position.
+    tcW = cell._tc.get_or_add_tcPr().get_or_add_tcW()
     tcW.set(qn("w:w"), str(dxa))
     tcW.set(qn("w:type"), "dxa")
 
@@ -187,13 +191,19 @@ def _set_table_borders(table):
         el.set(qn("w:space"), "0")
         el.set(qn("w:color"), "000000")
         borders.append(el)
-    table._tbl.tblPr.append(borders)
+    # w:tblBorders must precede w:tblLayout (and the rest) in the CT_TblPr
+    # sequence; appending blindly puts them out of order and Word refuses to
+    # open the file, while LibreOffice repairs it silently.
+    table._tbl.tblPr.insert_element_before(
+        borders,
+        "w:shd", "w:tblLayout", "w:tblCellMar", "w:tblLook",
+        "w:tblCaption", "w:tblDescription", "w:tblPrChange",
+    )
 
 
 def _set_fixed_layout(table):
-    layout = OxmlElement("w:tblLayout")
-    layout.set(qn("w:type"), "fixed")
-    table._tbl.tblPr.append(layout)
+    # get_or_add_tblLayout places w:tblLayout at its correct sequence position.
+    table._tbl.tblPr.get_or_add_tblLayout().set(qn("w:type"), "fixed")
 
 
 def _set_row_height(row, dxa):
@@ -430,8 +440,8 @@ def _add_round_table(doc, round_specs, opponents, results, placeholder_rounds):
     table = doc.add_table(rows=1 + 2 * len(round_specs), cols=len(HEADERS))
     table.alignment = WD_TABLE_ALIGNMENT.LEFT
     _set_grid_widths(table, COL_WIDTHS)
-    _set_fixed_layout(table)
     _set_table_borders(table)
+    _set_fixed_layout(table)
 
     rows = table.rows
     _set_row_height(rows[0], ROW_HEIGHT)

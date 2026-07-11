@@ -407,3 +407,93 @@ class DivisionScorecardsViewTests(TestCase):
                          [CIRCLE_FIRST_H_OFFSET])
         self.assertEqual(_circle_offsets(doc.tables[1].cell(1, 0)._tc),
                          [CIRCLE_SECOND_H_OFFSET])
+
+
+# Canonical child orders for the OOXML complex types we emit by hand. Word
+# validates each against these sequences on open and rejects the file if a
+# child appears out of order; LibreOffice silently repairs it, so only a schema
+# check (not "does it open here") catches the regression. Local names only.
+_CT_TBL_PR_ORDER = [
+    "tblStyle", "tblpPr", "tblOverlap", "bidiVisual", "tblStyleRowBandSize",
+    "tblStyleColBandSize", "tblW", "jc", "tblCellSpacing", "tblInd",
+    "tblBorders", "shd", "tblLayout", "tblCellMar", "tblLook", "tblCaption",
+    "tblDescription", "tblPrChange",
+]
+_CT_TC_PR_ORDER = [
+    "cnfStyle", "tcW", "gridSpan", "hMerge", "vMerge", "tcBorders", "shd",
+    "noWrap", "tcMar", "textDirection", "tcFitText", "vAlign", "hideMark",
+    "cellIns", "cellDel", "cellMerge", "tcPrChange",
+]
+_CT_ANCHOR_ORDER = [
+    "simplePos", "positionH", "positionV", "extent", "effectExtent",
+    # any one wrap* variant occupies this slot
+    "wrapNone", "wrapSquare", "wrapTight", "wrapThrough", "wrapTopAndBottom",
+    "docPr", "cNvGraphicFramePr", "graphic", "sizeRelH", "sizeRelV",
+]
+# the wrap variants are mutually exclusive alternatives sharing one rank
+_WRAP_RANK = {w: 5 for w in _CT_ANCHOR_ORDER[5:10]}
+
+
+def _local(tag):
+    return tag.rsplit("}", 1)[-1]
+
+
+class SchemaOrderTests(SimpleTestCase):
+    """Every hand-built tblPr / tcPr / anchor must be in OOXML sequence order.
+
+    LibreOffice tolerates out-of-order children; Word raises "Word experienced
+    an error trying to open the file". These walk the generated document and
+    fail if any child is out of its type's canonical order.
+    """
+
+    @staticmethod
+    def _rich_doc():
+        # Exercise every raw-XML path: borders + fixed layout (tblPr), shading +
+        # width + merges + vAlign (tcPr), and floating QR/logo/ellipse (anchor).
+        return build_document([
+            _spec("Alice", n_rounds=6, opponents={1: "Bob"},
+                  starts={1: "1st", 3: "2nd"}, qr_url="https://x.test/live"),
+        ])
+
+    def _assert_ordered(self, el, order, *, strict):
+        rank = {name: i for i, name in enumerate(order)}
+        rank.update(_WRAP_RANK if order is _CT_ANCHOR_ORDER else {})
+        last = -1
+        for child in el:
+            name = _local(child.tag)
+            if name not in rank:
+                if strict:
+                    self.fail(
+                        f"<{name}> not in canonical order for this element; "
+                        "the test's schema list needs updating"
+                    )
+                continue
+            self.assertGreaterEqual(
+                rank[name], last,
+                f"<{name}> is out of OOXML sequence order (Word will reject it)",
+            )
+            last = rank[name]
+
+    def test_tblPr_children_in_order(self):
+        from docx.oxml.ns import qn
+        body = self._rich_doc().element.body
+        tblPrs = list(body.iter(qn("w:tblPr")))
+        self.assertTrue(tblPrs)
+        for tblPr in tblPrs:
+            self._assert_ordered(tblPr, _CT_TBL_PR_ORDER, strict=True)
+
+    def test_tcPr_children_in_order(self):
+        from docx.oxml.ns import qn
+        body = self._rich_doc().element.body
+        tcPrs = list(body.iter(qn("w:tcPr")))
+        self.assertTrue(tcPrs)
+        for tcPr in tcPrs:
+            self._assert_ordered(tcPr, _CT_TC_PR_ORDER, strict=True)
+
+    def test_anchor_children_in_order(self):
+        from docx.oxml.ns import qn
+        body = self._rich_doc().element.body
+        anchors = list(body.iter(qn("wp:anchor")))
+        self.assertTrue(anchors)
+        for anchor in anchors:
+            self._assert_ordered(anchor, _CT_ANCHOR_ORDER, strict=False)
