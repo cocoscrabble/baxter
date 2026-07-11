@@ -695,8 +695,9 @@ class DivisionStandingsViewTests(TestCase):
         response = self.client.get(
             reverse("division_standings", kwargs=self.division.slug_kwargs())
         )
-        self.assertContains(response, "Alice")
-        self.assertContains(response, "Bob")
+        # Names are shown with the entrant's seed number.
+        self.assertContains(response, "Alice (#1)")
+        self.assertContains(response, "Bob (#2)")
 
     def test_standings_for_specific_round(self):
         ResultSlip.objects.create(
