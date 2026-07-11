@@ -208,7 +208,6 @@ class ResultSlipFormTests(TestCase):
                 "winner": self.entrant1.pk,
                 "winner_score": 450,
                 "loser_score": 380,
-                "winner_started": True,
                 "verified_by_opponent": True,
             },
             division=self.division,
@@ -225,7 +224,6 @@ class ResultSlipFormTests(TestCase):
                 "winner": self.entrant1.pk,
                 "winner_score": 450,
                 "loser_score": 380,
-                "winner_started": True,
                 "verified_by_opponent": False,
             },
             division=self.division,
@@ -244,7 +242,6 @@ class ResultSlipFormTests(TestCase):
                 "winner": self.entrant1.pk,
                 "winner_score": 5,
                 "loser_score": -20,
-                "winner_started": True,
                 "verified_by_opponent": True,
             },
             division=self.division,
@@ -265,7 +262,6 @@ class ResultSlipFormTests(TestCase):
                 "winner": other_entrant.pk,
                 "winner_score": 450,
                 "loser_score": 380,
-                "winner_started": True,
                 "verified_by_opponent": True,
             },
             division=self.division,
@@ -282,7 +278,6 @@ class ResultSlipFormTests(TestCase):
                 "winner": self.entrant1.pk,
                 "winner_score": 380,
                 "loser_score": 450,
-                "winner_started": True,
                 "verified_by_opponent": True,
             },
             division=self.division,
@@ -303,7 +298,6 @@ class ResultSlipFormTests(TestCase):
                 "winner": self.entrant1.pk,
                 "winner_score": 400,
                 "loser_score": 400,
-                "winner_started": True,
                 "verified_by_opponent": True,
             },
             division=self.division,
@@ -319,7 +313,6 @@ class ResultSlipFormTests(TestCase):
                 "winner": self.entrant1.pk,
                 "winner_score": 450,
                 "loser_score": 380,
-                "winner_started": True,
                 "verified_by_opponent": True,
             },
             division=self.division,
@@ -336,7 +329,6 @@ class ResultSlipFormTests(TestCase):
                 "winner": self.entrant1.pk,
                 "winner_score": 450,
                 "loser_score": 380,
-                "winner_started": True,
                 "verified_by_opponent": True,
             },
             division=self.division,
@@ -351,6 +343,29 @@ class ResultSlipFormTests(TestCase):
         self.assertEqual(rs.loser, self.entrant2)
         self.assertEqual(rs.winner_score, 450)
         self.assertEqual(rs.loser_score, 380)
+        # winner_started is derived from the pairing: entrant1 is `first`, so
+        # the winner (entrant1) started.
+        self.assertTrue(rs.winner_started)
+
+    def test_winner_started_derived_when_second_entrant_wins(self):
+        # The `first` entrant starts, so if the `second` entrant wins,
+        # winner_started must be False regardless of any submitted value.
+        form = ResultSlipForm(
+            data={
+                "round": 1,
+                "pairing": self.pairing.pk,
+                "winner": self.entrant2.pk,
+                "winner_score": 450,
+                "loser_score": 380,
+                "verified_by_opponent": True,
+            },
+            division=self.division,
+            pairings_by_round=self._pbr(),
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        rs = form.save()
+        self.assertEqual(rs.winner, self.entrant2)
+        self.assertFalse(rs.winner_started)
 
 
 class RoundPairingFormTests(TestCase):

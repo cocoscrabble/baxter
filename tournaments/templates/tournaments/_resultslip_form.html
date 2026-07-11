@@ -58,11 +58,6 @@
         {% if form.loser_score.errors %}<ul class="errorlist">{% for e in form.loser_score.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
     </p>
     <p>
-        <label for="id_winner_started">Winner started:</label>
-        {{ form.winner_started }}
-        {% if form.winner_started.errors %}<ul class="errorlist">{% for e in form.winner_started.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
-    </p>
-    <p>
         <label for="id_verified_by_opponent">
             {{ form.verified_by_opponent }}
             Verified by opponent
