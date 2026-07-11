@@ -365,4 +365,7 @@ class PublishedPairingsPresenter:
                 (round_num, [AnnotatedPairing(pairing=p) for p in round_pairings])
             )
         context["pairings"] = annotated
+        # The round shown by default: the latest published round (tabs let the
+        # viewer switch to any earlier one).
+        context["current_round"] = annotated[-1][0]
         return context

@@ -1193,6 +1193,18 @@ class DivisionPairingsRoundContentTests(TestCase):
         rounds_shown = [r for r, _ in response.context["pairings"]]
         self.assertEqual(rounds_shown, [1])
 
+    def test_pairings_rendered_as_round_tabs_defaulting_to_latest(self):
+        # Published rounds are shown as tabs (like standings), defaulting to the
+        # latest round via the pairRound signal.
+        self._create_round(1, RoundPairings.PUBLISHED, [(self.entrant1, self.entrant2)])
+        self._create_round(2, RoundPairings.PUBLISHED, [(self.entrant1, self.entrant3)])
+        response = self.client.get(
+            reverse("division_pairings", kwargs=self.division.slug_kwargs())
+        )
+        self.assertEqual(response.context["current_round"], 2)
+        self.assertContains(response, 'class="round-tabs"')
+        self.assertContains(response, "pairRound: 2")
+
     def test_published_round_not_regenerated_and_future_round_left_alone(self):
         _, pairings = self._create_round(
             1,

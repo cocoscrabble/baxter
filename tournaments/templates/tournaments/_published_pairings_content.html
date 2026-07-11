@@ -4,15 +4,22 @@
 {% if last_updated %}
 <p class="pairings-updated">Last updated {{ last_updated|date:"M j, Y, g:i A" }}</p>
 {% endif %}
+{# Tabbed like the standings page: one tab per published round, switched #}
+{# client-side. `data-show` leaves every round visible until datastar runs, #}
+{# so with no JS the full set of rounds still shows. #}
+<div id="pairings-content" data-signals="{pairRound: {{ current_round }}}">
 {% if pairings|length > 1 %}
-<nav class="round-nav no-print" aria-label="Jump to round">
+<div class="round-tabs">
     {% for round_num, round_pairings in pairings %}
-    <a href="#round-{{ round_num }}">Round {{ round_num }}</a>
+    <a href="#"
+       class="round-tab round-tab-finished{% if round_num == current_round %} active{% endif %}"
+       data-class="{active: $pairRound == {{ round_num }}}"
+       data-on:click__prevent="$pairRound = {{ round_num }}">{{ round_num }}</a>
     {% endfor %}
-</nav>
+</div>
 {% endif %}
 {% for round_num, round_pairings in pairings %}
-<section class="round-section" id="round-{{ round_num }}">
+<section class="round-section" id="round-{{ round_num }}" data-show="$pairRound == {{ round_num }}">
 <h2>Round {{ round_num }}</h2>
 <table>
     <thead>
@@ -36,4 +43,5 @@
 </table>
 </section>
 {% endfor %}
+</div>
 {% endif %}
