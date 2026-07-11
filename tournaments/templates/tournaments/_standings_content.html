@@ -22,6 +22,7 @@
             <th>Player</th>
             <th class="num">Score</th>
             <th class="num">Spread</th>
+            {% if can_edit %}<th class="num">Firsts</th>{% endif %}
         </tr>
     </thead>
     <tbody>
@@ -31,6 +32,7 @@
             <td>{{ player.name }}{% if player.seed %} (#{{ player.seed }}){% endif %}</td>
             <td class="num">{{ player.record }}</td>
             <td class="num">{{ player.spread }}</td>
+            {% if can_edit %}<td class="num">{{ player.starts }}</td>{% endif %}
         </tr>
         {% endfor %}
     </tbody>
