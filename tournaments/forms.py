@@ -88,7 +88,6 @@ class ResultSlipForm(forms.Form):
     winner = forms.IntegerField(widget=forms.Select())
     winner_score = forms.IntegerField()
     loser_score = forms.IntegerField(label="Opponent score")
-    winner_started = forms.BooleanField(required=False)
     # Not stored: a gate forcing the submitter to confirm the opponent agreed the
     # result before it can be saved. Required, so an unchecked box fails validation.
     verified_by_opponent = forms.BooleanField(
@@ -215,6 +214,9 @@ class ResultSlipForm(forms.Form):
         pairing = self.cleaned_data["pairing"]
         winner = self.cleaned_data["winner"]
         loser = pairing.first if winner.pk == pairing.second_id else pairing.second
+        # The pairing records who goes first (the `first` entrant starts), so
+        # derive winner_started from it rather than asking the submitter.
+        winner_started = winner.pk == pairing.first_id
         rp = pairing.round_pairings
         fields = dict(
             division=rp.division,
@@ -224,7 +226,7 @@ class ResultSlipForm(forms.Form):
             winner_score=self.cleaned_data["winner_score"],
             loser=loser,
             loser_score=self.cleaned_data["loser_score"],
-            winner_started=self.cleaned_data["winner_started"],
+            winner_started=winner_started,
         )
         if self.instance is not None:
             for name, value in fields.items():
