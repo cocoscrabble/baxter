@@ -30,7 +30,7 @@
         <select name="pairing" id="id_pairing" data-bind="pairing" data-on:change="$winner = ''">
             <option value="">---</option>
             {% for p_pk, p_label, p_round in form.pairing_options %}
-            <option value="{{ p_pk }}" data-show="!$round || Number($round) === {{ p_round }}">{{ p_label }}</option>
+            <option value="{{ p_pk }}" data-show="!$round || Number($round) === {{ p_round }}"{% if p_pk == form.initial.pairing %} selected{% endif %}>{{ p_label }}</option>
             {% endfor %}
         </select>
         {% if form.pairing.errors %}<ul class="errorlist">{% for e in form.pairing.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
