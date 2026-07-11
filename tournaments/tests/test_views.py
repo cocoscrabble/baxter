@@ -699,6 +699,24 @@ class DivisionStandingsViewTests(TestCase):
         self.assertContains(response, "Alice (#1)")
         self.assertContains(response, "Bob (#2)")
 
+    def test_firsts_column_shown_only_to_editor(self):
+        # Alice started (winner_started=True and Alice won), Bob did not.
+        ResultSlip.objects.create(
+            division=self.division,
+            round=1,
+            winner=self.entrant1,
+            winner_score=450,
+            loser=self.entrant2,
+            loser_score=380,
+            winner_started=True,
+        )
+        url = reverse("division_standings", kwargs=self.division.slug_kwargs())
+        # Anonymous: no Firsts column.
+        self.assertNotContains(self.client.get(url), "Firsts")
+        # Editor: the column appears.
+        self.client.login(username="owner", password="testpass123")
+        self.assertContains(self.client.get(url), "Firsts")
+
     def test_standings_for_specific_round(self):
         ResultSlip.objects.create(
             division=self.division,
