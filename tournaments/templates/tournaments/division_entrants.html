@@ -8,7 +8,7 @@
     {% if can_edit %}<div class="page-head-actions"><a href="{% url 'division_entrants_edit' division.tournament.slug division.slug %}" class="btn-secondary">Edit entrants</a></div>{% endif %}
 </div>
 
-{% if division.entrants.all %}
+{% if entrants %}
 <div class="table-scroll table-narrow">
 <table>
     <thead>
@@ -19,7 +19,7 @@
         </tr>
     </thead>
     <tbody>
-        {% for entrant in division.entrants.all %}
+        {% for entrant in entrants %}
         <tr>
             <td class="num">{{ entrant.number }}</td>
             <td>{{ entrant.player.name }}</td>
