@@ -754,6 +754,32 @@ class DivisionStandingsViewTests(TestCase):
 
 
 @tag("slow")
+class DivisionAllResultsViewTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        setUpTournament(cls)
+
+    def test_edit_results_button_shown_to_editor(self):
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(
+            reverse("division_all_results", kwargs=self.division.slug_kwargs())
+        )
+        edit_url = reverse("division_edit_results", kwargs=self.division.slug_kwargs())
+        self.assertContains(
+            response,
+            f'<a href="{edit_url}" class="btn-secondary">Edit Results</a>',
+            html=True,
+        )
+
+    def test_edit_results_button_hidden_from_anonymous(self):
+        response = self.client.get(
+            reverse("division_all_results", kwargs=self.division.slug_kwargs())
+        )
+        edit_url = reverse("division_edit_results", kwargs=self.division.slug_kwargs())
+        self.assertNotContains(response, f'href="{edit_url}"')
+
+
+@tag("slow")
 class DivisionSettingsEditViewTests(TestCase):
     def setUp(self):
         setUpTournament(self)

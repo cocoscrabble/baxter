@@ -5,6 +5,7 @@
 {% block content %}
 <div class="page-head">
     <h1>All Results: {{ division.name }}</h1>
+    {% if can_edit %}<div class="page-head-actions"><a href="{% url 'division_edit_results' division.tournament.slug division.slug %}" class="btn-secondary">Edit Results</a></div>{% endif %}
 </div>
 
 {% if result_slips %}
