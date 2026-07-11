@@ -28,7 +28,7 @@
         {% for player in standings %}
         <tr>
             <td class="num">{{ forloop.counter }}</td>
-            <td>{{ player.name }}</td>
+            <td>{{ player.name }}{% if player.seed %} (#{{ player.seed }}){% endif %}</td>
             <td class="num">{{ player.record }}</td>
             <td class="num">{{ player.spread }}</td>
         </tr>

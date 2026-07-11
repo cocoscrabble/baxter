@@ -458,7 +458,12 @@ class DivisionStandingsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
         pd = PairingData.for_division(division)
         max_round = division.max_round()
         current_round = self.kwargs.get("round", max_round)
-        context["standings"] = standings_after_round(pd, current_round)
+        standings = standings_after_round(pd, current_round)
+        # Annotate each standing with the entrant's seed number for display.
+        seed_by_name = {e.name: e.number for e in division.entrants.all()}
+        for p in standings:
+            p.seed = seed_by_name.get(p.name)
+        context["standings"] = standings
         context["round"] = current_round
         context["rounds"] = range(1, max_round + 1)
         return context
