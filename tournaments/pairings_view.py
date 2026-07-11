@@ -359,11 +359,27 @@ class PublishedPairingsPresenter:
         if not db_pairings:
             context["pairings_message"] = "No pairings published yet."
             return context
+        # A played pairing shows its score (first - second) instead of a submit
+        # button, the way the "Pair rounds" tab does.
+        played = {
+            (s["round"], frozenset({s["winner_id"], s["loser_id"]})): s
+            for s in self.division.result_slips
+            .filter(round__in=published_rounds)
+            .values("round", "winner_id", "loser_id", "winner_score", "loser_score")
+        }
         annotated = []
         for round_num, round_pairings in groupby(db_pairings, key=lambda p: p.round):
-            annotated.append(
-                (round_num, [AnnotatedPairing(pairing=p) for p in round_pairings])
-            )
+            rows = []
+            for p in round_pairings:
+                slip = played.get((round_num, frozenset({p.first_id, p.second_id})))
+                if slip:
+                    scores = {slip["winner_id"]: slip["winner_score"],
+                              slip["loser_id"]: slip["loser_score"]}
+                    result = f"{scores[p.first_id]} - {scores[p.second_id]}"
+                else:
+                    result = ""
+                rows.append(AnnotatedPairing(pairing=p, result=result))
+            annotated.append((round_num, rows))
         context["pairings"] = annotated
         # The round shown by default: the latest published round (tabs let the
         # viewer switch to any earlier one).

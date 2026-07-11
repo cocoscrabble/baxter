@@ -1277,6 +1277,21 @@ class ResultSlipCreateView(DivisionURLMixin, View):
             )
         return render(request, self.template_name, context)
 
+    def _render_played(self, request, division, result):
+        """Show an already-submitted game's result instead of a fresh form."""
+        slug_kwargs = division.slug_kwargs()
+        context = {
+            "division": division,
+            "result": result,
+            "active_tab": "add_result",
+            "can_edit": division.tournament.can_edit(request.user),
+            "pairings_url": reverse("division_pairings", kwargs=slug_kwargs),
+            "edit_url": reverse(
+                "resultslip_edit", kwargs={**slug_kwargs, "result_pk": result.pk}
+            ),
+        }
+        return render(request, "tournaments/resultslip_played.html", context)
+
     def _prefill_pairing(self, division, pairing_pk):
         """The pairing named by a ``?pairing=`` param, if it belongs to this
         division. Lets the published pairings page deep-link a match into the
@@ -1302,6 +1317,11 @@ class ResultSlipCreateView(DivisionURLMixin, View):
             context = self._form_context(division, form, editing=True, result=result)
             return self._render(request, context, signals=_result_signals(result))
         prefill = self._prefill_pairing(division, request.GET.get("pairing"))
+        # A stale pairings page can point "Submit results" at a game that has
+        # since been played; show its result instead of a blank submission form.
+        existing = prefill.result if prefill is not None and hasattr(prefill, "result") else None
+        if existing is not None:
+            return self._render_played(request, division, existing)
         pbr = _pairings_by_round(division, include_pairing=prefill)
         signals = _BLANK_RESULT_SIGNALS
         # Pre-select the match's round and pairing. ``initial`` drives the
