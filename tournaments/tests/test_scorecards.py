@@ -5,12 +5,13 @@ from django.urls import reverse
 from docx import Document
 
 from tournaments.scorecards import (
+    ScorecardResult,
     ScorecardSpec,
     build_document,
     make_rounds,
     render_scorecards,
 )
-from tournaments.models import DivisionSettings, Pairing
+from tournaments.models import DivisionSettings, Pairing, ResultSlip
 from tournaments.tests.test_views import setUpTournament
 
 DOCX_CONTENT_TYPE = (
@@ -192,6 +193,52 @@ class StartPrefillTests(SimpleTestCase):
         self.assertEqual(len(doc.part.package.image_parts._image_parts), 2)
 
 
+class ResultPrefillTests(SimpleTestCase):
+    def test_win_fills_score_columns_and_both_spread_subcells(self):
+        # Round 2 is divided, so its Spread column has two subcells.
+        doc = build_document([_spec("Alice", n_rounds=6, results={
+            2: ScorecardResult(player_score=450, opponent_score=380,
+                               won=True, cumulative_spread=120),
+        })])
+        table = doc.tables[0]
+        top, bottom = 3, 4  # round 2 grid rows (1 + 2*1, and the one below)
+        self.assertEqual(table.cell(top, 2).text, "✓")    # Won
+        self.assertEqual(table.cell(top, 3).text, "")     # Lost
+        self.assertEqual(table.cell(top, 4).text, "450")  # Player Score
+        self.assertEqual(table.cell(top, 5).text, "380")  # Opponent Score
+        self.assertEqual(table.cell(top, 6).text, "70")   # game spread
+        self.assertEqual(table.cell(bottom, 6).text, "120")  # cumulative spread
+
+    def test_loss_marks_the_lost_column(self):
+        doc = build_document([_spec("Alice", n_rounds=6, results={
+            2: ScorecardResult(player_score=380, opponent_score=450,
+                               won=False, cumulative_spread=-70),
+        })])
+        table = doc.tables[0]
+        self.assertEqual(table.cell(3, 2).text, "")   # Won
+        self.assertEqual(table.cell(3, 3).text, "✓")  # Lost
+        self.assertEqual(table.cell(3, 6).text, "-70")
+
+    def test_tie_marks_both_win_and_loss(self):
+        doc = build_document([_spec("Alice", n_rounds=6, results={
+            2: ScorecardResult(player_score=400, opponent_score=400,
+                               won=None, cumulative_spread=0),
+        })])
+        table = doc.tables[0]
+        self.assertEqual(table.cell(3, 2).text, "½")
+        self.assertEqual(table.cell(3, 3).text, "½")
+
+    def test_rounds_without_a_result_stay_blank(self):
+        doc = build_document([_spec("Alice", n_rounds=6, results={
+            2: ScorecardResult(player_score=450, opponent_score=380,
+                               won=True, cumulative_spread=70),
+        })])
+        table = doc.tables[0]
+        # Round 3 (rows 5/6) has no result: score columns are empty.
+        for col in (2, 3, 4, 5, 6):
+            self.assertEqual(table.cell(5, col).text, "")
+
+
 class RenderScorecardsTests(SimpleTestCase):
     def test_returns_openable_docx_bytes(self):
         data = render_scorecards([_spec("Alice")])
@@ -304,6 +351,43 @@ class DivisionScorecardsViewTests(TestCase):
         # Round 1's Opponent cell is row 1, column 1.
         self.assertEqual(doc.tables[0].cell(1, 1).text, self.player2.name)
         self.assertEqual(doc.tables[1].cell(1, 1).text, self.player1.name)
+
+    def _three_round_result(self):
+        DivisionSettings.objects.create(
+            division=self.division,
+            round_pairings=[{"round": 1}, {"round": 2}, {"round": 3}],
+        )
+        ResultSlip.objects.create(
+            division=self.division, round=1,
+            winner=self.entrant1, winner_score=450,
+            loser=self.entrant2, loser_score=380,
+            winner_started=True,
+        )
+
+    def test_results_prefilled_when_requested(self):
+        self._three_round_result()
+        response = self.client.get(
+            reverse("division_scorecards_download", kwargs=self.division.slug_kwargs())
+            + "?include_results=1"
+        )
+        doc = Document(BytesIO(response.content))
+        # Round 1 (undivided) is a single merged block; its cells are row 1.
+        winner_card, loser_card = doc.tables[0], doc.tables[1]
+        self.assertEqual(winner_card.cell(1, 2).text, "✓")    # Won
+        self.assertEqual(winner_card.cell(1, 4).text, "450")  # Player Score
+        self.assertEqual(winner_card.cell(1, 5).text, "380")  # Opponent Score
+        self.assertEqual(loser_card.cell(1, 3).text, "✓")     # Lost
+        self.assertEqual(loser_card.cell(1, 4).text, "380")
+
+    def test_results_omitted_without_the_flag(self):
+        self._three_round_result()
+        response = self.client.get(
+            reverse("division_scorecards_download", kwargs=self.division.slug_kwargs())
+        )
+        doc = Document(BytesIO(response.content))
+        # Score columns stay blank when results aren't requested.
+        self.assertEqual(doc.tables[0].cell(1, 2).text, "")
+        self.assertEqual(doc.tables[0].cell(1, 4).text, "")
 
     def test_starts_circled_from_pairings(self):
         from tournaments.scorecards import (
