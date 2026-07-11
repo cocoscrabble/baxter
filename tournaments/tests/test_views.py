@@ -591,8 +591,17 @@ class ResultSlipCreateViewTests(TestCase):
             reverse("resultslip_create", kwargs=self.division.slug_kwargs())
             + f"?pairing={self.pairing.pk}"
         )
-        self.assertContains(response, 'value="1" selected')
-        self.assertContains(response, f'value="{self.pairing.pk}" selected')
+        # Round select: round 1 chosen.
+        self.assertContains(response, '<option value="1" selected>1</option>', html=True)
+        # Pairing select: the linked pairing chosen. Anchored on the label so it
+        # can't be satisfied by the round option (whose value happens to coincide
+        # with the pairing pk in this fixture).
+        self.assertContains(
+            response,
+            f'<option value="{self.pairing.pk}" '
+            'data-show="!$round || Number($round) === 1" selected>Alice vs. Bob</option>',
+            html=True,
+        )
 
     def test_invalid_winner_not_in_pairing(self):
         other_player = Player.objects.create(
