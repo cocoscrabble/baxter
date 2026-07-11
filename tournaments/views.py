@@ -445,6 +445,14 @@ class DivisionEntrantsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
     context_object_name = "division"
     active_tab = "entrants"
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Seed order: highest-rated player first (ties broken by entrant number).
+        context["entrants"] = self.object.entrants.order_by(
+            "-player__rating", "number"
+        )
+        return context
+
 
 class DivisionStandingsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
     model = Division
