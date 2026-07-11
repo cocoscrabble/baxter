@@ -58,7 +58,7 @@ from .generate_pairings import publish_rounds, regenerate_pairings, unpublish_ro
 from .pairing.base import PairingData, PairingError, standings_after_round
 from .pairing.pair import STRATEGY_TYPES
 from .pairings_view import PairingsPresenter, PublishedPairingsPresenter
-from .scorecards import ScorecardSpec, make_rounds, render_scorecards
+from .scorecards import ScorecardResult, ScorecardSpec, make_rounds, render_scorecards
 from .results_export import ResultRow, render_results_csv
 
 DOCX_CONTENT_TYPE = (
@@ -714,6 +714,9 @@ class DivisionScorecardsDownloadView(LoginRequiredMixin, CanEditDivisionMixin, D
             reverse("published_pairings", kwargs=division.slug_kwargs())
         )
         opponents, starts = self._prefills_by_entrant(division)
+        # The director opts in to prefilling submitted results per download.
+        include_results = bool(self.request.GET.get("include_results"))
+        results = self._results_by_entrant(division) if include_results else {}
         specs = [
             ScorecardSpec(
                 tournament_name=tournament.name,
@@ -722,6 +725,7 @@ class DivisionScorecardsDownloadView(LoginRequiredMixin, CanEditDivisionMixin, D
                 rounds=rounds,
                 opponents=opponents.get(entrant.pk, {}),
                 starts=starts.get(entrant.pk, {}),
+                results=results.get(entrant.pk, {}),
                 qr_url=qr_url,
             )
             for entrant in division.entrants.all()
@@ -757,6 +761,34 @@ class DivisionScorecardsDownloadView(LoginRequiredMixin, CanEditDivisionMixin, D
             starts[p.first_id][p.round] = "1st"
             starts[p.second_id][p.round] = "2nd"
         return opponents, starts
+
+    @staticmethod
+    def _results_by_entrant(division):
+        """Map each entrant id to its {round: ScorecardResult} for submitted
+        results, from that entrant's point of view. Byes are skipped (they are
+        materialized as results but aren't a played game the player records),
+        and the cumulative spread is accumulated in round order."""
+        slips = division.result_slips.select_related(
+            "winner__player", "loser__player"
+        ).order_by("round")
+        results = defaultdict(dict)
+        cumulative = defaultdict(int)
+        for slip in slips:
+            if slip.winner.player.is_bye or slip.loser.player.is_bye:
+                continue
+            tie = slip.winner_score == slip.loser_score
+            for entrant_id, won, pscore, oscore in (
+                (slip.winner_id, None if tie else True, slip.winner_score, slip.loser_score),
+                (slip.loser_id, None if tie else False, slip.loser_score, slip.winner_score),
+            ):
+                cumulative[entrant_id] += pscore - oscore
+                results[entrant_id][slip.round] = ScorecardResult(
+                    player_score=pscore,
+                    opponent_score=oscore,
+                    won=won,
+                    cumulative_spread=cumulative[entrant_id],
+                )
+        return results
 
 
 class DivisionResultsExportView(LoginRequiredMixin, CanEditDivisionMixin, DetailView):

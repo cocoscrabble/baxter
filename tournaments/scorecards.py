@@ -73,6 +73,23 @@ class RoundSpec:
 
 
 @dataclass(frozen=True)
+class ScorecardResult:
+    """A submitted game result, from one player's point of view, used to
+    prefill the score columns for a round."""
+
+    player_score: int
+    opponent_score: int
+    won: bool | None = None  # True = won, False = lost, None = tie
+    # Running spread total through this round, for the lower Spread subcell.
+    cumulative_spread: int = 0
+
+    @property
+    def spread(self) -> int:
+        """This round's spread (goes in the upper Spread subcell)."""
+        return self.player_score - self.opponent_score
+
+
+@dataclass(frozen=True)
 class ScorecardSpec:
     """Everything needed to render one player's scorecard."""
 
@@ -85,6 +102,9 @@ class ScorecardSpec:
     # Optional {round number: "1st"/"2nd"} marking whether the player went
     # first or second that round, where the pairing fixes it.
     starts: dict[int, str] = field(default_factory=dict)
+    # Optional {round number: ScorecardResult} prefilling the score columns for
+    # rounds whose result has already been submitted.
+    results: dict[int, "ScorecardResult"] = field(default_factory=dict)
     qr_url: str = ""
     footer_text: str = "Submit results and view pairings and standings at:"
     footer_url: str = "cocoscrabble.org/live-coverage"
@@ -364,12 +384,42 @@ def _resolve_start(run, round_number, spec):
         para.remove(run)
 
 
-def _add_round_table(doc, round_specs, opponents, placeholder_rounds):
+def _prefill_cell(cell, text):
+    """Write a 10pt run into a cell's first paragraph (no-op for empty text)."""
+    if text != "":
+        _set_run_font(cell.paragraphs[0].add_run(text), 10)
+
+
+def _fill_result(top, bottom, spec, result):
+    """Prefill a round's score columns from a submitted result.
+
+    Win/loss is marked in the Won or Lost column (a tie marks both with ½);
+    the player's and opponent's scores go in their columns; the game spread
+    goes in the upper Spread subcell and the cumulative spread in the lower one
+    (for a divided round — an undivided round has a single, merged Spread cell,
+    so only the game spread is shown there).
+    """
+    won, lost, pscore, oscore, spread = 2, 3, 4, 5, len(HEADERS) - 1
+    if result.won is None:  # tie
+        _prefill_cell(top[won], "½")
+        _prefill_cell(top[lost], "½")
+    else:
+        _prefill_cell(top[won if result.won else lost], "✓")
+    _prefill_cell(top[pscore], str(result.player_score))
+    _prefill_cell(top[oscore], str(result.opponent_score))
+    _prefill_cell(top[spread], str(result.spread))
+    if spec.divided:
+        _prefill_cell(bottom[spread], str(result.cumulative_spread))
+
+
+def _add_round_table(doc, round_specs, opponents, results, placeholder_rounds):
     """One bordered table covering ``round_specs`` (each round = two grid rows).
 
     ``opponents`` is a {round number: name} mapping used to prefill the
-    Opponent column; rounds absent from it are left blank. ``placeholder_rounds``
-    are the rounds whose Round cell gets a seat placeholder for later resolving.
+    Opponent column; rounds absent from it are left blank. ``results`` is a
+    {round number: ScorecardResult} mapping prefilling the score columns for
+    rounds whose result is in. ``placeholder_rounds`` are the rounds whose
+    Round cell gets a seat placeholder for later resolving.
     """
     table = doc.add_table(rows=1 + 2 * len(round_specs), cols=len(HEADERS))
     table.alignment = WD_TABLE_ALIGNMENT.LEFT
@@ -410,9 +460,12 @@ def _add_round_table(doc, round_specs, opponents, placeholder_rounds):
                          mark_start=spec.number in placeholder_rounds)
 
         # Prefill the (merged) Opponent cell if a name was supplied.
-        opponent = opponents.get(spec.number, "")
-        if opponent:
-            _set_run_font(top[1].paragraphs[0].add_run(opponent), 10)
+        _prefill_cell(top[1], opponents.get(spec.number, ""))
+
+        # Prefill the score columns if this round's result is in.
+        result = results.get(spec.number)
+        if result is not None:
+            _fill_result(top, bottom, spec, result)
         r += 2
 
     return table
@@ -455,7 +508,7 @@ def build_scorecard(doc, spec, *, placeholder_rounds=frozenset()):
     chunks = _chunk_rounds(spec)
     tables = []
     for i, chunk in enumerate(chunks):
-        tables.append(_add_round_table(doc, chunk, spec.opponents, placeholder_rounds))
+        tables.append(_add_round_table(doc, chunk, spec.opponents, spec.results, placeholder_rounds))
         if i < len(chunks) - 1:
             _add_page_break(doc)
 
