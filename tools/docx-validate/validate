@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Validate one or more .docx files against the OOXML schema with the Open XML
+# SDK's OpenXmlValidator. Builds the tool on first use, then runs the binary.
+#
+#   tools/docx-validate/validate path/to/file.docx [more.docx ...]
+#
+# Exit code: 0 = all valid, 1 = schema errors found, 2 = usage/IO error.
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+bin="$here/bin/Release/net10.0/docx-validate"
+
+if [ ! -x "$bin" ]; then
+    echo "docx-validate: building (first run)..." >&2
+    dotnet build -c Release "$here/docx-validate.csproj" -v quiet >&2
+fi
+
+exec "$bin" "$@"
