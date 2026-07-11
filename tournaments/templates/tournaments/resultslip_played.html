@@ -1,0 +1,24 @@
+{% extends "tournaments/base_division.html" %}
+
+{% block title %}Result - {{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
+
+{% block page_class %}page--narrow{% endblock %}
+
+{% block content %}
+<h1>Result already submitted</h1>
+
+<div class="table-scroll table-narrow">
+<table>
+    <tbody>
+        <tr><th class="num">Round</th><td class="num">{{ result.round }}</td></tr>
+        <tr><th>Winner</th><td>{{ result.winner.name }} ({{ result.winner_score }})</td></tr>
+        <tr><th>Opponent</th><td>{{ result.loser.name }} ({{ result.loser_score }})</td></tr>
+    </tbody>
+</table>
+</div>
+
+<p>
+    <a href="{{ pairings_url }}">Back to pairings</a>
+    {% if can_edit %}&middot; <a href="{{ edit_url }}">Edit result</a>{% endif %}
+</p>
+{% endblock %}

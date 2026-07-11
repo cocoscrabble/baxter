@@ -36,7 +36,11 @@
             <td>{{ entry.pairing.table_label|default:entry.pairing.table }}</td>
             <td>{{ entry.pairing.first.name }} (#{{ entry.pairing.first.number }})</td>
             <td>{{ entry.pairing.second.name }} (#{{ entry.pairing.second.number }})</td>
+            {% if entry.result %}
+            <td class="num">{{ entry.result }}</td>
+            {% else %}
             <td class="no-print"><a class="btn-primary" href="{% url 'resultslip_create' division.tournament.slug division.slug %}?pairing={{ entry.pairing.pk }}">Submit results</a></td>
+            {% endif %}
         </tr>
         {% endfor %}
     </tbody>

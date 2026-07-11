@@ -519,6 +519,30 @@ class ResultSlipCreateViewTests(TestCase):
         rs = self.division.result_slips.first()
         self.assertEqual(rs.pairing, self.pairing)
 
+    def test_submit_for_already_played_pairing_shows_result_page(self):
+        # A stale pairings page clicking Submit on a played game gets the result
+        # page, not a blank submission form.
+        ResultSlip.objects.create(
+            division=self.division,
+            round=1,
+            pairing=self.pairing,
+            winner=self.entrant1,
+            winner_score=450,
+            loser=self.entrant2,
+            loser_score=380,
+            winner_started=True,
+        )
+        response = self.client.get(
+            reverse("resultslip_create", kwargs=self.division.slug_kwargs())
+            + f"?pairing={self.pairing.pk}"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "tournaments/resultslip_played.html")
+        self.assertContains(response, "already")
+        self.assertContains(response, "450")
+        # Not the submission form.
+        self.assertNotContains(response, 'name="verified_by_opponent"')
+
     def test_edit_existing_result_slip(self):
         rs = ResultSlip.objects.create(
             division=self.division,
@@ -1204,6 +1228,23 @@ class DivisionPairingsRoundContentTests(TestCase):
         self.assertEqual(response.context["current_round"], 2)
         self.assertContains(response, 'class="round-tabs"')
         self.assertContains(response, "pairRound: 2")
+
+    def test_played_pairing_shows_score_instead_of_submit_button(self):
+        _, pairings = self._create_round(
+            1,
+            RoundPairings.PUBLISHED,
+            [(self.entrant1, self.entrant2), (self.entrant3, self.entrant4)],
+        )
+        # Play the first pairing (entrant1 first, so score reads first - second).
+        self._create_slip(1, pairings[0], self.entrant1, self.entrant2, 450, 380)
+        response = self.client.get(
+            reverse("division_pairings", kwargs=self.division.slug_kwargs())
+        )
+        # Played pairing: score shown, no submit link.
+        self.assertContains(response, "450 - 380")
+        self.assertNotContains(response, f'?pairing={pairings[0].pk}"')
+        # Unplayed pairing: submit link still present.
+        self.assertContains(response, f'?pairing={pairings[1].pk}"')
 
     def test_published_round_not_regenerated_and_future_round_left_alone(self):
         _, pairings = self._create_round(
