@@ -79,7 +79,10 @@ class ScorecardResult:
 
     player_score: int
     opponent_score: int
-    won: bool | None = None  # True = won, False = lost, None = tie
+    # Running record through this round, for the Won / Lost columns. A win
+    # counts 1, a loss 0, a tie half to each side (so these can be half-integers).
+    cumulative_wins: float = 0
+    cumulative_losses: float = 0
     # Running spread total through this round, for the lower Spread subcell.
     cumulative_spread: int = 0
 
@@ -390,21 +393,24 @@ def _prefill_cell(cell, text):
         _set_run_font(cell.paragraphs[0].add_run(text), 10)
 
 
+def _fmt_record(value):
+    """Format a running win/loss count, dropping a trailing ``.0`` (so 3, not
+    3.0) but keeping a half (3.5)."""
+    return f"{value:.1f}".rstrip("0").rstrip(".")
+
+
 def _fill_result(top, bottom, spec, result):
     """Prefill a round's score columns from a submitted result.
 
-    Win/loss is marked in the Won or Lost column (a tie marks both with ½);
-    the player's and opponent's scores go in their columns; the game spread
-    goes in the upper Spread subcell and the cumulative spread in the lower one
-    (for a divided round — an undivided round has a single, merged Spread cell,
-    so only the game spread is shown there).
+    The Won and Lost columns carry the player's running win/loss record through
+    this round; the player's and opponent's scores go in their columns; the game
+    spread goes in the upper Spread subcell and the cumulative spread in the
+    lower one (for a divided round — an undivided round has a single, merged
+    Spread cell, so only the game spread is shown there).
     """
     won, lost, pscore, oscore, spread = 2, 3, 4, 5, len(HEADERS) - 1
-    if result.won is None:  # tie
-        _prefill_cell(top[won], "½")
-        _prefill_cell(top[lost], "½")
-    else:
-        _prefill_cell(top[won if result.won else lost], "✓")
+    _prefill_cell(top[won], _fmt_record(result.cumulative_wins))
+    _prefill_cell(top[lost], _fmt_record(result.cumulative_losses))
     _prefill_cell(top[pscore], str(result.player_score))
     _prefill_cell(top[oscore], str(result.opponent_score))
     _prefill_cell(top[spread], str(result.spread))

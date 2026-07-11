@@ -194,44 +194,36 @@ class StartPrefillTests(SimpleTestCase):
 
 
 class ResultPrefillTests(SimpleTestCase):
-    def test_win_fills_score_columns_and_both_spread_subcells(self):
+    def test_record_and_scores_and_both_spread_subcells(self):
         # Round 2 is divided, so its Spread column has two subcells.
         doc = build_document([_spec("Alice", n_rounds=6, results={
             2: ScorecardResult(player_score=450, opponent_score=380,
-                               won=True, cumulative_spread=120),
+                               cumulative_wins=2, cumulative_losses=1,
+                               cumulative_spread=120),
         })])
         table = doc.tables[0]
         top, bottom = 3, 4  # round 2 grid rows (1 + 2*1, and the one below)
-        self.assertEqual(table.cell(top, 2).text, "✓")    # Won
-        self.assertEqual(table.cell(top, 3).text, "")     # Lost
+        self.assertEqual(table.cell(top, 2).text, "2")    # Won (running wins)
+        self.assertEqual(table.cell(top, 3).text, "1")    # Lost (running losses)
         self.assertEqual(table.cell(top, 4).text, "450")  # Player Score
         self.assertEqual(table.cell(top, 5).text, "380")  # Opponent Score
         self.assertEqual(table.cell(top, 6).text, "70")   # game spread
         self.assertEqual(table.cell(bottom, 6).text, "120")  # cumulative spread
 
-    def test_loss_marks_the_lost_column(self):
-        doc = build_document([_spec("Alice", n_rounds=6, results={
-            2: ScorecardResult(player_score=380, opponent_score=450,
-                               won=False, cumulative_spread=-70),
-        })])
-        table = doc.tables[0]
-        self.assertEqual(table.cell(3, 2).text, "")   # Won
-        self.assertEqual(table.cell(3, 3).text, "✓")  # Lost
-        self.assertEqual(table.cell(3, 6).text, "-70")
-
-    def test_tie_marks_both_win_and_loss(self):
+    def test_half_records_from_a_tie_show_a_fraction(self):
         doc = build_document([_spec("Alice", n_rounds=6, results={
             2: ScorecardResult(player_score=400, opponent_score=400,
-                               won=None, cumulative_spread=0),
+                               cumulative_wins=2.5, cumulative_losses=1.5,
+                               cumulative_spread=0),
         })])
         table = doc.tables[0]
-        self.assertEqual(table.cell(3, 2).text, "½")
-        self.assertEqual(table.cell(3, 3).text, "½")
+        self.assertEqual(table.cell(3, 2).text, "2.5")  # Won
+        self.assertEqual(table.cell(3, 3).text, "1.5")  # Lost
 
     def test_rounds_without_a_result_stay_blank(self):
         doc = build_document([_spec("Alice", n_rounds=6, results={
             2: ScorecardResult(player_score=450, opponent_score=380,
-                               won=True, cumulative_spread=70),
+                               cumulative_wins=1, cumulative_spread=70),
         })])
         table = doc.tables[0]
         # Round 3 (rows 5/6) has no result: score columns are empty.
@@ -373,10 +365,13 @@ class DivisionScorecardsViewTests(TestCase):
         doc = Document(BytesIO(response.content))
         # Round 1 (undivided) is a single merged block; its cells are row 1.
         winner_card, loser_card = doc.tables[0], doc.tables[1]
-        self.assertEqual(winner_card.cell(1, 2).text, "✓")    # Won
+        # After round 1 the winner's running record is 1-0, the loser's 0-1.
+        self.assertEqual(winner_card.cell(1, 2).text, "1")    # Won
+        self.assertEqual(winner_card.cell(1, 3).text, "0")    # Lost
         self.assertEqual(winner_card.cell(1, 4).text, "450")  # Player Score
         self.assertEqual(winner_card.cell(1, 5).text, "380")  # Opponent Score
-        self.assertEqual(loser_card.cell(1, 3).text, "✓")     # Lost
+        self.assertEqual(loser_card.cell(1, 2).text, "0")     # Won
+        self.assertEqual(loser_card.cell(1, 3).text, "1")     # Lost
         self.assertEqual(loser_card.cell(1, 4).text, "380")
 
     def test_results_omitted_without_the_flag(self):
