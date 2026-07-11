@@ -50,7 +50,7 @@ QR_H_OFFSET, QR_V_OFFSET = 5789295, 7315
 # Offsets (EMU) are relative to the Round cell's column / the prompt paragraph;
 # the "1st" sits left of centre and "2nd" right, in a ~54pt-wide cell. Tune these
 # if a font change shifts where the ordinals land.
-CIRCLE_COLOR = "C00000"  # outline colour (dark red), like a pen mark
+CIRCLE_COLOR = "531882"  # outline colour (purple), like a pen mark
 CIRCLE_W, CIRCLE_H = 295000, 200000
 # Centred over the ordinal ink: the "1st"/"2nd" text sits at roughly ∓40pt from
 # the cell centre, so the ellipse's left edge (posOffset) is set to land its
