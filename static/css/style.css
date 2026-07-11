@@ -458,6 +458,25 @@ input[type="submit"]:hover {
     background-color: #fff;
 }
 
+/* Filled purple button, used on anchors that should read as a primary action
+   (e.g. the "Submit results" links in the pairings table). */
+.btn-primary {
+    display: inline-block;
+    background-color: var(--color-primary);
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font: inherit;
+    text-decoration: none;
+}
+
+.btn-primary:hover {
+    background-color: var(--color-primary-hover);
+    color: white;
+}
+
 .btn-cancel {
     background-color: #fff;
     color: var(--color-muted);
