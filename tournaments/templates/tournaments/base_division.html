@@ -18,11 +18,18 @@
 <span class="nav-tab-sep"></span>
 <a href="{% url 'division_pair_rounds' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'pair_rounds' %} active{% endif %}">Pair rounds</a>
 <a href="{% url 'division_edit_results' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'edit_results' %} active{% endif %}">Edit Results</a>
-<a href="{% url 'division_entrants_edit' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'edit_entrants' %} active{% endif %}">Edit Entrants</a>
 <a href="{% url 'division_round_pairings' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'round_pairings' %} active{% endif %}">Round Pairings</a>
-<a href="{% url 'division_settings' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'settings' %} active{% endif %}">Settings</a>
-<a href="{% url 'division_fixtures' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'fixtures' %} active{% endif %}">Fixtures</a>
-<a href="{% url 'division_board_tables' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'board_tables' %} active{% endif %}">Board Tables</a>
+{# Secondary menu: a native <details> so it opens on click with no JS; #}
+{# datastar only adds click-away-to-close on top. #}
+<details class="nav-menu" data-on:click__outside="el.open = false">
+    <summary class="nav-tab nav-menu-summary{% if active_tab == 'settings' or active_tab == 'edit_entrants' or active_tab == 'fixtures' or active_tab == 'board_tables' %} active{% endif %}">Settings <span class="nav-menu-caret" aria-hidden="true">▾</span></summary>
+    <div class="nav-menu-panel">
+        <a href="{% url 'division_settings' division.tournament.slug division.slug %}" class="nav-menu-item{% if active_tab == 'settings' %} active{% endif %}">Settings</a>
+        <a href="{% url 'division_entrants_edit' division.tournament.slug division.slug %}" class="nav-menu-item{% if active_tab == 'edit_entrants' %} active{% endif %}">Edit Entrants</a>
+        <a href="{% url 'division_fixtures' division.tournament.slug division.slug %}" class="nav-menu-item{% if active_tab == 'fixtures' %} active{% endif %}">Fixtures</a>
+        <a href="{% url 'division_board_tables' division.tournament.slug division.slug %}" class="nav-menu-item{% if active_tab == 'board_tables' %} active{% endif %}">Board Tables</a>
+    </div>
+</details>
 <a href="{% url 'division_scorecards' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'scorecards' %} active{% endif %}">Scorecards</a>
 {% endif %}
 </div>

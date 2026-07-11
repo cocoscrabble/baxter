@@ -309,6 +309,69 @@ h3 { font-size: 1.02rem; margin: var(--space-md) 0 var(--space-sm); }
     vertical-align: middle;
 }
 
+/* Secondary nav menu ("Settings ▾"), built on a native <details> so it opens
+   with no JS. The panel floats below the summary; a click on the summary
+   toggles it, and datastar closes it on an outside click. */
+.nav-menu {
+    position: relative;
+}
+
+.nav-menu-summary {
+    list-style: none;   /* drop the default disclosure triangle */
+    cursor: pointer;
+    user-select: none;
+}
+
+.nav-menu-summary::-webkit-details-marker {
+    display: none;
+}
+
+/* Keep the summary highlighted (like a hovered tab) while the menu is open. */
+.nav-menu[open] > .nav-menu-summary:not(.active) {
+    background-color: var(--color-bg-subtle);
+    color: var(--color-primary);
+}
+
+.nav-menu-caret {
+    font-size: 0.7em;
+}
+
+.nav-menu-panel {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 10;
+    margin-top: var(--space-xs);
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 160px;
+    padding: var(--space-xs);
+    background-color: var(--surface-raised);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.nav-menu-item {
+    text-decoration: none;
+    color: var(--color-muted);
+    padding: var(--space-xs) var(--space-sm);
+    border-radius: var(--radius);
+    font-size: 0.9em;
+    white-space: nowrap;
+}
+
+.nav-menu-item:hover {
+    background-color: var(--color-bg-subtle);
+    color: var(--color-primary);
+}
+
+.nav-menu-item.active {
+    background-color: var(--color-primary);
+    color: white;
+}
+
 .nav-right {
     display: flex;
     align-items: center;
