@@ -69,7 +69,7 @@
         </label>
         {% if form.verified_by_opponent.errors %}<ul class="errorlist">{% for e in form.verified_by_opponent.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
     </p>
-    <button type="submit" class="btn-save">Save</button>
+    <button type="submit" class="btn-save">Submit</button>
     {% if editing %}
     <button type="button" class="btn-cancel"
         data-on:click="@get('{% url 'resultslip_create' division.tournament.slug division.slug %}')">Cancel edit</button>
