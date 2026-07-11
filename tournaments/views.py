@@ -766,27 +766,38 @@ class DivisionScorecardsDownloadView(LoginRequiredMixin, CanEditDivisionMixin, D
     def _results_by_entrant(division):
         """Map each entrant id to its {round: ScorecardResult} for submitted
         results, from that entrant's point of view. Byes are skipped (they are
-        materialized as results but aren't a played game the player records),
-        and the cumulative spread is accumulated in round order."""
+        materialized as results but aren't a played game the player records);
+        the running record (wins/losses, a tie counting half to each) and the
+        cumulative spread are accumulated in round order."""
         slips = division.result_slips.select_related(
             "winner__player", "loser__player"
         ).order_by("round")
         results = defaultdict(dict)
-        cumulative = defaultdict(int)
+        wins = defaultdict(float)
+        losses = defaultdict(float)
+        spread = defaultdict(int)
         for slip in slips:
             if slip.winner.player.is_bye or slip.loser.player.is_bye:
                 continue
             tie = slip.winner_score == slip.loser_score
-            for entrant_id, won, pscore, oscore in (
-                (slip.winner_id, None if tie else True, slip.winner_score, slip.loser_score),
-                (slip.loser_id, None if tie else False, slip.loser_score, slip.winner_score),
+            for entrant_id, pscore, oscore in (
+                (slip.winner_id, slip.winner_score, slip.loser_score),
+                (slip.loser_id, slip.loser_score, slip.winner_score),
             ):
-                cumulative[entrant_id] += pscore - oscore
+                if tie:
+                    wins[entrant_id] += 0.5
+                    losses[entrant_id] += 0.5
+                elif pscore > oscore:
+                    wins[entrant_id] += 1
+                else:
+                    losses[entrant_id] += 1
+                spread[entrant_id] += pscore - oscore
                 results[entrant_id][slip.round] = ScorecardResult(
                     player_score=pscore,
                     opponent_score=oscore,
-                    won=won,
-                    cumulative_spread=cumulative[entrant_id],
+                    cumulative_wins=wins[entrant_id],
+                    cumulative_losses=losses[entrant_id],
+                    cumulative_spread=spread[entrant_id],
                 )
         return results
 
