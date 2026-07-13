@@ -121,18 +121,28 @@ class OpponentPrefillTests(SimpleTestCase):
         self.assertEqual(len(doc.part.package.image_parts._image_parts), 2)
 
 
+_VML_OVAL = "{urn:schemas-microsoft-com:vml}oval"
+
+
 def _circle_offsets(el):
-    """Horizontal offset of every ellipse-circle drawing under ``el``, in order."""
-    from docx.oxml.ns import qn
+    """Left margin (pt) of every VML ellipse-circle under ``el``, in order."""
+    import re
 
     offsets = []
-    for anchor in el.iter(qn("wp:anchor")):
-        if not any(g.get("prst") == "ellipse" for g in anchor.iter(qn("a:prstGeom"))):
-            continue
-        offsets.append(
-            int(anchor.find(qn("wp:positionH")).find(qn("wp:posOffset")).text)
-        )
+    for oval in el.iter(_VML_OVAL):
+        m = re.search(r"margin-left:(-?[\d.]+)pt", oval.get("style", ""))
+        offsets.append(float(m.group(1)))
     return offsets
+
+
+def _first_pt():
+    from tournaments.scorecards import CIRCLE_FIRST_H_OFFSET, _EMU_PER_PT
+    return round(CIRCLE_FIRST_H_OFFSET / _EMU_PER_PT, 2)
+
+
+def _second_pt():
+    from tournaments.scorecards import CIRCLE_SECOND_H_OFFSET, _EMU_PER_PT
+    return round(CIRCLE_SECOND_H_OFFSET / _EMU_PER_PT, 2)
 
 
 class StartPrefillTests(SimpleTestCase):
@@ -142,11 +152,6 @@ class StartPrefillTests(SimpleTestCase):
         return table.cell(1 + 2 * (round_number - 1), 0)
 
     def test_supplied_starts_circle_the_right_ordinal(self):
-        from tournaments.scorecards import (
-            CIRCLE_FIRST_H_OFFSET,
-            CIRCLE_SECOND_H_OFFSET,
-        )
-
         doc = build_document(
             [_spec("Alice", n_rounds=6, starts={1: "1st", 3: "2nd"})]
         )
@@ -155,9 +160,9 @@ class StartPrefillTests(SimpleTestCase):
         self.assertIn("1st", self._round_cell(table, 1).text)
         self.assertIn("2nd", self._round_cell(table, 1).text)
         self.assertEqual(_circle_offsets(self._round_cell(table, 1)._tc),
-                         [CIRCLE_FIRST_H_OFFSET])
+                         [_first_pt()])
         self.assertEqual(_circle_offsets(self._round_cell(table, 3)._tc),
-                         [CIRCLE_SECOND_H_OFFSET])
+                         [_second_pt()])
 
     def test_unmarked_rounds_get_no_circle(self):
         doc = build_document([_spec("Alice", n_rounds=6, starts={1: "1st"})])
@@ -167,20 +172,15 @@ class StartPrefillTests(SimpleTestCase):
         self.assertEqual(len(_circle_offsets(table._tbl)), 1)
 
     def test_each_player_circles_their_own_seat(self):
-        from tournaments.scorecards import (
-            CIRCLE_FIRST_H_OFFSET,
-            CIRCLE_SECOND_H_OFFSET,
-        )
-
         specs = [
             _spec("Alice", starts={1: "1st"}),
             _spec("Bob", starts={1: "2nd"}),
         ]
         doc = build_document(specs)
         self.assertEqual(_circle_offsets(self._round_cell(doc.tables[0], 1)._tc),
-                         [CIRCLE_FIRST_H_OFFSET])
+                         [_first_pt()])
         self.assertEqual(_circle_offsets(self._round_cell(doc.tables[1], 1)._tc),
-                         [CIRCLE_SECOND_H_OFFSET])
+                         [_second_pt()])
 
     def test_marked_division_still_shares_images(self):
         # Starts differ per player but the clone path must still hold.
@@ -191,6 +191,40 @@ class StartPrefillTests(SimpleTestCase):
         ]
         doc = Document(BytesIO(render_scorecards(specs)))
         self.assertEqual(len(doc.part.package.image_parts._image_parts), 2)
+
+    def test_circles_are_wps_wrapped_with_a_vml_fallback(self):
+        # A bare wps:wsp shape makes Word for the web flag the document corrupt;
+        # a pure-VML ellipse it mis-positions. So each seat circle is a wps shape
+        # inside mc:Choice (correct position, no corruption) paired with a VML
+        # <v:oval> fallback, and no ellipse anchor may sit outside an mc:Choice.
+        from docx.oxml.ns import qn
+
+        mc = "http://schemas.openxmlformats.org/markup-compatibility/2006"
+        doc = build_document([_spec("Alice", starts={1: "1st", 3: "2nd"})])
+        body = doc.element.body
+
+        ellipse_choices = [
+            c for c in body.iter(f"{{{mc}}}Choice")
+            if any(g.get("prst") == "ellipse" for g in c.iter(qn("a:prstGeom")))
+        ]
+        wps_ns = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
+        self.assertEqual(len(ellipse_choices), 2)
+        for choice in ellipse_choices:
+            self.assertEqual(choice.get("Requires"), "wps")
+            # a:graphicData/@uri must name the wps:wsp child's namespace, or Word
+            # (unlike OpenXmlValidator) can't resolve the shape and flags the doc
+            # corrupt. Pinning it here guards against reintroducing that mismatch.
+            gdata = choice.find(f".//{qn('a:graphicData')}")
+            self.assertEqual(gdata.get("uri"), wps_ns)
+            self.assertIsNotNone(gdata.find(f"{{{wps_ns}}}wsp"))
+            fallback = choice.getparent().find(f"{{{mc}}}Fallback")
+            self.assertIsNotNone(fallback)
+            self.assertIsNotNone(fallback.find(f".//{_VML_OVAL}"))
+
+        for anchor in body.iter(qn("wp:anchor")):
+            if any(g.get("prst") == "ellipse" for g in anchor.iter(qn("a:prstGeom"))):
+                ancestors = {a.tag for a in anchor.iterancestors()}
+                self.assertIn(f"{{{mc}}}Choice", ancestors)
 
 
 class ResultPrefillTests(SimpleTestCase):
@@ -273,8 +307,13 @@ class ClonedScorecardTests(SimpleTestCase):
 
         specs = [_spec(f"Player {i}", qr_url="https://x.test/live") for i in range(4)]
         doc = Document(BytesIO(render_scorecards(specs)))
-        ids = [e.get("id") for e in doc.element.iter(qn("wp:docPr"))]
-        self.assertEqual(len(ids), len(set(ids)))
+        # Both the wordprocessing docPr id and the DrawingML picture id must be
+        # unique across the package; a duplicate in either makes Word for the web
+        # flag the file corrupt and drop the images to placeholders (add_picture
+        # emits every pic:cNvPr id as 0, so the clones must renumber them).
+        for tag in ("wp:docPr", "pic:cNvPr"):
+            ids = [e.get("id") for e in doc.element.iter(qn(tag))]
+            self.assertEqual(len(ids), len(set(ids)), f"{tag} ids not unique: {ids}")
 
     def test_differing_layouts_fall_back_and_still_render(self):
         specs = [
@@ -385,11 +424,6 @@ class DivisionScorecardsViewTests(TestCase):
         self.assertEqual(doc.tables[0].cell(1, 4).text, "")
 
     def test_starts_circled_from_pairings(self):
-        from tournaments.scorecards import (
-            CIRCLE_FIRST_H_OFFSET,
-            CIRCLE_SECOND_H_OFFSET,
-        )
-
         DivisionSettings.objects.create(
             division=self.division,
             round_pairings=[{"round": 1}, {"round": 2}, {"round": 3}],
@@ -404,9 +438,9 @@ class DivisionScorecardsViewTests(TestCase):
         doc = Document(BytesIO(response.content))
         # entrant1 went first, entrant2 second; round 1's Round cell is (1, 0).
         self.assertEqual(_circle_offsets(doc.tables[0].cell(1, 0)._tc),
-                         [CIRCLE_FIRST_H_OFFSET])
+                         [_first_pt()])
         self.assertEqual(_circle_offsets(doc.tables[1].cell(1, 0)._tc),
-                         [CIRCLE_SECOND_H_OFFSET])
+                         [_second_pt()])
 
 
 # Canonical child orders for the OOXML complex types we emit by hand. Word
