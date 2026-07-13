@@ -55,9 +55,10 @@ CIRCLE_W, CIRCLE_H = 295000, 200000
 # Centred over the ordinal ink: the "1st"/"2nd" text sits at roughly ∓40pt from
 # the cell centre, so the ellipse's left edge (posOffset) is set to land its
 # centre there. The offset is paragraph-relative (from the prompt paragraph's
-# top); positive drops the ellipse down onto the ordinal line — Word for the web
-# otherwise renders it a touch high over the round number above.
-CIRCLE_V_OFFSET = 40000
+# top), tuned to centre the ellipse in desktop Word and LibreOffice. Word for the
+# web renders the same offset a touch high, but that's a Word-online rendering
+# glitch — the printed/desktop output is what matters, so we optimise for it.
+CIRCLE_V_OFFSET = -30000
 CIRCLE_FIRST_H_OFFSET = 2000
 CIRCLE_SECOND_H_OFFSET = 245000
 
