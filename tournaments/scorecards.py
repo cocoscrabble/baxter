@@ -59,7 +59,7 @@ CIRCLE_W, CIRCLE_H = 295000, 200000
 # web renders the same offset a touch high, but that's a Word-online rendering
 # glitch — the printed/desktop output is what matters, so we optimise for it.
 CIRCLE_V_OFFSET = -30000
-CIRCLE_FIRST_H_OFFSET = 2000
+CIRCLE_FIRST_H_OFFSET = -25000  # nudged slightly left to sit over "1st"
 CIRCLE_SECOND_H_OFFSET = 245000
 
 
