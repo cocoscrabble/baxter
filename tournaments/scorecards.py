@@ -54,8 +54,10 @@ CIRCLE_COLOR = "531882"  # outline colour (purple), like a pen mark
 CIRCLE_W, CIRCLE_H = 295000, 200000
 # Centred over the ordinal ink: the "1st"/"2nd" text sits at roughly ∓40pt from
 # the cell centre, so the ellipse's left edge (posOffset) is set to land its
-# centre there. Nudged down slightly so it sits on the ordinal line, not high.
-CIRCLE_V_OFFSET = -30000
+# centre there. The offset is paragraph-relative (from the prompt paragraph's
+# top); positive drops the ellipse down onto the ordinal line — Word for the web
+# otherwise renders it a touch high over the round number above.
+CIRCLE_V_OFFSET = 40000
 CIRCLE_FIRST_H_OFFSET = 2000
 CIRCLE_SECOND_H_OFFSET = 245000
 
@@ -291,6 +293,13 @@ def _add_floating_image(paragraph, image, cx, cy, h_offset, v_offset, *, behind)
         '</wp:anchor>'
     )
     anchor.append(graphic)
+    # The DrawingML non-visual picture id (pic:cNvPr/@id) that add_picture emits
+    # is always 0; leaving every logo/QR pic at 0 gives the package duplicate
+    # drawing-object ids. Desktop Word and LibreOffice silently renumber, but
+    # Word for the web rejects the file as corrupt and drops the images to
+    # "unable to load picture" placeholders. Give each pic its own id.
+    for cnvpr in anchor.iter(qn("pic:cNvPr")):
+        cnvpr.set("id", str(_uid[0]))
     drawing = run._r.find(qn("w:drawing"))
     drawing.remove(inline)
     drawing.append(anchor)
@@ -323,10 +332,30 @@ def _set_vmerge(cell, *, restart):
     vMerge.val = "restart" if restart else None
 
 
+# The seat circle is a DrawingML wps:wsp shape (Word 2010 extension) — Word for
+# the web positions this correctly, unlike a VML shape — wrapped in
+# mc:AlternateContent with a VML fallback, which is the only way Word writes such
+# a shape and what keeps Word for the web from flagging the document corrupt.
 _WPS_NS = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
 _WPS_DRAWING_NS = "http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing"
+_MC_NS = "http://schemas.openxmlformats.org/markup-compatibility/2006"
+# Namespaces for the VML fallback; python-docx's nsmap doesn't carry these, but
+# the document root declares them so the parsed fragments resolve.
+_V_NS = "urn:schemas-microsoft-com:vml"
+_O_NS = "urn:schemas-microsoft-com:office:office"
+_W10_NS = "urn:schemas-microsoft-com:office:word"
+
+_EMU_PER_PT = 12700  # VML positions in points; our shape geometry is in EMU.
 
 _QN_DOCPR = qn("wp:docPr")
+_QN_ANCHOR = qn("wp:anchor")
+_QN_ANCHOR_ID = f"{{{_WPS_DRAWING_NS}}}anchorId"
+_QN_EDIT_ID = f"{{{_WPS_DRAWING_NS}}}editId"
+_QN_VML_OVAL = f"{{{_V_NS}}}oval"
+_QN_O_SPID = f"{{{_O_NS}}}spid"
+# z-order base for the seat ellipses; each clone gets base+uid so no two shapes
+# share a relativeHeight (Word assigns each floating shape a distinct one).
+_CIRCLE_Z_BASE = 251659264
 
 # A round whose seat may be fixed gets a placeholder run in its prompt paragraph
 # carrying this prefix plus the round number. The per-player patch pass swaps
@@ -341,24 +370,88 @@ def _start_sentinel(round_number):
 
 
 def _circle_xml(h_offset):
-    return (
-        f'<w:r xmlns:w="{nsmap["w"]}" xmlns:wp="{nsmap["wp"]}" '
-        f'xmlns:a="{nsmap["a"]}" xmlns:wps="{_WPS_NS}"><w:drawing>'
-        '<wp:anchor simplePos="0" relativeHeight="0" behindDoc="0" locked="0" '
-        'layoutInCell="1" allowOverlap="1" distT="0" distB="0" distL="0" distR="0">'
+    """A run holding the seat ellipse, wrapped Word's way for compatibility.
+
+    The ellipse is a ``wps:wsp`` DrawingML shape (Word 2010 extension). Word for
+    the web positions it correctly — but a *bare* ``wps`` shape (one Word never
+    writes) makes it flag the whole document corrupt, and a pure-VML ellipse it
+    renders in the wrong place (it ignores VML floating offsets). So we do what
+    Word does: the ``wps`` shape is the ``mc:Choice`` (Word and Word-online read
+    it — correct position, no corruption flag), with a VML ``<w:pict>`` oval as
+    the ``mc:Fallback`` for clients that don't grok ``wps``.
+
+    Word for the web is stricter than the OOXML schema: a *skeletal* ``wps``
+    shape validates but still trips its corruption check. So the ``mc:Choice``
+    mirrors, element for element, what desktop Word writes for a hand-drawn oval
+    — populated ``wps:bodyPr``, ``wps:style``, ``a:effectLst``, and the
+    ``wp14:sizeRel*`` extensions — differing only in our geometry, colour, and
+    the paragraph-relative vertical anchor (each card is cloned down the page, so
+    the ellipse must ride its own prompt paragraph rather than a page offset).
+    The single ``<w:r>`` root declares every prefix the two branches use so the
+    fragment resolves standalone.
+    """
+    drawing = (
+        '<w:drawing>'
+        '<wp:anchor distT="0" distB="0" distL="114300" distR="114300" '
+        f'simplePos="0" relativeHeight="{_CIRCLE_Z_BASE}" behindDoc="0" '
+        'locked="0" layoutInCell="1" allowOverlap="1" '
+        'wp14:anchorId="00000000" wp14:editId="00000000">'
         '<wp:simplePos x="0" y="0"/>'
         f'<wp:positionH relativeFrom="column"><wp:posOffset>{h_offset}</wp:posOffset></wp:positionH>'
         f'<wp:positionV relativeFrom="paragraph"><wp:posOffset>{CIRCLE_V_OFFSET}</wp:posOffset></wp:positionV>'
         f'<wp:extent cx="{CIRCLE_W}" cy="{CIRCLE_H}"/>'
-        '<wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/>'
+        '<wp:effectExtent l="0" t="0" r="9525" b="9525"/><wp:wrapNone/>'
         '<wp:docPr id="0" name="circle0"/><wp:cNvGraphicFramePr/>'
-        '<a:graphic><a:graphicData uri="' + _WPS_DRAWING_NS + '">'
+        '<a:graphic><a:graphicData uri="' + _WPS_NS + '">'
         '<wps:wsp><wps:cNvSpPr/><wps:spPr>'
         f'<a:xfrm><a:off x="0" y="0"/><a:ext cx="{CIRCLE_W}" cy="{CIRCLE_H}"/></a:xfrm>'
         '<a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom><a:noFill/>'
         f'<a:ln w="19050"><a:solidFill><a:srgbClr val="{CIRCLE_COLOR}"/></a:solidFill></a:ln>'
-        '</wps:spPr><wps:bodyPr/></wps:wsp></a:graphicData></a:graphic>'
-        '</wp:anchor></w:drawing></w:r>'
+        '<a:effectLst/></wps:spPr>'
+        '<wps:style>'
+        '<a:lnRef idx="1"><a:schemeClr val="accent1"/></a:lnRef>'
+        '<a:fillRef idx="3"><a:schemeClr val="accent1"/></a:fillRef>'
+        '<a:effectRef idx="2"><a:schemeClr val="accent1"/></a:effectRef>'
+        '<a:fontRef idx="minor"><a:schemeClr val="lt1"/></a:fontRef>'
+        '</wps:style>'
+        '<wps:bodyPr rot="0" spcFirstLastPara="0" vertOverflow="overflow" '
+        'horzOverflow="overflow" vert="horz" wrap="square" lIns="91440" '
+        'tIns="45720" rIns="91440" bIns="45720" numCol="1" spcCol="0" '
+        'rtlCol="0" fromWordArt="0" anchor="ctr" anchorCtr="0" forceAA="0" '
+        'compatLnSpc="1"><a:prstTxWarp prst="textNoShape"><a:avLst/>'
+        '</a:prstTxWarp><a:noAutofit/></wps:bodyPr>'
+        '</wps:wsp></a:graphicData></a:graphic>'
+        '<wp14:sizeRelH relativeFrom="margin"><wp14:pctWidth>0</wp14:pctWidth></wp14:sizeRelH>'
+        '<wp14:sizeRelV relativeFrom="margin"><wp14:pctHeight>0</wp14:pctHeight></wp14:sizeRelV>'
+        '</wp:anchor></w:drawing>'
+    )
+    # VML fallback: same ellipse in points, positioned like the wps anchor's
+    # column/paragraph origins. Only clients that can't read wps use this; its
+    # style string mirrors what Word emits for the fallback branch.
+    fallback = (
+        '<w:pict>'
+        '<v:oval id="circle0" o:spid="_x0000_s1026" '
+        f'style="position:absolute;margin-left:{h_offset / _EMU_PER_PT:.2f}pt;'
+        f'margin-top:{CIRCLE_V_OFFSET / _EMU_PER_PT:.2f}pt;'
+        f'width:{CIRCLE_W / _EMU_PER_PT:.2f}pt;height:{CIRCLE_H / _EMU_PER_PT:.2f}pt;'
+        f'z-index:{_CIRCLE_Z_BASE};visibility:visible;mso-wrap-style:square;'
+        'mso-wrap-distance-left:9pt;mso-wrap-distance-top:0;'
+        'mso-wrap-distance-right:9pt;mso-wrap-distance-bottom:0;'
+        'mso-position-horizontal:absolute;mso-position-horizontal-relative:text;'
+        'mso-position-vertical:absolute;mso-position-vertical-relative:text;'
+        'v-text-anchor:middle" '
+        f'filled="f" strokecolor="#{CIRCLE_COLOR}" strokeweight="1.5pt">'
+        '<w10:wrap type="none"/></v:oval></w:pict>'
+    )
+    return (
+        f'<w:r xmlns:w="{nsmap["w"]}" xmlns:wp="{nsmap["wp"]}" '
+        f'xmlns:a="{nsmap["a"]}" xmlns:wps="{_WPS_NS}" xmlns:mc="{_MC_NS}" '
+        f'xmlns:wp14="{_WPS_DRAWING_NS}" '
+        f'xmlns:v="{_V_NS}" xmlns:o="{_O_NS}" xmlns:w10="{_W10_NS}">'
+        '<mc:AlternateContent>'
+        f'<mc:Choice Requires="wps">{drawing}</mc:Choice>'
+        f'<mc:Fallback>{fallback}</mc:Fallback>'
+        '</mc:AlternateContent></w:r>'
     )
 
 
@@ -376,9 +469,19 @@ def _circle_run(*, first):
         _CIRCLE_RUNS[first] = base
     run = copy.deepcopy(base)
     _uid[0] += 1
+    uid = _uid[0]
+    # The wps drawing id, its anchor/edit ids and z-order, and the VML fallback
+    # shape id all have to be unique across the document, or Word rejects it.
     docPr = run.find(".//" + _QN_DOCPR)
-    docPr.set("id", str(_uid[0]))
-    docPr.set("name", f"circle{_uid[0]}")
+    docPr.set("id", str(uid))
+    docPr.set("name", f"circle{uid}")
+    anchor = run.find(".//" + _QN_ANCHOR)
+    anchor.set(_QN_ANCHOR_ID, f"{uid:08X}")
+    anchor.set(_QN_EDIT_ID, f"{uid ^ 0x55555555:08X}")
+    anchor.set("relativeHeight", str(_CIRCLE_Z_BASE + uid))
+    oval = run.find(".//" + _QN_VML_OVAL)
+    oval.set("id", f"circle{uid}")
+    oval.set(_QN_O_SPID, f"_x0000_s{1026 + uid}")
     return run
 
 
@@ -583,11 +686,20 @@ def _patch_text(element, replacements, spec):
 
 
 def _reassign_drawing_ids(element):
-    """Give cloned drawings fresh ids so Word doesn't see duplicate object ids."""
+    """Give cloned drawings fresh ids so Word doesn't see duplicate object ids.
+
+    Both the wordprocessing docPr id (wp:docPr/@id) and the DrawingML picture id
+    (pic:cNvPr/@id) must be unique across the package or Word for the web treats
+    the file as corrupt; the clone starts out sharing the template's ids for
+    both.
+    """
     for docPr in element.iter(qn("wp:docPr")):
         _uid[0] += 1
         docPr.set("id", str(_uid[0]))
         docPr.set("name", f"image{_uid[0]}")
+    for cnvpr in element.iter(qn("pic:cNvPr")):
+        _uid[0] += 1
+        cnvpr.set("id", str(_uid[0]))
 
 
 def build_document(specs):

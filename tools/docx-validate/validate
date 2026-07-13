@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 # Validate one or more .docx files against the OOXML schema with the Open XML
-# SDK's OpenXmlValidator. Builds the tool on first use, then runs the binary.
+# SDK's OpenXmlValidator (plus semantic checks for duplicate drawing-ids and
+# graphicData uri/payload mismatches). Builds the tool on first use, then runs
+# the binary.
 #
 #   tools/docx-validate/validate path/to/file.docx [more.docx ...]
 #
-# Exit code: 0 = all valid, 1 = schema errors found, 2 = usage/IO error.
+# Exit code: 0 = all valid, 1 = problems found, 2 = usage/IO error.
+#
+# Note: only builds when the binary is missing; after editing Program.cs run
+#   dotnet build -c Release docx-validate.csproj
+# (or delete bin/) to pick up changes.
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
