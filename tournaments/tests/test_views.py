@@ -1753,6 +1753,83 @@ class DivisionEditResultsViewTests(TestCase):
         self.assertIn("errors", body)
         self.assertEqual(self.division.result_slips.count(), 0)
 
+    # ── Reconciling save (Phase 2): results keyed on pairing ────────────
+
+    def test_edit_result_preserves_pk_and_created_at(self):
+        # Editing a score must update the existing slip in place — its pk and
+        # created_at (used as submitted_on in the export) survive, where the old
+        # wipe-and-recreate reset both.
+        pairing = self._make_pairing(1, self.entrant1, self.entrant2)
+        slip = ResultSlip.objects.create(
+            division=self.division,
+            round=1,
+            pairing=pairing,
+            winner=self.entrant1,
+            winner_score=400,
+            loser=self.entrant2,
+            loser_score=380,
+            winner_started=True,
+        )
+        original_pk, original_created = slip.pk, slip.created_at
+        self.client.login(username="owner", password="testpass123")
+        payload = {
+            "rows": [
+                {
+                    "round": 1,
+                    "winner": self.entrant1.pk,
+                    "winner_score": 500,
+                    "loser": self.entrant2.pk,
+                    "loser_score": 380,
+                    "winner_started": True,
+                },
+            ],
+            "_version": 0,
+        }
+        response = self.client.post(
+            self.url, json.dumps(payload), content_type="application/json"
+        )
+        self.assertEqual(response.status_code, 200)
+        slip.refresh_from_db()
+        self.assertEqual(slip.pk, original_pk)
+        self.assertEqual(slip.winner_score, 500)  # the edit applied
+        self.assertEqual(slip.created_at, original_created)  # timestamp survived
+
+    def test_delete_result_recomputes_round_status(self):
+        rp = RoundPairings.objects.create(
+            division=self.division,
+            round=1,
+            status=RoundPairings.IN_PROGRESS,
+        )
+        pairing = Pairing.objects.create(
+            division=self.division,
+            round=1,
+            round_pairings=rp,
+            first=self.entrant1,
+            second=self.entrant2,
+            table=1,
+        )
+        ResultSlip.objects.create(
+            division=self.division,
+            round=1,
+            pairing=pairing,
+            winner=self.entrant1,
+            winner_score=450,
+            loser=self.entrant2,
+            loser_score=380,
+            winner_started=True,
+        )
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.post(
+            self.url,
+            json.dumps({"rows": [], "_version": 0}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.division.result_slips.count(), 0)
+        rp.refresh_from_db()
+        # With its only real result gone, the round drops back to PUBLISHED.
+        self.assertEqual(rp.status, RoundPairings.PUBLISHED)
+
 
 @tag("slow")
 class TestDivisionVisibilityTests(TestCase):
@@ -2380,6 +2457,116 @@ class DivisionEntrantsEditViewTests(TestCase):
         # The losing save is discarded — player1 survives.
         self.assertEqual(self.division.entrants.count(), 1)
         self.assertEqual(self.division.entrants.get().player, self.player1)
+
+    # ── Reconciling save (Phase 2): entrants keyed on player ────────────
+
+    def _seed_entrants(self):
+        e1 = Entrant.objects.create(
+            division=self.division, player=self.player1, number=1
+        )
+        e2 = Entrant.objects.create(
+            division=self.division, player=self.player2, number=2
+        )
+        return e1, e2
+
+    def _pair_and_result(self, e1, e2):
+        pairing = Pairing.objects.create(
+            division=self.division, round=1, first=e1, second=e2, table=1
+        )
+        slip = ResultSlip.objects.create(
+            division=self.division,
+            round=1,
+            pairing=pairing,
+            winner=e1,
+            winner_score=450,
+            loser=e2,
+            loser_score=380,
+            winner_started=True,
+        )
+        return pairing, slip
+
+    def test_noop_save_preserves_pairings_and_results(self):
+        # A save that doesn't change the roster must leave pairings and results
+        # completely alone (the old wipe-and-recreate cascaded them away).
+        e1, e2 = self._seed_entrants()
+        pairing, slip = self._pair_and_result(e1, e2)
+        self.client.login(username="owner", password="testpass123")
+        response = self._save([self.player1, self.player2], version=0)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.division.entrants.count(), 2)
+        self.assertTrue(self.division.pairings.filter(pk=pairing.pk).exists())
+        self.assertTrue(self.division.result_slips.filter(pk=slip.pk).exists())
+        # The entrant rows keep their pks (nothing was deleted/recreated).
+        self.assertEqual(
+            {e.pk for e in self.division.entrants.all()}, {e1.pk, e2.pk}
+        )
+
+    def test_add_late_entrant_keeps_existing_rows(self):
+        e1, e2 = self._seed_entrants()
+        pairing, slip = self._pair_and_result(e1, e2)
+        self.client.login(username="owner", password="testpass123")
+        response = self._save(
+            [self.player1, self.player2, self.player3], version=0
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.division.entrants.count(), 3)
+        # Existing rows kept their pks; only the newcomer was created.
+        self.assertTrue(self.division.entrants.filter(pk=e1.pk).exists())
+        self.assertTrue(self.division.entrants.filter(pk=e2.pk).exists())
+        self.assertTrue(
+            self.division.entrants.filter(player=self.player3).exists()
+        )
+        # The late add didn't disturb the existing pairing/result.
+        self.assertTrue(self.division.result_slips.filter(pk=slip.pk).exists())
+
+    def test_remove_entrant_without_dependents(self):
+        e1, e2 = self._seed_entrants()  # no pairings/results
+        self.client.login(username="owner", password="testpass123")
+        response = self._save([self.player1], version=0)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.division.entrants.count(), 1)
+        self.assertFalse(self.division.entrants.filter(pk=e2.pk).exists())
+
+    def test_remove_entrant_with_results_is_blocked(self):
+        e1, e2 = self._seed_entrants()
+        self._pair_and_result(e1, e2)
+        self.client.login(username="owner", password="testpass123")
+        # Dropping player2 (who has a result) must be rejected before any write.
+        response = self._save([self.player1], version=0)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("errors", response.json())
+        # Nothing changed, and the version wasn't bumped.
+        self.assertEqual(self.division.entrants.count(), 2)
+        self.assertEqual(
+            self.client.get(self.url).context["grid"].version, 0
+        )
+
+    def test_renumber_swap_succeeds(self):
+        # Swapping two entrants' numbers transiently collides on the
+        # (division, number) unique constraint; the two-pass update handles it.
+        e1, e2 = self._seed_entrants()  # player1=1, player2=2
+        self.client.login(username="owner", password="testpass123")
+        payload = {
+            "rows": [
+                {"number": 2, "player": self.player1.pk},
+                {"number": 1, "player": self.player2.pk},
+            ],
+            "_version": 0,
+        }
+        response = self.client.post(
+            self.url, json.dumps(payload), content_type="application/json"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            self.division.entrants.get(player=self.player1).number, 2
+        )
+        self.assertEqual(
+            self.division.entrants.get(player=self.player2).number, 1
+        )
+        # pks preserved through the swap.
+        self.assertEqual(
+            {e.pk for e in self.division.entrants.all()}, {e1.pk, e2.pk}
+        )
 
     def test_missing_version_skips_check(self):
         # A payload without _version (older page) still saves, for compatibility.

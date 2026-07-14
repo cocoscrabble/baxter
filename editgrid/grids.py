@@ -96,7 +96,13 @@ class GridContext:
 
 
 class EditGrid:
-    """A wipe-and-recreate editable grid over an FK-scoped model collection.
+    """An editable grid over an FK-scoped model collection.
+
+    By default it wipes and recreates the whole collection on save. A grid that
+    sets ``key_fields`` instead reconciles the payload against the existing rows
+    (match / update / create / delete keyed on that natural key), so untouched
+    rows keep their pk, their ``auto_now_add`` timestamps, and any dependent
+    rows that would otherwise cascade away.
 
     Concrete subclasses set the class attributes and override the serialization
     / lookup / validation hooks. The grid-specific bits that don't fit the
@@ -115,6 +121,12 @@ class EditGrid:
     template_name: str = ""
     columns: list = []         # list[Column] driving the client's table
     focus_field: str = ""      # field to focus when a new row is added
+
+    # Reconciling-save configuration. Empty ``key_fields`` keeps the legacy
+    # wipe-and-recreate behaviour, so grids that don't opt in are unaffected.
+    key_fields: tuple[str, ...] = ()        # model attrs forming row identity
+    update_fields: tuple[str, ...] = ()     # model attrs the grid may change
+    unique_within_parent: tuple[str, ...] = ()  # unique attrs needing a swap dance
 
     def queryset(self, parent):
         return getattr(parent, self.related_name).all()
@@ -135,24 +147,119 @@ class EditGrid:
     def validate(self, rows, parent):
         return parse_rows(self.dto_class, rows, *self.validate_args(parent))
 
+    def can_delete(self, instance):
+        """Return an error message if ``instance`` must not be removed, else None.
+
+        Called (pre-transaction) for every existing row whose key is absent from
+        the payload. Only consulted for reconciling grids (``key_fields`` set).
+        """
+        return None
+
+    def _row_key(self, instance):
+        return tuple(getattr(instance, f) for f in self.key_fields)
+
+    def reconcile_errors(self, parent, prepared):
+        """Pre-transaction checks for reconciling grids: duplicate keys in the
+        payload and deletion guards on rows that would be removed. Returns a
+        list of error strings (empty when there's nothing to reject).
+        """
+        if not self.key_fields:
+            return []
+        errors = []
+        seen = set()
+        payload_keys = set()
+        for inst in prepared:
+            key = self._row_key(inst)
+            if key in seen:
+                errors.append(f"Duplicate row for {self.key_fields} = {key}.")
+            seen.add(key)
+            payload_keys.add(key)
+        for obj in self.queryset(parent):
+            if self._row_key(obj) not in payload_keys:
+                msg = self.can_delete(obj)
+                if msg:
+                    errors.append(msg)
+        return errors
+
     def prepare(self, parent, validated):
-        """Build the (unsaved) instances to create, or return ``(_, errors)``.
+        """Build the (unsaved) instances to write, or return ``(_, errors)``.
 
         Runs before the save transaction so failures don't bump the version.
-        Default builds one instance per validated row; grids needing extra
-        lookups or cross-row checks override.
+        Default builds one instance per validated row and runs the reconcile
+        guards; grids needing extra lookups or cross-row checks override (and
+        should call ``reconcile_errors`` themselves).
         """
         fk = {self.parent_field: parent}
-        return [self.model(**fk, **dto.to_db_kwargs()) for dto in validated], []
+        prepared = [self.model(**fk, **dto.to_db_kwargs()) for dto in validated]
+        return prepared, self.reconcile_errors(parent, prepared)
 
     def persist(self, parent, prepared):
         """Write the prepared rows inside the save transaction.
 
-        Default replaces the whole FK-scoped collection (delete + bulk-create);
-        grids backed by something other than a model collection override.
+        With ``key_fields`` set, reconcile against the existing rows so untouched
+        rows are left alone. Otherwise replace the whole FK-scoped collection
+        (delete + bulk-create). Grids backed by something other than a model
+        collection override.
         """
-        self.queryset(parent).delete()
-        self.model.objects.bulk_create(prepared)
+        if not self.key_fields:
+            self.queryset(parent).delete()
+            self.model.objects.bulk_create(prepared)
+            return
+        self._reconcile(parent, prepared)
+
+    def _reconcile(self, parent, prepared):
+        existing = {self._row_key(obj): obj for obj in self.queryset(parent)}
+        payload_keys = set()
+        to_create, to_update = [], []
+        for inst in prepared:
+            key = self._row_key(inst)
+            payload_keys.add(key)
+            match = existing.get(key)
+            if match is None:
+                to_create.append(inst)
+            elif self._copy_changes(inst, match):
+                to_update.append(match)
+        to_delete = [obj for key, obj in existing.items() if key not in payload_keys]
+        # Delete first so a freed unique value (e.g. an entrant number) is
+        # available to a create or update in the same save.
+        for obj in to_delete:
+            obj.delete()
+        self._save_updates(to_update)
+        if to_create:
+            self.model.objects.bulk_create(to_create)
+
+    def _copy_changes(self, src, dst):
+        """Copy managed fields from ``src`` onto ``dst``; return True if any
+        value actually changed."""
+        changed = False
+        for f in self.update_fields:
+            val = getattr(src, f)
+            if getattr(dst, f) != val:
+                setattr(dst, f, val)
+                changed = True
+        return changed
+
+    def _save_updates(self, to_update):
+        if not to_update:
+            return
+        if self.unique_within_parent:
+            # Park each row's unique field(s) at a distinct temporary out of the
+            # valid range, then restore the real values — so an in-place
+            # permutation (two entrants swapping numbers) doesn't transiently
+            # violate the non-deferrable unique constraint on SQLite.
+            finals = [
+                {f: getattr(obj, f) for f in self.unique_within_parent}
+                for obj in to_update
+            ]
+            for i, obj in enumerate(to_update):
+                for f in self.unique_within_parent:
+                    setattr(obj, f, -(i + 1))
+                obj.save(update_fields=self.unique_within_parent)
+            for obj, final in zip(to_update, finals):
+                for f, val in final.items():
+                    setattr(obj, f, val)
+        for obj in to_update:
+            obj.save(update_fields=self.update_fields)
 
     def after_save(self, parent):
         """Hook run inside the save transaction after the rows are written."""

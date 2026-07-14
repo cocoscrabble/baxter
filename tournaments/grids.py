@@ -21,6 +21,12 @@ class EntrantsGrid(EditGrid):
     js_module = "tournaments/js/edit_entrants.js"  # custom: create-player + import
     template_name = "tournaments/division_entrants_edit.html"
     focus_field = "player"
+    # Reconcile on the player: keep each existing entrant (and its pairings /
+    # results, which would otherwise cascade away on a wipe) and only apply
+    # number changes, adds, and guarded removals.
+    key_fields = ("player_id",)
+    update_fields = ("number",)
+    unique_within_parent = ("number",)  # (division, number) is unique
     columns = [
         Column("number", "#", kind="display", width=60, auto_increment=True),
         Column("player", "Player", kind="choice", lookup="players", autocomplete=True),
@@ -40,6 +46,22 @@ class EntrantsGrid(EditGrid):
 
     def validate_args(self, division):
         return (set(Player.objects.values_list("pk", flat=True)), set())
+
+    def can_delete(self, entrant):
+        # An entrant with pairings or results can't just be removed — deleting
+        # it would cascade away those Pairing / ResultSlip rows. Registration-
+        # period entrants with no dependents delete normally.
+        if (
+            entrant.pairings_as_first.exists()
+            or entrant.pairings_as_second.exists()
+            or entrant.wins.exists()
+            or entrant.losses.exists()
+        ):
+            return (
+                f"{entrant.player.name} has pairings or results — cannot be "
+                "removed."
+            )
+        return None
 
 
 class FixedPairingsGrid(EditGrid):
@@ -115,6 +137,19 @@ class ResultsGrid(EditGrid):
     dto_class = ResultSlipDTO
     dom_id = "results-table"
     template_name = "tournaments/division_edit_results.html"
+    # Reconcile on the pairing so an edited row keeps its pk and, crucially, its
+    # created_at (auto_now_add) — the results export uses it as submitted_on.
+    # A row whose match changed resolves to a different pairing, i.e. delete +
+    # create, which is correct.
+    key_fields = ("pairing_id",)
+    update_fields = (
+        "round",
+        "winner_id",
+        "winner_score",
+        "loser_id",
+        "loser_score",
+        "winner_started",
+    )
     columns = [
         Column("round", "Round", kind="number", min=1, width=100, auto_increment=True),
         Column("winner", "Winner", kind="choice", lookup="entrants"),
@@ -156,7 +191,7 @@ class ResultsGrid(EditGrid):
             )
         if errors:
             return [], errors
-        return instances, []
+        return instances, self.reconcile_errors(division, instances)
 
     def after_save(self, division):
         # Recreating the slips can change which rounds have results; refresh the
