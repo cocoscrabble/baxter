@@ -61,13 +61,17 @@ def publish_rounds(division, round_numbers=None):
     qs = division.round_pairings_set.filter(status=RoundPairings.DRAFT)
     if round_numbers is not None:
         qs = qs.filter(round__in=round_numbers)
-    published = list(qs.values_list("round", flat=True))
-    qs.update(status=RoundPairings.PUBLISHED)
-    for round_num in published:
-        materialize_byes(division, round_num)
-        rp = division.round_pairings_set.filter(round=round_num).first()
-        if rp:
-            rp.update_status()
+    # Flip the status, materialize byes, and refresh status atomically: a crash
+    # partway through must not leave a PUBLISHED round whose byes were never
+    # recorded (it could then never reach FINISHED without manual entry).
+    with transaction.atomic():
+        published = list(qs.values_list("round", flat=True))
+        qs.update(status=RoundPairings.PUBLISHED)
+        for round_num in published:
+            materialize_byes(division, round_num)
+            rp = division.round_pairings_set.filter(round=round_num).first()
+            if rp:
+                rp.update_status()
     return published
 
 

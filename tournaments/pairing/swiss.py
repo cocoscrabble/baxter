@@ -14,7 +14,14 @@ from tournaments.pairing.base import (
 )
 from tournaments.pairing.round_pairing import RoundPairing
 
+# The split point for SwissPlusRandom: the top SWISS_DISTANCE players are paired
+# Swiss, the rest Random No Repeats.
 SWISS_DISTANCE = 10
+
+# The largest seed gap the Swiss blossom matcher will draw an edge across. Pairs
+# further apart than this in the standings are never matched (equivalent to the
+# Rust engine's MAX_DISTANCE = 11 with a strict `<`).
+MAX_PAIRING_DISTANCE = 10
 
 
 class Groups:
@@ -129,7 +136,7 @@ def pair_candidates(bracket: list[list[candidate]]) -> list[pair]:
     for player_candidates in bracket:
         for c in player_candidates:
             # don't pair candidates too far apart
-            if c.distance < 11:
+            if c.distance <= MAX_PAIRING_DISTANCE:
                 weight = -(30 * c.repeats + c.distance)
                 v1 = names[c.name1]
                 v2 = names[c.name2]
@@ -159,6 +166,11 @@ def _pair_swiss_players(players: Standings, repeats: Repeats) -> Pairings:
     if groups.length > 1:
         while len(groups.bottom) < 6:
             groups.merge_bottom()
+            if groups.length <= 1:
+                # Merging has collapsed everything into a single group that is
+                # still under 6; merge_bottom is now a no-op, so stop to avoid
+                # spinning forever.
+                break
     while groups.length > 0:
         if nrep > max_nrep:
             break

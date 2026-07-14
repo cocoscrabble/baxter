@@ -21,10 +21,25 @@ class ResultSlipDTO(DataClassJsonMixin):
 
     @classmethod
     def from_json(cls, row: dict) -> "ResultSlipDTO | None":
-        """Parse a JSON row dict. Returns None if required fields are missing."""
+        """Parse a JSON row dict. Returns None if a field is missing/invalid.
+
+        Coerce the numeric fields explicitly (mirroring ``FixedPairingDTO``) so a
+        string-typed number from the client behaves the same as it does in the
+        fixed-pairings grid. ``winner_started`` is serialized as a bool.
+        """
         if any(row.get(f.name) is None for f in fields(cls)):
             return None
-        return cls.from_dict(row)
+        try:
+            return cls(
+                round=int(row["round"]),
+                winner=int(row["winner"]),
+                winner_score=int(row["winner_score"]),
+                loser=int(row["loser"]),
+                loser_score=int(row["loser_score"]),
+                winner_started=bool(row["winner_started"]),
+            )
+        except (ValueError, TypeError):
+            return None
 
     def validate(self, entrant_ids: set[int]) -> list[str]:
         """Return list of validation error strings."""
@@ -56,10 +71,20 @@ class EntrantDTO(DataClassJsonMixin):
 
     @classmethod
     def from_json(cls, row: dict) -> "EntrantDTO | None":
-        """Parse a JSON row dict. Returns None if required fields are missing."""
+        """Parse a JSON row dict. Returns None if a field is missing/invalid.
+
+        Numeric fields are coerced explicitly (mirroring ``FixedPairingDTO``) so
+        string-typed numbers behave identically across grids.
+        """
         if any(row.get(f.name) is None for f in fields(cls)):
             return None
-        return cls.from_dict(row)
+        try:
+            return cls(
+                number=int(row["number"]),
+                player=int(row["player"]),
+            )
+        except (ValueError, TypeError):
+            return None
 
     def validate(self, valid_player_ids: set[int], seen_players: set[int]) -> list[str]:
         """Return list of validation error strings. Adds player to seen_players if valid."""

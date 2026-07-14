@@ -106,9 +106,15 @@ class PairingData:
         fixed: dict[int, list[tuple[str, str]]] = defaultdict(list)
         for fp in division.fixed_pairings.select_related("entrant1__player", "entrant2__player").all():
             fixed[fp.round_number].append((fp.entrant1.player.name, fp.entrant2.player.name))
+        # A division with no settings row yet has no configured pairings.
+        # Malformed blobs are rejected at write time (_validate_blocks), so a
+        # missing row is the only thing to tolerate here. Imported locally to
+        # keep this module free of module-level Django model dependencies.
+        from tournaments.models import DivisionSettings
+
         try:
             raw_rps = division.settings.round_pairings or []
-        except Exception:
+        except DivisionSettings.DoesNotExist:
             raw_rps = []
         rps = [RoundPairing.from_dict(x) for x in raw_rps]
         normalize_round_robin_start_rounds(rps)
@@ -255,7 +261,9 @@ class Repeats:
 
     def get(self, p: Pairing) -> int:
         key = self._key(p)
-        return self.matches[key]
+        # Non-mutating read: indexing the defaultdict would permanently insert
+        # every probed key, and pair_no_repeats_blossom probes O(n²) pairs.
+        return self.matches.get(key, 0)
 
 
 class Starts:

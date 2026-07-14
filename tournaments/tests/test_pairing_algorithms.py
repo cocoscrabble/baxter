@@ -5,6 +5,7 @@ from tournaments.pairing.base import (
     PairingData,
     PlayerData,
     Repeats,
+    ResultSlipData,
 )
 from tournaments.pairing.round_pairing import RP, RoundPairing
 from tournaments.pairing.basic import (
@@ -354,3 +355,77 @@ class SwissInitialTests(PairingTestCase):
     def test_8_players(self):
         # A-E, B-F, C-G, D-H
         self._sw("ABCDEFGH", "AEBFCGDH")
+
+
+# ── Swiss small fields (regression: must not hang) ──────
+
+
+class SwissSmallFieldTests(PairingTestCase):
+    """Swiss round 2+ on tiny fields must terminate.
+
+    The repro was 4 players in two win-groups after round 1: merging the bottom
+    group collapses everything into a single sub-6 group, and the old merge loop
+    (`while len(groups.bottom) < 6: merge_bottom()`) spun forever because
+    merge_bottom is a no-op once one group remains.
+    """
+
+    def _round2(self, standings_str, round1_results):
+        """Pair round 2 given round-1 (winner, loser) results.
+
+        Seeding order matches `standings_str`; each result is a full-round game
+        so standings_after_round(1) yields the expected win-groups.
+        """
+        n = len(standings_str)
+        entrants = [
+            EntrantData(PlayerData(name=ch, rating=(n - i) * 100))
+            for i, ch in enumerate(standings_str)
+        ]
+        slips = [
+            ResultSlipData(
+                round=1,
+                winner_name=w,
+                loser_name=loser,
+                winner_score=400,
+                loser_score=300,
+                winner_started=True,
+            )
+            for (w, loser) in round1_results
+        ]
+        pd = PairingData(
+            result_slips=slips,
+            entrants=entrants,
+            repeats=Repeats(),
+            round_pairings=[],
+        )
+        rp = RoundPairing(round=2, start_round=1, pairing=RP.Swiss)
+        return pair_swiss(pd, rp)
+
+    def _assert_valid(self, pairings, standings_str):
+        """Every paired player is distinct and drawn from the field."""
+        paired = [p.first.name for p in pairings] + [
+            p.second.name for p in pairings
+        ]
+        self.assertEqual(len(paired), len(set(paired)), "a player was paired twice")
+        self.assertTrue(set(paired) <= set(standings_str))
+
+    def test_2_players(self):
+        pairings = self._round2("AB", [("A", "B")])
+        self.assertEqual(len(pairings), 1)
+        self._assert_valid(pairings, "AB")
+
+    def test_4_players_two_win_groups(self):
+        # A beat C, B beat D → two win-groups of two; the original hang repro.
+        pairings = self._round2("ABCD", [("A", "C"), ("B", "D")])
+        self.assertEqual(len(pairings), 2)
+        self._assert_valid(pairings, "ABCD")
+
+    def test_3_players(self):
+        # Odd field: one game played, the unpaired seed carries a bye upstream.
+        pairings = self._round2("ABC", [("A", "B")])
+        self.assertEqual(len(pairings), 1)
+        self._assert_valid(pairings, "ABC")
+
+    def test_5_players(self):
+        pairings = self._round2("ABCDE", [("A", "C"), ("B", "D")])
+        self.assertEqual(len(pairings), 2)
+        self._assert_valid(pairings, "ABCDE")

@@ -2136,6 +2136,79 @@
     ]
   },
   {
+    "name": "swiss_r2_n4",
+    "deterministic": true,
+    "input": {
+      "players": [
+        {
+          "name": "P01",
+          "rating": 2000
+        },
+        {
+          "name": "P02",
+          "rating": 1990
+        },
+        {
+          "name": "P03",
+          "rating": 1980
+        },
+        {
+          "name": "P04",
+          "rating": 1970
+        }
+      ],
+      "result_slips": [
+        {
+          "round": 1,
+          "winner_name": "P01",
+          "loser_name": "P02",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P03",
+          "loser_name": "P04",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        }
+      ],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "Swiss"
+        },
+        {
+          "round": 2,
+          "start_round": 1,
+          "pairing": "Swiss"
+        }
+      ],
+      "fixed_pairings": {},
+      "seed": 0
+    },
+    "expected": [
+      {
+        "round": 2,
+        "pairings": [
+          {
+            "first": "P03",
+            "second": "P01",
+            "repeats": 1
+          },
+          {
+            "first": "P02",
+            "second": "P04",
+            "repeats": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
     "name": "swiss_r2_n12",
     "deterministic": true,
     "input": {
