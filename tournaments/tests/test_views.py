@@ -116,6 +116,26 @@ class DivisionCreateDeleteViewTests(TestCase):
             self.tournament.divisions.filter(name="Sandbox", is_test=True).exists()
         )
 
+    def test_create_division_reusing_soft_deleted_name(self):
+        # unique_together (tournament, name) spans soft-deleted rows, so posting
+        # the name of a soft-deleted division must flash an error, not 500 with
+        # an IntegrityError.
+        self.client.login(username="owner", password="testpass123")
+        division = self.tournament.divisions.create(name="Novice")
+        division.soft_delete()
+        response = self.client.post(
+            reverse("division_create", kwargs={"tournament_slug": self.tournament.slug}),
+            {"name": "Novice", "is_test": "0"},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        # No new (active) division was created.
+        self.assertFalse(
+            self.tournament.divisions.filter(name="Novice").exists()
+        )
+        messages = [str(m) for m in response.context["messages"]]
+        self.assertTrue(any("deleted division" in m for m in messages))
+
     def test_create_division_non_editor_forbidden(self):
         self.client.login(username="other", password="testpass123")
         response = self.client.post(

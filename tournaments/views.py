@@ -3,6 +3,7 @@ from collections import defaultdict
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.core.exceptions import PermissionDenied
 from django.db import models
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -335,14 +336,28 @@ class DivisionCreateView(LoginRequiredMixin, View):
     def post(self, request, tournament_slug):
         tournament = get_object_or_404(Tournament, slug=tournament_slug)
         if not tournament.can_edit(request.user):
-            from django.core.exceptions import PermissionDenied
             raise PermissionDenied
         name = request.POST.get("name", "").strip()
         is_test = request.POST.get("is_test") == "1"
         if name:
-            Division.objects.get_or_create(
-                tournament=tournament, name=name, defaults={"is_test": is_test}
-            )
+            # unique_together (tournament, name) spans soft-deleted rows, so a
+            # get_or_create via the active-only manager would 500 with an
+            # IntegrityError when the name belongs to a soft-deleted division.
+            existing = Division.all_objects.filter(
+                tournament=tournament, name=name
+            ).first()
+            if existing is not None and existing.is_deleted:
+                messages.error(
+                    request,
+                    f"“{name}” belongs to a deleted division — restore or "
+                    "rename it before reusing the name.",
+                )
+            elif existing is None:
+                Division.objects.create(
+                    tournament=tournament, name=name, is_test=is_test
+                )
+            # An existing active division with this name is a silent no-op, as
+            # before.
         return redirect("tournament_detail", **tournament.slug_kwargs())
 
 
@@ -524,13 +539,30 @@ class PublishPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
         return _pairings_body_response(request, division)
 
 
+def _read_int(data, key):
+    """Parse an integer datastar/POST signal.
+
+    Returns ``(value, None)`` on success or ``(None, JsonResponse(status=400))``
+    when the key is missing or non-numeric, so a malformed signal yields a clean
+    400 instead of an unhandled 500.
+    """
+    try:
+        return int(data[key]), None
+    except (KeyError, TypeError, ValueError):
+        return None, JsonResponse(
+            {"error": f"missing or invalid '{key}'"}, status=400
+        )
+
+
 class PublishRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
     """Publish a single draft round and live-swap the pairings body."""
 
     def post(self, request, *args, **kwargs):
         division = self.get_division()
         data = (read_signals(request) or {}) if is_datastar(request) else request.POST
-        round_number = int(data["round"])
+        round_number, error = _read_int(data, "round")
+        if error:
+            return error
         publish_rounds(division, [round_number])
         return _pairings_body_response(request, division, select_round=round_number)
 
@@ -542,7 +574,9 @@ class UnpublishRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
     def post(self, request, *args, **kwargs):
         division = self.get_division()
         data = (read_signals(request) or {}) if is_datastar(request) else request.POST
-        round_number = int(data["round"])
+        round_number, error = _read_int(data, "round")
+        if error:
+            return error
         unpublished = unpublish_rounds(division, [round_number])
         error = None if unpublished else (
             f"Round {round_number} can't be unpublished — it already has results."
@@ -556,9 +590,15 @@ class AddFixedPairingView(LoginRequiredMixin, CanEditDivisionMixin, View):
     def post(self, request, *args, **kwargs):
         division = self.get_division()
         data = (read_signals(request) or {}) if is_datastar(request) else request.POST
-        round_number = int(data["round"])
-        entrant1_id = int(data["entrant1"])
-        entrant2_id = int(data["entrant2"])
+        round_number, error = _read_int(data, "round")
+        if error:
+            return error
+        entrant1_id, error = _read_int(data, "entrant1")
+        if error:
+            return error
+        entrant2_id, error = _read_int(data, "entrant2")
+        if error:
+            return error
         _, error = add_fixed_pairing(division, round_number, entrant1_id, entrant2_id)
         return _pairings_body_response(request, division, select_round=round_number, error=error)
 
@@ -569,8 +609,12 @@ class RemoveFixedPairingView(LoginRequiredMixin, CanEditDivisionMixin, View):
     def post(self, request, *args, **kwargs):
         division = self.get_division()
         data = (read_signals(request) or {}) if is_datastar(request) else request.POST
-        fp_id = int(data["fp_id"])
-        round_number = int(data["round"])
+        fp_id, error = _read_int(data, "fp_id")
+        if error:
+            return error
+        round_number, error = _read_int(data, "round")
+        if error:
+            return error
         _, error = remove_fixed_pairing(division, fp_id)
         return _pairings_body_response(request, division, select_round=round_number, error=error)
 

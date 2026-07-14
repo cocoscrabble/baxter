@@ -162,6 +162,12 @@ def build_cases():
     cases.append(case("koth_r2_n8", True, es8, sched_koth, slips=hist8))
     sched_swiss = [RoundPairing(1, 0, RP.Swiss), RoundPairing(2, 1, RP.Swiss)]
     cases.append(case("swiss_r2_n8", True, es8, sched_swiss, slips=hist8))
+    # Tiny field: after round 1 the four players split into two win-groups, and
+    # merging the bottom group collapses everything into one sub-6 group. This is
+    # the case that hung the Python engine before the merge-loop guard.
+    es4 = entrants(4)
+    hist4 = round1_results(es4, winners_idx={0, 1})  # top of each pair wins
+    cases.append(case("swiss_r2_n4", True, es4, [RoundPairing(1, 0, RP.Swiss), RoundPairing(2, 1, RP.Swiss)], slips=hist4))
     es12 = entrants(12)
     hist12 = round1_results(es12, winners_idx={0, 1, 2, 3, 4, 5})
     cases.append(case("swiss_r2_n12", True, es12, [RoundPairing(1, 0, RP.Swiss), RoundPairing(2, 1, RP.Swiss)], slips=hist12))
