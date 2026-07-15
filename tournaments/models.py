@@ -1,8 +1,16 @@
+import secrets
+
 from django.conf import settings
 from django.db import models
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
+
+
+def random_pairing_seed():
+    """A fresh non-negative seed that fits both a signed BigInteger column and
+    the Rust engine's u64 seed."""
+    return secrets.randbelow(2**63)
 
 # Slugs that would shadow a sibling static route's own detail page (the static
 # routes themselves always win at request time thanks to URL ordering; this set
@@ -255,6 +263,10 @@ class DivisionSettings(models.Model):
     # Source of truth for the round-pairings editor; round_pairings is derived
     # from it. Each block: {"pairing", "rounds", "pair_from"}.
     pairing_blocks = models.JSONField(default=list)
+    # Seed for the pairing engine's random strategies, stable across regenerations
+    # so lazy draft re-pairing doesn't reshuffle random rounds on every render.
+    # Re-rolled only by an explicit reshuffle action.
+    pairing_seed = models.BigIntegerField(default=random_pairing_seed)
 
     def __str__(self):
         return f"Settings for {self.division}"

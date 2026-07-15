@@ -2923,6 +2923,356 @@
     ]
   },
   {
+    "name": "tied_ratings_koth_n8",
+    "deterministic": true,
+    "input": {
+      "players": [
+        {
+          "name": "P1",
+          "rating": 1600,
+          "dropped": false
+        },
+        {
+          "name": "P2",
+          "rating": 1600,
+          "dropped": false
+        },
+        {
+          "name": "P3",
+          "rating": 1500,
+          "dropped": false
+        },
+        {
+          "name": "P4",
+          "rating": 1500,
+          "dropped": false
+        },
+        {
+          "name": "P5",
+          "rating": 1400,
+          "dropped": false
+        },
+        {
+          "name": "P6",
+          "rating": 1400,
+          "dropped": false
+        },
+        {
+          "name": "P7",
+          "rating": 1300,
+          "dropped": false
+        },
+        {
+          "name": "P8",
+          "rating": 1300,
+          "dropped": false
+        }
+      ],
+      "result_slips": [],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "KotH"
+        }
+      ],
+      "fixed_pairings": {},
+      "seed": 0
+    },
+    "expected": [
+      {
+        "round": 1,
+        "pairings": [
+          {
+            "first": "P1",
+            "second": "P2",
+            "repeats": 1
+          },
+          {
+            "first": "P3",
+            "second": "P4",
+            "repeats": 1
+          },
+          {
+            "first": "P5",
+            "second": "P6",
+            "repeats": 1
+          },
+          {
+            "first": "P7",
+            "second": "P8",
+            "repeats": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "db_order_koth_n4",
+    "deterministic": true,
+    "input": {
+      "players": [
+        {
+          "name": "P3",
+          "rating": 1500,
+          "dropped": false
+        },
+        {
+          "name": "P1",
+          "rating": 1600,
+          "dropped": false
+        },
+        {
+          "name": "P4",
+          "rating": 1500,
+          "dropped": false
+        },
+        {
+          "name": "P2",
+          "rating": 1600,
+          "dropped": false
+        }
+      ],
+      "result_slips": [],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "KotH"
+        }
+      ],
+      "fixed_pairings": {},
+      "seed": 0
+    },
+    "expected": [
+      {
+        "round": 1,
+        "pairings": [
+          {
+            "first": "P1",
+            "second": "P2",
+            "repeats": 1
+          },
+          {
+            "first": "P3",
+            "second": "P4",
+            "repeats": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "tied_records_swiss_r2_n8",
+    "deterministic": true,
+    "input": {
+      "players": [
+        {
+          "name": "P01",
+          "rating": 2000,
+          "dropped": false
+        },
+        {
+          "name": "P02",
+          "rating": 1990,
+          "dropped": false
+        },
+        {
+          "name": "P03",
+          "rating": 1980,
+          "dropped": false
+        },
+        {
+          "name": "P04",
+          "rating": 1970,
+          "dropped": false
+        },
+        {
+          "name": "P05",
+          "rating": 1960,
+          "dropped": false
+        },
+        {
+          "name": "P06",
+          "rating": 1950,
+          "dropped": false
+        },
+        {
+          "name": "P07",
+          "rating": 1940,
+          "dropped": false
+        },
+        {
+          "name": "P08",
+          "rating": 1930,
+          "dropped": false
+        }
+      ],
+      "result_slips": [
+        {
+          "round": 1,
+          "winner_name": "P01",
+          "loser_name": "P02",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P03",
+          "loser_name": "P04",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P05",
+          "loser_name": "P06",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P07",
+          "loser_name": "P08",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        }
+      ],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "Swiss"
+        },
+        {
+          "round": 2,
+          "start_round": 1,
+          "pairing": "Swiss"
+        }
+      ],
+      "fixed_pairings": {},
+      "seed": 0
+    },
+    "expected": [
+      {
+        "round": 2,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P03",
+            "repeats": 1
+          },
+          {
+            "first": "P07",
+            "second": "P05",
+            "repeats": 1
+          },
+          {
+            "first": "P02",
+            "second": "P04",
+            "repeats": 1
+          },
+          {
+            "first": "P08",
+            "second": "P06",
+            "repeats": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "koth_fixed_odd_n7",
+    "deterministic": true,
+    "input": {
+      "players": [
+        {
+          "name": "P01",
+          "rating": 2000,
+          "dropped": false
+        },
+        {
+          "name": "P02",
+          "rating": 1990,
+          "dropped": false
+        },
+        {
+          "name": "P03",
+          "rating": 1980,
+          "dropped": false
+        },
+        {
+          "name": "P04",
+          "rating": 1970,
+          "dropped": false
+        },
+        {
+          "name": "P05",
+          "rating": 1960,
+          "dropped": false
+        },
+        {
+          "name": "P06",
+          "rating": 1950,
+          "dropped": false
+        },
+        {
+          "name": "P07",
+          "rating": 1940,
+          "dropped": false
+        }
+      ],
+      "result_slips": [],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "KotH"
+        }
+      ],
+      "fixed_pairings": {
+        "1": [
+          [
+            "P02",
+            "P06"
+          ]
+        ]
+      },
+      "seed": 0
+    },
+    "expected": [
+      {
+        "round": 1,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P03",
+            "repeats": 1
+          },
+          {
+            "first": "P04",
+            "second": "P05",
+            "repeats": 1
+          },
+          {
+            "first": "P02",
+            "second": "P06",
+            "repeats": 1
+          },
+          {
+            "first": "Bye",
+            "second": "P07",
+            "repeats": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
     "name": "random_r1_n8",
     "deterministic": false,
     "input": {

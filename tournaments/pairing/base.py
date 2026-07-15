@@ -100,6 +100,10 @@ class PairingData:
     # modifying every strategy individually.
     excluded_names: set[str] = field(default_factory=set)
 
+    # Seed for the engine's random strategies. Carried into the Rust engine's
+    # input; unused by the Python engine (which uses the global RNG).
+    seed: int = 0
+
     @classmethod
     def for_division(cls, division) -> "PairingData":
         entrants = [
@@ -117,12 +121,22 @@ class PairingData:
         from tournaments.models import DivisionSettings
 
         try:
-            raw_rps = division.settings.round_pairings or []
+            settings = division.settings
+            raw_rps = settings.round_pairings or []
+            seed = settings.pairing_seed
         except DivisionSettings.DoesNotExist:
             raw_rps = []
+            seed = 0
         rps = [RoundPairing.from_dict(x) for x in raw_rps]
         normalize_round_robin_start_rounds(rps)
-        return cls(result_slips=slips, entrants=entrants, repeats=Repeats(), fixed_pairings=dict(fixed), round_pairings=rps)
+        return cls(
+            result_slips=slips,
+            entrants=entrants,
+            repeats=Repeats(),
+            fixed_pairings=dict(fixed),
+            round_pairings=rps,
+            seed=seed,
+        )
 
 
 class PairingError(Exception):
