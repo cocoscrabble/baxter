@@ -34,8 +34,10 @@ from .fixed_pairings import (
 from .match_simulation import simulate_match, simulate_round
 from .commands import (
     add_fixed_pairing_cmd,
+    add_result,
     create_division,
     create_tournament,
+    edit_result,
     delete_division,
     delete_tournament,
     publish_all_rounds,
@@ -1508,13 +1510,24 @@ class ResultSlipCreateView(DivisionURLMixin, View):
             data, division=division, pairings_by_round=pbr, instance=result,
         )
         if form.is_valid():
-            rs = form.save()
+            pairing = form.cleaned_data["pairing"]
+            winner = form.cleaned_data["winner"]
+            payload = {
+                "division": division.name,
+                "round": pairing.round,
+                "first_name": pairing.first.player.name,
+                "second_name": pairing.second.player.name,
+                "winner_name": winner.player.name,
+                "winner_score": form.cleaned_data["winner_score"],
+                "loser_score": form.cleaned_data["loser_score"],
+            }
+            actor = request.user if request.user.is_authenticated else None
+            command = add_result if creating else edit_result
+            rs = command(division.tournament, actor, payload)
             if creating:
                 # Let this browser edit its own submission later without opening
                 # up pk-guessing edits of everyone else's slips.
                 self._remember_created_result(request, rs)
-            if rs.pairing and rs.pairing.round_pairings:
-                rs.pairing.round_pairings.update_status()
             # Reset to a blank form for the next entry, surfacing the saved
             # result with an Edit button to correct it if needed.
             fresh_pbr = _pairings_by_round(division)

@@ -18,7 +18,7 @@ from django.contrib.auth import get_user_model
 from django.db.models import Q
 
 from tournaments.events import EventResult, command_context, records_event
-from tournaments.models import Division, DivisionSettings, Tournament
+from tournaments.models import Division, DivisionSettings, ResultSlip, Tournament
 
 User = get_user_model()
 
@@ -226,6 +226,76 @@ def remove_fixed_pairing_cmd(tournament, actor, payload):
     return EventResult(
         payload=payload, division=division, result=(ok, error), record=ok
     )
+
+
+# ---------------------------------------------------------------------------
+# Single result entry (ResultSlipCreateView; the form only validates now)
+# ---------------------------------------------------------------------------
+
+
+def _find_pairing(division, round_number, first_name, second_name):
+    names = {first_name, second_name}
+    for p in division.pairings.filter(round=round_number).select_related(
+        "first__player", "second__player"
+    ):
+        if {p.first.player.name, p.second.player.name} == names:
+            return p
+    return None
+
+
+def _write_result(division, pairing, payload, instance):
+    winner = (
+        pairing.first
+        if pairing.first.player.name == payload["winner_name"]
+        else pairing.second
+    )
+    loser = pairing.second if winner.pk == pairing.first_id else pairing.first
+    fields = dict(
+        division=division,
+        round=pairing.round,
+        pairing=pairing,
+        winner=winner,
+        winner_score=payload["winner_score"],
+        loser=loser,
+        loser_score=payload["loser_score"],
+        winner_started=winner.pk == pairing.first_id,
+    )
+    if instance is not None:
+        for name, value in fields.items():
+            setattr(instance, name, value)
+        instance.save()
+        slip = instance
+    else:
+        slip = ResultSlip.objects.create(**fields)
+    # Recompute round status inside the command so the recorded digest reflects
+    # it (a replay must see the same status).
+    if pairing.round_pairings_id:
+        pairing.round_pairings.update_status()
+    return slip
+
+
+@records_event("result_added")
+def add_result(tournament, actor, payload):
+    """payload: {division, round, first_name, second_name, winner_name,
+    winner_score, loser_score}. Records a new game result."""
+    division = _division(tournament, payload["division"])
+    pairing = _find_pairing(
+        division, payload["round"], payload["first_name"], payload["second_name"]
+    )
+    slip = _write_result(division, pairing, payload, instance=None)
+    return EventResult(payload=payload, division=division, result=slip)
+
+
+@records_event("result_edited")
+def edit_result(tournament, actor, payload):
+    """payload as add_result. Updates the pairing's existing slip in place."""
+    division = _division(tournament, payload["division"])
+    pairing = _find_pairing(
+        division, payload["round"], payload["first_name"], payload["second_name"]
+    )
+    instance = getattr(pairing, "result", None)
+    slip = _write_result(division, pairing, payload, instance=instance)
+    return EventResult(payload=payload, division=division, result=slip)
 
 
 @records_event("fixed_pairings_removed")
