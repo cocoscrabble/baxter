@@ -1,0 +1,19 @@
+[package]
+name = "scrabble-pairing-py"
+version = "0.1.0"
+edition = "2021"
+description = "PyO3 binding for the scrabble-pairing engine"
+license = "MIT OR Apache-2.0"
+
+# A separate crate from `scrabble-pairing` so the core stays wasm-clean: PyO3
+# links libpython and can't target wasm. This crate is the only one that pulls
+# PyO3 in.
+[lib]
+name = "scrabble_pairing_py"
+crate-type = ["cdylib"]
+
+[dependencies]
+scrabble-pairing = { path = "../scrabble-pairing" }
+# abi3-py312: one stable-ABI wheel covers CPython 3.12+ (incl. 3.14 and future
+# upgrades). extension-module: don't link libpython at build time.
+pyo3 = { version = "0.23", features = ["extension-module", "abi3-py312"] }
