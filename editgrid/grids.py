@@ -121,6 +121,15 @@ class EditGrid:
     template_name: str = ""
     columns: list = []         # list[Column] driving the client's table
     focus_field: str = ""      # field to focus when a new row is added
+    # Host grids that should log a save event set this to the event type; the
+    # host view's on_saved hook records it. Empty = don't log.
+    event_type: str = ""
+
+    def to_portable(self, rows, parent):
+        """Convert the client's (pk-based) rows into a pk-free, replay-safe
+        payload for the event log. Default passes them through — override on
+        grids whose rows carry pks (entrant/player references)."""
+        return rows
 
     # Reconciling-save configuration. Empty ``key_fields`` keeps the legacy
     # wipe-and-recreate behaviour, so grids that don't opt in are unaffected.

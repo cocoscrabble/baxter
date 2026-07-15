@@ -19,6 +19,14 @@ def _entrant_values(division):
     return [{"id": e.pk, "label": e.player.name} for e in entrants]
 
 
+def _entrant_name_map(division):
+    """{entrant pk -> player name} for portable-payload conversion."""
+    return {
+        e.pk: e.player.name
+        for e in division.entrants.select_related("player")
+    }
+
+
 class EntrantsGrid(EditGrid):
     model = Entrant
     parent_field = "division"
@@ -26,6 +34,7 @@ class EntrantsGrid(EditGrid):
     scope = "entrants"
     dto_class = EntrantDTO
     dom_id = "entrants-table"
+    event_type = "entrants_saved"
     js_module = "tournaments/js/edit_entrants.js"  # custom: create-player + import
     template_name = "tournaments/division_entrants_edit.html"
     focus_field = "player"
@@ -47,6 +56,17 @@ class EntrantsGrid(EditGrid):
 
     def queryset(self, division):
         return division.entrants.select_related("player").order_by("number")
+
+    def to_portable(self, rows, division):
+        names = dict(Player.objects.values_list("pk", "name"))
+        return [
+            {
+                "number": r["number"],
+                "player": names.get(r["player"]),
+                "dropped": r.get("dropped", False),
+            }
+            for r in rows
+        ]
 
     def serialize_row(self, entrant):
         return {
@@ -135,6 +155,7 @@ class FixedPairingsGrid(EditGrid):
     scope = "fixed_pairings"
     dto_class = FixedPairingDTO
     dom_id = "fixed-pairings-table"
+    event_type = "fixed_pairings_saved"
     template_name = "tournaments/division_fixed_pairings_edit.html"
     focus_field = "round_number"
     columns = [
@@ -142,6 +163,17 @@ class FixedPairingsGrid(EditGrid):
         Column("entrant1", "Player 1", kind="choice", lookup="entrantValues", autocomplete=True),
         Column("entrant2", "Player 2", kind="choice", lookup="entrantValues", autocomplete=True),
     ]
+
+    def to_portable(self, rows, division):
+        names = _entrant_name_map(division)
+        return [
+            {
+                "round_number": r["round_number"],
+                "entrant1": names.get(r["entrant1"]),
+                "entrant2": names.get(r["entrant2"]),
+            }
+            for r in rows
+        ]
 
     def serialize_row(self, fp):
         return {
@@ -164,6 +196,7 @@ class FixedTablesGrid(EditGrid):
     scope = "fixed_tables"
     dto_class = FixedTableDTO
     dom_id = "fixed-tables-table"
+    event_type = "fixed_tables_saved"
     template_name = "tournaments/division_fixed_tables_edit.html"
     focus_field = "round_number"
     columns = [
@@ -171,6 +204,17 @@ class FixedTablesGrid(EditGrid):
         Column("entrant", "Player", kind="choice", lookup="entrantValues", autocomplete=True, min_width=200),
         Column("table_label", "Table", kind="text", value_type="str", width=100),
     ]
+
+    def to_portable(self, rows, division):
+        names = _entrant_name_map(division)
+        return [
+            {
+                "round_number": r["round_number"],
+                "entrant": names.get(r["entrant"]),
+                "table_label": r["table_label"],
+            }
+            for r in rows
+        ]
 
     def serialize_row(self, ft):
         return {
@@ -200,6 +244,7 @@ class ResultsGrid(EditGrid):
     scope = "results"
     dto_class = ResultSlipDTO
     dom_id = "results-table"
+    event_type = "results_saved"
     template_name = "tournaments/division_edit_results.html"
     # Reconcile on the pairing so an edited row keeps its pk and, crucially, its
     # created_at (auto_now_add) — the results export uses it as submitted_on.
@@ -227,6 +272,20 @@ class ResultsGrid(EditGrid):
 
     def queryset(self, division):
         return division.result_slips.select_related("winner", "loser").order_by("round", "pk")
+
+    def to_portable(self, rows, division):
+        names = _entrant_name_map(division)
+        return [
+            {
+                "round": r["round"],
+                "winner": names.get(r["winner"]),
+                "winner_score": r["winner_score"],
+                "loser": names.get(r["loser"]),
+                "loser_score": r["loser_score"],
+                "winner_started": r["winner_started"],
+            }
+            for r in rows
+        ]
 
     def serialize_row(self, slip):
         return slip.to_dict()
@@ -270,6 +329,7 @@ class BoardTableMapGrid(JsonBlobGrid):
     blob_field = "board_table_map"
     scope = "board_table_map"
     dom_id = "board-table-map-table"
+    event_type = "board_tables_saved"  # rows are label/board/table — no pks; default to_portable
     js_module = "tournaments/js/edit_board_table_map.js"  # custom: generate button
     template_name = "tournaments/division_board_table_map_edit.html"
     focus_field = "label"
