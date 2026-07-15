@@ -16,8 +16,15 @@ dependencies = [
     "psycopg2-binary>=2.9",
     "python-docx>=1.2.0",
     "qrcode[pil]>=8.2",
+    "scrabble-pairing-py",
     "whitenoise>=6.0",
 ]
+
+[tool.uv.sources]
+# Local PyO3 extension crate; uv builds the wheel via maturin on `uv sync`.
+# uv does not watch the crate source — after editing Rust, rebuild with
+# `uv sync --reinstall-package scrabble-pairing-py` (or `make rust-engine`).
+scrabble-pairing-py = { path = "scrabble-pairing-py" }
 
 [dependency-groups]
 dev = [

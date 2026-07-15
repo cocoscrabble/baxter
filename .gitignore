@@ -74,5 +74,6 @@ node_modules/
 tmp/
 t.py
 
-# Rust build artifacts (scrabble-pairing crate)
+# Rust build artifacts (scrabble-pairing crates)
 scrabble-pairing/target/
+scrabble-pairing-py/target/

@@ -1,0 +1,14 @@
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "scrabble-pairing-py"
+version = "0.1.0"
+description = "PyO3 binding for the scrabble-pairing engine"
+requires-python = ">=3.12"
+classifiers = ["Programming Language :: Rust"]
+
+[tool.maturin]
+# abi3 wheel (see Cargo.toml); no Python source, just the compiled extension.
+features = ["pyo3/extension-module"]

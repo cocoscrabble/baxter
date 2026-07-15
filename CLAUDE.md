@@ -29,6 +29,32 @@ uv run python manage.py test <app_name>.tests.TestClass.test_method
 
 # Django management commands
 uv run python manage.py <command>
+
+# Rebuild the Rust pairing extension after editing scrabble-pairing*/ crates
+# (uv does not watch the crate source)
+make rust-engine   # == uv sync --reinstall-package scrabble-pairing-py
+```
+
+## Pairing engine (Rust cutover in progress)
+
+The pairing computation is being cut over to the `scrabble-pairing` Rust crate,
+called from Python via the `scrabble-pairing-py` PyO3 extension (a separate
+crate so the core stays wasm-clean). `scrabble_pairing_py.pair_json(str) -> str`
+is the boundary. Building requires a local Rust toolchain (already needed for
+the crate); `uv sync` builds the wheel via maturin. See `PLAN_RUST_CUTOVER.md`.
+
+Until the cutover completes, the both-engines policy still holds: pairing fixes
+land in both `tournaments/pairing/` (Python) and `scrabble-pairing/` (Rust), and
+must keep the parity corpus (`scrabble-pairing/tests/corpus/cases.json`) green
+(`cargo test` in `scrabble-pairing/`).
+
+Engine selection is `settings.PAIRING_ENGINE` (env `PAIRING_ENGINE`):
+`python` (default), `rust`, or `shadow` (run both, return Python, log
+divergences). Run the Django suite both ways:
+
+```bash
+uv run python manage.py test tournaments.tests
+PAIRING_ENGINE=rust uv run python manage.py test tournaments.tests
 ```
 
 ## Configuration
