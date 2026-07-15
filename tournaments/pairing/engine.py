@@ -73,6 +73,12 @@ def pair_with_engine(pd: PairingData) -> list[tuple[int, list[DisplayPairing]]]:
     return pair(pd)
 
 
+def pair_rust(pd: PairingData) -> list[tuple[int, list[DisplayPairing]]]:
+    """Pair via the Rust engine only, ignoring ``PAIRING_ENGINE``. Exposed for
+    comparison/burn-in tooling; production code uses ``pair_with_engine``."""
+    return _pair_rust(pd)
+
+
 def _pair_rust(pd: PairingData) -> list[tuple[int, list[DisplayPairing]]]:
     # Imported lazily so a missing extension only breaks the rust/shadow paths,
     # not `import tournaments.pairing.engine` on the default python path.

@@ -20,7 +20,7 @@ from tournaments.pairing.base import (
     Starts,
 )
 from tournaments.pairing.round_pairing import RoundPairing
-from tournaments.pairing.pair import pair_round
+from tournaments.pairing.pair import pair, pair_round
 
 
 # ---------------------------------------------------------------------------
@@ -121,6 +121,120 @@ def simulate(
         rounds.append(Round(rp.round, display_pairings, round_results))
 
     return rounds, starts, pd.repeats
+
+
+# ---------------------------------------------------------------------------
+# Engine comparison (pre-cutover burn-in)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class EngineDivergence:
+    """One round where the Python and Rust engines disagreed."""
+
+    round: int
+    # "different-pairs": the two engines paired different opponents (serious).
+    # "repeats": same opponents, different repeat counts.
+    # "orientation": same opponents, different starter (who goes first).
+    # "rust-error": the Rust engine failed while Python succeeded.
+    kind: str
+    python: object
+    rust: object
+
+    def __str__(self) -> str:
+        return f"round {self.round} [{self.kind}]\n  python={self.python}\n  rust={self.rust}"
+
+
+def _round_pairings(engine_output, round_num):
+    for rnd, pairings in engine_output:
+        if rnd == round_num:
+            return pairings
+    return []
+
+
+def _classify_divergence(round_num, py, ru):
+    """Return an EngineDivergence if the two rounds differ, else None."""
+    py_key = [(p.first.name, p.second.name, p.repeats) for p in py]
+    ru_key = [(p.first.name, p.second.name, p.repeats) for p in ru]
+    if py_key == ru_key:
+        return None
+
+    def unordered(pairings):
+        return sorted(tuple(sorted((p.first.name, p.second.name))) for p in pairings)
+
+    def reps_by_pair(pairings):
+        return {
+            tuple(sorted((p.first.name, p.second.name))): p.repeats for p in pairings
+        }
+
+    if unordered(py) != unordered(ru):
+        kind = "different-pairs"
+    elif reps_by_pair(py) != reps_by_pair(ru):
+        kind = "repeats"
+    else:
+        kind = "orientation"
+    return EngineDivergence(round_num, kind, py_key, ru_key)
+
+
+def compare_engines(
+    round_pairings: list[dict],
+    n_entrants: int,
+    seed: int | None = None,
+) -> list[EngineDivergence]:
+    """Simulate a tournament and, each round, pair it with BOTH engines from the
+    same accumulated results — reporting where they disagree.
+
+    Mirrors the production flow (whole-tournament ``pair()`` fed growing
+    ``result_slips``, exactly what ``pair_with_engine`` does), so a clean run
+    here is real evidence the Rust engine can be cut over. Random strategies use
+    the two engines' RNGs differently, so their rounds are skipped (same policy
+    as shadow mode). Results are simulated off the Python pairings, so the run is
+    reproducible for a given seed on deterministic schedules.
+    """
+    # Imported here so importing this module doesn't require the extension.
+    from tournaments.pairing.engine import RANDOM_STRATEGIES, pair_rust
+
+    if seed is not None:
+        # Seed the global RNG too, so schedules containing random strategies
+        # (which the engines drive from the global RNG) are reproducible.
+        random.seed(seed)
+    rng = random.Random(seed)
+    entrants = create_entrants(n_entrants)
+    ratings = {e.player.name: e.player.rating for e in entrants}
+    rps = [
+        d if isinstance(d, RoundPairing) else RoundPairing.from_dict(d)
+        for d in round_pairings
+    ]
+    result_slips: list[ResultSlipData] = []
+    divergences: list[EngineDivergence] = []
+
+    for rp in rps:
+        pd = PairingData(
+            result_slips=list(result_slips),
+            entrants=entrants,
+            repeats=Repeats(),
+            round_pairings=rps,
+            seed=seed or 0,
+        )
+        py_pairings = _round_pairings(pair(pd), rp.round)
+        try:
+            ru_pairings = _round_pairings(pair_rust(pd), rp.round)
+        except Exception as exc:  # noqa: BLE001 — surface any rust-side failure
+            divergences.append(
+                EngineDivergence(rp.round, "rust-error", None, str(exc))
+            )
+            ru_pairings = None
+
+        if ru_pairings is not None and rp.pairing not in RANDOM_STRATEGIES:
+            div = _classify_divergence(rp.round, py_pairings, ru_pairings)
+            if div is not None:
+                divergences.append(div)
+
+        # Advance the simulation off the Python pairings (the canonical driver).
+        for p in py_pairings:
+            result_slips.append(simulate_match(rng, ratings, p, rp.round))
+
+    return divergences
 
 
 def check_starts_balancing(rounds: list[Round]) -> None:

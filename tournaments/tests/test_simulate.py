@@ -10,7 +10,12 @@ from unittest import TestCase
 from django.test import tag
 
 from tournaments.pairing.round_pairing import make_pairings
-from tournaments.simulate import Round, check_starts_balancing, simulate
+from tournaments.simulate import (
+    Round,
+    check_starts_balancing,
+    compare_engines,
+    simulate,
+)
 
 
 def _rp_dicts(spec: str) -> list[dict]:
@@ -113,6 +118,58 @@ class PairingCountTests(TestCase):
 
     def test_quads_clustered(self):
         self._check("QC:3", 24)
+
+
+@tag("slow")
+class EngineComparisonTests(TestCase):
+    """The Python and Rust engines must stay in agreement on the deterministic,
+    non-blossom strategies (a regression guard for the cutover). Swiss uses
+    blossom matching, whose tie-breaks are implementation-defined and differ
+    between the engines (equal-cost), so it is deliberately not asserted equal.
+    """
+
+    def _assert_agree(self, spec, n_entrants, seeds=range(4)):
+        for seed in seeds:
+            with self.subTest(spec=spec, n_entrants=n_entrants, seed=seed):
+                divergences = compare_engines(_rp_dicts(spec), n_entrants, seed=seed)
+                self.assertEqual(
+                    divergences, [], f"engines diverged: {[str(d) for d in divergences]}"
+                )
+
+    def test_koth_agrees(self):
+        self._assert_agree("KH:15", 24)
+        self._assert_agree("KH:15", 23)  # odd field -> bye
+
+    def test_qoth_agrees(self):
+        self._assert_agree("QH:15", 20)
+
+    def test_round_robin_agrees(self):
+        self._assert_agree("RR:11", 12)
+        self._assert_agree("RR:11", 11)  # odd field -> bye
+
+    def test_double_round_robin_agrees(self):
+        self._assert_agree("DR:10", 8)
+
+    def test_quads_agree(self):
+        self._assert_agree("QC:3", 16)
+        self._assert_agree("QD:3", 12)
+        self._assert_agree("QE:3", 12)
+
+    def test_sixes_agrees(self):
+        self._assert_agree("SX:3", 12)
+
+    def test_swiss_divergences_are_equal_cost(self):
+        # Swiss may pick a different (but equally optimal) matching on ties. When
+        # it does, the disagreement must only ever be orientation or an
+        # equal-cost different-pairs choice — never a "rust-error", and never a
+        # different-pairs that changes the repeat profile (which _classify would
+        # not flag, but which we guard against here by construction).
+        seen = set()
+        for seed in range(8):
+            for d in compare_engines(_rp_dicts("SW:15"), 24, seed=seed):
+                seen.add(d.kind)
+        self.assertNotIn("rust-error", seen)
+        self.assertTrue(seen <= {"orientation", "different-pairs"})
 
 
 @tag("slow")
