@@ -1,3 +1,4 @@
+import contextlib
 import json
 from dataclasses import asdict
 
@@ -92,9 +93,21 @@ class BaseEditGridView(View):
         with check_conflict(self.grid_key(parent), data.get("_version")) as guard:
             if guard.conflict:
                 return guard.conflict
-            self.grid.persist(parent, prepared)
-            self.grid.after_save(parent)
+            # ``save_context`` lets the host wrap the write (e.g. an event-log
+            # command context); ``on_saved`` lets it record an event — both
+            # inside the version-bump transaction. Defaults are no-ops so the
+            # editgrid app stays domain-agnostic.
+            with self.save_context():
+                self.grid.persist(parent, prepared)
+                self.grid.after_save(parent)
+                self.on_saved(parent, rows)
         return guard.response
+
+    def save_context(self):
+        return contextlib.nullcontext()
+
+    def on_saved(self, parent, rows):
+        """Hook called after a successful save, inside the transaction."""
 
 
 class EditPresenceBaseView(View):

@@ -1105,6 +1105,29 @@ class DivisionEditGridView(LoginRequiredMixin, CanEditDivisionMixin, BaseEditGri
         )
         return context
 
+    def save_context(self):
+        # Run the grid write inside an event-log command context.
+        from tournaments.events import command_context
+
+        return command_context()
+
+    def on_saved(self, division, rows):
+        # Record a grid-save event (in the same transaction) with a pk-free,
+        # replay-safe payload. Grids without an event_type opt out.
+        from tournaments.events import division_digest, record_event
+
+        if not self.grid.event_type:
+            return
+        actor = self.request.user if self.request.user.is_authenticated else None
+        record_event(
+            division.tournament,
+            self.grid.event_type,
+            {"division": division.name, "rows": self.grid.to_portable(rows, division)},
+            actor=actor,
+            division=division,
+            digest=division_digest(division),
+        )
+
 
 class DivisionEntrantsEditView(DivisionEditGridView):
     grid = EntrantsGrid()

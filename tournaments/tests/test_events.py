@@ -1,6 +1,7 @@
 """Phase 1 event-log tests: the state digest and the recorder."""
 
 from django.test import TestCase
+from django.urls import reverse
 
 from tournaments.events import division_digest, division_state, record_event
 from tournaments.models import (
@@ -181,3 +182,34 @@ class CrudCommandTests(TestCase):
 
         publish_all_rounds(self.tournament, self.owner, {"division": "Open"})
         self.assertEqual(self.tournament.events.count(), 0)
+
+
+class GridEventTests(TestCase):
+    """A grid save records an event with a pk-free (name-based) payload."""
+
+    def setUp(self):
+        setUpTournament(self)
+        self.division.entrants.all().delete()
+
+    def test_entrants_grid_save_logs_portable_rows(self):
+        import json
+
+        self.client.login(username="owner", password="testpass123")
+        url = reverse("division_entrants_edit", kwargs=self.division.slug_kwargs())
+        payload = {
+            "rows": [
+                {"number": 1, "player": self.player1.pk, "dropped": False},
+                {"number": 2, "player": self.player2.pk, "dropped": False},
+            ]
+        }
+        response = self.client.post(
+            url, json.dumps(payload), content_type="application/json"
+        )
+        self.assertEqual(response.status_code, 200)
+        event = self.tournament.events.get()
+        self.assertEqual(event.event_type, "entrants_saved")
+        self.assertEqual(event.division, self.division)
+        self.assertEqual(event.actor, self.owner)
+        # Players are recorded by name, not pk.
+        players = {row["player"] for row in event.payload["rows"]}
+        self.assertEqual(players, {"Alice", "Bob"})
