@@ -119,3 +119,57 @@ class RecordEventTests(TestCase):
         self.assertEqual(e.actor_session, "hashed")
         self.assertEqual(e.division, self.division)
         self.assertEqual(e.digest, "deadbeef")
+
+
+class CrudCommandTests(TestCase):
+    """Phase 2 (CRUD cluster): the tournament/division lifecycle commands log."""
+
+    def setUp(self):
+        setUpTournament(self)
+
+    def test_create_tournament_logs_with_default_division_seed(self):
+        from tournaments.commands import create_tournament
+
+        t = create_tournament(
+            None,
+            self.owner,
+            {
+                "name": "Nationals",
+                "location": "Reno",
+                "start_date": "2026-08-01",
+                "editors": [],
+            },
+        )
+        event = t.events.get()
+        self.assertEqual(event.event_type, "tournament_created")
+        self.assertEqual(event.payload["name"], "Nationals")
+        self.assertEqual(event.actor, self.owner)
+        # The default division and its seed are recorded so replay reproduces
+        # the same random-strategy pairings.
+        self.assertEqual(t.divisions.count(), 1)
+        self.assertIn("pairing_seed", event.payload["default_division"])
+        div = t.divisions.get()
+        self.assertEqual(
+            div.settings.pairing_seed, event.payload["default_division"]["pairing_seed"]
+        )
+
+    def test_create_division_records_seed(self):
+        from tournaments.commands import create_division
+
+        div = create_division(self.tournament, self.owner, {"name": "Novice"})
+        event = self.tournament.events.get()
+        self.assertEqual(event.event_type, "division_created")
+        self.assertEqual(event.division, div)
+        self.assertEqual(event.payload["pairing_seed"], div.settings.pairing_seed)
+
+    def test_rename_and_delete_log_events(self):
+        from tournaments.commands import delete_division, rename_division
+
+        rename_division(
+            self.tournament, self.owner, {"old_name": "Open", "new_name": "Championship"}
+        )
+        delete_division(self.tournament, self.owner, {"name": "Championship"})
+        types = list(
+            self.tournament.events.order_by("seq").values_list("event_type", flat=True)
+        )
+        self.assertEqual(types, ["division_renamed", "division_deleted"])

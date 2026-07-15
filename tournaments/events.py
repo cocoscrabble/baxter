@@ -8,6 +8,7 @@ which is what makes replay a test. See PLAN_EVENT_LOG.md.
 """
 
 import contextvars
+import dataclasses
 import functools
 import hashlib
 import json
@@ -91,6 +92,20 @@ class derived_writes:
         return False
 
 
+class command_context:
+    """Mark a mutation as command-driven for the write guard *without* recording
+    an event. For the rare mutation that can't carry a log entry — tournament
+    deletion cascades its own log away, so there is nothing to record against."""
+
+    def __enter__(self):
+        self._token = _in_command.set(True)
+        return self
+
+    def __exit__(self, *exc):
+        _in_command.reset(self._token)
+        return False
+
+
 # ---------------------------------------------------------------------------
 # Recording
 # ---------------------------------------------------------------------------
@@ -139,23 +154,61 @@ def record_event(
         )
 
 
-def records_event(event_type):
-    """Decorator that marks a function as a command and registers it for replay.
+@dataclasses.dataclass
+class EventResult:
+    """What a command returns: the payload to log plus metadata.
 
-    The wrapped function does the domain work and returns an ``EventSpec`` (the
-    payload plus optional actor/division/digest metadata); the wrapper appends
-    the event in the same transaction. Registration (``event_type -> callable``)
-    lets the replay harness dispatch by type. Full behaviour is wired in
-    Phase 2; Phase 1 defines the machinery.
+    ``payload`` is normally the command's validated input dict, verbatim (so a
+    replay drives the same command with the same payload). A command may augment
+    it — the one intended case is simulated results recording their generated
+    scores. ``division`` is the affected division (digest source + convenience
+    FK); ``tournament`` overrides it when there is no division (or the tournament
+    is being created). ``result`` is handed back to the view caller.
+    """
+
+    payload: dict
+    division: object = None
+    tournament: object = None
+    result: object = None
+
+
+# event_type -> command callable, populated by @records_event. Used by replay.
+COMMAND_REGISTRY: dict[str, object] = {}
+
+
+def records_event(event_type):
+    """Mark a function as a command: it runs in a transaction (as an "in command"
+    context), and the event it returns is appended in that same transaction.
+
+    The command's signature is ``func(tournament, actor, payload) -> EventResult``
+    (``tournament`` may be ``None`` when the command creates it). Registration
+    (``event_type -> callable``) lets the replay harness dispatch by type.
     """
 
     def decorator(func):
         @functools.wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(tournament, actor, payload, *, actor_session=""):
             token = _in_command.set(True)
             try:
                 with transaction.atomic():
-                    return func(*args, **kwargs)
+                    outcome = func(tournament, actor, payload)
+                    division = outcome.division
+                    tourn = (
+                        outcome.tournament
+                        or (division.tournament if division is not None else None)
+                        or tournament
+                    )
+                    digest = division_digest(division) if division is not None else ""
+                    record_event(
+                        tourn,
+                        event_type,
+                        outcome.payload,
+                        actor=actor,
+                        actor_session=actor_session,
+                        division=division,
+                        digest=digest,
+                    )
+                    return outcome.result
             finally:
                 _in_command.reset(token)
 
@@ -164,10 +217,6 @@ def records_event(event_type):
         return wrapper
 
     return decorator
-
-
-# event_type -> command callable, populated by @records_event. Used by replay.
-COMMAND_REGISTRY: dict[str, object] = {}
 
 
 # ---------------------------------------------------------------------------
