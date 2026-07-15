@@ -8,6 +8,7 @@ from django.db import transaction
 from django.db.models import Q
 
 from .assign_tables import assign_tables, parse_board_table_map
+from .events import as_derived, derived_writes
 from .models import BYE_PLAYER_NAME, DivisionSettings, Pairing, ResultSlip, RoundPairings
 from .pairing.base import PairingData, standings_after_round
 from .pairing.engine import pair_with_engine
@@ -34,21 +35,24 @@ def materialize_byes(division, round_num):
         .filter(Q(first__player__is_bye=True) | Q(second__player__is_bye=True))
         .select_related("first__player", "second__player")
     )
-    for p in bye_pairings:
-        if p.first.player.is_bye:
-            bye_entrant, real_entrant = p.first, p.second
-        else:
-            bye_entrant, real_entrant = p.second, p.first
-        ResultSlip.objects.create(
-            division=division,
-            round=round_num,
-            pairing=p,
-            winner=real_entrant,
-            winner_score=BYE_WINNER_SCORE,
-            loser=bye_entrant,
-            loser_score=BYE_LOSER_SCORE,
-            winner_started=False,
-        )
+    # Derived state (not a command): the bye result is a consequence of publish,
+    # re-derived on replay.
+    with derived_writes():
+        for p in bye_pairings:
+            if p.first.player.is_bye:
+                bye_entrant, real_entrant = p.first, p.second
+            else:
+                bye_entrant, real_entrant = p.second, p.first
+            ResultSlip.objects.create(
+                division=division,
+                round=round_num,
+                pairing=p,
+                winner=real_entrant,
+                winner_score=BYE_WINNER_SCORE,
+                loser=bye_entrant,
+                loser_score=BYE_LOSER_SCORE,
+                winner_started=False,
+            )
 
 
 def publish_rounds(division, round_numbers=None):
@@ -141,6 +145,7 @@ def resolve_fixed_table(first_ft, second_ft, first_rank, second_rank):
 
 
 @transaction.atomic
+@as_derived
 def regenerate_pairings(division):
     """Run the pairing algorithm and save results to the Pairing table.
 

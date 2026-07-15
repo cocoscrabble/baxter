@@ -106,6 +106,17 @@ class command_context:
         return False
 
 
+def as_derived(func):
+    """Decorator marking a function's writes as derived-state recomputation."""
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        with derived_writes():
+            return func(*args, **kwargs)
+
+    return wrapper
+
+
 # ---------------------------------------------------------------------------
 # Recording
 # ---------------------------------------------------------------------------
@@ -289,19 +300,36 @@ def division_digest(division) -> str:
 # Development write guard
 # ---------------------------------------------------------------------------
 
-# Once Phase 2 has routed every mutation through a command, this flips to True
-# and any ORM write to a guarded model outside a command/derived context raises
-# in dev and tests. Until then it only debug-logs, so nothing breaks mid-build.
-GUARD_STRICT = False
+# The guard is opt-in: it only raises while a ``strict_write_guard()`` context is
+# active. That keeps the ordinary test suite (which builds fixtures with direct
+# ORM writes) working, while letting the fuzzer and replay tests assert that no
+# mutation escapes a command. A write inside a command or derived-recompute
+# context is always allowed.
+_guard_strict: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "guard_strict", default=False
+)
+
+
+class strict_write_guard:
+    """Within this context, any ORM write to a guarded model outside a command
+    (or derived_writes) raises — for the fuzzer and replay harness to catch a
+    mutation that skipped the event log."""
+
+    def __enter__(self):
+        self._token = _guard_strict.set(True)
+        return self
+
+    def __exit__(self, *exc):
+        _guard_strict.reset(self._token)
+        return False
 
 
 def _write_guard(sender, **kwargs):
-    if in_command_context():
+    if in_command_context() or not _guard_strict.get():
         return
-    message = f"event-log guard: {sender.__name__} written outside a command"
-    if GUARD_STRICT:
-        raise RuntimeError(message)
-    logger.debug(message)
+    raise RuntimeError(
+        f"event-log guard: {sender.__name__} written outside a command"
+    )
 
 
 def connect_write_guard():

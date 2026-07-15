@@ -184,6 +184,38 @@ class CrudCommandTests(TestCase):
         self.assertEqual(self.tournament.events.count(), 0)
 
 
+class WriteGuardTests(TestCase):
+    """The opt-in strict write guard catches mutations that skip a command."""
+
+    def setUp(self):
+        setUpTournament(self)
+
+    def test_bare_write_raises_under_strict_guard(self):
+        from tournaments.events import strict_write_guard
+
+        with self.assertRaises(RuntimeError):
+            with strict_write_guard():
+                Division.objects.create(name="Loose", tournament=self.tournament)
+
+    def test_command_write_allowed_under_strict_guard(self):
+        from tournaments.commands import create_division
+        from tournaments.events import strict_write_guard
+
+        with strict_write_guard():
+            create_division(self.tournament, self.owner, {"name": "Novice"})
+        self.assertTrue(self.tournament.divisions.filter(name="Novice").exists())
+
+    def test_derived_write_allowed_under_strict_guard(self):
+        from tournaments.events import derived_writes, strict_write_guard
+
+        newcomer = Player.objects.create(name="Zed", player_number="777", rating=1200)
+        with strict_write_guard(), derived_writes():
+            Entrant.objects.create(
+                division=self.division, player=newcomer, number=99
+            )
+        self.assertTrue(self.division.entrants.filter(number=99).exists())
+
+
 class GridEventTests(TestCase):
     """A grid save records an event with a pk-free (name-based) payload."""
 
