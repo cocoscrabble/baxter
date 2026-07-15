@@ -102,9 +102,14 @@ class ExportTournament:
     start_date: str  # ISO 8601 date
     players: list[ExportPlayer] = field(default_factory=list)
     divisions: list[ExportDivision] = field(default_factory=list)
+    # The append-only event log, so audit history / replayability travels with
+    # the tournament to the registry. One dict per event in seq order.
+    event_log: list = field(default_factory=list)
 
     @classmethod
     def from_db(cls, tournament) -> "ExportTournament":
+        from tournaments.replay import events_from_tournament
+
         divisions = list(tournament.divisions.filter(is_test=False))
         # One ExportPlayer per distinct player across all exported divisions, so
         # a player entered in two divisions is described only once.
@@ -117,6 +122,7 @@ class ExportTournament:
             start_date=tournament.start_date.isoformat(),
             players=[ExportPlayer.from_db(p) for p in players],
             divisions=[ExportDivision.from_db(d) for d in divisions],
+            event_log=events_from_tournament(tournament),
         )
 
 

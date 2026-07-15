@@ -90,6 +90,90 @@ def _replay_grid(division, event_type, payload):
         grid.after_save(division)
 
 
+def _replay_snapshot(ctx, payload):
+    """Rebuild a whole tournament from a state_snapshot (recorded effect, since a
+    pre-log tournament has no input history to re-derive from)."""
+    from datetime import date
+
+    from tournaments.grids import resolve_player
+    from tournaments.models import (
+        Division,
+        DivisionSettings,
+        Entrant,
+        Pairing,
+        ResultSlip,
+        RoundPairings,
+        Tournament,
+    )
+
+    t = payload["tournament"]
+    owner = ctx.actor(t["owner"])
+    tournament = Tournament.objects.create(
+        name=t["name"],
+        location=t["location"],
+        start_date=date.fromisoformat(t["start_date"]),
+        owner=owner,
+        is_fake=t.get("is_fake", False),
+    )
+    tournament.editors.set(
+        [u for u in [owner] + [ctx.actor(n) for n in t.get("editors", [])] if u]
+    )
+    ctx.tournament = tournament
+
+    with command_context():
+        for d in payload["divisions"]:
+            division = Division.objects.create(
+                tournament=tournament, name=d["name"], is_test=d["is_test"]
+            )
+            settings_obj, _ = DivisionSettings.objects.get_or_create(division=division)
+            settings_obj.pairing_seed = d.get("pairing_seed", 0)
+            settings_obj.pairing_blocks = d.get("pairing_blocks", [])
+            settings_obj.round_pairings = d.get("round_pairings", [])
+            settings_obj.board_table_map = d.get("board_table_map", [])
+            settings_obj.save()
+
+            ent_by_name = {}
+            for e in d["entrants"]:
+                player = resolve_player(e["player"], e.get("rating", 0))
+                ent_by_name[e["player"]] = Entrant.objects.create(
+                    division=division, player=player, number=e["number"],
+                    dropped=e.get("dropped", False),
+                )
+
+            def resolve(name):
+                if name.lower() == "bye":
+                    return division.bye_entrant()
+                return ent_by_name.get(name) or Entrant.objects.create(
+                    division=division, player=resolve_player(name),
+                    number=1000 + len(ent_by_name),
+                )
+
+            pairing_by_key = {}
+            for rd in d["rounds"]:
+                rp = RoundPairings.objects.create(
+                    division=division, round=rd["round"], status=rd["status"]
+                )
+                for p in rd["pairings"]:
+                    first, second = resolve(p["first"]), resolve(p["second"])
+                    pairing = Pairing.objects.create(
+                        division=division, round=rd["round"], round_pairings=rp,
+                        first=first, second=second,
+                        table=p.get("table", 0), table_label=p.get("table_label", ""),
+                    )
+                    key = (rd["round"], frozenset({p["first"], p["second"]}))
+                    pairing_by_key[key] = pairing
+
+            for r in d["results"]:
+                key = (r["round"], frozenset({r["winner"], r["loser"]}))
+                ResultSlip.objects.create(
+                    division=division, round=r["round"],
+                    pairing=pairing_by_key.get(key),
+                    winner=resolve(r["winner"]), winner_score=r["winner_score"],
+                    loser=resolve(r["loser"]), loser_score=r["loser_score"],
+                    winner_started=r["winner_started"],
+                )
+
+
 def apply_event(ctx, event):
     from tournaments.commands import create_tournament, delete_tournament
     from tournaments.generate_pairings import regenerate_pairings
@@ -101,6 +185,9 @@ def apply_event(ctx, event):
 
     if event_type == "tournament_created":
         ctx.tournament = create_tournament(None, actor, payload)
+        return
+    if event_type == "state_snapshot":
+        _replay_snapshot(ctx, payload)
         return
     if ctx.tournament is None:
         raise ReplayError(f"event {event_type} before tournament_created")

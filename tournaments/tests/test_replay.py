@@ -98,6 +98,46 @@ class ReplayTests(TestCase):
             division_digest(ctx.tournament.divisions.get()), division_digest(division)
         )
 
+    def test_snapshot_of_prelog_tournament_replays(self):
+        from datetime import date
+
+        from tournaments.events import snapshot_existing
+        from tournaments.models import (
+            Division,
+            Entrant,
+            Pairing,
+            ResultSlip,
+            RoundPairings,
+            Tournament,
+        )
+
+        # A "pre-existing" tournament built directly — no event log.
+        t = Tournament.objects.create(
+            name="Legacy", location="X", start_date=date(2026, 3, 15), owner=self.owner
+        )
+        t.editors.add(self.owner)
+        div = Division.objects.create(name="Open", tournament=t)
+        e1 = Entrant.objects.create(division=div, player=self.players[0], number=1)
+        e2 = Entrant.objects.create(division=div, player=self.players[1], number=2)
+        rp = RoundPairings.objects.create(
+            division=div, round=1, status=RoundPairings.FINISHED
+        )
+        pairing = Pairing.objects.create(
+            division=div, round=1, round_pairings=rp, first=e1, second=e2, table=1
+        )
+        ResultSlip.objects.create(
+            division=div, round=1, pairing=pairing, winner=e1, winner_score=450,
+            loser=e2, loser_score=380, winner_started=True,
+        )
+        recorded = division_digest(div)
+
+        event = snapshot_existing(t)
+        self.assertEqual(event.event_type, "state_snapshot")
+        self.assertIsNone(snapshot_existing(t))  # idempotent — already has a log
+
+        ctx = replay(events_from_tournament(t))
+        self.assertEqual(division_digest(ctx.tournament.divisions.get()), recorded)
+
     def test_upto_stops_after_prefix(self):
         tournament, division = self._build_logged_tournament()
         events = events_from_tournament(tournament)
