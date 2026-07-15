@@ -370,6 +370,108 @@ def _now_iso() -> str:
     return timezone.now().isoformat()
 
 
+# ---------------------------------------------------------------------------
+# State snapshot (for tournaments predating the log)
+# ---------------------------------------------------------------------------
+
+
+def build_snapshot(tournament) -> dict:
+    """Full, pk-free portable state of a tournament and its divisions, for a
+    one-time ``state_snapshot`` event so pre-log tournaments become replayable.
+
+    Unlike other events this records *effect* (the derived pairings/results as
+    they stand), because there is no history of inputs to re-derive from.
+    """
+    from tournaments.models import RoundPairings
+
+    divisions = []
+    for division in tournament.divisions.all():
+        entrants = [
+            {
+                "number": e.number,
+                "player": e.player.name,
+                "rating": e.player.rating,
+                "dropped": e.dropped,
+            }
+            for e in division.entrants.select_related("player")
+        ]
+        try:
+            settings_obj = division.settings
+            seed = settings_obj.pairing_seed
+            blocks = settings_obj.pairing_blocks
+            round_pairings = settings_obj.round_pairings
+            board_table_map = settings_obj.board_table_map
+        except Exception:
+            seed, blocks, round_pairings, board_table_map = 0, [], [], []
+        rounds = []
+        for rp in division.round_pairings_set.exclude(
+            status=RoundPairings.DRAFT
+        ).order_by("round"):
+            rounds.append(
+                {
+                    "round": rp.round,
+                    "status": rp.status,
+                    "pairings": [
+                        {
+                            "first": p.first.player.name,
+                            "second": p.second.player.name,
+                            "table": p.table,
+                            "table_label": p.table_label,
+                        }
+                        for p in rp.pairings.select_related(
+                            "first__player", "second__player"
+                        )
+                    ],
+                }
+            )
+        results = [
+            {
+                "round": r.round,
+                "winner": r.winner.player.name,
+                "loser": r.loser.player.name,
+                "winner_score": r.winner_score,
+                "loser_score": r.loser_score,
+                "winner_started": r.winner_started,
+            }
+            for r in division.result_slips.select_related("winner__player", "loser__player")
+        ]
+        divisions.append(
+            {
+                "name": division.name,
+                "is_test": division.is_test,
+                "pairing_seed": seed,
+                "pairing_blocks": blocks,
+                "round_pairings": round_pairings,
+                "board_table_map": board_table_map,
+                "entrants": entrants,
+                "rounds": rounds,
+                "results": results,
+            }
+        )
+    return {
+        "tournament": {
+            "name": tournament.name,
+            "location": tournament.location,
+            "start_date": tournament.start_date.isoformat(),
+            "owner": tournament.owner.username,
+            "editors": [
+                u.username
+                for u in tournament.editors.exclude(pk=tournament.owner.pk)
+            ],
+            "is_fake": tournament.is_fake,
+        },
+        "divisions": divisions,
+    }
+
+
+def snapshot_existing(tournament) -> "object | None":
+    """Record a state_snapshot as seq 1 for a tournament that has no events yet.
+    Returns the event, or None if the tournament already has a log."""
+    if tournament.events.exists():
+        return None
+    return record_event(tournament, "state_snapshot", build_snapshot(tournament))
+
+
 def describe_event(event) -> str:
     """A short human-readable description of an event, for the Activity page."""
     p = event.payload or {}
