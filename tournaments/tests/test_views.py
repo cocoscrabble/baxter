@@ -564,6 +564,9 @@ class ResultSlipCreateViewTests(TestCase):
         self.assertNotContains(response, 'name="verified_by_opponent"')
 
     def test_edit_existing_result_slip(self):
+        # Editing an existing slip is an editor action (anonymous submitters can
+        # only edit their own session's submissions — see the 4a tests below).
+        self.client.login(username="owner", password="testpass123")
         rs = ResultSlip.objects.create(
             division=self.division,
             round=1,
@@ -599,6 +602,7 @@ class ResultSlipCreateViewTests(TestCase):
         self.assertEqual(rs.loser_score, 400)
 
     def test_edit_form_prefills_existing_result(self):
+        self.client.login(username="owner", password="testpass123")
         rs = ResultSlip.objects.create(
             division=self.division,
             round=1,
@@ -670,6 +674,91 @@ class ResultSlipCreateViewTests(TestCase):
         self.assertContains(
             response, "Winner must be one of the players in the pairing"
         )
+
+    # ── Anonymous edit ownership (Phase 4a) ─────────────────────────────
+
+    def _second_open_pairing(self):
+        """A second, unplayed pairing so submitting one result leaves the round
+        IN_PROGRESS rather than FINISHED (which would trigger the lockout)."""
+        p3 = Player.objects.create(name="Cara", player_number="013", rating=1400)
+        p4 = Player.objects.create(name="Dan", player_number="014", rating=1300)
+        e3 = Entrant.objects.create(division=self.division, player=p3, number=3)
+        e4 = Entrant.objects.create(division=self.division, player=p4, number=4)
+        return Pairing.objects.create(
+            division=self.division, round=1, round_pairings=self.rp,
+            first=e3, second=e4, table=2,
+        )
+
+    def _create_slip_as_anonymous(self):
+        """Submit a result anonymously; return the created ResultSlip."""
+        self.client.post(
+            reverse("resultslip_create", kwargs=self.division.slug_kwargs()),
+            {
+                "round": 1,
+                "pairing": self.pairing.pk,
+                "winner": self.entrant1.pk,
+                "winner_score": 450,
+                "loser_score": 380,
+                "winner_started": True,
+                "verified_by_opponent": True,
+            },
+        )
+        return self.division.result_slips.get()
+
+    def _edit_url(self, rs):
+        return reverse(
+            "resultslip_edit",
+            kwargs={**self.division.slug_kwargs(), "result_pk": rs.pk},
+        )
+
+    def test_anonymous_can_edit_own_submission(self):
+        self._second_open_pairing()  # keep the round open after one result
+        rs = self._create_slip_as_anonymous()
+        # Same session (same test client) → the edit form loads.
+        response = self.client.get(self._edit_url(rs))
+        self.assertEqual(response.status_code, 200)
+
+    def test_anonymous_cannot_edit_others_submission(self):
+        rs = ResultSlip.objects.create(
+            division=self.division,
+            round=1,
+            pairing=self.pairing,
+            winner=self.entrant1,
+            winner_score=450,
+            loser=self.entrant2,
+            loser_score=380,
+            winner_started=True,
+        )
+        # A fresh anonymous session that didn't create this slip is refused.
+        response = self.client.get(self._edit_url(rs))
+        self.assertEqual(response.status_code, 403)
+        response = self.client.post(self._edit_url(rs), {})
+        self.assertEqual(response.status_code, 403)
+
+    def test_editor_can_edit_any_submission(self):
+        rs = ResultSlip.objects.create(
+            division=self.division,
+            round=1,
+            pairing=self.pairing,
+            winner=self.entrant1,
+            winner_score=450,
+            loser=self.entrant2,
+            loser_score=380,
+            winner_started=True,
+        )
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(self._edit_url(rs))
+        self.assertEqual(response.status_code, 200)
+
+    def test_anonymous_edit_refused_once_round_finished(self):
+        self._second_open_pairing()  # keep the round open after one result
+        rs = self._create_slip_as_anonymous()
+        # Same session could edit while the round is open...
+        self.assertEqual(self.client.get(self._edit_url(rs)).status_code, 200)
+        # ...but once the round is FINISHED, corrections go through a director.
+        self.rp.status = RoundPairings.FINISHED
+        self.rp.save(update_fields=["status"])
+        self.assertEqual(self.client.get(self._edit_url(rs)).status_code, 403)
 
 
 @tag("slow")
@@ -2387,6 +2476,27 @@ class DivisionEntrantsEditViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.division.entrants.count(), 2)
         self.assertEqual(self.division.entrants.get(number=1).player, self.player2)
+
+    def test_post_two_players_same_name_rejected(self):
+        # Two distinct Player rows sharing a name (registry sync can produce
+        # these) must not both enter one division — the engine keys entrants by
+        # name and would silently collide.
+        dup = Player.objects.create(
+            name="Alice", player_number="099", rating=1234
+        )
+        self.client.login(username="owner", password="testpass123")
+        payload = {
+            "rows": [
+                {"number": 1, "player": self.player1.pk},  # Alice
+                {"number": 2, "player": dup.pk},  # also "Alice"
+            ]
+        }
+        response = self.client.post(
+            self.url, json.dumps(payload), content_type="application/json"
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("errors", response.json())
+        self.assertEqual(self.division.entrants.count(), 0)
 
     def test_post_duplicate_player_returns_errors(self):
         self.client.login(username="owner", password="testpass123")

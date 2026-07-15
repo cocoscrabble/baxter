@@ -1267,6 +1267,11 @@ class ResultSlipCreateView(DivisionURLMixin, View):
         _ensure_visible_division(self.division, self.request.user)
         return self.division
 
+    # Session key holding the pks of result slips this browser created, so an
+    # anonymous submitter can edit their own submissions without being able to
+    # edit anyone else's by guessing pks.
+    SESSION_KEY = "created_result_pks"
+
     def get_result(self, division):
         """Return the ResultSlip being edited, or None when adding a new one."""
         result_pk = self.kwargs.get("result_pk")
@@ -1283,6 +1288,32 @@ class ResultSlipCreateView(DivisionURLMixin, View):
             pk=result_pk,
             division=division,
         )
+
+    def _remember_created_result(self, request, rs):
+        # Re-assign (rather than mutate in place) so the session is reliably
+        # marked dirty and persisted.
+        pks = request.session.get(self.SESSION_KEY, [])
+        if rs.pk not in pks:
+            request.session[self.SESSION_KEY] = pks + [rs.pk]
+
+    def _can_edit_result(self, request, division, result):
+        """Whether the caller may edit an existing slip.
+
+        Tournament editors may always edit. An anonymous submitter may edit only
+        a slip their own session created, and only while the round is still open
+        — once the round is FINISHED, corrections go through a director.
+        """
+        if division.tournament.can_edit(request.user):
+            return True
+        if result.pk not in request.session.get(self.SESSION_KEY, []):
+            return False
+        rp = division.round_pairings_set.filter(round=result.round).first()
+        return rp is None or rp.status != RoundPairings.FINISHED
+
+    def _guard_edit(self, request, division, result):
+        """Raise PermissionDenied if ``result`` is being edited without rights."""
+        if result is not None and not self._can_edit_result(request, division, result):
+            raise PermissionDenied
 
     def _form_context(self, division, form, *, editing=False, result=None, saved=None):
         pbr = form._pairings_by_round
@@ -1358,6 +1389,7 @@ class ResultSlipCreateView(DivisionURLMixin, View):
     def get(self, request, *args, **kwargs):
         division = self.get_division()
         result = self.get_result(division)
+        self._guard_edit(request, division, result)
         if result is not None:
             pbr = _pairings_by_round(division, include_pairing=result.pairing)
             form = ResultSlipForm(
@@ -1388,6 +1420,8 @@ class ResultSlipCreateView(DivisionURLMixin, View):
     def post(self, request, *args, **kwargs):
         division = self.get_division()
         result = self.get_result(division)
+        self._guard_edit(request, division, result)
+        creating = result is None
         include = result.pairing if result is not None and result.pairing_id else None
         pbr = _pairings_by_round(division, include_pairing=include)
         if is_datastar(request):
@@ -1399,6 +1433,10 @@ class ResultSlipCreateView(DivisionURLMixin, View):
         )
         if form.is_valid():
             rs = form.save()
+            if creating:
+                # Let this browser edit its own submission later without opening
+                # up pk-guessing edits of everyone else's slips.
+                self._remember_created_result(request, rs)
             if rs.pairing and rs.pairing.round_pairings:
                 rs.pairing.round_pairings.update_status()
             # Reset to a blank form for the next entry, surfacing the saved
