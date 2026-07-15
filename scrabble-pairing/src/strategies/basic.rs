@@ -213,6 +213,21 @@ fn rr_block_pairings(ctx: &Ctx, rp: &RoundPairing, k: i32) -> Result<Pairings, S
 
     let position_of = |round: i32| ((round - rp.start_round) / k) as usize;
 
+    // A round robin over E players has exactly E-1 rounds (num_positions
+    // templates); a double round robin has 2*(E-1). A block with more rounds
+    // than that has no template for the overflow round — fail clearly instead of
+    // indexing past the rotation.
+    if position_of(rp.round) >= num_positions {
+        let max_rounds = num_positions * k as usize;
+        return Err(format!(
+            "This round robin has only {max_rounds} round{} for the current \
+             field; round {} is beyond the rotation — shorten the block or add \
+             players.",
+            if max_rounds == 1 { "" } else { "s" },
+            rp.round,
+        ));
+    }
+
     // Played rounds become fixed points, identified from their recorded games.
     let mut played_pairs: HashMap<usize, HashSet<(String, String)>> = HashMap::new();
     for s in ctx.slips {

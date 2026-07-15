@@ -691,6 +691,28 @@ mod tests {
     }
 
     #[test]
+    fn round_robin_more_rounds_than_field_reports_error() {
+        // 4 players -> a round robin has 3 rounds; a 5-round block overflows the
+        // rotation. The overflow round comes back empty carrying a clear error,
+        // not a panic.
+        let json = format!(
+            r#"{{"players":[{}],"round_pairings":[{}]}}"#,
+            rr_players_json(4),
+            rr_rounds_json(5, "RoundRobin"),
+        );
+        let out = pair(&input(&json));
+        let r4 = out.iter().find(|r| r.round == 4).unwrap();
+        assert!(r4.pairings.is_empty());
+        assert!(r4.error.as_deref().unwrap_or("").contains("beyond the rotation"));
+        // The valid rounds 1-3 still pair.
+        for round in 1..=3 {
+            let r = out.iter().find(|x| x.round == round).unwrap();
+            assert!(r.error.is_none());
+            assert_eq!(r.pairings.len(), 2);
+        }
+    }
+
+    #[test]
     fn round_robin_conflicting_fixed_pairings_report_error() {
         // P1 pinned to two opponents in the same round demands two templates at
         // once — the round comes back empty carrying the conflict.

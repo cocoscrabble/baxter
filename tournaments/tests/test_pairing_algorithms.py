@@ -528,3 +528,25 @@ class DroppedAndLateEntrantTests(TestCase):
         with self.assertRaises(PairingError) as cm:
             pair_round_robin(pd, RoundPairing(2, 0, RP.RoundRobin))
         self.assertIn("withdrew", str(cm.exception))
+
+    def test_round_robin_beyond_rotation_raises(self):
+        # 4 players -> a round robin has 3 rounds; round 4 is beyond the rotation
+        # and must raise a clear error rather than an IndexError. A round-robin
+        # block shares its first round as start_round (see
+        # normalize_round_robin_start_rounds).
+        entrants = [
+            EntrantData(PlayerData(n, r))
+            for n, r in [("A", 1600), ("B", 1500), ("C", 1400), ("D", 1300)]
+        ]
+        rps = [RoundPairing(r, 1, RP.RoundRobin) for r in range(1, 6)]
+        pd = PairingData(
+            result_slips=[], entrants=entrants, repeats=Repeats(),
+            round_pairings=rps,
+        )
+        # Rounds 1-3 pair fine.
+        for r in (1, 2, 3):
+            self.assertEqual(len(pair_round_robin(pd, RoundPairing(r, 1, RP.RoundRobin))), 2)
+        # Round 4 overflows the rotation.
+        with self.assertRaises(PairingError) as cm:
+            pair_round_robin(pd, RoundPairing(4, 1, RP.RoundRobin))
+        self.assertIn("beyond the rotation", str(cm.exception))

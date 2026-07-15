@@ -182,6 +182,19 @@ def _rr_block_pairings(pd: PairingData, rp: RoundPairing, k: int) -> Pairings:
     def position_of(round_number):
         return (round_number - rp.start_round) // k
 
+    # A round robin over E players has exactly E-1 rounds (num_positions
+    # templates); a double round robin has 2*(E-1). A block configured with more
+    # rounds than that has no template for the overflow round — fail clearly
+    # instead of indexing past the rotation.
+    if position_of(rp.round) >= num_positions:
+        max_rounds = num_positions * k
+        raise PairingError(
+            f"This round robin has only {max_rounds} "
+            f"round{'s' if max_rounds != 1 else ''} for the current field; "
+            f"round {rp.round} is beyond the rotation — shorten the block or "
+            "add players."
+        )
+
     # Played rounds become fixed points, identified from their recorded games.
     played_pairs = defaultdict(set)
     for s in pd.result_slips:
