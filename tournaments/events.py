@@ -251,8 +251,16 @@ def division_state(division) -> dict:
         [e.number, e.player.name, e.dropped]
         for e in division.entrants.select_related("player")
     )
+    # Draft rounds are transient — they're lazily regenerated (deterministically)
+    # and their existence at any moment depends on when Pair Rounds was last
+    # rendered, which the log doesn't capture. Excluding them keeps the digest a
+    # function of *committed* state, so replay is robust to regeneration timing.
+    from tournaments.models import RoundPairings
+
     rounds = []
-    for rp in division.round_pairings_set.order_by("round"):
+    for rp in (
+        division.round_pairings_set.exclude(status=RoundPairings.DRAFT).order_by("round")
+    ):
         pairings = sorted(
             [
                 sorted([p.first.player.name, p.second.player.name]),

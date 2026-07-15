@@ -131,6 +131,12 @@ class EditGrid:
         grids whose rows carry pks (entrant/player references)."""
         return rows
 
+    def from_portable(self, rows, parent):
+        """Inverse of ``to_portable``: turn a logged (name-based) payload back
+        into client-shaped (pk-based) rows so a replay can drive the same save.
+        Default passes them through."""
+        return rows
+
     # Reconciling-save configuration. Empty ``key_fields`` keeps the legacy
     # wipe-and-recreate behaviour, so grids that don't opt in are unaffected.
     key_fields: tuple[str, ...] = ()        # model attrs forming row identity

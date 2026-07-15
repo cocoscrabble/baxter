@@ -27,6 +27,30 @@ def _entrant_name_map(division):
     }
 
 
+def _entrant_pk_by_name(division):
+    """{player name -> entrant pk} — the inverse, for replay (from_portable)."""
+    return {
+        e.player.name: e.pk
+        for e in division.entrants.select_related("player")
+    }
+
+
+def resolve_player(name, rating=0):
+    """A Player matching ``name`` (case-insensitive), created with ``rating`` if
+    none exists. Used by replay to rebuild a roster in a fresh database."""
+    from .models import next_temp_player_number
+
+    player = Player.objects.filter(name__iexact=name).first()
+    if player is None:
+        player = Player.objects.create(
+            name=name,
+            player_number=next_temp_player_number(),
+            rating=rating,
+            is_provisional=True,
+        )
+    return player
+
+
 class EntrantsGrid(EditGrid):
     model = Entrant
     parent_field = "division"
@@ -75,6 +99,16 @@ class EntrantsGrid(EditGrid):
                 }
             )
         return portable
+
+    def from_portable(self, rows, division):
+        return [
+            {
+                "number": r["number"],
+                "player": resolve_player(r["player"], r.get("rating", 0)).pk,
+                "dropped": r.get("dropped", False),
+            }
+            for r in rows
+        ]
 
     def serialize_row(self, entrant):
         return {
@@ -183,6 +217,17 @@ class FixedPairingsGrid(EditGrid):
             for r in rows
         ]
 
+    def from_portable(self, rows, division):
+        pks = _entrant_pk_by_name(division)
+        return [
+            {
+                "round_number": r["round_number"],
+                "entrant1": pks.get(r["entrant1"]),
+                "entrant2": pks.get(r["entrant2"]),
+            }
+            for r in rows
+        ]
+
     def serialize_row(self, fp):
         return {
             "round_number": fp.round_number,
@@ -219,6 +264,17 @@ class FixedTablesGrid(EditGrid):
             {
                 "round_number": r["round_number"],
                 "entrant": names.get(r["entrant"]),
+                "table_label": r["table_label"],
+            }
+            for r in rows
+        ]
+
+    def from_portable(self, rows, division):
+        pks = _entrant_pk_by_name(division)
+        return [
+            {
+                "round_number": r["round_number"],
+                "entrant": pks.get(r["entrant"]),
                 "table_label": r["table_label"],
             }
             for r in rows
