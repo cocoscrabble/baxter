@@ -7,7 +7,7 @@ use crate::rng::shuffle;
 use crate::round_pairing::RoundPairing;
 use crate::standings::{Pairings, Player, BYE_NAME};
 
-use super::{pair_no_repeats_blossom, Ctx};
+use super::{guard_no_dropped_in_block, pair_no_repeats_blossom, Ctx};
 
 /// Pair consecutive standings: 1-2, 3-4, … (King of the Hill).
 pub fn pair_koth(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
@@ -209,6 +209,7 @@ fn rr_block_pairings(ctx: &Ctx, rp: &RoundPairing, k: i32) -> Result<Pairings, S
         .filter(|o| o.pairing == rp.pairing && o.start_round == rp.start_round)
         .map(|o| o.round)
         .collect();
+    guard_no_dropped_in_block(ctx, &block_rounds, "round-robin", "round robins")?;
 
     let position_of = |round: i32| ((round - rp.start_round) / k) as usize;
 

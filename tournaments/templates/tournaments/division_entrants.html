@@ -20,9 +20,9 @@
     </thead>
     <tbody>
         {% for entrant in entrants %}
-        <tr>
+        <tr{% if entrant.dropped %} class="row-dropped"{% endif %}>
             <td class="num">{{ entrant.number }}</td>
-            <td>{{ entrant.player.name }}</td>
+            <td>{{ entrant.player.name }}{% if entrant.dropped %} <span class="tag tag-dropped">withdrew</span>{% endif %}</td>
             <td class="num">{{ entrant.player.rating }}</td>
         </tr>
         {% endfor %}

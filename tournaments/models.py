@@ -375,6 +375,11 @@ class Entrant(models.Model):
         related_name="entries",
     )
     number = models.IntegerField()
+    # A dropped (withdrawn) entrant is excluded from all future pairing but keeps
+    # their played results, which still count for everyone else's standings,
+    # repeats, and spread. Finished rounds are never re-paired, so a boolean is
+    # enough — we never need to know *when* they withdrew.
+    dropped = models.BooleanField(default=False)
 
     objects = RealEntrantManager()
     all_objects = models.Manager()

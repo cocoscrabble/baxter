@@ -746,4 +746,32 @@ mod tests {
         assert_eq!(m.len(), 15);
         assert!(m.values().all(|&c| c == 1), "repeats: {m:?}");
     }
+
+    #[test]
+    fn dropping_out_of_played_round_robin_reports_error() {
+        // P4 withdraws after playing round 1 of a round-robin block. The block
+        // can't be re-paired around them, so the next round comes back empty
+        // carrying a clear error (mirrors the Python engine's PairingError).
+        let json = r#"{
+            "players": [
+                {"name": "P1", "rating": 1990},
+                {"name": "P2", "rating": 1980},
+                {"name": "P3", "rating": 1970},
+                {"name": "P4", "rating": 1960, "dropped": true}
+            ],
+            "round_pairings": [
+                {"round": 1, "start_round": 0, "pairing": "RoundRobin"},
+                {"round": 2, "start_round": 0, "pairing": "RoundRobin"},
+                {"round": 3, "start_round": 0, "pairing": "RoundRobin"}
+            ],
+            "result_slips": [
+                {"round": 1, "winner_name": "P1", "loser_name": "P4", "winner_score": 400, "loser_score": 300, "winner_started": true},
+                {"round": 1, "winner_name": "P2", "loser_name": "P3", "winner_score": 400, "loser_score": 300, "winner_started": true}
+            ]
+        }"#;
+        let out = pair(&input(json));
+        let r2 = out.iter().find(|r| r.round == 2).unwrap();
+        assert!(r2.pairings.is_empty());
+        assert!(r2.error.as_deref().unwrap_or("").contains("withdrew"));
+    }
 }

@@ -924,6 +924,22 @@ dd {
     vertical-align: middle;
 }
 
+/* Marker for a withdrawn (dropped) entrant in standings/entrant lists. */
+.tag-dropped {
+    display: inline-block;
+    background-color: var(--color-muted-bg);
+    color: #fff;
+    font-size: 0.75em;
+    font-weight: bold;
+    padding: 1px 6px;
+    border-radius: var(--radius-sm);
+    vertical-align: middle;
+}
+
+.row-dropped {
+    color: var(--color-muted);
+}
+
 /* ── Round Tabs ───────────────────────────────────────────── */
 .round-tabs {
     display: flex;

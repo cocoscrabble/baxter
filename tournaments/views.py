@@ -481,11 +481,16 @@ class DivisionStandingsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
         pd = PairingData.for_division(division)
         max_round = division.max_round()
         current_round = self.kwargs.get("round", max_round)
-        standings = standings_after_round(pd, current_round)
-        # Annotate each standing with the entrant's seed number for display.
-        seed_by_name = {e.name: e.number for e in division.entrants.all()}
+        # Display standings keep withdrawn players visible (marked below); their
+        # games always counted in everyone's record.
+        standings = standings_after_round(pd, current_round, include_dropped=True)
+        # Annotate each standing with the entrant's seed number and dropped flag.
+        entrants = list(division.entrants.all())
+        seed_by_name = {e.name: e.number for e in entrants}
+        dropped_names = {e.name for e in entrants if e.dropped}
         for p in standings:
             p.seed = seed_by_name.get(p.name)
+            p.dropped = p.name in dropped_names
         context["standings"] = standings
         context["round"] = current_round
         context["rounds"] = range(1, max_round + 1)
@@ -780,7 +785,8 @@ class DivisionScorecardsDownloadView(LoginRequiredMixin, CanEditDivisionMixin, D
                 results=results.get(entrant.pk, {}),
                 qr_url=qr_url,
             )
-            for entrant in division.entrants.all()
+            # Withdrawn players don't play further rounds, so they get no card.
+            for entrant in division.entrants.filter(dropped=False)
         ]
 
         response = HttpResponse(

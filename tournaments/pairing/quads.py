@@ -1,4 +1,10 @@
-from tournaments.pairing.base import Pairings, PairingData, Player, standings_after_round
+from tournaments.pairing.base import (
+    Pairings,
+    PairingData,
+    Player,
+    guard_no_dropped_in_block,
+    standings_after_round,
+)
 from tournaments.pairing.round_pairing import RoundPairing
 
 
@@ -6,6 +12,11 @@ def _quad_standings(pd: PairingData, rp: RoundPairing) -> list:
     """Start-round standings for a quad/sixes round, with a bye appended for an
     odd field so it divides into whole quads/hexes. Whoever is grouped with the
     bye sits the round out (the bye follows the strategy's own distribution)."""
+    block_rounds = {
+        o.round for o in pd.round_pairings
+        if o.pairing == rp.pairing and o.start_round == rp.start_round
+    }
+    guard_no_dropped_in_block(pd, block_rounds, "quad block", "quad blocks")
     standings = list(standings_after_round(pd, rp.start_round))
     if len(standings) % 2 != 0:
         standings.append(Player("Bye"))

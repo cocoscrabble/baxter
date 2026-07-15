@@ -6,35 +6,43 @@
       "players": [
         {
           "name": "P01",
-          "rating": 2000
+          "rating": 2000,
+          "dropped": false
         },
         {
           "name": "P02",
-          "rating": 1990
+          "rating": 1990,
+          "dropped": false
         },
         {
           "name": "P03",
-          "rating": 1980
+          "rating": 1980,
+          "dropped": false
         },
         {
           "name": "P04",
-          "rating": 1970
+          "rating": 1970,
+          "dropped": false
         },
         {
           "name": "P05",
-          "rating": 1960
+          "rating": 1960,
+          "dropped": false
         },
         {
           "name": "P06",
-          "rating": 1950
+          "rating": 1950,
+          "dropped": false
         },
         {
           "name": "P07",
-          "rating": 1940
+          "rating": 1940,
+          "dropped": false
         },
         {
           "name": "P08",
-          "rating": 1930
+          "rating": 1930,
+          "dropped": false
         }
       ],
       "result_slips": [],
@@ -83,35 +91,43 @@
       "players": [
         {
           "name": "P01",
-          "rating": 2000
+          "rating": 2000,
+          "dropped": false
         },
         {
           "name": "P02",
-          "rating": 1990
+          "rating": 1990,
+          "dropped": false
         },
         {
           "name": "P03",
-          "rating": 1980
+          "rating": 1980,
+          "dropped": false
         },
         {
           "name": "P04",
-          "rating": 1970
+          "rating": 1970,
+          "dropped": false
         },
         {
           "name": "P05",
-          "rating": 1960
+          "rating": 1960,
+          "dropped": false
         },
         {
           "name": "P06",
-          "rating": 1950
+          "rating": 1950,
+          "dropped": false
         },
         {
           "name": "P07",
-          "rating": 1940
+          "rating": 1940,
+          "dropped": false
         },
         {
           "name": "P08",
-          "rating": 1930
+          "rating": 1930,
+          "dropped": false
         }
       ],
       "result_slips": [],
@@ -160,43 +176,53 @@
       "players": [
         {
           "name": "P01",
-          "rating": 2000
+          "rating": 2000,
+          "dropped": false
         },
         {
           "name": "P02",
-          "rating": 1990
+          "rating": 1990,
+          "dropped": false
         },
         {
           "name": "P03",
-          "rating": 1980
+          "rating": 1980,
+          "dropped": false
         },
         {
           "name": "P04",
-          "rating": 1970
+          "rating": 1970,
+          "dropped": false
         },
         {
           "name": "P05",
-          "rating": 1960
+          "rating": 1960,
+          "dropped": false
         },
         {
           "name": "P06",
-          "rating": 1950
+          "rating": 1950,
+          "dropped": false
         },
         {
           "name": "P07",
-          "rating": 1940
+          "rating": 1940,
+          "dropped": false
         },
         {
           "name": "P08",
-          "rating": 1930
+          "rating": 1930,
+          "dropped": false
         },
         {
           "name": "P09",
-          "rating": 1920
+          "rating": 1920,
+          "dropped": false
         },
         {
           "name": "P10",
-          "rating": 1910
+          "rating": 1910,
+          "dropped": false
         }
       ],
       "result_slips": [],
@@ -250,35 +276,43 @@
       "players": [
         {
           "name": "P01",
-          "rating": 2000
+          "rating": 2000,
+          "dropped": false
         },
         {
           "name": "P02",
-          "rating": 1990
+          "rating": 1990,
+          "dropped": false
         },
         {
           "name": "P03",
-          "rating": 1980
+          "rating": 1980,
+          "dropped": false
         },
         {
           "name": "P04",
-          "rating": 1970
+          "rating": 1970,
+          "dropped": false
         },
         {
           "name": "P05",
-          "rating": 1960
+          "rating": 1960,
+          "dropped": false
         },
         {
           "name": "P06",
-          "rating": 1950
+          "rating": 1950,
+          "dropped": false
         },
         {
           "name": "P07",
-          "rating": 1940
+          "rating": 1940,
+          "dropped": false
         },
         {
           "name": "P08",
-          "rating": 1930
+          "rating": 1930,
+          "dropped": false
         }
       ],
       "result_slips": [],
@@ -327,27 +361,33 @@
       "players": [
         {
           "name": "P01",
-          "rating": 2000
+          "rating": 2000,
+          "dropped": false
         },
         {
           "name": "P02",
-          "rating": 1990
+          "rating": 1990,
+          "dropped": false
         },
         {
           "name": "P03",
-          "rating": 1980
+          "rating": 1980,
+          "dropped": false
         },
         {
           "name": "P04",
-          "rating": 1970
+          "rating": 1970,
+          "dropped": false
         },
         {
           "name": "P05",
-          "rating": 1960
+          "rating": 1960,
+          "dropped": false
         },
         {
           "name": "P06",
-          "rating": 1950
+          "rating": 1950,
+          "dropped": false
         }
       ],
       "result_slips": [],
@@ -491,35 +531,43 @@
       "players": [
         {
           "name": "P01",
-          "rating": 2000
+          "rating": 2000,
+          "dropped": false
         },
         {
           "name": "P02",
-          "rating": 1990
+          "rating": 1990,
+          "dropped": false
         },
         {
           "name": "P03",
-          "rating": 1980
+          "rating": 1980,
+          "dropped": false
         },
         {
           "name": "P04",
-          "rating": 1970
+          "rating": 1970,
+          "dropped": false
         },
         {
           "name": "P05",
-          "rating": 1960
+          "rating": 1960,
+          "dropped": false
         },
         {
           "name": "P06",
-          "rating": 1950
+          "rating": 1950,
+          "dropped": false
         },
         {
           "name": "P07",
-          "rating": 1940
+          "rating": 1940,
+          "dropped": false
         },
         {
           "name": "P08",
-          "rating": 1930
+          "rating": 1930,
+          "dropped": false
         }
       ],
       "result_slips": [],
@@ -748,19 +796,23 @@
       "players": [
         {
           "name": "P01",
-          "rating": 2000
+          "rating": 2000,
+          "dropped": false
         },
         {
           "name": "P02",
-          "rating": 1990
+          "rating": 1990,
+          "dropped": false
         },
         {
           "name": "P03",
-          "rating": 1980
+          "rating": 1980,
+          "dropped": false
         },
         {
           "name": "P04",
-          "rating": 1970
+          "rating": 1970,
+          "dropped": false
         }
       ],
       "result_slips": [],
@@ -899,35 +951,43 @@
       "players": [
         {
           "name": "P01",
-          "rating": 2000
+          "rating": 2000,
+          "dropped": false
         },
         {
           "name": "P02",
-          "rating": 1990
+          "rating": 1990,
+          "dropped": false
         },
         {
           "name": "P03",
-          "rating": 1980
+          "rating": 1980,
+          "dropped": false
         },
         {
           "name": "P04",
-          "rating": 1970
+          "rating": 1970,
+          "dropped": false
         },
         {
           "name": "P05",
-          "rating": 1960
+          "rating": 1960,
+          "dropped": false
         },
         {
           "name": "P06",
-          "rating": 1950
+          "rating": 1950,
+          "dropped": false
         },
         {
           "name": "P07",
-          "rating": 1940
+          "rating": 1940,
+          "dropped": false
         },
         {
           "name": "P08",
-          "rating": 1930
+          "rating": 1930,
+          "dropped": false
         }
       ],
       "result_slips": [],
@@ -1066,35 +1126,43 @@
       "players": [
         {
           "name": "P01",
-          "rating": 2000
+          "rating": 2000,
+          "dropped": false
         },
         {
           "name": "P02",
-          "rating": 1990
+          "rating": 1990,
+          "dropped": false
         },
         {
           "name": "P03",
-          "rating": 1980
+          "rating": 1980,
+          "dropped": false
         },
         {
           "name": "P04",
-          "rating": 1970
+          "rating": 1970,
+          "dropped": false
         },
         {
           "name": "P05",
-          "rating": 1960
+          "rating": 1960,
+          "dropped": false
         },
         {
           "name": "P06",
-          "rating": 1950
+          "rating": 1950,
+          "dropped": false
         },
         {
           "name": "P07",
-          "rating": 1940
+          "rating": 1940,
+          "dropped": false
         },
         {
           "name": "P08",
-          "rating": 1930
+          "rating": 1930,
+          "dropped": false
         }
       ],
       "result_slips": [],
@@ -1203,51 +1271,63 @@
       "players": [
         {
           "name": "P01",
-          "rating": 2000
+          "rating": 2000,
+          "dropped": false
         },
         {
           "name": "P02",
-          "rating": 1990
+          "rating": 1990,
+          "dropped": false
         },
         {
           "name": "P03",
-          "rating": 1980
+          "rating": 1980,
+          "dropped": false
         },
         {
           "name": "P04",
-          "rating": 1970
+          "rating": 1970,
+          "dropped": false
         },
         {
           "name": "P05",
-          "rating": 1960
+          "rating": 1960,
+          "dropped": false
         },
         {
           "name": "P06",
-          "rating": 1950
+          "rating": 1950,
+          "dropped": false
         },
         {
           "name": "P07",
-          "rating": 1940
+          "rating": 1940,
+          "dropped": false
         },
         {
           "name": "P08",
-          "rating": 1930
+          "rating": 1930,
+          "dropped": false
         },
         {
           "name": "P09",
-          "rating": 1920
+          "rating": 1920,
+          "dropped": false
         },
         {
           "name": "P10",
-          "rating": 1910
+          "rating": 1910,
+          "dropped": false
         },
         {
           "name": "P11",
-          "rating": 1900
+          "rating": 1900,
+          "dropped": false
         },
         {
           "name": "P12",
-          "rating": 1890
+          "rating": 1890,
+          "dropped": false
         }
       ],
       "result_slips": [],
@@ -1386,51 +1466,63 @@
       "players": [
         {
           "name": "P01",
-          "rating": 2000
+          "rating": 2000,
+          "dropped": false
         },
         {
           "name": "P02",
-          "rating": 1990
+          "rating": 1990,
+          "dropped": false
         },
         {
           "name": "P03",
-          "rating": 1980
+          "rating": 1980,
+          "dropped": false
         },
         {
           "name": "P04",
-          "rating": 1970
+          "rating": 1970,
+          "dropped": false
         },
         {
           "name": "P05",
-          "rating": 1960
+          "rating": 1960,
+          "dropped": false
         },
         {
           "name": "P06",
-          "rating": 1950
+          "rating": 1950,
+          "dropped": false
         },
         {
           "name": "P07",
-          "rating": 1940
+          "rating": 1940,
+          "dropped": false
         },
         {
           "name": "P08",
-          "rating": 1930
+          "rating": 1930,
+          "dropped": false
         },
         {
           "name": "P09",
-          "rating": 1920
+          "rating": 1920,
+          "dropped": false
         },
         {
           "name": "P10",
-          "rating": 1910
+          "rating": 1910,
+          "dropped": false
         },
         {
           "name": "P11",
-          "rating": 1900
+          "rating": 1900,
+          "dropped": false
         },
         {
           "name": "P12",
-          "rating": 1890
+          "rating": 1890,
+          "dropped": false
         }
       ],
       "result_slips": [],
@@ -1569,43 +1661,53 @@
       "players": [
         {
           "name": "P01",
-          "rating": 2000
+          "rating": 2000,
+          "dropped": false
         },
         {
           "name": "P02",
-          "rating": 1990
+          "rating": 1990,
+          "dropped": false
         },
         {
           "name": "P03",
-          "rating": 1980
+          "rating": 1980,
+          "dropped": false
         },
         {
           "name": "P04",
-          "rating": 1970
+          "rating": 1970,
+          "dropped": false
         },
         {
           "name": "P05",
-          "rating": 1960
+          "rating": 1960,
+          "dropped": false
         },
         {
           "name": "P06",
-          "rating": 1950
+          "rating": 1950,
+          "dropped": false
         },
         {
           "name": "P07",
-          "rating": 1940
+          "rating": 1940,
+          "dropped": false
         },
         {
           "name": "P08",
-          "rating": 1930
+          "rating": 1930,
+          "dropped": false
         },
         {
           "name": "P09",
-          "rating": 1920
+          "rating": 1920,
+          "dropped": false
         },
         {
           "name": "P10",
-          "rating": 1910
+          "rating": 1910,
+          "dropped": false
         }
       ],
       "result_slips": [],
@@ -1729,51 +1831,63 @@
       "players": [
         {
           "name": "P01",
-          "rating": 2000
+          "rating": 2000,
+          "dropped": false
         },
         {
           "name": "P02",
-          "rating": 1990
+          "rating": 1990,
+          "dropped": false
         },
         {
           "name": "P03",
-          "rating": 1980
+          "rating": 1980,
+          "dropped": false
         },
         {
           "name": "P04",
-          "rating": 1970
+          "rating": 1970,
+          "dropped": false
         },
         {
           "name": "P05",
-          "rating": 1960
+          "rating": 1960,
+          "dropped": false
         },
         {
           "name": "P06",
-          "rating": 1950
+          "rating": 1950,
+          "dropped": false
         },
         {
           "name": "P07",
-          "rating": 1940
+          "rating": 1940,
+          "dropped": false
         },
         {
           "name": "P08",
-          "rating": 1930
+          "rating": 1930,
+          "dropped": false
         },
         {
           "name": "P09",
-          "rating": 1920
+          "rating": 1920,
+          "dropped": false
         },
         {
           "name": "P10",
-          "rating": 1910
+          "rating": 1910,
+          "dropped": false
         },
         {
           "name": "P11",
-          "rating": 1900
+          "rating": 1900,
+          "dropped": false
         },
         {
           "name": "P12",
-          "rating": 1890
+          "rating": 1890,
+          "dropped": false
         }
       ],
       "result_slips": [],
@@ -1912,35 +2026,43 @@
       "players": [
         {
           "name": "P01",
-          "rating": 2000
+          "rating": 2000,
+          "dropped": false
         },
         {
           "name": "P02",
-          "rating": 1990
+          "rating": 1990,
+          "dropped": false
         },
         {
           "name": "P03",
-          "rating": 1980
+          "rating": 1980,
+          "dropped": false
         },
         {
           "name": "P04",
-          "rating": 1970
+          "rating": 1970,
+          "dropped": false
         },
         {
           "name": "P05",
-          "rating": 1960
+          "rating": 1960,
+          "dropped": false
         },
         {
           "name": "P06",
-          "rating": 1950
+          "rating": 1950,
+          "dropped": false
         },
         {
           "name": "P07",
-          "rating": 1940
+          "rating": 1940,
+          "dropped": false
         },
         {
           "name": "P08",
-          "rating": 1930
+          "rating": 1930,
+          "dropped": false
         }
       ],
       "result_slips": [
@@ -2027,35 +2149,43 @@
       "players": [
         {
           "name": "P01",
-          "rating": 2000
+          "rating": 2000,
+          "dropped": false
         },
         {
           "name": "P02",
-          "rating": 1990
+          "rating": 1990,
+          "dropped": false
         },
         {
           "name": "P03",
-          "rating": 1980
+          "rating": 1980,
+          "dropped": false
         },
         {
           "name": "P04",
-          "rating": 1970
+          "rating": 1970,
+          "dropped": false
         },
         {
           "name": "P05",
-          "rating": 1960
+          "rating": 1960,
+          "dropped": false
         },
         {
           "name": "P06",
-          "rating": 1950
+          "rating": 1950,
+          "dropped": false
         },
         {
           "name": "P07",
-          "rating": 1940
+          "rating": 1940,
+          "dropped": false
         },
         {
           "name": "P08",
-          "rating": 1930
+          "rating": 1930,
+          "dropped": false
         }
       ],
       "result_slips": [
@@ -2142,19 +2272,23 @@
       "players": [
         {
           "name": "P01",
-          "rating": 2000
+          "rating": 2000,
+          "dropped": false
         },
         {
           "name": "P02",
-          "rating": 1990
+          "rating": 1990,
+          "dropped": false
         },
         {
           "name": "P03",
-          "rating": 1980
+          "rating": 1980,
+          "dropped": false
         },
         {
           "name": "P04",
-          "rating": 1970
+          "rating": 1970,
+          "dropped": false
         }
       ],
       "result_slips": [
@@ -2209,57 +2343,258 @@
     ]
   },
   {
+    "name": "swiss_late_add_r2_n5",
+    "deterministic": true,
+    "input": {
+      "players": [
+        {
+          "name": "P01",
+          "rating": 2000,
+          "dropped": false
+        },
+        {
+          "name": "P02",
+          "rating": 1990,
+          "dropped": false
+        },
+        {
+          "name": "P03",
+          "rating": 1980,
+          "dropped": false
+        },
+        {
+          "name": "P04",
+          "rating": 1970,
+          "dropped": false
+        },
+        {
+          "name": "P05",
+          "rating": 1960,
+          "dropped": false
+        }
+      ],
+      "result_slips": [
+        {
+          "round": 1,
+          "winner_name": "P01",
+          "loser_name": "P02",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P03",
+          "loser_name": "P04",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        }
+      ],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "Swiss"
+        },
+        {
+          "round": 2,
+          "start_round": 1,
+          "pairing": "Swiss"
+        }
+      ],
+      "fixed_pairings": {},
+      "seed": 0
+    },
+    "expected": []
+  },
+  {
+    "name": "swiss_dropout_r2_n8",
+    "deterministic": true,
+    "input": {
+      "players": [
+        {
+          "name": "P01",
+          "rating": 2000,
+          "dropped": false
+        },
+        {
+          "name": "P02",
+          "rating": 1990,
+          "dropped": false
+        },
+        {
+          "name": "P03",
+          "rating": 1980,
+          "dropped": false
+        },
+        {
+          "name": "P04",
+          "rating": 1970,
+          "dropped": false
+        },
+        {
+          "name": "P05",
+          "rating": 1960,
+          "dropped": false
+        },
+        {
+          "name": "P06",
+          "rating": 1950,
+          "dropped": false
+        },
+        {
+          "name": "P07",
+          "rating": 1940,
+          "dropped": false
+        },
+        {
+          "name": "P08",
+          "rating": 1930,
+          "dropped": true
+        }
+      ],
+      "result_slips": [
+        {
+          "round": 1,
+          "winner_name": "P01",
+          "loser_name": "P02",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P03",
+          "loser_name": "P04",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P05",
+          "loser_name": "P06",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        },
+        {
+          "round": 1,
+          "winner_name": "P07",
+          "loser_name": "P08",
+          "winner_score": 450,
+          "loser_score": 400,
+          "winner_started": true
+        }
+      ],
+      "round_pairings": [
+        {
+          "round": 1,
+          "start_round": 0,
+          "pairing": "Swiss"
+        },
+        {
+          "round": 2,
+          "start_round": 1,
+          "pairing": "Swiss"
+        }
+      ],
+      "fixed_pairings": {},
+      "seed": 0
+    },
+    "expected": [
+      {
+        "round": 2,
+        "pairings": [
+          {
+            "first": "P01",
+            "second": "P03",
+            "repeats": 1
+          },
+          {
+            "first": "P07",
+            "second": "P05",
+            "repeats": 1
+          },
+          {
+            "first": "P02",
+            "second": "P04",
+            "repeats": 1
+          },
+          {
+            "first": "Bye",
+            "second": "P06",
+            "repeats": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
     "name": "swiss_r2_n12",
     "deterministic": true,
     "input": {
       "players": [
         {
           "name": "P01",
-          "rating": 2000
+          "rating": 2000,
+          "dropped": false
         },
         {
           "name": "P02",
-          "rating": 1990
+          "rating": 1990,
+          "dropped": false
         },
         {
           "name": "P03",
-          "rating": 1980
+          "rating": 1980,
+          "dropped": false
         },
         {
           "name": "P04",
-          "rating": 1970
+          "rating": 1970,
+          "dropped": false
         },
         {
           "name": "P05",
-          "rating": 1960
+          "rating": 1960,
+          "dropped": false
         },
         {
           "name": "P06",
-          "rating": 1950
+          "rating": 1950,
+          "dropped": false
         },
         {
           "name": "P07",
-          "rating": 1940
+          "rating": 1940,
+          "dropped": false
         },
         {
           "name": "P08",
-          "rating": 1930
+          "rating": 1930,
+          "dropped": false
         },
         {
           "name": "P09",
-          "rating": 1920
+          "rating": 1920,
+          "dropped": false
         },
         {
           "name": "P10",
-          "rating": 1910
+          "rating": 1910,
+          "dropped": false
         },
         {
           "name": "P11",
-          "rating": 1900
+          "rating": 1900,
+          "dropped": false
         },
         {
           "name": "P12",
-          "rating": 1890
+          "rating": 1890,
+          "dropped": false
         }
       ],
       "result_slips": [
@@ -2372,23 +2707,28 @@
       "players": [
         {
           "name": "P01",
-          "rating": 2000
+          "rating": 2000,
+          "dropped": false
         },
         {
           "name": "P02",
-          "rating": 1990
+          "rating": 1990,
+          "dropped": false
         },
         {
           "name": "P03",
-          "rating": 1980
+          "rating": 1980,
+          "dropped": false
         },
         {
           "name": "P04",
-          "rating": 1970
+          "rating": 1970,
+          "dropped": false
         },
         {
           "name": "P05",
-          "rating": 1960
+          "rating": 1960,
+          "dropped": false
         }
       ],
       "result_slips": [],
@@ -2432,31 +2772,38 @@
       "players": [
         {
           "name": "P01",
-          "rating": 2000
+          "rating": 2000,
+          "dropped": false
         },
         {
           "name": "P02",
-          "rating": 1990
+          "rating": 1990,
+          "dropped": false
         },
         {
           "name": "P03",
-          "rating": 1980
+          "rating": 1980,
+          "dropped": false
         },
         {
           "name": "P04",
-          "rating": 1970
+          "rating": 1970,
+          "dropped": false
         },
         {
           "name": "P05",
-          "rating": 1960
+          "rating": 1960,
+          "dropped": false
         },
         {
           "name": "P06",
-          "rating": 1950
+          "rating": 1950,
+          "dropped": false
         },
         {
           "name": "P07",
-          "rating": 1940
+          "rating": 1940,
+          "dropped": false
         }
       ],
       "result_slips": [],
@@ -2505,27 +2852,33 @@
       "players": [
         {
           "name": "P01",
-          "rating": 2000
+          "rating": 2000,
+          "dropped": false
         },
         {
           "name": "P02",
-          "rating": 1990
+          "rating": 1990,
+          "dropped": false
         },
         {
           "name": "P03",
-          "rating": 1980
+          "rating": 1980,
+          "dropped": false
         },
         {
           "name": "P04",
-          "rating": 1970
+          "rating": 1970,
+          "dropped": false
         },
         {
           "name": "P05",
-          "rating": 1960
+          "rating": 1960,
+          "dropped": false
         },
         {
           "name": "P06",
-          "rating": 1950
+          "rating": 1950,
+          "dropped": false
         }
       ],
       "result_slips": [],
@@ -2576,35 +2929,43 @@
       "players": [
         {
           "name": "P01",
-          "rating": 2000
+          "rating": 2000,
+          "dropped": false
         },
         {
           "name": "P02",
-          "rating": 1990
+          "rating": 1990,
+          "dropped": false
         },
         {
           "name": "P03",
-          "rating": 1980
+          "rating": 1980,
+          "dropped": false
         },
         {
           "name": "P04",
-          "rating": 1970
+          "rating": 1970,
+          "dropped": false
         },
         {
           "name": "P05",
-          "rating": 1960
+          "rating": 1960,
+          "dropped": false
         },
         {
           "name": "P06",
-          "rating": 1950
+          "rating": 1950,
+          "dropped": false
         },
         {
           "name": "P07",
-          "rating": 1940
+          "rating": 1940,
+          "dropped": false
         },
         {
           "name": "P08",
-          "rating": 1930
+          "rating": 1930,
+          "dropped": false
         }
       ],
       "result_slips": [],
@@ -2626,43 +2987,53 @@
       "players": [
         {
           "name": "P01",
-          "rating": 2000
+          "rating": 2000,
+          "dropped": false
         },
         {
           "name": "P02",
-          "rating": 1990
+          "rating": 1990,
+          "dropped": false
         },
         {
           "name": "P03",
-          "rating": 1980
+          "rating": 1980,
+          "dropped": false
         },
         {
           "name": "P04",
-          "rating": 1970
+          "rating": 1970,
+          "dropped": false
         },
         {
           "name": "P05",
-          "rating": 1960
+          "rating": 1960,
+          "dropped": false
         },
         {
           "name": "P06",
-          "rating": 1950
+          "rating": 1950,
+          "dropped": false
         },
         {
           "name": "P07",
-          "rating": 1940
+          "rating": 1940,
+          "dropped": false
         },
         {
           "name": "P08",
-          "rating": 1930
+          "rating": 1930,
+          "dropped": false
         },
         {
           "name": "P09",
-          "rating": 1920
+          "rating": 1920,
+          "dropped": false
         },
         {
           "name": "P10",
-          "rating": 1910
+          "rating": 1910,
+          "dropped": false
         }
       ],
       "result_slips": [
@@ -2730,59 +3101,73 @@
       "players": [
         {
           "name": "P01",
-          "rating": 2000
+          "rating": 2000,
+          "dropped": false
         },
         {
           "name": "P02",
-          "rating": 1990
+          "rating": 1990,
+          "dropped": false
         },
         {
           "name": "P03",
-          "rating": 1980
+          "rating": 1980,
+          "dropped": false
         },
         {
           "name": "P04",
-          "rating": 1970
+          "rating": 1970,
+          "dropped": false
         },
         {
           "name": "P05",
-          "rating": 1960
+          "rating": 1960,
+          "dropped": false
         },
         {
           "name": "P06",
-          "rating": 1950
+          "rating": 1950,
+          "dropped": false
         },
         {
           "name": "P07",
-          "rating": 1940
+          "rating": 1940,
+          "dropped": false
         },
         {
           "name": "P08",
-          "rating": 1930
+          "rating": 1930,
+          "dropped": false
         },
         {
           "name": "P09",
-          "rating": 1920
+          "rating": 1920,
+          "dropped": false
         },
         {
           "name": "P10",
-          "rating": 1910
+          "rating": 1910,
+          "dropped": false
         },
         {
           "name": "P11",
-          "rating": 1900
+          "rating": 1900,
+          "dropped": false
         },
         {
           "name": "P12",
-          "rating": 1890
+          "rating": 1890,
+          "dropped": false
         },
         {
           "name": "P13",
-          "rating": 1880
+          "rating": 1880,
+          "dropped": false
         },
         {
           "name": "P14",
-          "rating": 1870
+          "rating": 1870,
+          "dropped": false
         }
       ],
       "result_slips": [
