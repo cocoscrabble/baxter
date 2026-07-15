@@ -35,6 +35,7 @@ from .match_simulation import simulate_match, simulate_round
 from .commands import (
     add_fixed_pairing_cmd,
     add_result,
+    bulk_import_entrants,
     create_division,
     create_tournament,
     edit_result,
@@ -46,6 +47,9 @@ from .commands import (
     remove_fixed_pairings_cmd,
     rename_division,
     restore_division,
+    save_settings,
+    simulate_match_cmd,
+    simulate_round_cmd,
     unpublish_round,
     update_tournament,
 )
@@ -1054,10 +1058,10 @@ class DivisionRoundPairingsEditView(LoginRequiredMixin, CanEditDivisionMixin, Vi
         with check_conflict(edit_key(division, "round_pairings"), data.get("_version")) as guard:
             if guard.conflict:
                 return guard.conflict
-            settings_obj, _ = DivisionSettings.objects.get_or_create(division=division)
-            settings_obj.pairing_blocks = blocks
-            settings_obj.round_pairings = round_pairings
-            settings_obj.save(update_fields=["pairing_blocks", "round_pairings"])
+            save_settings(
+                division.tournament, request.user,
+                {"division": division.name, "blocks": blocks},
+            )
         return guard.response
 
 
@@ -1197,8 +1201,6 @@ class BulkImportEntrantsView(LoginRequiredMixin, CanEditDivisionMixin, View):
     """Import entrants from a CSV file, creating new Players as needed."""
 
     def post(self, request, *args, **kwargs):
-        from tournaments.import_entrants import import_entrants
-
         division = self.get_division()
         uploaded = request.FILES.get("csv_file")
         if not uploaded:
@@ -1209,7 +1211,10 @@ class BulkImportEntrantsView(LoginRequiredMixin, CanEditDivisionMixin, View):
         except UnicodeDecodeError:
             return JsonResponse({"errors": ["File must be UTF-8 encoded text."]}, status=400)
 
-        result, errors = import_entrants(division, text)
+        result, errors = bulk_import_entrants(
+            division.tournament, request.user,
+            {"division": division.name, "csv": text},
+        )
         if errors:
             return JsonResponse({"errors": errors}, status=400)
 
@@ -1639,10 +1644,11 @@ class SimulateMatchView(LoginRequiredMixin, CanEditDivisionMixin, View):
         if not first_entrant or not second_entrant:
             return JsonResponse({"error": "Entrant not found."}, status=400)
 
-        slip = simulate_match(division, round_num, first_entrant, second_entrant)
-        if slip.pairing and slip.pairing.round_pairings:
-            slip.pairing.round_pairings.update_status()
-
+        simulate_match_cmd(
+            division.tournament, request.user,
+            {"division": division.name, "round": round_num,
+             "first_name": first_name, "second_name": second_name},
+        )
         return _simulation_response(request, division)
 
 
@@ -1669,5 +1675,8 @@ class SimulateRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
         if error:
             return error
 
-        simulate_round(division, round_num)
+        simulate_round_cmd(
+            division.tournament, request.user,
+            {"division": division.name, "round": round_num},
+        )
         return _simulation_response(request, division)

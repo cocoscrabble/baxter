@@ -58,15 +58,23 @@ class EntrantsGrid(EditGrid):
         return division.entrants.select_related("player").order_by("number")
 
     def to_portable(self, rows, division):
-        names = dict(Player.objects.values_list("pk", "name"))
-        return [
-            {
-                "number": r["number"],
-                "player": names.get(r["player"]),
-                "dropped": r.get("dropped", False),
-            }
-            for r in rows
-        ]
+        # Carry name + rating so a replay into a fresh DB can create a missing
+        # player with the right rating (pairing seeds off rating).
+        players = {
+            p.pk: (p.name, p.rating) for p in Player.objects.all()
+        }
+        portable = []
+        for r in rows:
+            name, rating = players.get(r["player"], (None, 0))
+            portable.append(
+                {
+                    "number": r["number"],
+                    "player": name,
+                    "rating": rating,
+                    "dropped": r.get("dropped", False),
+                }
+            )
+        return portable
 
     def serialize_row(self, entrant):
         return {
