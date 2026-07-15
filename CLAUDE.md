@@ -6,6 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Baxter is a scrabble tournament manager built with Django 6.0 and Python 3.14.
 
+Design/implementation plans live in `plans/` (see `plans/README.md`) — put new
+plans there, not in the repo root.
+
 ## Development Commands
 
 ```bash
