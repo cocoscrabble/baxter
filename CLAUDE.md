@@ -57,6 +57,26 @@ uv run python manage.py test tournaments.tests
 PAIRING_ENGINE=rust uv run python manage.py test tournaments.tests
 ```
 
+## Event log
+
+Every state-changing action is recorded as an append-only `TournamentEvent`
+(see PLAN_EVENT_LOG.md). Mutations go through **commands** (`@records_event` in
+`tournaments/commands.py` + domain modules; grid saves via the editgrid
+`on_saved` hook) — not direct view writes. Payloads are pk-free (name-keyed) so
+the log replays into a fresh DB. Key pieces:
+
+- `tournaments/events.py` — recorder, `division_digest` (excludes DRAFT rounds),
+  the command catalog, the opt-in `strict_write_guard`.
+- `tournaments/replay.py` + `replay_tournament` command — reconstruct a
+  tournament from its log (`--verify` compares digests).
+- `tournaments/fuzz.py` + `fuzz_tournament` command + `test_fuzz` — seeded
+  fuzzer whose meta-invariant is that replay reproduces the digest.
+- Activity page + `export_event_log` (JSONL); `snapshot_tournaments` backfills
+  pre-log tournaments.
+
+**A new mutating POST view must route through a command** (or be added to the
+exempt set in `test_event_completeness.py`, which fails CI otherwise).
+
 ## Configuration
 
 Settings are managed via environment variables using python-decouple. Required variables are stored in `.env` (gitignored):
