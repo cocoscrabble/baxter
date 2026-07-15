@@ -88,9 +88,9 @@ class Fuzzer:
 
     def op_save_settings(self):
         # KotH/Swiss handle any round count. Round-robin/quads have field-size
-        # constraints (an RR block with more rounds than E-1 overflows the
-        # engine — a separate pre-existing bug), so they're left out of the
-        # fuzzer's random schedules.
+        # constraints (an over-long RR block now raises a clear PairingError
+        # rather than crashing, but the fuzzer would then need to tolerate that
+        # expected error mid-run), so they're left out of the random schedules.
         strategy = self.rng.choice(["KotH", "Swiss"])
         rounds = self.rng.randint(1, 4)
         self._post_json(
