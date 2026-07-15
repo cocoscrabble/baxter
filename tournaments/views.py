@@ -353,6 +353,41 @@ class TournamentUpdateView(TournamentURLMixin, LoginRequiredMixin, CanEditTourna
         return self.object.get_absolute_url()
 
 
+class TournamentActivityView(TournamentURLMixin, LoginRequiredMixin, CanEditTournamentMixin, DetailView):
+    """The tournament's event log, newest first (owners/editors only)."""
+
+    model = Tournament
+    template_name = "tournaments/tournament_activity.html"
+    context_object_name = "tournament"
+
+    def get_context_data(self, **kwargs):
+        from tournaments.events import describe_event
+
+        context = super().get_context_data(**kwargs)
+        events = self.object.events.order_by("-seq").select_related(
+            "actor", "division"
+        )
+        context["events"] = [(e, describe_event(e)) for e in events]
+        return context
+
+
+class TournamentEventLogExportView(TournamentURLMixin, LoginRequiredMixin, CanEditTournamentMixin, View):
+    """Download the tournament's event log as JSONL (owners/editors only)."""
+
+    def get_object(self, queryset=None):
+        return self.tournament
+
+    def get(self, request, *args, **kwargs):
+        from tournaments.events import export_jsonl
+
+        content = export_jsonl(self.tournament)
+        response = HttpResponse(content, content_type="application/x-ndjson")
+        response["Content-Disposition"] = (
+            f'attachment; filename="{self.tournament.slug}-eventlog.jsonl"'
+        )
+        return response
+
+
 class CanDeleteTournamentMixin(UserPassesTestMixin):
     """Mixin that checks whether the user may delete the tournament."""
 
@@ -1550,8 +1585,14 @@ class ResultSlipCreateView(DivisionURLMixin, View):
                 "loser_score": form.cleaned_data["loser_score"],
             }
             actor = request.user if request.user.is_authenticated else None
+            # Attribute anonymous submissions to a browser (hashed), not a user.
+            from tournaments.events import hashed_session
+
+            actor_session = "" if actor else hashed_session(request)
             command = add_result if creating else edit_result
-            rs = command(division.tournament, actor, payload)
+            rs = command(
+                division.tournament, actor, payload, actor_session=actor_session
+            )
             if creating:
                 # Let this browser edit its own submission later without opening
                 # up pk-guessing edits of everyone else's slips.

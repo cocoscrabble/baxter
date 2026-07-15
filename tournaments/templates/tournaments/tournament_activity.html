@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Activity - {{ tournament.name }} - Baxter{% endblock %}
+
+{% block breadcrumbs %}
+<span class="nav-sep">/</span>
+<a href="{% url 'tournament_detail' tournament.slug %}">{{ tournament.name }}</a>
+<span class="nav-sep">/</span>
+Activity
+{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <h1>Activity: {{ tournament.name }}</h1>
+    <div class="page-head-actions">
+        <a href="{% url 'tournament_event_log_export' tournament.slug %}" class="btn-secondary">Download log (JSONL)</a>
+    </div>
+</div>
+
+{% if events %}
+<div class="table-scroll">
+<table>
+    <thead>
+        <tr>
+            <th class="num">#</th>
+            <th>When</th>
+            <th>Who</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for event, description in events %}
+        <tr>
+            <td class="num">{{ event.seq }}</td>
+            <td>{{ event.created_at }}</td>
+            <td>
+                {% if event.actor %}{{ event.actor.username }}
+                {% elif event.actor_session %}<span title="anonymous submitter">guest·{{ event.actor_session|slice:":6" }}</span>
+                {% else %}—{% endif %}
+            </td>
+            <td>{{ description }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% else %}
+{% include "tournaments/_empty_state.html" with message="No activity recorded yet." %}
+{% endif %}
+{% endblock %}
