@@ -78,7 +78,7 @@ from .player_sync import import_players
 from users.models import User
 from .generate_pairings import publish_rounds, regenerate_pairings, unpublish_rounds
 from .pairing.base import PairingData, PairingError, standings_after_round
-from .pairing.pair import STRATEGY_TYPES
+from .pairing.round_pairing import STRATEGY_TYPES
 from .pairings_view import PairingsPresenter, PublishedPairingsPresenter
 from .scorecards import ScorecardResult, ScorecardSpec, make_rounds, render_scorecards
 from .results_export import ResultRow, render_results_csv

@@ -1,8 +1,6 @@
 """Tests for the pairing engine adapter (tournaments/pairing/engine.py)."""
 
-from unittest import TestCase, mock
-
-from django.test import override_settings
+from unittest import TestCase
 
 from tournaments.pairing.base import (
     EntrantData,
@@ -13,7 +11,6 @@ from tournaments.pairing.base import (
     ResultSlipData,
 )
 from tournaments.pairing.engine import (
-    _pair_shadow,
     _rounds_to_display,
     pair_with_engine,
     pairing_data_to_input,
@@ -100,48 +97,10 @@ class RoundsToDisplayTests(TestCase):
         self.assertIn("unsatisfiable", str(cm.exception))
 
 
-class RustPathTests(TestCase):
-    @override_settings(PAIRING_ENGINE="rust")
-    def test_rust_engine_pairs_initial_swiss(self):
-        # Dropped D is excluded → A/B/C + bye; A-C paired, B byes (deterministic).
+class EnginePathTests(TestCase):
+    def test_engine_pairs_initial_swiss(self):
+        # Dropped D is excluded → A/B/C + bye; A fixed to B, C takes the bye.
         out = pair_with_engine(_swiss_pd())
         self.assertEqual(len(out), 1)
-        names = {
-            (p.first.name, p.second.name) for _, ps in out for p in ps
-        }
-        # A is fixed to B this round; C takes the bye (odd active field).
+        names = {(p.first.name, p.second.name) for _, ps in out for p in ps}
         self.assertIn(("A", "B"), names)
-
-
-class ShadowModeTests(TestCase):
-    def test_divergence_is_logged_and_python_result_returned(self):
-        pd = _swiss_pd()
-        # Force a divergence by mutating the rust result's deterministic round.
-        bad = [
-            {
-                "round": 1,
-                "pairings": [{"first": "Z", "second": "Y", "repeats": 0}],
-                "error": None,
-            }
-        ]
-        with mock.patch(
-            "tournaments.pairing.engine._pair_rust",
-            return_value=_rounds_to_display(bad),
-        ):
-            with self.assertLogs("tournaments.pairing.engine", level="ERROR") as logs:
-                result = _pair_shadow(pd)
-        self.assertTrue(any("divergence" in m for m in logs.output))
-        # The Python result is returned unchanged (A-B fixed pairing present).
-        pairs = {(p.first.name, p.second.name) for _, ps in result for p in ps}
-        self.assertIn(("A", "B"), pairs)
-
-    def test_rust_exception_does_not_break_shadow(self):
-        pd = _swiss_pd()
-        with mock.patch(
-            "tournaments.pairing.engine._pair_rust",
-            side_effect=RuntimeError("boom"),
-        ):
-            with self.assertLogs("tournaments.pairing.engine", level="ERROR"):
-                result = _pair_shadow(pd)
-        # Still returns the Python result despite the rust-side blow-up.
-        self.assertTrue(result)

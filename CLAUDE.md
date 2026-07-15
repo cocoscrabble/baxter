@@ -38,27 +38,22 @@ uv run python manage.py <command>
 make rust-engine   # == uv sync --reinstall-package scrabble-pairing-py
 ```
 
-## Pairing engine (Rust cutover in progress)
+## Pairing engine (Rust)
 
-The pairing computation is being cut over to the `scrabble-pairing` Rust crate,
-called from Python via the `scrabble-pairing-py` PyO3 extension (a separate
-crate so the core stays wasm-clean). `scrabble_pairing_py.pair_json(str) -> str`
-is the boundary. Building requires a local Rust toolchain (already needed for
-the crate); `uv sync` builds the wheel via maturin. See `PLAN_RUST_CUTOVER.md`.
+The pairing computation is the `scrabble-pairing` Rust crate, called from Python
+via the `scrabble-pairing-py` PyO3 extension (a separate crate so the core stays
+wasm-clean). `scrabble_pairing_py.pair_json(str) -> str` is the boundary;
+`tournaments/pairing/engine.py::pair_with_engine` is the single Python entry
+point. Building requires a local Rust toolchain; `uv sync` builds the wheel via
+maturin (`make rust-engine` to rebuild after crate edits).
 
-Until the cutover completes, the both-engines policy still holds: pairing fixes
-land in both `tournaments/pairing/` (Python) and `scrabble-pairing/` (Rust), and
-must keep the parity corpus (`scrabble-pairing/tests/corpus/cases.json`) green
-(`cargo test` in `scrabble-pairing/`).
-
-Engine selection is `settings.PAIRING_ENGINE` (env `PAIRING_ENGINE`):
-`python` (default), `rust`, or `shadow` (run both, return Python, log
-divergences). Run the Django suite both ways:
-
-```bash
-uv run python manage.py test tournaments.tests
-PAIRING_ENGINE=rust uv run python manage.py test tournaments.tests
-```
+**The Python engine has been deleted** — engine changes are Rust-only now (edit
+`scrabble-pairing/src/`, add a `cargo test`). What stays in Python is the
+ORM-facing layer: `PairingData` assembly, `standings_after_round`/`seedings`
+(standings display), `Repeats`/`Starts`, `PairingError`, and the publish/
+regenerate lifecycle. `tests/corpus/cases.json` is a **frozen** regression
+fixture (the Python oracle that generated it is gone); `cargo test` still checks
+the Rust engine against it.
 
 ## Event log
 
