@@ -32,6 +32,7 @@ from tournaments.pairing.base import (  # noqa: E402
     Repeats,
     ResultSlipData,
 )
+from tournaments.pairing.engine import pairing_data_to_input  # noqa: E402
 from tournaments.pairing.pair import pair  # noqa: E402
 from tournaments.pairing.round_pairing import (  # noqa: E402
     RP,
@@ -45,6 +46,13 @@ OUT = Path(__file__).resolve().parent.parent / "scrabble-pairing" / "tests" / "c
 def entrants(n):
     """n entrants P01..Pn with distinct, descending ratings (stable seeding)."""
     return [EntrantData(PlayerData(f"P{i + 1:02d}", 2000 - 10 * i)) for i in range(n)]
+
+
+def entrants_rated(specs):
+    """Entrants from explicit (name, rating) pairs, kept in the given order (the
+    equivalent of ``division.entrants.all()`` order — what seedings falls back to
+    when ratings tie)."""
+    return [EntrantData(PlayerData(name, rating)) for name, rating in specs]
 
 
 def slip(rnd, winner, loser, ws=450, ls=400, winner_started=True):
@@ -65,28 +73,17 @@ def block_schedule(strategy, n_rounds):
 
 
 def serialize_input(es, slips, rps, fixed, seed):
-    return {
-        "players": [
-            {"name": e.player.name, "rating": e.player.rating, "dropped": e.dropped}
-            for e in es
-        ],
-        "result_slips": [
-            {
-                "round": s.round,
-                "winner_name": s.winner_name,
-                "loser_name": s.loser_name,
-                "winner_score": s.winner_score,
-                "loser_score": s.loser_score,
-                "winner_started": s.winner_started,
-            }
-            for s in slips
-        ],
-        "round_pairings": [
-            {"round": r.round, "start_round": r.start_round, "pairing": str(r.pairing)} for r in rps
-        ],
-        "fixed_pairings": {str(k): [[a, b] for (a, b) in v] for k, v in fixed.items()},
-        "seed": seed,
-    }
+    # Reuse the app's single PairingData -> boundary serializer so the corpus and
+    # the runtime rust path never drift.
+    pd = PairingData(
+        result_slips=list(slips),
+        entrants=list(es),
+        repeats=Repeats(),
+        round_pairings=list(rps),
+        fixed_pairings=fixed,
+        seed=seed,
+    )
+    return pairing_data_to_input(pd)
 
 
 def serialize_output(out):
@@ -204,6 +201,31 @@ def build_cases():
             fixed={1: [("P01", "P06")]},
         )
     )
+
+    # --- Tie-break / input-order stability (the engines must agree on how equal
+    # ratings and equal records break) ---
+    # Tied ratings: seeding falls back to entrant (DB) order for equal ratings.
+    tied_ratings = entrants_rated(
+        [("P1", 1600), ("P2", 1600), ("P3", 1500), ("P4", 1500),
+         ("P5", 1400), ("P6", 1400), ("P7", 1300), ("P8", 1300)]
+    )
+    cases.append(case("tied_ratings_koth_n8", True, tied_ratings, block_schedule(RP.KotH, 1)))
+    # Entrant (DB) order deliberately not rating order: equal-rated players are
+    # listed out of seed order, so a wrong stability assumption would diverge.
+    db_order = entrants_rated(
+        [("P3", 1500), ("P1", 1600), ("P4", 1500), ("P2", 1600)]
+    )
+    cases.append(case("db_order_koth_n4", True, db_order, block_schedule(RP.KotH, 1)))
+    # Tied records AND spread after round 1 (every game +50), Swiss round 2:
+    # exercises the standings sort tie-break (score, then spread, then order).
+    es_tr = entrants(8)
+    hist_tr = [
+        slip(1, es_tr[2 * i].player.name, es_tr[2 * i + 1].player.name, 450, 400)
+        for i in range(4)
+    ]
+    cases.append(case("tied_records_swiss_r2_n8", True, es_tr, [RoundPairing(1, 0, RP.Swiss), RoundPairing(2, 1, RP.Swiss)], slips=hist_tr))
+    # Odd field with a fixed pairing: bye + fixed-pairing interaction.
+    cases.append(case("koth_fixed_odd_n7", True, entrants(7), block_schedule(RP.KotH, 1), fixed={1: [("P02", "P06")]}))
 
     # --- Random strategies (non-deterministic; invariant checks on the Rust side) ---
     cases.append(case("random_r1_n8", False, entrants(8), block_schedule(RP.Random, 1)))

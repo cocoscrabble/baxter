@@ -10,7 +10,7 @@ from django.db.models import Q
 from .assign_tables import assign_tables, parse_board_table_map
 from .models import BYE_PLAYER_NAME, DivisionSettings, Pairing, ResultSlip, RoundPairings
 from .pairing.base import PairingData, standings_after_round
-from .pairing.pair import pair
+from .pairing.engine import pair_with_engine
 
 # A bye is scored as a win with a fixed +50 spread (50–0), no game played.
 BYE_WINNER_SCORE = 50
@@ -154,7 +154,7 @@ def regenerate_pairings(division):
         division.round_pairings_set.filter(status=RoundPairings.DRAFT).delete()
         division.pairings.filter(round_pairings__isnull=True).delete()
         return
-    pairings = pair(pd)
+    pairings = pair_with_engine(pd)
     entrant_by_name = {
         e.player.name: e
         for e in division.entrants.select_related("player")
