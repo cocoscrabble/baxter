@@ -33,12 +33,18 @@ from .fixed_pairings import (
 )
 from .match_simulation import simulate_match, simulate_round
 from .commands import (
+    add_fixed_pairing_cmd,
     create_division,
     create_tournament,
     delete_division,
     delete_tournament,
+    publish_all_rounds,
+    publish_round,
+    remove_fixed_pairing_cmd,
+    remove_fixed_pairings_cmd,
     rename_division,
     restore_division,
+    unpublish_round,
     update_tournament,
 )
 from .grids import BoardTableMapGrid, EntrantsGrid, FixedPairingsGrid, FixedTablesGrid, ResultsGrid
@@ -570,7 +576,7 @@ class PublishPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
 
     def post(self, request, *args, **kwargs):
         division = self.division
-        publish_rounds(division)
+        publish_all_rounds(division.tournament, request.user, {"division": division.name})
         return _pairings_body_response(request, division)
 
 
@@ -598,7 +604,10 @@ class PublishRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
         round_number, error = _read_int(data, "round")
         if error:
             return error
-        publish_rounds(division, [round_number])
+        publish_round(
+            division.tournament, request.user,
+            {"division": division.name, "round": round_number},
+        )
         return _pairings_body_response(request, division, select_round=round_number)
 
 
@@ -612,7 +621,10 @@ class UnpublishRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
         round_number, error = _read_int(data, "round")
         if error:
             return error
-        unpublished = unpublish_rounds(division, [round_number])
+        unpublished = unpublish_round(
+            division.tournament, request.user,
+            {"division": division.name, "round": round_number},
+        )
         error = None if unpublished else (
             f"Round {round_number} can't be unpublished — it already has results."
         )
@@ -634,7 +646,17 @@ class AddFixedPairingView(LoginRequiredMixin, CanEditDivisionMixin, View):
         entrant2_id, error = _read_int(data, "entrant2")
         if error:
             return error
-        _, error = add_fixed_pairing(division, round_number, entrant1_id, entrant2_id)
+        e1 = division.entrants.filter(pk=entrant1_id).select_related("player").first()
+        e2 = division.entrants.filter(pk=entrant2_id).select_related("player").first()
+        error = None
+        if e1 is not None and e2 is not None and e1 != e2:
+            _, error = add_fixed_pairing_cmd(
+                division.tournament, request.user,
+                {
+                    "division": division.name, "round": round_number,
+                    "name1": e1.player.name, "name2": e2.player.name,
+                },
+            )
         return _pairings_body_response(request, division, select_round=round_number, error=error)
 
 
@@ -650,7 +672,21 @@ class RemoveFixedPairingView(LoginRequiredMixin, CanEditDivisionMixin, View):
         round_number, error = _read_int(data, "round")
         if error:
             return error
-        _, error = remove_fixed_pairing(division, fp_id)
+        fp = (
+            division.fixed_pairings
+            .select_related("entrant1__player", "entrant2__player")
+            .filter(pk=fp_id).first()
+        )
+        error = None
+        if fp is not None:
+            _, error = remove_fixed_pairing_cmd(
+                division.tournament, request.user,
+                {
+                    "division": division.name, "round": fp.round_number,
+                    "name1": fp.entrant1.player.name,
+                    "name2": fp.entrant2.player.name,
+                },
+            )
         return _pairings_body_response(request, division, select_round=round_number, error=error)
 
 
@@ -658,7 +694,17 @@ class RemoveFixedPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
     def post(self, request, *args, **kwargs):
         division = self.get_division()
         keep_ids = set(request.POST.getlist("keep"))
-        error = remove_fixed_pairings(division, keep_ids)
+        kept = []
+        for fp in division.fixed_pairings.select_related(
+            "entrant1__player", "entrant2__player"
+        ):
+            if str(fp.pk) in keep_ids:
+                n1, n2 = sorted([fp.entrant1.player.name, fp.entrant2.player.name])
+                kept.append([fp.round_number, n1, n2])
+        error = remove_fixed_pairings_cmd(
+            division.tournament, request.user,
+            {"division": division.name, "kept": kept},
+        )
         if error:
             messages.error(request, error)
         return redirect("division_pair_rounds", **division.slug_kwargs())
