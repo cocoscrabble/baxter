@@ -298,6 +298,112 @@ def edit_result(tournament, actor, payload):
     return EventResult(payload=payload, division=division, result=slip)
 
 
+# ---------------------------------------------------------------------------
+# Settings, bulk import, simulation
+# ---------------------------------------------------------------------------
+
+
+@records_event("division_settings_saved")
+def save_settings(tournament, actor, payload):
+    """payload: {division, blocks}. round_pairings are derived from the blocks."""
+    from tournaments.pairing.round_pairing import blocks_to_round_pairings
+
+    division = _division(tournament, payload["division"])
+    blocks = payload["blocks"]
+    round_pairings = [rp.to_dict() for rp in blocks_to_round_pairings(blocks)]
+    settings_obj, _ = DivisionSettings.objects.get_or_create(division=division)
+    settings_obj.pairing_blocks = blocks
+    settings_obj.round_pairings = round_pairings
+    settings_obj.save(update_fields=["pairing_blocks", "round_pairings"])
+    return EventResult(payload=payload, division=division, result=settings_obj)
+
+
+@records_event("entrants_bulk_imported")
+def bulk_import_entrants(tournament, actor, payload):
+    """payload: {division, csv} — the raw CSV text. New players are created by
+    name; a replay resolves/creates them the same way."""
+    from tournaments.import_entrants import import_entrants
+
+    division = _division(tournament, payload["division"])
+    result, errors = import_entrants(division, payload["csv"])
+    if errors:
+        return EventResult(payload=payload, result=(None, errors), record=False)
+    return EventResult(payload=payload, division=division, result=(result, errors))
+
+
+def _sim_result_dict(slip):
+    return {
+        "first_name": slip.pairing.first.player.name,
+        "second_name": slip.pairing.second.player.name,
+        "winner_name": slip.winner.player.name,
+        "loser_name": slip.loser.player.name,
+        "winner_score": slip.winner_score,
+        "loser_score": slip.loser_score,
+        "winner_started": slip.winner_started,
+    }
+
+
+def _apply_sim_result(division, round_num, r):
+    pairing = _find_pairing(division, round_num, r["first_name"], r["second_name"])
+    slip = ResultSlip.objects.create(
+        division=division,
+        round=round_num,
+        pairing=pairing,
+        winner=_entrant(division, r["winner_name"]),
+        winner_score=r["winner_score"],
+        loser=_entrant(division, r["loser_name"]),
+        loser_score=r["loser_score"],
+        winner_started=r["winner_started"],
+    )
+    if pairing is not None and pairing.round_pairings_id:
+        pairing.round_pairings.update_status()
+    return slip
+
+
+@records_event("match_simulated")
+def simulate_match_cmd(tournament, actor, payload):
+    """payload: {division, round, first_name, second_name}. The generated scores
+    are recorded (the RNG is unseeded, so a replay applies them, not re-rolls)."""
+    from tournaments.match_simulation import simulate_match
+
+    division = _division(tournament, payload["division"])
+    if "result" in payload:  # replay: apply the recorded result
+        slip = _apply_sim_result(division, payload["round"], payload["result"])
+        return EventResult(payload=payload, division=division, result=slip)
+    first = _entrant(division, payload["first_name"])
+    second = _entrant(division, payload["second_name"])
+    slip = simulate_match(division, payload["round"], first, second)
+    if slip.pairing_id and slip.pairing.round_pairings_id:
+        slip.pairing.round_pairings.update_status()
+    out = {**payload, "result": _sim_result_dict(slip)}
+    return EventResult(payload=out, division=division, result=slip)
+
+
+@records_event("round_simulated")
+def simulate_round_cmd(tournament, actor, payload):
+    """payload: {division, round}. Records every generated result for replay."""
+    from tournaments.match_simulation import simulate_round
+
+    division = _division(tournament, payload["division"])
+    round_num = payload["round"]
+    if "results" in payload:  # replay: apply the recorded results
+        for r in payload["results"]:
+            _apply_sim_result(division, round_num, r)
+        return EventResult(payload=payload, division=division, result=None)
+    before = set(
+        division.result_slips.filter(round=round_num).values_list("pk", flat=True)
+    )
+    simulate_round(division, round_num)
+    created = (
+        division.result_slips.filter(round=round_num)
+        .exclude(pk__in=before)
+        .select_related("pairing__first__player", "pairing__second__player",
+                        "winner__player", "loser__player")
+    )
+    out = {**payload, "results": [_sim_result_dict(s) for s in created]}
+    return EventResult(payload=out, division=division, result=None)
+
+
 @records_event("fixed_pairings_removed")
 def remove_fixed_pairings_cmd(tournament, actor, payload):
     """payload: {division, kept: [[round, name1, name2], ...]} — the fixed
