@@ -32,6 +32,15 @@ from .fixed_pairings import (
     remove_fixed_pairings,
 )
 from .match_simulation import simulate_match, simulate_round
+from .commands import (
+    create_division,
+    create_tournament,
+    delete_division,
+    delete_tournament,
+    rename_division,
+    restore_division,
+    update_tournament,
+)
 from .grids import BoardTableMapGrid, EntrantsGrid, FixedPairingsGrid, FixedTablesGrid, ResultsGrid
 from .models import (
     EDIT_SCOPES,
@@ -82,16 +91,27 @@ class TournamentListView(ListView):
         return context
 
 
+def _tournament_payload(form):
+    return {
+        "name": form.cleaned_data["name"],
+        "location": form.cleaned_data["location"],
+        "start_date": form.cleaned_data["start_date"].isoformat(),
+        "editors": [
+            u.username for u in form.cleaned_data.get("editor_usernames", [])
+        ],
+    }
+
+
 class TournamentCreateView(LoginRequiredMixin, CreateView):
     model = Tournament
     form_class = TournamentForm
     template_name = "tournaments/tournament_form.html"
 
     def form_valid(self, form):
-        form.instance.owner = self.request.user
-        response = super().form_valid(form)
-        Division.objects.create(tournament=self.object, name="Division 1")
-        return response
+        self.object = create_tournament(
+            None, self.request.user, _tournament_payload(form)
+        )
+        return redirect(self.get_success_url())
 
     def get_success_url(self):
         return self.object.get_absolute_url()
@@ -313,6 +333,10 @@ class TournamentUpdateView(TournamentURLMixin, LoginRequiredMixin, CanEditTourna
         context.update(self.object.division_buckets())
         return context
 
+    def form_valid(self, form):
+        update_tournament(self.object, self.request.user, _tournament_payload(form))
+        return redirect(self.get_success_url())
+
     def get_success_url(self):
         return self.object.get_absolute_url()
 
@@ -330,6 +354,10 @@ class TournamentDeleteView(TournamentURLMixin, LoginRequiredMixin, CanDeleteTour
     template_name = "tournaments/tournament_confirm_delete.html"
     context_object_name = "tournament"
     success_url = reverse_lazy("tournament_list")
+
+    def post(self, request, *args, **kwargs):
+        delete_tournament(self.get_object(), request.user, {})
+        return redirect(self.success_url)
 
 
 class DivisionCreateView(LoginRequiredMixin, View):
@@ -353,8 +381,8 @@ class DivisionCreateView(LoginRequiredMixin, View):
                     "rename it before reusing the name.",
                 )
             elif existing is None:
-                Division.objects.create(
-                    tournament=tournament, name=name, is_test=is_test
+                create_division(
+                    tournament, request.user, {"name": name, "is_test": is_test}
                 )
             # An existing active division with this name is a silent no-op, as
             # before.
@@ -368,18 +396,18 @@ class DivisionDeleteView(LoginRequiredMixin, CanEditDivisionMixin, View):
         return render(request, self.template_name, {"division": self.division})
 
     def post(self, request, *args, **kwargs):
-        tournament_slug = self.division.tournament.slug
-        self.division.soft_delete()
-        return redirect("tournament_detail", tournament_slug=tournament_slug)
+        division = self.division
+        delete_division(division.tournament, request.user, {"name": division.name})
+        return redirect("tournament_detail", tournament_slug=division.tournament.slug)
 
 
 class DivisionRestoreView(LoginRequiredMixin, CanEditDivisionMixin, View):
     division_manager = Division.all_objects
 
     def post(self, request, *args, **kwargs):
-        tournament_slug = self.division.tournament.slug
-        self.division.restore()
-        return redirect("tournament_detail", tournament_slug=tournament_slug)
+        division = self.division
+        restore_division(division.tournament, request.user, {"name": division.name})
+        return redirect("tournament_detail", tournament_slug=division.tournament.slug)
 
 
 class DivisionRenameView(LoginRequiredMixin, CanEditDivisionMixin, View):
@@ -400,8 +428,10 @@ class DivisionRenameView(LoginRequiredMixin, CanEditDivisionMixin, View):
         ):
             error = f"A division named “{name}” already exists."
         else:
-            division.name = name
-            division.save(update_fields=["name"])
+            rename_division(
+                tournament, request.user,
+                {"old_name": division.name, "new_name": name},
+            )
 
         if is_datastar(request):
             context = {"tournament": tournament, "can_edit": True, "rename_error": error}
