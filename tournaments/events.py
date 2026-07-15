@@ -296,6 +296,113 @@ def division_digest(division) -> str:
     return hashlib.sha256(blob.encode()).hexdigest()
 
 
+def hashed_session(request) -> str:
+    """A short, non-reversible fingerprint of the caller's session, so anonymous
+    actions in the audit log can be attributed to a browser without storing the
+    raw session key."""
+    request.session.save()  # ensure a session key exists
+    key = request.session.session_key or ""
+    return hashlib.sha256(key.encode()).hexdigest()[:16] if key else ""
+
+
+# ---------------------------------------------------------------------------
+# Export
+# ---------------------------------------------------------------------------
+
+
+def export_jsonl(tournament) -> str:
+    """Serialize a tournament's log to JSONL: a header line (schema versions,
+    recorded-at, git rev if available) followed by one line per event in seq
+    order. The header lets a replay report which code version produced it."""
+    import subprocess
+
+    try:
+        git_rev = (
+            subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL
+            )
+            .decode()
+            .strip()
+        )
+    except Exception:
+        git_rev = ""
+    lines = [
+        json.dumps(
+            {
+                "kind": "header",
+                "tournament": tournament.name,
+                "schema_version": 1,
+                "git_rev": git_rev,
+                "exported_at": _now_iso(),
+            }
+        )
+    ]
+    for event in tournament.events.order_by("seq").select_related("actor", "division"):
+        lines.append(
+            json.dumps(
+                {
+                    "seq": event.seq,
+                    "created_at": event.created_at.isoformat(),
+                    "actor": event.actor.username if event.actor else None,
+                    "actor_session": event.actor_session,
+                    "division": event.division.name if event.division else None,
+                    "event_type": event.event_type,
+                    "schema_version": event.schema_version,
+                    "payload": event.payload,
+                    "digest": event.digest,
+                }
+            )
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _now_iso() -> str:
+    from django.utils import timezone
+
+    return timezone.now().isoformat()
+
+
+def describe_event(event) -> str:
+    """A short human-readable description of an event, for the Activity page."""
+    p = event.payload or {}
+    div = event.division.name if event.division else p.get("division", "")
+    t = event.event_type
+
+    def rows(n=None):
+        n = len(p.get("rows", [])) if n is None else n
+        return f"{n} row{'s' if n != 1 else ''}"
+
+    templates = {
+        "tournament_created": lambda: f"Created tournament “{p.get('name', '')}”",
+        "tournament_updated": lambda: "Updated tournament details",
+        "tournament_deleted": lambda: "Deleted the tournament",
+        "division_created": lambda: f"Created division “{p.get('name', '')}”",
+        "division_renamed": lambda: f"Renamed “{p.get('old_name', '')}” to “{p.get('new_name', '')}”",
+        "division_deleted": lambda: f"Deleted division “{p.get('name', '')}”",
+        "division_restored": lambda: f"Restored division “{p.get('name', '')}”",
+        "division_settings_saved": lambda: f"Saved pairing schedule for {div}",
+        "entrants_saved": lambda: f"Saved entrants for {div} ({rows()})",
+        "entrants_bulk_imported": lambda: f"Imported entrants for {div}",
+        "results_saved": lambda: f"Saved results for {div} ({rows()})",
+        "result_added": lambda: f"Entered a result in {div} round {p.get('round', '')}",
+        "result_edited": lambda: f"Edited a result in {div} round {p.get('round', '')}",
+        "fixed_pairings_saved": lambda: f"Saved fixed pairings for {div}",
+        "fixed_tables_saved": lambda: f"Saved fixed tables for {div}",
+        "board_tables_saved": lambda: f"Saved the board/table map for {div}",
+        "fixed_pairing_added": lambda: f"Fixed {p.get('name1', '')} vs {p.get('name2', '')} in {div} round {p.get('round', '')}",
+        "fixed_pairing_removed": lambda: f"Removed a fixed pairing in {div} round {p.get('round', '')}",
+        "fixed_pairings_removed": lambda: f"Removed fixed pairings in {div}",
+        "rounds_published": lambda: f"Published rounds {p.get('rounds', '')} in {div}",
+        "round_published": lambda: f"Published round {p.get('round', '')} in {div}",
+        "round_unpublished": lambda: f"Unpublished round {p.get('round', '')} in {div}",
+        "match_simulated": lambda: f"Simulated a match in {div} round {p.get('round', '')}",
+        "round_simulated": lambda: f"Simulated round {p.get('round', '')} in {div}",
+        "state_snapshot": lambda: f"Recorded a state snapshot for {div}",
+    }
+    render = templates.get(t)
+    return render() if render else t.replace("_", " ").capitalize()
+
+
 # ---------------------------------------------------------------------------
 # Development write guard
 # ---------------------------------------------------------------------------

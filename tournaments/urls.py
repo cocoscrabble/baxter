@@ -39,9 +39,11 @@ from .views import (
     RoundPairingsTabView,
     SimulateMatchView,
     SimulateRoundView,
+    TournamentActivityView,
     TournamentCreateView,
     TournamentDeleteView,
     TournamentDetailView,
+    TournamentEventLogExportView,
     TournamentListView,
     TournamentUpdateView,
 )
@@ -65,6 +67,8 @@ urlpatterns = [
     path("<slug:tournament_slug>/", TournamentDetailView.as_view(), name="tournament_detail"),
     path("<slug:tournament_slug>/edit/", TournamentUpdateView.as_view(), name="tournament_edit"),
     path("<slug:tournament_slug>/delete/", TournamentDeleteView.as_view(), name="tournament_delete"),
+    path("<slug:tournament_slug>/activity/", TournamentActivityView.as_view(), name="tournament_activity"),
+    path("<slug:tournament_slug>/activity/export/", TournamentEventLogExportView.as_view(), name="tournament_event_log_export"),
     path("<slug:tournament_slug>/division/create/", DivisionCreateView.as_view(), name="division_create"),
 
     path(D, DivisionDetailView.as_view(), name="division_detail"),
