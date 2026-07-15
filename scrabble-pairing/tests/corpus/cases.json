@@ -2247,8 +2247,8 @@
             "repeats": 1
           },
           {
-            "first": "P07",
-            "second": "P05",
+            "first": "P05",
+            "second": "P07",
             "repeats": 1
           },
           {
@@ -2257,8 +2257,8 @@
             "repeats": 1
           },
           {
-            "first": "P08",
-            "second": "P06",
+            "first": "P06",
+            "second": "P08",
             "repeats": 1
           }
         ]
@@ -2329,8 +2329,8 @@
         "round": 2,
         "pairings": [
           {
-            "first": "P03",
-            "second": "P01",
+            "first": "P01",
+            "second": "P03",
             "repeats": 1
           },
           {
@@ -2513,8 +2513,8 @@
             "repeats": 1
           },
           {
-            "first": "P07",
-            "second": "P05",
+            "first": "P05",
+            "second": "P07",
             "repeats": 1
           },
           {
@@ -2672,13 +2672,13 @@
             "repeats": 1
           },
           {
-            "first": "P07",
-            "second": "P05",
+            "first": "P05",
+            "second": "P07",
             "repeats": 1
           },
           {
-            "first": "P11",
-            "second": "P09",
+            "first": "P09",
+            "second": "P11",
             "repeats": 1
           },
           {
@@ -2687,13 +2687,13 @@
             "repeats": 1
           },
           {
-            "first": "P08",
-            "second": "P06",
+            "first": "P06",
+            "second": "P08",
             "repeats": 1
           },
           {
-            "first": "P12",
-            "second": "P10",
+            "first": "P10",
+            "second": "P12",
             "repeats": 1
           }
         ]
@@ -3167,8 +3167,8 @@
             "repeats": 1
           },
           {
-            "first": "P07",
-            "second": "P05",
+            "first": "P05",
+            "second": "P07",
             "repeats": 1
           },
           {
@@ -3177,8 +3177,8 @@
             "repeats": 1
           },
           {
-            "first": "P08",
-            "second": "P06",
+            "first": "P06",
+            "second": "P08",
             "repeats": 1
           }
         ]

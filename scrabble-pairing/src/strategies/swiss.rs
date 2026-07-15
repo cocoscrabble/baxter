@@ -16,6 +16,24 @@ const SWISS_DISTANCE: usize = 10;
 /// Don't pair candidates more than this many rating-rank places apart.
 const MAX_DISTANCE: i32 = 11;
 
+// Deterministic tie-break for the blossom matching. Equally-good pairings (same
+// repeats, same total seed-distance) admit many max-weight matchings; perturbing
+// each edge by a well-mixed per-edge value makes the maximum (almost surely)
+// unique so the Python and Rust engines pick the same one. The primary objective
+// is scaled up by WEIGHT_SCALE so the perturbation never overrides it; the
+// per-edge value is a splitmix64 hash of the canonical (min, max) vertex pair,
+// bit-for-bit identical to the Python engine's.
+const TIEBREAK_MOD: u64 = 1 << 40;
+const WEIGHT_SCALE: i128 = 1 << 52;
+
+fn match_tiebreak(a: usize, b: usize) -> i128 {
+    let mut x = ((a as u64) << 20) | (b as u64);
+    x = (x ^ (x >> 30)).wrapping_mul(0xBF58476D1CE4E5B9);
+    x = (x ^ (x >> 27)).wrapping_mul(0x94D049BB133111EB);
+    x ^= x >> 31;
+    (x % TIEBREAK_MOD) as i128
+}
+
 /// Win-count groups, highest first, each an ordered queue of players.
 struct Groups {
     groups: VecDeque<VecDeque<Player>>,
@@ -162,7 +180,8 @@ fn pair_candidates(bracket: &[Vec<Candidate>]) -> Vec<(String, String)> {
                 let v1 = names[&c.name1];
                 let v2 = names[&c.name2];
                 let key = if v1 <= v2 { (v1, v2) } else { (v2, v1) };
-                let weight = -(30 * c.repeats as i128 + c.distance as i128);
+                let weight = WEIGHT_SCALE * -(30 * c.repeats as i128 + c.distance as i128)
+                    + match_tiebreak(key.0, key.1);
                 seen.entry(key).or_insert(weight);
             }
         }
