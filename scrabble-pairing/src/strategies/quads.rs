@@ -4,10 +4,12 @@
 //! These strategies assume an even field that is `4n` or `4n+2` (quads) / a
 //! valid sixes size. A malformed field yields no pairings rather than panicking.
 
+use std::collections::HashSet;
+
 use crate::round_pairing::RoundPairing;
 use crate::standings::{Pairings, Player};
 
-use super::Ctx;
+use super::{guard_no_dropped_in_block, Ctx};
 
 // Quad pairings for four players 0-3, indexed by round position.
 const PAIRINGS4: [[[usize; 2]; 2]; 3] = [[[0, 3], [1, 2]], [[0, 2], [1, 3]], [[0, 1], [2, 3]]];
@@ -22,12 +24,19 @@ const PAIRINGS6: [[[usize; 2]; 3]; 3] = [
 /// Start-round standings for a quad/sixes round, with a bye appended for an odd
 /// field so it divides into whole quads/hexes. Whoever is grouped with the bye
 /// sits the round out (the bye follows the strategy's own distribution).
-fn quad_standings(ctx: &Ctx, rp: &RoundPairing) -> Vec<Player> {
+fn quad_standings(ctx: &Ctx, rp: &RoundPairing) -> Result<Vec<Player>, String> {
+    let block_rounds: HashSet<i32> = ctx
+        .round_pairings
+        .iter()
+        .filter(|o| o.pairing == rp.pairing && o.start_round == rp.start_round)
+        .map(|o| o.round)
+        .collect();
+    guard_no_dropped_in_block(ctx, &block_rounds, "quad block", "quad blocks")?;
     let mut standings = ctx.standings(rp.start_round);
     if !standings.len().is_multiple_of(2) {
         standings.push(Player::bye());
     }
-    standings
+    Ok(standings)
 }
 
 /// 0-based position of `rp` within its run of same-strategy, same-start_round
@@ -109,7 +118,7 @@ fn maybe_add_quads(hexes: &mut Vec<Vec<Player>>, standings: &[Player], last_hex:
 
 pub fn pair_clustered_quads(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings, String> {
     let pos = quad_position(rp, ctx.round_pairings);
-    let standings = quad_standings(ctx, rp);
+    let standings = quad_standings(ctx, rp)?;
     let last_quad = last_quad_position(standings.len())
         .ok_or_else(|| "field too small for quads".to_string())?;
     let mut quads: Vec<Vec<Player>> = Vec::new();
@@ -124,7 +133,7 @@ pub fn pair_clustered_quads(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings
 
 pub fn pair_distributed_quads(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings, String> {
     let pos = quad_position(rp, ctx.round_pairings);
-    let standings = quad_standings(ctx, rp);
+    let standings = quad_standings(ctx, rp)?;
     let last_quad = last_quad_position(standings.len())
         .ok_or_else(|| "field too small for quads".to_string())?;
     let stride = last_quad / 4;
@@ -138,7 +147,7 @@ pub fn pair_distributed_quads(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairin
 
 pub fn pair_equalized_quads(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings, String> {
     let pos = quad_position(rp, ctx.round_pairings);
-    let standings = quad_standings(ctx, rp);
+    let standings = quad_standings(ctx, rp)?;
     let last_quad = last_quad_position(standings.len())
         .ok_or_else(|| "field too small for quads".to_string())?;
     let stride = last_quad / 4;
@@ -153,7 +162,7 @@ pub fn pair_equalized_quads(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings
 
 pub fn pair_sixes(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings, String> {
     let pos = quad_position(rp, ctx.round_pairings);
-    let standings = quad_standings(ctx, rp);
+    let standings = quad_standings(ctx, rp)?;
     let last_hex = last_hex_position(standings.len())
         .ok_or_else(|| "field too small for sixes".to_string())?;
     let stride = last_hex / 6;

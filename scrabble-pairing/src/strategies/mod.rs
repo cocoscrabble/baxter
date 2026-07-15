@@ -45,6 +45,44 @@ impl Ctx<'_> {
     }
 }
 
+/// Error if a withdrawn entrant already played a game in this block's rounds.
+///
+/// Round-robin / quad blocks are a fixed template over a fixed field; once a
+/// player in the block has played, the block can't be re-paired around their
+/// withdrawal. `singular` / `plural` name the block in the message, e.g.
+/// `("round-robin", "round robins")`.
+pub fn guard_no_dropped_in_block(
+    ctx: &Ctx,
+    block_rounds: &HashSet<i32>,
+    singular: &str,
+    plural: &str,
+) -> Result<(), String> {
+    let dropped: HashSet<&str> = ctx
+        .players
+        .iter()
+        .filter(|p| p.dropped)
+        .map(|p| p.name.as_str())
+        .collect();
+    if dropped.is_empty() {
+        return Ok(());
+    }
+    for s in ctx.slips {
+        if !block_rounds.contains(&s.round) {
+            continue;
+        }
+        for name in [&s.winner_name, &s.loser_name] {
+            if dropped.contains(name.as_str()) {
+                return Err(format!(
+                    "{name} withdrew mid-{singular} — {plural} can't re-pair \
+                     around a withdrawal; convert the remaining rounds to \
+                     another strategy or enter forfeits."
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Blossom matching that minimizes repeat opponents, with a random tiebreak.
 pub fn pair_no_repeats_blossom(
     players: &[Player],

@@ -11,6 +11,11 @@ use crate::round_pairing::RoundPairing;
 pub struct PlayerData {
     pub name: String,
     pub rating: i32,
+    /// A withdrawn entrant: excluded from all future pairing, but their played
+    /// results still count for opponents. `#[serde(default)]` keeps older corpus
+    /// cases (without the field) parsing.
+    #[serde(default)]
+    pub dropped: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]

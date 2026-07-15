@@ -180,8 +180,9 @@ pub fn results_after_round(slips: &[ResultSlipData], round: i32) -> Results {
 }
 
 /// Initial seeding order: players by descending rating (ties keep input order).
+/// Dropped (withdrawn) entrants are unpairable, so they never seed a round.
 pub fn seedings(players: &[PlayerData]) -> Vec<Player> {
-    let mut indexed: Vec<&PlayerData> = players.iter().collect();
+    let mut indexed: Vec<&PlayerData> = players.iter().filter(|p| !p.dropped).collect();
     // sort_by is stable, so equal ratings keep their original input order.
     indexed.sort_by(|a, b| b.rating.cmp(&a.rating));
     indexed.into_iter().map(|p| Player::new(&p.name)).collect()
@@ -189,9 +190,12 @@ pub fn seedings(players: &[PlayerData]) -> Vec<Player> {
 
 /// Standings after `round`, with the bye and any excluded players removed.
 ///
-/// Round 0 uses the seedings; later rounds use accumulated results. The bye is
-/// never a competitor, and `excluded` (fixed players this round) are filtered so
-/// a strategy only sees the remaining field.
+/// Round 0 uses the seedings; later rounds use accumulated results. Withdrawn
+/// players are dropped from the pairable field (their games still counted for
+/// everyone else), and a late entrant with no results yet is appended as a zero
+/// record — in seeding (rating) order among newcomers — so it starts getting
+/// paired. The bye is never a competitor, and `excluded` (fixed players this
+/// round) are filtered so a strategy only sees the remaining field.
 pub fn standings_after_round(
     players: &[PlayerData],
     slips: &[ResultSlipData],
@@ -201,7 +205,26 @@ pub fn standings_after_round(
     let mut s = if round == 0 {
         seedings(players)
     } else {
-        results_after_round(slips, round).standings()
+        let mut s = results_after_round(slips, round).standings();
+        let dropped: std::collections::HashSet<&str> = players
+            .iter()
+            .filter(|p| p.dropped)
+            .map(|p| p.name.as_str())
+            .collect();
+        if !dropped.is_empty() {
+            s.retain(|p| !dropped.contains(p.name.as_str()));
+        }
+        let present: std::collections::HashSet<String> =
+            s.iter().map(|p| p.name.clone()).collect();
+        let mut newcomers: Vec<&PlayerData> = players
+            .iter()
+            .filter(|p| !p.dropped && !present.contains(&p.name))
+            .collect();
+        newcomers.sort_by(|a, b| b.rating.cmp(&a.rating));
+        for p in newcomers {
+            s.push(Player::new(&p.name));
+        }
+        s
     };
     s.retain(|p| !p.is_bye());
     if !excluded.is_empty() {
@@ -329,6 +352,7 @@ mod tests {
         PlayerData {
             name: name.into(),
             rating,
+            dropped: false,
         }
     }
 

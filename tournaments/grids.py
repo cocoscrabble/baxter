@@ -3,7 +3,15 @@
 from editgrid.grids import Column, EditGrid, JsonBlobGrid
 
 from .dto import EntrantDTO, FixedPairingDTO, FixedTableDTO, ResultSlipDTO
-from .models import DivisionSettings, Entrant, FixedPairing, FixedTable, Player, ResultSlip
+from .models import (
+    DivisionSettings,
+    Entrant,
+    FixedPairing,
+    FixedTable,
+    Player,
+    ResultSlip,
+    RoundPairings,
+)
 
 
 def _entrant_values(division):
@@ -25,18 +33,27 @@ class EntrantsGrid(EditGrid):
     # results, which would otherwise cascade away on a wipe) and only apply
     # number changes, adds, and guarded removals.
     key_fields = ("player_id",)
-    update_fields = ("number",)
+    update_fields = ("number", "dropped")
     unique_within_parent = ("number",)  # (division, number) is unique
     columns = [
         Column("number", "#", kind="display", width=60, auto_increment=True),
         Column("player", "Player", kind="choice", lookup="players", autocomplete=True),
+        Column(
+            "dropped", "Dropped", kind="choice",
+            values={False: "", True: "Dropped"}, value_type="bool",
+            new_row=False, width=110,
+        ),
     ]
 
     def queryset(self, division):
         return division.entrants.select_related("player").order_by("number")
 
     def serialize_row(self, entrant):
-        return {"number": entrant.number, "player": entrant.player_id}
+        return {
+            "number": entrant.number,
+            "player": entrant.player_id,
+            "dropped": entrant.dropped,
+        }
 
     def lookups(self, division):
         return {"players": [
@@ -62,6 +79,25 @@ class EntrantsGrid(EditGrid):
                 "removed."
             )
         return None
+
+    def _roster_signature(self, division):
+        # (player, dropped) per real entrant — what the pairing engine keys off.
+        # A pure renumber doesn't change it (numbers don't affect pairing).
+        return frozenset(division.entrants.values_list("player_id", "dropped"))
+
+    def persist(self, division, prepared):
+        before = self._roster_signature(division)
+        super().persist(division, prepared)
+        if self._roster_signature(division) != before:
+            # Roster membership or a dropped flag changed, so any draft pairings
+            # are stale. Drop them (a plain DELETE — safe inside the save
+            # transaction); the lazy _autogenerate_pairable_rounds re-pairs on
+            # the next Pair Rounds render. Published/finished rounds are left
+            # alone (unpublish handles those). Regenerating here is deliberately
+            # avoided: a PairingError would poison the whole grid save.
+            division.round_pairings_set.filter(
+                status=RoundPairings.DRAFT
+            ).delete()
 
 
 class FixedPairingsGrid(EditGrid):

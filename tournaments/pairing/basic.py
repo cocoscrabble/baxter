@@ -9,6 +9,7 @@ from tournaments.pairing.base import (
     PairingData,
     PairingError,
     Player,
+    guard_no_dropped_in_block,
     pair_no_repeats_blossom,
     standings_after_round,
 )
@@ -176,6 +177,7 @@ def _rr_block_pairings(pd: PairingData, rp: RoundPairing, k: int) -> Pairings:
         o.round for o in pd.round_pairings
         if o.pairing == rp.pairing and o.start_round == rp.start_round
     }
+    guard_no_dropped_in_block(pd, block_rounds, "round-robin", "round robins")
 
     def position_of(round_number):
         return (round_number - rp.start_round) // k

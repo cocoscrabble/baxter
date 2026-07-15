@@ -68,20 +68,24 @@ class ResultSlipDTO(DataClassJsonMixin):
 class EntrantDTO(DataClassJsonMixin):
     number: int
     player: int
+    dropped: bool = False
 
     @classmethod
     def from_json(cls, row: dict) -> "EntrantDTO | None":
         """Parse a JSON row dict. Returns None if a field is missing/invalid.
 
         Numeric fields are coerced explicitly (mirroring ``FixedPairingDTO``) so
-        string-typed numbers behave identically across grids.
+        string-typed numbers behave identically across grids. ``dropped`` is
+        optional (defaults False) so older payloads without the column still
+        parse.
         """
-        if any(row.get(f.name) is None for f in fields(cls)):
+        if row.get("number") is None or row.get("player") is None:
             return None
         try:
             return cls(
                 number=int(row["number"]),
                 player=int(row["player"]),
+                dropped=bool(row.get("dropped", False)),
             )
         except (ValueError, TypeError):
             return None
@@ -102,6 +106,7 @@ class EntrantDTO(DataClassJsonMixin):
         return {
             "number": self.number,
             "player_id": self.player,
+            "dropped": self.dropped,
         }
 
 

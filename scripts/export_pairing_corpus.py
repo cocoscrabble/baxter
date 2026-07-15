@@ -66,7 +66,10 @@ def block_schedule(strategy, n_rounds):
 
 def serialize_input(es, slips, rps, fixed, seed):
     return {
-        "players": [{"name": e.player.name, "rating": e.player.rating} for e in es],
+        "players": [
+            {"name": e.player.name, "rating": e.player.rating, "dropped": e.dropped}
+            for e in es
+        ],
         "result_slips": [
             {
                 "round": s.round,
@@ -168,6 +171,20 @@ def build_cases():
     es4 = entrants(4)
     hist4 = round1_results(es4, winners_idx={0, 1})  # top of each pair wins
     cases.append(case("swiss_r2_n4", True, es4, [RoundPairing(1, 0, RP.Swiss), RoundPairing(2, 1, RP.Swiss)], slips=hist4))
+
+    # --- Late entrant mid-Swiss: P05 joins after round 1 (no results yet) and
+    # must appear in round 2 as a zero record (round1_results leaves the odd
+    # last seed unpaired). ---
+    es5 = entrants(5)
+    hist_late = round1_results(es5, winners_idx={0, 1})
+    cases.append(case("swiss_late_add_r2_n5", True, es5, [RoundPairing(1, 0, RP.Swiss), RoundPairing(2, 1, RP.Swiss)], slips=hist_late))
+
+    # --- Dropout mid-Swiss: 8 play round 1, P08 withdraws -> 7 active in round
+    # 2, so the even field turns odd and a bye appears. ---
+    es8d = entrants(8)
+    es8d[7].dropped = True
+    hist_drop = round1_results(es8d, winners_idx={0, 1, 2, 3})
+    cases.append(case("swiss_dropout_r2_n8", True, es8d, [RoundPairing(1, 0, RP.Swiss), RoundPairing(2, 1, RP.Swiss)], slips=hist_drop))
     es12 = entrants(12)
     hist12 = round1_results(es12, winners_idx={0, 1, 2, 3, 4, 5})
     cases.append(case("swiss_r2_n12", True, es12, [RoundPairing(1, 0, RP.Swiss), RoundPairing(2, 1, RP.Swiss)], slips=hist12))

@@ -35,6 +35,9 @@ class PlayerData:
 @dataclass
 class EntrantData:
     player: PlayerData
+    # A dropped entrant keeps their played results (they still count for
+    # opponents) but is never paired again.
+    dropped: bool = False
 
 
 @dataclass
@@ -100,7 +103,8 @@ class PairingData:
     @classmethod
     def for_division(cls, division) -> "PairingData":
         entrants = [
-            EntrantData(PlayerData.from_db(e.player)) for e in division.entrants.all()
+            EntrantData(PlayerData.from_db(e.player), dropped=e.dropped)
+            for e in division.entrants.all()
         ]
         slips = [ResultSlipData.from_db(r) for r in division.result_slips.all()]
         fixed: dict[int, list[tuple[str, str]]] = defaultdict(list)
@@ -125,6 +129,31 @@ class PairingError(Exception):
     """Raised when a round cannot be paired as configured — e.g. a set of fixed
     pairings that can't all be satisfied by a round-robin slot assignment. The
     message is surfaced to the organiser."""
+
+
+def guard_no_dropped_in_block(pd, block_rounds, singular, plural) -> None:
+    """Raise a clear ``PairingError`` if a withdrawn entrant already played a
+    game in this block's rounds.
+
+    Round-robin / quad blocks are a fixed template over a fixed field; once a
+    player in the block has played, the block can't be re-paired around their
+    withdrawal (the remaining templates still expect them). ``singular`` /
+    ``plural`` name the block in the message, e.g. ``("round-robin",
+    "round robins")``.
+    """
+    dropped = {e.player.name for e in pd.entrants if e.dropped}
+    if not dropped:
+        return
+    for s in pd.result_slips:
+        if s.round not in block_rounds:
+            continue
+        for name in (s.winner_name, s.loser_name):
+            if name in dropped:
+                raise PairingError(
+                    f"{name} withdrew mid-{singular} — {plural} can't re-pair "
+                    "around a withdrawal; convert the remaining rounds to "
+                    "another strategy or enter forfeits."
+                )
 
 
 class DefaultDict(defaultdict):
@@ -350,17 +379,48 @@ def results_after_round(pd: PairingData, round: int) -> Results:
 Standings = list[Player]
 
 
-def seedings(pd: PairingData) -> Standings:
-    entrants = list(pd.entrants)
+def seedings(pd: PairingData, include_dropped: bool = False) -> Standings:
+    # Dropped entrants are unpairable, so they never seed a round (the pairing
+    # path leaves include_dropped False); the standings *display* passes True to
+    # keep showing them.
+    entrants = [e for e in pd.entrants if include_dropped or not e.dropped]
     entrants.sort(key=lambda x: -x.player.rating)
     return [Player(e.player.name) for e in entrants]
 
 
-def standings_after_round(pd: PairingData, round: int) -> Standings:
+def standings_after_round(
+    pd: PairingData, round: int, include_dropped: bool = False
+) -> Standings:
+    """Field standing after ``round``.
+
+    The pairing engine calls this with ``include_dropped=False`` (the default):
+    withdrawn players are removed from the pairable field and late entrants are
+    appended as zero records so they start getting paired. The standings display
+    passes ``include_dropped=True`` so withdrawn players stay visible (marked);
+    their games always count for everyone else either way.
+    """
     if round == 0:
-        s = seedings(pd)
+        s = seedings(pd, include_dropped=include_dropped)
     else:
         s = results_after_round(pd, round).standings()
+        # Withdrawn players still counted above — their games affect everyone
+        # else's record/spread — but they can't be paired again.
+        if not include_dropped:
+            dropped = {e.player.name for e in pd.entrants if e.dropped}
+            if dropped:
+                s = [p for p in s if p.name not in dropped]
+        # A late entrant has no result slips yet, so it never appears in
+        # results-derived standings and would silently never be paired. Append
+        # each recordless entrant as a zero record, in seeding (rating) order
+        # among themselves, at the bottom of the field.
+        present = {p.name for p in s}
+        newcomers = [
+            e
+            for e in pd.entrants
+            if e.player.name not in present and (include_dropped or not e.dropped)
+        ]
+        newcomers.sort(key=lambda e: -e.player.rating)
+        s = s + [Player(e.player.name) for e in newcomers]
     # The bye is never a competitor: it must not appear in any pairing field or
     # in displayed standings. (It is added back as a forced pairing for an odd
     # field — see pair_round.)

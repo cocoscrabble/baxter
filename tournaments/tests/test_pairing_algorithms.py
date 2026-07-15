@@ -3,9 +3,11 @@ from unittest import TestCase
 from tournaments.pairing.base import (
     EntrantData,
     PairingData,
+    PairingError,
     PlayerData,
     Repeats,
     ResultSlipData,
+    standings_after_round,
 )
 from tournaments.pairing.round_pairing import RP, RoundPairing
 from tournaments.pairing.basic import (
@@ -429,3 +431,100 @@ class SwissSmallFieldTests(PairingTestCase):
         pairings = self._round2("ABCDE", [("A", "C"), ("B", "D")])
         self.assertEqual(len(pairings), 2)
         self._assert_valid(pairings, "ABCDE")
+
+
+# ── Dropped entrants & late adds ────────────────────────
+
+
+class DroppedAndLateEntrantTests(TestCase):
+    """standings_after_round handling of withdrawals and late entrants."""
+
+    def _pd(self, entrants, slips):
+        return PairingData(
+            result_slips=slips,
+            entrants=entrants,
+            repeats=Repeats(),
+            round_pairings=[],
+        )
+
+    def test_dropped_excluded_from_pairing_but_kept_for_display(self):
+        entrants = [
+            EntrantData(PlayerData("A", 1600)),
+            EntrantData(PlayerData("B", 1500)),
+            EntrantData(PlayerData("C", 1400), dropped=True),
+            EntrantData(PlayerData("D", 1300)),
+        ]
+        slips = [
+            ResultSlipData(1, "A", "C", 400, 300, True),
+            ResultSlipData(1, "B", "D", 400, 300, True),
+        ]
+        pd = self._pd(entrants, slips)
+        pairing = [p.name for p in standings_after_round(pd, 1)]
+        self.assertNotIn("C", pairing)  # unpairable once withdrawn
+        display = [
+            p.name for p in standings_after_round(pd, 1, include_dropped=True)
+        ]
+        self.assertIn("C", display)  # still shown in standings
+
+    def test_dropped_result_still_counts_for_opponent(self):
+        # C withdrew, but the game C lost to A still gives A its win/spread.
+        entrants = [
+            EntrantData(PlayerData("A", 1600)),
+            EntrantData(PlayerData("C", 1400), dropped=True),
+        ]
+        slips = [ResultSlipData(1, "A", "C", 450, 300, True)]
+        pd = self._pd(entrants, slips)
+        standings = standings_after_round(pd, 1)
+        a = next(p for p in standings if p.name == "A")
+        self.assertEqual(a.wins, 1)
+        self.assertEqual(a.spread, 150)
+
+    def test_late_entrant_appended_at_bottom(self):
+        entrants = [
+            EntrantData(PlayerData("A", 1600)),
+            EntrantData(PlayerData("B", 1500)),
+            EntrantData(PlayerData("C", 1400)),
+            EntrantData(PlayerData("D", 1300)),
+            EntrantData(PlayerData("E", 1200)),  # added after round 1, no results
+        ]
+        slips = [
+            ResultSlipData(1, "A", "C", 400, 300, True),
+            ResultSlipData(1, "B", "D", 400, 300, True),
+        ]
+        pd = self._pd(entrants, slips)
+        names = [p.name for p in standings_after_round(pd, 1)]
+        self.assertIn("E", names)
+        self.assertEqual(names[-1], "E")  # zero record sits at the bottom
+
+    def test_two_late_entrants_in_seed_order(self):
+        entrants = [
+            EntrantData(PlayerData("A", 1600)),
+            EntrantData(PlayerData("B", 1500)),
+            EntrantData(PlayerData("E", 1200)),  # late, lower rated
+            EntrantData(PlayerData("F", 1250)),  # late, higher rated
+        ]
+        slips = [ResultSlipData(1, "A", "B", 400, 300, True)]
+        pd = self._pd(entrants, slips)
+        names = [p.name for p in standings_after_round(pd, 1)]
+        # Newcomers appended in rating order among themselves: F (1250) then E.
+        self.assertEqual(names[-2:], ["F", "E"])
+
+    def test_dropping_out_of_played_round_robin_raises(self):
+        entrants = [
+            EntrantData(PlayerData("A", 1600)),
+            EntrantData(PlayerData("B", 1500)),
+            EntrantData(PlayerData("C", 1400), dropped=True),  # withdraws mid-RR
+            EntrantData(PlayerData("D", 1300)),
+        ]
+        rps = [RoundPairing(r, 0, RP.RoundRobin) for r in (1, 2, 3)]
+        slips = [
+            ResultSlipData(1, "A", "C", 400, 300, True),
+            ResultSlipData(1, "B", "D", 400, 300, True),
+        ]
+        pd = PairingData(
+            result_slips=slips, entrants=entrants, repeats=Repeats(),
+            round_pairings=rps,
+        )
+        with self.assertRaises(PairingError) as cm:
+            pair_round_robin(pd, RoundPairing(2, 0, RP.RoundRobin))
+        self.assertIn("withdrew", str(cm.exception))

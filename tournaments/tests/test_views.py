@@ -2541,6 +2541,32 @@ class DivisionEntrantsEditViewTests(TestCase):
             self.client.get(self.url).context["grid"].version, 0
         )
 
+    def test_marking_dropped_persists_and_clears_draft_pairings(self):
+        e1, e2 = self._seed_entrants()
+        draft = RoundPairings.objects.create(
+            division=self.division, round=1, status=RoundPairings.DRAFT
+        )
+        published = RoundPairings.objects.create(
+            division=self.division, round=2, status=RoundPairings.PUBLISHED
+        )
+        self.client.login(username="owner", password="testpass123")
+        payload = {
+            "rows": [
+                {"number": 1, "player": self.player1.pk, "dropped": False},
+                {"number": 2, "player": self.player2.pk, "dropped": True},
+            ],
+            "_version": 0,
+        }
+        response = self.client.post(
+            self.url, json.dumps(payload), content_type="application/json"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(self.division.entrants.get(player=self.player2).dropped)
+        # A changed dropped flag invalidates draft pairings but leaves published
+        # rounds alone.
+        self.assertFalse(RoundPairings.objects.filter(pk=draft.pk).exists())
+        self.assertTrue(RoundPairings.objects.filter(pk=published.pk).exists())
+
     def test_renumber_swap_succeeds(self):
         # Swapping two entrants' numbers transiently collides on the
         # (division, number) unique constraint; the two-pass update handles it.
