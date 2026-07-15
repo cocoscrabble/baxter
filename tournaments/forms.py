@@ -5,7 +5,7 @@ from users.models import User
 from django.forms import formset_factory
 
 from .models import Entrant, Pairing, Player, ResultSlip, RoundPairings, Tournament
-from .pairing.pair import STRATEGY_TYPES
+from .pairing.round_pairing import STRATEGY_TYPES
 
 
 def clean_multiline_text(text):

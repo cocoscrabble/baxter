@@ -28,6 +28,26 @@ class RP(StrEnum):
         return name in (RP.Quads_Clustered, RP.Quads_Distributed, RP.Quads_Equalized, RP.Sixes)
 
 
+# The pairing strategies the schedule editor offers. Every entry must be a name
+# the Rust engine accepts (see test_rust_engine); the engine is now the only
+# implementation.
+STRATEGY_TYPES = [
+    RP.KotH,
+    RP.QotH,
+    RP.Swiss,
+    RP.RoundRobin,
+    RP.DoubleRoundRobin,
+    RP.Random,
+    RP.RandomNoRepeats,
+    RP.Quads_Clustered,
+    RP.Quads_Distributed,
+    RP.Quads_Equalized,
+    RP.Sixes,
+    RP.Charlottesville,
+    RP.SwissPlusRandom,
+]
+
+
 ABBREV = {
     "KH": RP.KotH,
     "QH": RP.QotH,

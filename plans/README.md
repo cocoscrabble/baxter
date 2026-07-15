@@ -12,13 +12,13 @@ Current plans:
 - `PLAN.md` — code-review fix plan (Swiss loop, grid-save reconciliation, late
   entrants/dropouts, access hardening). **Implemented.**
 - `PLAN_RUST_CUTOVER.md` — cut the pairing engine over to the `scrabble-pairing`
-  Rust crate via a PyO3 extension. Phases 1–3 implemented (binding, adapter,
-  parity); default engine still `python` pending burn-in.
+  Rust crate via a PyO3 extension. **Implemented** (all phases); the Python
+  engine is deleted and Rust is the only engine.
 - `PLAN_EVENT_LOG.md` — replayable append-only tournament event log.
   **Implemented** (all phases).
 - `PLAN_ROUND_ROBIN.md` — fully general fixed pairings for round robins.
-  **Not yet started**; sequenced after the Rust cutover (solver written once,
-  in Rust).
+  **Not yet started**; now unblocked by the completed cutover (solver written
+  once, in Rust).
 - `PLAN_DESKTOP_APP.md` — package Baxter as a downloadable offline desktop app
   (PyInstaller + waitress launcher). **Potential future work**; not started,
   not scheduled.

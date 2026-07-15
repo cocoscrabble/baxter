@@ -13,7 +13,6 @@ from tournaments.pairing.round_pairing import make_pairings
 from tournaments.simulate import (
     Round,
     check_starts_balancing,
-    compare_engines,
     simulate,
 )
 
@@ -48,7 +47,7 @@ class StartsBalancingTests(TestCase):
         rps = _rp_dicts(spec)
         for seed in seeds:
             with self.subTest(spec=spec, n_entrants=n_entrants, seed=seed):
-                rounds, _, _ = simulate(rps, n_entrants, seed=seed)
+                rounds = simulate(rps, n_entrants, seed=seed)
                 check_starts_balancing(rounds)
 
     def test_koth(self):
@@ -101,7 +100,7 @@ class PairingCountTests(TestCase):
     def _check(self, spec, n_entrants):
         rps = _rp_dicts(spec)
         expected_games = n_entrants // 2
-        rounds, _, _ = simulate(rps, n_entrants, seed=42)
+        rounds = simulate(rps, n_entrants, seed=42)
         for round in rounds:
             with self.subTest(round=round.number):
                 self.assertEqual(len(round.pairings), expected_games)
@@ -121,51 +120,6 @@ class PairingCountTests(TestCase):
 
 
 @tag("slow")
-class EngineComparisonTests(TestCase):
-    """The Python and Rust engines must stay byte-identical across strategies (a
-    regression guard for the cutover). Swiss's blossom matcher uses an explicit
-    deterministic tie-break shared by both engines, so it agrees exactly too.
-    """
-
-    def _assert_agree(self, spec, n_entrants, seeds=range(4)):
-        for seed in seeds:
-            with self.subTest(spec=spec, n_entrants=n_entrants, seed=seed):
-                divergences = compare_engines(_rp_dicts(spec), n_entrants, seed=seed)
-                self.assertEqual(
-                    divergences, [], f"engines diverged: {[str(d) for d in divergences]}"
-                )
-
-    def test_koth_agrees(self):
-        self._assert_agree("KH:15", 24)
-        self._assert_agree("KH:15", 23)  # odd field -> bye
-
-    def test_qoth_agrees(self):
-        self._assert_agree("QH:15", 20)
-
-    def test_round_robin_agrees(self):
-        self._assert_agree("RR:11", 12)
-        self._assert_agree("RR:11", 11)  # odd field -> bye
-
-    def test_double_round_robin_agrees(self):
-        self._assert_agree("DR:10", 8)
-
-    def test_quads_agree(self):
-        self._assert_agree("QC:3", 16)
-        self._assert_agree("QD:3", 12)
-        self._assert_agree("QE:3", 12)
-
-    def test_sixes_agrees(self):
-        self._assert_agree("SX:3", 12)
-
-    def test_swiss_agrees(self):
-        # The shared deterministic blossom tie-break makes Swiss byte-identical
-        # across engines, including odd fields (byes) where ties are common.
-        self._assert_agree("SW:15", 24, seeds=range(8))
-        self._assert_agree("SW:15", 23, seeds=range(8))
-        self._assert_agree("SW:15", 17, seeds=range(8))
-
-
-@tag("slow")
 class SwissNeverShortRoundTests(TestCase):
     """Regression: Swiss must pair the whole field every round.
 
@@ -181,7 +135,7 @@ class SwissNeverShortRoundTests(TestCase):
         for n_entrants in (8, 10, 16, 30):
             expected_games = n_entrants // 2
             for seed in range(8):
-                rounds, _, _ = simulate(rps, n_entrants, seed=seed)
+                rounds = simulate(rps, n_entrants, seed=seed)
                 for round in rounds:
                     with self.subTest(n=n_entrants, seed=seed, round=round.number):
                         self.assertEqual(len(round.pairings), expected_games)
@@ -193,7 +147,7 @@ class AllPlayersAppearTests(TestCase):
 
     def _check(self, spec, n_entrants):
         rps = _rp_dicts(spec)
-        rounds, _, _ = simulate(rps, n_entrants, seed=42)
+        rounds = simulate(rps, n_entrants, seed=42)
         all_names = _all_players(rounds)
         for round in rounds:
             with self.subTest(round=round.number):
@@ -219,7 +173,7 @@ class NoDuplicatePairingsInRoundTests(TestCase):
 
     def _check(self, spec, n_entrants):
         rps = _rp_dicts(spec)
-        rounds, _, _ = simulate(rps, n_entrants, seed=42)
+        rounds = simulate(rps, n_entrants, seed=42)
         for round in rounds:
             with self.subTest(round=round.number):
                 seen = set()
@@ -245,7 +199,7 @@ class RoundRobinCompletenessTests(TestCase):
 
     def test_four_players(self):
         rps = _rp_dicts("RR:3")
-        rounds, _, _ = simulate(rps, 4, seed=42)
+        rounds = simulate(rps, 4, seed=42)
         opponents = _player_opponents(rounds)
         players = _all_players(rounds)
         for player in players:
@@ -258,7 +212,7 @@ class RoundRobinCompletenessTests(TestCase):
 
     def test_eight_players(self):
         rps = _rp_dicts("RR:7")
-        rounds, _, _ = simulate(rps, 8, seed=42)
+        rounds = simulate(rps, 8, seed=42)
         opponents = _player_opponents(rounds)
         players = _all_players(rounds)
         for player in players:
@@ -276,15 +230,12 @@ class RepeatsTrackingTests(TestCase):
 
     def test_repeats_counted_correctly(self):
         rps = _rp_dicts("KH:7")
-        rounds, _, repeats = simulate(rps, 8, seed=42)
-        # Count pairings manually
-        pair_counts = defaultdict(int)
+        rounds = simulate(rps, 8, seed=42)
+        # A pairing's repeat count is how many times that pair has met, counting
+        # the current round (the engine returns the post-increment count).
+        seen = defaultdict(int)
         for round in rounds:
             for p in round.pairings:
                 key = tuple(sorted([p.first.name, p.second.name]))
-                pair_counts[key] += 1
-        # Every pair tracked by Repeats should match our manual count
-        for key, count in pair_counts.items():
-            from tournaments.pairing.base import Pairing, Player
-            p = Pairing(Player(key[0]), Player(key[1]))
-            self.assertEqual(repeats.get(p), count)
+                seen[key] += 1
+                self.assertEqual(p.repeats, seen[key])

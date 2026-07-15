@@ -1,9 +1,7 @@
-import random
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
 
-import networkx as nx
 from dataclasses_json import dataclass_json
 
 from tournaments.pairing.round_pairing import (
@@ -143,31 +141,6 @@ class PairingError(Exception):
     """Raised when a round cannot be paired as configured — e.g. a set of fixed
     pairings that can't all be satisfied by a round-robin slot assignment. The
     message is surfaced to the organiser."""
-
-
-def guard_no_dropped_in_block(pd, block_rounds, singular, plural) -> None:
-    """Raise a clear ``PairingError`` if a withdrawn entrant already played a
-    game in this block's rounds.
-
-    Round-robin / quad blocks are a fixed template over a fixed field; once a
-    player in the block has played, the block can't be re-paired around their
-    withdrawal (the remaining templates still expect them). ``singular`` /
-    ``plural`` name the block in the message, e.g. ``("round-robin",
-    "round robins")``.
-    """
-    dropped = {e.player.name for e in pd.entrants if e.dropped}
-    if not dropped:
-        return
-    for s in pd.result_slips:
-        if s.round not in block_rounds:
-            continue
-        for name in (s.winner_name, s.loser_name):
-            if name in dropped:
-                raise PairingError(
-                    f"{name} withdrew mid-{singular} — {plural} can't re-pair "
-                    "around a withdrawal; convert the remaining rounds to "
-                    "another strategy or enter forfeits."
-                )
 
 
 class DefaultDict(defaultdict):
@@ -442,40 +415,3 @@ def standings_after_round(
     if pd.excluded_names:
         s = [p for p in s if p.name not in pd.excluded_names]
     return s
-
-
-def blossom(edges) -> list[tuple]:
-    # The nx implementation of blossom does not like negative weights.
-    m = min(x[2] for x in edges) if edges else 0
-    edges = [[v1, v2, w - m] for v1, v2, w in edges]
-    g = nx.Graph()
-    g.add_weighted_edges_from(edges)
-    matching = nx.max_weight_matching(g, maxcardinality=True)
-    # Normalize each matched pair to (min, max) and sort, matching the Rust
-    # engine's matcher. networkx yields each edge in an arbitrary internal order;
-    # canonicalizing it makes the downstream start-balancing orientation
-    # identical across engines when the two players' start history is tied.
-    return sorted((min(u, v), max(u, v)) for u, v in matching)
-
-
-def pair_no_repeats_blossom(players: Standings, repeats: Repeats) -> Pairings:
-    """Blossom matching to minimize repeat opponents with random tiebreaking."""
-    edges = []
-    names = {}
-    inames = {}
-    for i, player in enumerate(players):
-        names[player.name] = i
-        inames[i] = player.name
-    for p1 in players:
-        for p2 in players:
-            if p1.name < p2.name:
-                reps = repeats.get(Pairing(p1, p2))
-                weight = -(10 * reps + random.random())
-                v1 = names[p1.name]
-                v2 = names[p2.name]
-                edges.append([v1, v2, weight])
-    b = blossom(edges)
-    pairings = Pairings()
-    for v1, v2 in b:
-        pairings.add(Player(inames[v1]), Player(inames[v2]))
-    return pairings
