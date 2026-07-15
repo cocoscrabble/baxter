@@ -170,6 +170,9 @@ class EventResult:
     division: object = None
     tournament: object = None
     result: object = None
+    # Set False when the command validated to a no-op or rejected the input:
+    # the result is still returned to the caller, but no event is logged.
+    record: bool = True
 
 
 # event_type -> command callable, populated by @records_event. Used by replay.
@@ -192,6 +195,8 @@ def records_event(event_type):
             try:
                 with transaction.atomic():
                     outcome = func(tournament, actor, payload)
+                    if not outcome.record:
+                        return outcome.result
                     division = outcome.division
                     tourn = (
                         outcome.tournament

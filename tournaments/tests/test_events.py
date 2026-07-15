@@ -173,3 +173,11 @@ class CrudCommandTests(TestCase):
             self.tournament.events.order_by("seq").values_list("event_type", flat=True)
         )
         self.assertEqual(types, ["division_renamed", "division_deleted"])
+
+    def test_noop_publish_records_no_event(self):
+        # A command that validates to a no-op (nothing to publish) records
+        # nothing, via EventResult(record=False).
+        from tournaments.commands import publish_all_rounds
+
+        publish_all_rounds(self.tournament, self.owner, {"division": "Open"})
+        self.assertEqual(self.tournament.events.count(), 0)

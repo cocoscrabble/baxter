@@ -15,6 +15,7 @@ fresh database.
 from datetime import date
 
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 
 from tournaments.events import EventResult, command_context, records_event
 from tournaments.models import Division, DivisionSettings, Tournament
@@ -134,3 +135,116 @@ def restore_division(tournament, actor, payload):
     div = Division.all_objects.get(tournament=tournament, name=payload["name"])
     div.restore()
     return EventResult(payload=payload, division=div, result=div)
+
+
+# ---------------------------------------------------------------------------
+# Publishing (thin adapters over generate_pairings; the bodies stay there)
+# ---------------------------------------------------------------------------
+
+
+def _division(tournament, name):
+    return Division.objects.get(tournament=tournament, name=name)
+
+
+@records_event("rounds_published")
+def publish_all_rounds(tournament, actor, payload):
+    """payload: {division}. Publishes every draft round; records which."""
+    from tournaments.generate_pairings import publish_rounds
+
+    division = _division(tournament, payload["division"])
+    published = publish_rounds(division)
+    out = {**payload, "rounds": published}
+    return EventResult(
+        payload=out, division=division, result=published, record=bool(published)
+    )
+
+
+@records_event("round_published")
+def publish_round(tournament, actor, payload):
+    """payload: {division, round}."""
+    from tournaments.generate_pairings import publish_rounds
+
+    division = _division(tournament, payload["division"])
+    published = publish_rounds(division, [payload["round"]])
+    return EventResult(
+        payload=payload, division=division, result=published, record=bool(published)
+    )
+
+
+@records_event("round_unpublished")
+def unpublish_round(tournament, actor, payload):
+    """payload: {division, round}."""
+    from tournaments.generate_pairings import unpublish_rounds
+
+    division = _division(tournament, payload["division"])
+    unpublished = unpublish_rounds(division, [payload["round"]])
+    return EventResult(
+        payload=payload, division=division, result=unpublished, record=bool(unpublished)
+    )
+
+
+# ---------------------------------------------------------------------------
+# Fixed pairings (thin adapters; pk args translated to/from player names)
+# ---------------------------------------------------------------------------
+
+
+def _entrant(division, name):
+    return division.entrants.get(player__name=name)
+
+
+@records_event("fixed_pairing_added")
+def add_fixed_pairing_cmd(tournament, actor, payload):
+    """payload: {division, round, name1, name2}."""
+    from tournaments.fixed_pairings import add_fixed_pairing
+
+    division = _division(tournament, payload["division"])
+    e1 = _entrant(division, payload["name1"])
+    e2 = _entrant(division, payload["name2"])
+    ok, error = add_fixed_pairing(division, payload["round"], e1.pk, e2.pk)
+    return EventResult(
+        payload=payload, division=division, result=(ok, error), record=ok
+    )
+
+
+@records_event("fixed_pairing_removed")
+def remove_fixed_pairing_cmd(tournament, actor, payload):
+    """payload: {division, round, name1, name2}."""
+    from tournaments.fixed_pairings import remove_fixed_pairing
+    from tournaments.models import FixedPairing
+
+    division = _division(tournament, payload["division"])
+    e1 = _entrant(division, payload["name1"])
+    e2 = _entrant(division, payload["name2"])
+    fp = FixedPairing.objects.filter(
+        division=division, round_number=payload["round"]
+    ).filter(
+        Q(entrant1=e1, entrant2=e2) | Q(entrant1=e2, entrant2=e1)
+    ).first()
+    if fp is None:
+        return EventResult(payload=payload, result=(False, None), record=False)
+    ok, error = remove_fixed_pairing(division, fp.pk)
+    return EventResult(
+        payload=payload, division=division, result=(ok, error), record=ok
+    )
+
+
+@records_event("fixed_pairings_removed")
+def remove_fixed_pairings_cmd(tournament, actor, payload):
+    """payload: {division, kept: [[round, name1, name2], ...]} — the fixed
+    pairings to keep; all others are removed."""
+    from tournaments.fixed_pairings import remove_fixed_pairings
+    from tournaments.models import FixedPairing
+
+    division = _division(tournament, payload["division"])
+    kept = {tuple(k) for k in payload.get("kept", [])}
+    keep_ids = []
+    for fp in division.fixed_pairings.select_related(
+        "entrant1__player", "entrant2__player"
+    ):
+        n1, n2 = sorted([fp.entrant1.player.name, fp.entrant2.player.name])
+        if (fp.round_number, n1, n2) in kept:
+            keep_ids.append(fp.pk)
+    error = remove_fixed_pairings(division, keep_ids)
+    return EventResult(
+        payload=payload, division=division, result=error, record=error is None
+    )
