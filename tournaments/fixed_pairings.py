@@ -32,6 +32,15 @@ def rounds_with_results(division, round_numbers) -> set[int]:
 _RR_FAMILY = {RP.RoundRobin, RP.DoubleRoundRobin}
 
 
+def _round_strategy(division, round_number) -> str | None:
+    """The pairing strategy configured for ``round_number``, or None if unset.
+
+    A plain ``str`` (comparable to the ``RP`` StrEnum members)."""
+    rps = PairingData.for_division(division).round_pairings
+    rp = next((r for r in rps if r.round == round_number), None)
+    return rp.pairing if rp is not None else None
+
+
 def round_robin_block_rounds(division, round_number) -> list[int] | None:
     """The rounds of the round-robin block containing ``round_number``, or None if
     that round isn't part of a round-robin block. The block is the run of
@@ -84,6 +93,14 @@ def add_fixed_pairing(division, round_number, entrant1_id, entrant2_id) -> tuple
         return False, (
             f"Round {round_number} already has results — "
             "fixed pairings cannot be changed."
+        )
+
+    # Interim: Charlottesville honors fixed pairings via the exclude-and-pair-the-
+    # rest path, which corrupts its rotation schedule. Reject until the solver
+    # supports it (PLAN_ROUND_ROBIN Phase 5) rather than silently mispair.
+    if _round_strategy(division, round_number) == RP.Charlottesville:
+        return False, (
+            "Fixed pairings are not yet supported for Charlottesville blocks."
         )
 
     # In a round robin the two players meet exactly once; if they already have,

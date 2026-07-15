@@ -159,6 +159,155 @@ fn rr_permutation(
     Ok(assign)
 }
 
+/// Cheaply detectable conflicts among the pins of one round-robin block, each
+/// with a specific message naming the players and rounds involved. Runs before
+/// the solver, so a common data-entry mistake produces an actionable error
+/// instead of the generic "no valid round robin" from the search.
+///
+/// A *position* is a round (round robin) or round-pair (double round robin);
+/// `pos_of` maps a round to it and `round_of` maps back to a representative
+/// round for messages. `played` is the pinned edges per position (from result
+/// slips ∪ published pairings); `fixed_by_round` is the fixed pins tagged with
+/// their requested round, sorted canonically by the caller for determinism.
+fn validate_block_pins(
+    players: &[Player],
+    num_positions: usize,
+    k: i32,
+    start_round: i32,
+    played: &HashMap<usize, HashSet<(String, String)>>,
+    fixed_by_round: &[(i32, (String, String))],
+) -> Result<(), String> {
+    let e = players.len();
+    let names: HashSet<&str> = players.iter().map(|p| p.name.as_str()).collect();
+    let pos_of = |round: i32| ((round - start_round) / k) as usize;
+    let round_of = |pos: usize| start_round + pos as i32 * k;
+
+    // 1. A fixed pairing names a non-entrant or a player against themselves.
+    for (round, (a, b)) in fixed_by_round {
+        if a == b {
+            return Err(format!(
+                "A fixed pairing in round {round} lists {a} against themselves."
+            ));
+        }
+        for who in [a, b] {
+            if !names.contains(who.as_str()) {
+                return Err(format!("{who} is not in this round robin."));
+            }
+        }
+    }
+
+    // Seed a per-position "who is P's opponent here" map with the played edges,
+    // then add fixed pins on top. A player pinned to two different opponents at
+    // one position is impossible (a matching gives each player one opponent).
+    // For a double round robin the two calendar rounds of a position share one
+    // matching, so a clash across them is reported with both round numbers.
+    let mut opponent: HashMap<usize, HashMap<&str, (&str, i32, bool)>> = HashMap::new();
+    for (pos, edges) in played {
+        let entry = opponent.entry(*pos).or_default();
+        for (a, b) in edges {
+            entry.insert(a.as_str(), (b.as_str(), round_of(*pos), true));
+            entry.insert(b.as_str(), (a.as_str(), round_of(*pos), true));
+        }
+    }
+    for (round, (a, b)) in fixed_by_round {
+        let pos = pos_of(*round);
+        let entry = opponent.entry(pos).or_default();
+        for (x, y) in [(a, b), (b, a)] {
+            match entry.get(x.as_str()) {
+                Some((existing, _, _)) if *existing == y.as_str() => {}
+                Some((existing, r0, was_played)) => {
+                    if *was_played {
+                        return Err(format!(
+                            "{x} already plays {existing} in round {r0}, so cannot \
+                             also be fixed against {y} in round {round}."
+                        ));
+                    } else if r0 == round {
+                        return Err(format!(
+                            "{x} is fixed against both {existing} and {y} in round {round}."
+                        ));
+                    } else {
+                        return Err(format!(
+                            "{x} is fixed against {existing} in round {r0} and against \
+                             {y} in round {round}, which are the two halves of one \
+                             double-round-robin slot and share a matching."
+                        ));
+                    }
+                }
+                None => {
+                    entry.insert(x.as_str(), (y.as_str(), *round, false));
+                }
+            }
+        }
+    }
+
+    // Track which position each edge sits at (played first, then fixed) to catch
+    // the same pair pinned in two different positions.
+    let mut edge_pos: HashMap<&(String, String), usize> = HashMap::new();
+    for (pos, edges) in played {
+        for e in edges {
+            edge_pos.insert(e, *pos);
+        }
+    }
+    for (round, edge) in fixed_by_round {
+        let pos = pos_of(*round);
+        if let Some(&other) = edge_pos.get(edge) {
+            if other != pos {
+                let (a, b) = edge;
+                let played_there = played.get(&other).is_some_and(|s| s.contains(edge));
+                if played_there {
+                    return Err(format!(
+                        "{a} and {b} already played each other in round {}.",
+                        round_of(other)
+                    ));
+                }
+                return Err(format!(
+                    "{a} and {b} are fixed in both round {} and round {round}, but \
+                     they meet only once in a round robin.",
+                    round_of(other)
+                ));
+            }
+        }
+        edge_pos.insert(edge, pos);
+    }
+
+    // 5. More distinct fixed pairs at one position than games fit (E/2).
+    let mut fixed_edges_at: HashMap<usize, HashSet<&(String, String)>> = HashMap::new();
+    for (round, edge) in fixed_by_round {
+        fixed_edges_at.entry(pos_of(*round)).or_default().insert(edge);
+    }
+    for (pos, edges) in &fixed_edges_at {
+        if edges.len() > e / 2 {
+            return Err(format!(
+                "Round {} has {} fixed pairings but only {} games fit.",
+                round_of(*pos),
+                edges.len(),
+                e / 2
+            ));
+        }
+    }
+
+    // 6. A player fixed against more distinct opponents than the block has
+    //    positions for (each opponent needs its own round).
+    let mut opponents_of: HashMap<&str, HashSet<&str>> = HashMap::new();
+    for (_round, (a, b)) in fixed_by_round {
+        opponents_of.entry(a).or_default().insert(b);
+        opponents_of.entry(b).or_default().insert(a);
+    }
+    for (who, opps) in &opponents_of {
+        if opps.len() > num_positions {
+            return Err(format!(
+                "{who} is fixed against {} opponents but the block has only {} \
+                 round{}.",
+                opps.len(),
+                num_positions,
+                if num_positions == 1 { "" } else { "s" }
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 /// Round-robin family pairing for one calendar round, honoring fixed pairings by
 /// permuting which template lands in which round (`k` calendar rounds per
 /// template: 1 for round robin, 2 for double round robin).
@@ -205,20 +354,36 @@ fn rr_block_pairings(ctx: &Ctx, rp: &RoundPairing, k: i32) -> Result<Pairings, S
                 .insert(canon(&s.winner_name, &s.loser_name));
         }
     }
+    let mut fixed_by_round: Vec<(i32, (String, String))> = Vec::new();
+    for (round, pairs) in ctx.fixed_pairings {
+        if block_rounds.contains(round) {
+            for (a, b) in pairs {
+                fixed_by_round.push((*round, canon(a, b)));
+            }
+        }
+    }
+    fixed_by_round.sort_by(|x, y| x.0.cmp(&y.0).then_with(|| x.1.cmp(&y.1)));
+
+    // Cheap, specific conflict checks before the search (and before template
+    // identification below, which can also fail — but with a vaguer message).
+    validate_block_pins(
+        &players,
+        num_positions,
+        k,
+        rp.start_round,
+        &played_pairs,
+        &fixed_by_round,
+    )?;
+
     let mut played: HashMap<usize, usize> = HashMap::new();
     for (position, pairset) in &played_pairs {
         played.insert(*position, identify_template(pairset, &template_of_pair)?);
     }
 
-    let mut fixed: Vec<(usize, (String, String))> = Vec::new();
-    for (round, pairs) in ctx.fixed_pairings {
-        if block_rounds.contains(round) {
-            for (a, b) in pairs {
-                fixed.push((position_of(*round), canon(a, b)));
-            }
-        }
-    }
-    fixed.sort_by(|x, y| x.0.cmp(&y.0).then_with(|| x.1.cmp(&y.1)));
+    let fixed: Vec<(usize, (String, String))> = fixed_by_round
+        .iter()
+        .map(|(round, edge)| (position_of(*round), edge.clone()))
+        .collect();
 
     let assign = rr_permutation(num_positions, &template_of_pair, &played, &fixed)?;
 

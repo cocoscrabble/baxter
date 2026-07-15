@@ -714,8 +714,8 @@ mod tests {
 
     #[test]
     fn round_robin_conflicting_fixed_pairings_report_error() {
-        // P1 pinned to two opponents in the same round demands two templates at
-        // once — the round comes back empty carrying the conflict.
+        // P1 pinned to two opponents in the same round is impossible; the
+        // validation layer names the exact conflict.
         let json = format!(
             r#"{{"players":[{}],"round_pairings":[{}],"fixed_pairings":{{"1":[["P1","P2"],["P1","P3"]]}}}}"#,
             rr_players_json(6),
@@ -724,7 +724,46 @@ mod tests {
         let out = pair(&input(&json));
         let r1 = out.iter().find(|r| r.round == 1).unwrap();
         assert!(r1.pairings.is_empty());
-        assert!(r1.error.as_deref().unwrap_or("").contains("conflict"));
+        let msg = r1.error.as_deref().unwrap_or("");
+        assert!(msg.contains("P1 is fixed against both"), "got: {msg}");
+    }
+
+    #[test]
+    fn round_robin_same_pair_two_rounds_reports_error() {
+        // A pair meets exactly once in a round robin; fixing them in two rounds
+        // is impossible and named as such.
+        let json = format!(
+            r#"{{"players":[{}],"round_pairings":[{}],"fixed_pairings":{{"1":[["P1","P2"]],"2":[["P1","P2"]]}}}}"#,
+            rr_players_json(6),
+            rr_rounds_json(5, "RoundRobin"),
+        );
+        let out = pair(&input(&json));
+        let msg = out
+            .iter()
+            .filter_map(|r| r.error.as_deref())
+            .find(|m| m.contains("meet only once"))
+            .unwrap_or("");
+        assert!(msg.contains("P1") && msg.contains("meet only once"), "got: {msg}");
+    }
+
+    #[test]
+    fn round_robin_fixing_an_already_played_pair_reports_error() {
+        // P1 beat P2 in round 1; fixing that same pair into round 3 is rejected
+        // with an "already played" message (they meet once per cycle).
+        let json = format!(
+            r#"{{"players":[{}],"round_pairings":[{}],
+                 "result_slips":[{{"round":1,"winner_name":"P1","loser_name":"P2","winner_score":400,"loser_score":300,"winner_started":true}}],
+                 "fixed_pairings":{{"3":[["P1","P2"]]}}}}"#,
+            rr_players_json(6),
+            rr_rounds_json(5, "RoundRobin"),
+        );
+        let out = pair(&input(&json));
+        let msg = out
+            .iter()
+            .filter_map(|r| r.error.as_deref())
+            .find(|m| m.contains("already played"))
+            .unwrap_or("");
+        assert!(msg.contains("P1") && msg.contains("P2"), "got: {msg}");
     }
 
     #[test]
