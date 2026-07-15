@@ -637,3 +637,44 @@ EDIT_SCOPES = frozenset(
         "round_pairings",
     }
 )
+
+
+class TournamentEvent(models.Model):
+    """One entry in a tournament's append-only event log.
+
+    Records the *inputs* of a state-changing command (never the resulting rows);
+    derived state is recomputed on replay. Append-only: there are no update or
+    delete code paths (deleting a tournament cascades its log). The catalog of
+    valid ``event_type`` values and the recording machinery live in
+    ``tournaments/events.py``.
+    """
+
+    tournament = models.ForeignKey(
+        Tournament, on_delete=models.CASCADE, related_name="events"
+    )
+    seq = models.PositiveIntegerField()  # 1-based, contiguous per tournament
+    created_at = models.DateTimeField(auto_now_add=True)
+    # Null actor = anonymous (e.g. a player submitting a result); the hashed
+    # session key still identifies the browser for the audit trail.
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    actor_session = models.CharField(max_length=64, blank=True)
+    # Convenience filter only — the payload carries the division *name*, which is
+    # what replay keys on (this FK is nulled if the division is later deleted).
+    division = models.ForeignKey(
+        Division, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    event_type = models.CharField(max_length=50)
+    schema_version = models.PositiveSmallIntegerField(default=1)
+    payload = models.JSONField()
+    # sha256 of the affected division's canonical state after the command, so a
+    # replay can compare digests per event and pinpoint the first divergence.
+    digest = models.CharField(max_length=64, blank=True)
+
+    class Meta:
+        unique_together = [["tournament", "seq"]]
+        ordering = ["tournament", "seq"]
+
+    def __str__(self):
+        return f"{self.tournament} #{self.seq} {self.event_type}"
