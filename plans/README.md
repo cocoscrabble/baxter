@@ -19,3 +19,6 @@ Current plans:
 - `PLAN_ROUND_ROBIN.md` — fully general fixed pairings for round robins.
   **Not yet started**; sequenced after the Rust cutover (solver written once,
   in Rust).
+- `PLAN_DESKTOP_APP.md` — package Baxter as a downloadable offline desktop app
+  (PyInstaller + waitress launcher). **Potential future work**; not started,
+  not scheduled.

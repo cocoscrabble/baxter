@@ -35,10 +35,9 @@ DEBUG = env("DEBUG", default=False)
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
 
-# Pairing engine selection during the Rust cutover: "python" (default), "rust"
-# (the scrabble_pairing_py extension), or "shadow" (run both, return Python,
-# log divergences). See tournaments/pairing/engine.py and PLAN_RUST_CUTOVER.md.
-PAIRING_ENGINE = env("PAIRING_ENGINE", default="python")
+# Pairing engine: "rust" (the scrabble_pairing_py extension, default). The
+# Python engine has been retired; see tournaments/pairing/engine.py.
+PAIRING_ENGINE = env("PAIRING_ENGINE", default="rust")
 
 # Production hardening (behind the dokku nginx proxy, which terminates TLS and
 # sets X-Forwarded-Proto). Kept off in DEBUG so local http still works.
