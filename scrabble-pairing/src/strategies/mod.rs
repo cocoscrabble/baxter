@@ -6,6 +6,7 @@
 
 pub mod basic;
 pub mod quads;
+pub mod roundrobin;
 pub mod swiss;
 
 use std::collections::{HashMap, HashSet};

@@ -9,7 +9,7 @@ use crate::model::{OutPairing, PairingInput, PlayerData, ResultSlipData, RoundRe
 use crate::rng::seeded;
 use crate::round_pairing::{normalize_round_robin_start_rounds, RoundPairing, RP};
 use crate::standings::{standings_after_round, Pairings, Player, Repeats, Starts, BYE_NAME};
-use crate::strategies::{basic, quads, swiss, Ctx};
+use crate::strategies::{basic, quads, roundrobin, swiss, Ctx};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RoundStatus {
@@ -29,15 +29,15 @@ fn run_strategy(rp: &RoundPairing, ctx: &mut Ctx) -> Result<Pairings, String> {
         RP::KotH => basic::pair_koth(ctx, rp),
         RP::QotH => basic::pair_qoth(ctx, rp),
         RP::Swiss => swiss::pair_swiss(ctx, rp),
-        RP::RoundRobin => basic::pair_round_robin(ctx, rp)?,
-        RP::DoubleRoundRobin => basic::pair_double_round_robin(ctx, rp)?,
+        RP::RoundRobin => roundrobin::pair_round_robin(ctx, rp)?,
+        RP::DoubleRoundRobin => roundrobin::pair_double_round_robin(ctx, rp)?,
         RP::Random => basic::pair_random(ctx, rp),
         RP::RandomNoRepeats => basic::pair_random_no_repeats(ctx, rp),
         RP::QuadsClustered => quads::pair_clustered_quads(ctx, rp)?,
         RP::QuadsDistributed => quads::pair_distributed_quads(ctx, rp)?,
         RP::QuadsEqualized => quads::pair_equalized_quads(ctx, rp)?,
         RP::Sixes => quads::pair_sixes(ctx, rp)?,
-        RP::Charlottesville => basic::pair_charlottesville(ctx, rp),
+        RP::Charlottesville => roundrobin::pair_charlottesville(ctx, rp),
         RP::SwissPlusRandom => swiss::pair_swiss_plus_random(ctx, rp),
         RP::Unknown => return Err("unknown pairing strategy".to_string()),
     })
