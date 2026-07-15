@@ -339,6 +339,21 @@ class RoundRobinFixedPairingLifecycleTests(PairingDBTestBase):
         self.assertFalse(ok)
         self.assertIn("already played", err)
 
+    def test_add_rejected_for_charlottesville_round(self):
+        # Charlottesville doesn't yet support fixed pairings (Phase 5); adding one
+        # is rejected with a clear message rather than silently corrupting the
+        # rotation via the exclude-and-pair-the-rest path.
+        from tournaments.fixed_pairings import add_fixed_pairing
+
+        rp = [{"round": i, "pairing": RP.Charlottesville, "start_round": 1} for i in range(1, 3)]
+        DivisionSettings.objects.create(division=self.division, round_pairings=rp)
+
+        ok, err = add_fixed_pairing(
+            self.division, 1, self.entrants[0].pk, self.entrants[3].pk
+        )
+        self.assertFalse(ok)
+        self.assertIn("Charlottesville", err)
+
     def test_infeasible_stored_pairings_degrade_to_banner_not_500(self):
         # A stored fixed-pairing set that can't be satisfied (one player pinned to
         # two opponents in the same round) must render the Pair-rounds tab with a
