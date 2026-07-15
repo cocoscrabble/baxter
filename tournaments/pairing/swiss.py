@@ -23,6 +23,26 @@ SWISS_DISTANCE = 10
 # Rust engine's MAX_DISTANCE = 11 with a strict `<`).
 MAX_PAIRING_DISTANCE = 10
 
+# Deterministic tie-break for the blossom matching. When several pairings are
+# equally good (same repeats, same total seed-distance) there can be many
+# max-weight matchings, and the Python (networkx) and Rust (rustworkx) matchers
+# pick different ones. Perturbing each edge by a well-mixed per-edge value makes
+# the maximum (almost surely) unique, so both engines choose the same matching.
+# The primary objective is scaled up by _WEIGHT_SCALE so the perturbation can
+# never override it. The per-edge value is a splitmix64 hash of the canonical
+# (min, max) vertex pair — bit-for-bit identical to the Rust engine's.
+_U64 = (1 << 64) - 1
+_TIEBREAK_MOD = 1 << 40
+_WEIGHT_SCALE = 1 << 52
+
+
+def _match_tiebreak(a: int, b: int) -> int:
+    x = ((a << 20) | b) & _U64
+    x = ((x ^ (x >> 30)) * 0xBF58476D1CE4E5B9) & _U64
+    x = ((x ^ (x >> 27)) * 0x94D049BB133111EB) & _U64
+    x ^= x >> 31
+    return x % _TIEBREAK_MOD
+
 
 class Groups:
     def __init__(self, n):
@@ -137,9 +157,13 @@ def pair_candidates(bracket: list[list[candidate]]) -> list[pair]:
         for c in player_candidates:
             # don't pair candidates too far apart
             if c.distance <= MAX_PAIRING_DISTANCE:
-                weight = -(30 * c.repeats + c.distance)
                 v1 = names[c.name1]
                 v2 = names[c.name2]
+                a, b = (v1, v2) if v1 <= v2 else (v2, v1)
+                weight = (
+                    _WEIGHT_SCALE * -(30 * c.repeats + c.distance)
+                    + _match_tiebreak(a, b)
+                )
                 edges.append([v1, v2, weight])
     b = blossom(edges)
     pairings = []

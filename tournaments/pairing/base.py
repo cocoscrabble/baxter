@@ -450,7 +450,12 @@ def blossom(edges) -> list[tuple]:
     edges = [[v1, v2, w - m] for v1, v2, w in edges]
     g = nx.Graph()
     g.add_weighted_edges_from(edges)
-    return list(sorted(nx.max_weight_matching(g, maxcardinality=True)))
+    matching = nx.max_weight_matching(g, maxcardinality=True)
+    # Normalize each matched pair to (min, max) and sort, matching the Rust
+    # engine's matcher. networkx yields each edge in an arbitrary internal order;
+    # canonicalizing it makes the downstream start-balancing orientation
+    # identical across engines when the two players' start history is tied.
+    return sorted((min(u, v), max(u, v)) for u, v in matching)
 
 
 def pair_no_repeats_blossom(players: Standings, repeats: Repeats) -> Pairings:

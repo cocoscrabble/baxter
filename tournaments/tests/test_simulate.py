@@ -122,10 +122,9 @@ class PairingCountTests(TestCase):
 
 @tag("slow")
 class EngineComparisonTests(TestCase):
-    """The Python and Rust engines must stay in agreement on the deterministic,
-    non-blossom strategies (a regression guard for the cutover). Swiss uses
-    blossom matching, whose tie-breaks are implementation-defined and differ
-    between the engines (equal-cost), so it is deliberately not asserted equal.
+    """The Python and Rust engines must stay byte-identical across strategies (a
+    regression guard for the cutover). Swiss's blossom matcher uses an explicit
+    deterministic tie-break shared by both engines, so it agrees exactly too.
     """
 
     def _assert_agree(self, spec, n_entrants, seeds=range(4)):
@@ -158,18 +157,12 @@ class EngineComparisonTests(TestCase):
     def test_sixes_agrees(self):
         self._assert_agree("SX:3", 12)
 
-    def test_swiss_divergences_are_equal_cost(self):
-        # Swiss may pick a different (but equally optimal) matching on ties. When
-        # it does, the disagreement must only ever be orientation or an
-        # equal-cost different-pairs choice — never a "rust-error", and never a
-        # different-pairs that changes the repeat profile (which _classify would
-        # not flag, but which we guard against here by construction).
-        seen = set()
-        for seed in range(8):
-            for d in compare_engines(_rp_dicts("SW:15"), 24, seed=seed):
-                seen.add(d.kind)
-        self.assertNotIn("rust-error", seen)
-        self.assertTrue(seen <= {"orientation", "different-pairs"})
+    def test_swiss_agrees(self):
+        # The shared deterministic blossom tie-break makes Swiss byte-identical
+        # across engines, including odd fields (byes) where ties are common.
+        self._assert_agree("SW:15", 24, seeds=range(8))
+        self._assert_agree("SW:15", 23, seeds=range(8))
+        self._assert_agree("SW:15", 17, seeds=range(8))
 
 
 @tag("slow")
