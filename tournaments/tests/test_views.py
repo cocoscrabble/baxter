@@ -1268,6 +1268,40 @@ class DivisionPairingsRoundContentTests(TestCase):
         # Two prior meetings → count 2, rounds comma-separated with the "rd." label.
         self.assertContains(r3, '>2<span class="repeat-rounds">rd. 1, 2</span>')
 
+    def test_finished_round_shows_repeats_counted_up_to_that_round(self):
+        # A pair meets in rounds 1, 2 and 3. On the finished round 2, the Repeats
+        # column counts only the earlier meeting (round 1) — the later round 3 must
+        # not be counted.
+        settings = self.division.settings
+        settings.round_pairings = [
+            {"round": 1, "pairing": "KotH", "start_round": 0},
+            {"round": 2, "pairing": "KotH", "start_round": 1},
+            {"round": 3, "pairing": "KotH", "start_round": 2},
+        ]
+        settings.save()
+        pairs = [(self.entrant1, self.entrant2), (self.entrant3, self.entrant4)]
+        _, r1p = self._create_round(1, RoundPairings.FINISHED, pairs)
+        self._create_slip(1, r1p[0], self.entrant1, self.entrant2, 450, 380)
+        self._create_slip(1, r1p[1], self.entrant3, self.entrant4, 500, 400)
+        _, r2p = self._create_round(2, RoundPairings.FINISHED, pairs)
+        self._create_slip(2, r2p[0], self.entrant1, self.entrant2, 450, 380)
+        self._create_slip(2, r2p[1], self.entrant3, self.entrant4, 500, 400)
+        self._create_round(3, RoundPairings.PUBLISHED, pairs)
+
+        r2 = self.client.get(
+            reverse("round_pairings_tab", kwargs={**self.division.slug_kwargs(), "round": 2})
+        )
+        self.assertEqual(r2.context["selected_status"], "finished")
+        by_pair = {
+            frozenset({e.pairing.first_id, e.pairing.second_id}): e.repeat_rounds
+            for e in r2.context["round_pairings"]
+        }
+        # Only round 1 counts — round 3 (later) is excluded.
+        self.assertEqual(by_pair[frozenset({self.entrant1.id, self.entrant2.id})], (1,))
+        # The finished-round table now carries the Repeats column, rendered here.
+        self.assertContains(r2, "Repeats")
+        self.assertContains(r2, '>1<span class="repeat-rounds">rd. 1</span>')
+
     def test_finished_round_shows_all_pairings_with_results(self):
         _, pairings = self._create_round(
             1,

@@ -35,6 +35,7 @@
                 <th>First Player</th>
                 <th></th>
                 <th>Second Player</th>
+                <th class="num">Repeats</th>
                 <th class="num">Result</th>
             </tr>
         </thead>
@@ -45,6 +46,7 @@
                 <td>{{ entry.pairing.first.name }}</td>
                 <td>{% if entry.is_fixed %}&#x1F512;{% endif %}</td>
                 <td>{{ entry.pairing.second.name }}</td>
+                <td class="num">{% if entry.repeat_rounds %}{{ entry.repeat_rounds|length }}<span class="repeat-rounds">rd. {{ entry.repeat_rounds|join:", " }}</span>{% endif %}</td>
                 <td class="num">
                     {% if entry.result %}
                         {{ entry.result }}
