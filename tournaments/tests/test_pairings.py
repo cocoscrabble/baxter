@@ -339,6 +339,62 @@ class RoundRobinFixedPairingLifecycleTests(PairingDBTestBase):
         self.assertFalse(ok)
         self.assertIn("already played", err)
 
+    def test_in_progress_round_published_games_are_pinned(self):
+        # Play one game of a published round so it goes in-progress with an
+        # unplayed-but-printed game. Adding a fixed pairing to a later round must
+        # leave that in-progress round untouched and never duplicate its unplayed
+        # game elsewhere — the solver pins the round's published pairings.
+        from tournaments.fixed_pairings import add_fixed_pairing
+
+        self._rr_config()
+        self._publish_all()
+        round1 = self._round_pairs(1)
+
+        played_pairing = self.division.pairings.filter(round=1).first()
+        ResultSlip.objects.create(
+            division=self.division, round=1, pairing=played_pairing,
+            winner=played_pairing.first, winner_score=400,
+            loser=played_pairing.second, loser_score=350, winner_started=True,
+        )
+        rp1 = self.division.round_pairings_set.get(round=1)
+        rp1.update_status()
+        self.assertEqual(rp1.status, RoundPairings.IN_PROGRESS)
+
+        played_names = frozenset(
+            {played_pairing.first.player.name, played_pairing.second.player.name}
+        )
+        unplayed = next(pr for pr in round1 if pr != played_names)
+
+        # Two players who have not met, fixed into the (still draft) round 3.
+        unmet = next(
+            (a, b)
+            for a in range(4) for b in range(4)
+            if a < b
+            and frozenset(
+                {self.entrants[a].player.name, self.entrants[b].player.name}
+            ) not in round1
+        )
+        ok, err = add_fixed_pairing(
+            self.division, 3, self.entrants[unmet[0]].pk, self.entrants[unmet[1]].pk
+        )
+        self.assertTrue(ok, err)
+
+        # The in-progress round is byte-for-byte unchanged.
+        self.assertEqual(self._round_pairs(1), round1)
+        # The fixed pairing is honored in round 3.
+        self.assertIn(
+            frozenset(
+                {self.entrants[unmet[0]].player.name, self.entrants[unmet[1]].player.name}
+            ),
+            self._round_pairs(3),
+        )
+        # The unplayed round-1 game appears only in round 1, never duplicated.
+        appearances = sum(
+            1 for r in (1, 2, 3) if unplayed in self._round_pairs(r)
+        )
+        self.assertEqual(appearances, 1)
+        self._assert_complete_round_robin()
+
     def test_add_rejected_for_charlottesville_round(self):
         # Charlottesville doesn't yet support fixed pairings (Phase 5); adding one
         # is rejected with a clear message rather than silently corrupting the
@@ -374,7 +430,8 @@ class RoundRobinFixedPairingLifecycleTests(PairingDBTestBase):
         )
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "conflict")
+        # The validation layer names the exact conflict in the banner.
+        self.assertContains(response, "is fixed against both")
 
 
 # ── _regenerate_pairings with fixed tables ────────────────────────────────────

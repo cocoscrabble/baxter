@@ -42,6 +42,10 @@ def pairing_data_to_input(pd: PairingData) -> dict:
         "fixed_pairings": {
             str(k): [[a, b] for (a, b) in v] for k, v in pd.fixed_pairings.items()
         },
+        "published_pairings": {
+            str(k): [[a, b] for (a, b) in v]
+            for k, v in pd.published_pairings.items()
+        },
         "seed": pd.seed,
     }
 

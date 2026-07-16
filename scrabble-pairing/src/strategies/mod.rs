@@ -35,6 +35,9 @@ pub struct Ctx<'a> {
     pub round_pairings: &'a [RoundPairing],
     pub excluded: &'a HashSet<String>,
     pub fixed_pairings: &'a HashMap<i32, Vec<(String, String)>>,
+    /// Already-published pairings of non-draft rounds, pinned by the round-robin
+    /// solver (see `PairingInput::published_pairings`).
+    pub published_pairings: &'a HashMap<i32, Vec<(String, String)>>,
     pub repeats: &'a Repeats,
     pub rng: &'a mut ChaCha8Rng,
 }

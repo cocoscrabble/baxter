@@ -40,6 +40,13 @@ pub struct PairingInput {
     /// JSON object keys are strings; serde_json parses them back to `i32`.
     #[serde(default)]
     pub fixed_pairings: HashMap<i32, Vec<(String, String)>>,
+    /// Round number -> the already-published pairings of every non-draft round.
+    /// The round-robin solver pins these so an in-progress (partially played)
+    /// round's unplayed-but-printed games are honored, not recomputed. Draft
+    /// rounds are absent (they are free to re-pair). `#[serde(default)]` keeps
+    /// older callers and corpus cases parsing.
+    #[serde(default)]
+    pub published_pairings: HashMap<i32, Vec<(String, String)>>,
     /// Seed for the random strategies. Defaults to 0, so a run is fully
     /// reproducible; the caller supplies entropy if it wants variety.
     #[serde(default)]
