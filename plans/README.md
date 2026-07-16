@@ -17,8 +17,11 @@ Current plans:
 - `PLAN_EVENT_LOG.md` — replayable append-only tournament event log.
   **Implemented** (all phases).
 - `PLAN_ROUND_ROBIN.md` — fully general fixed pairings for round robins.
-  **Not yet started**; now unblocked by the completed cutover (solver written
-  once, in Rust).
+  **Implemented** (all phases). The solver lives once in Rust
+  (`strategies/roundrobin.rs`): a validation layer plus a two-layer completion
+  solver (template-permutation fast path → backtracking) covering round robins,
+  double round robins, and Charlottesville, with `published_pairings` plumbing so
+  in-progress rounds pin their printed games.
 - `PLAN_DESKTOP_APP.md` — package Baxter as a downloadable offline desktop app
   (PyInstaller + waitress launcher). **Potential future work**; not started,
   not scheduled.
