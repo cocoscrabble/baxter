@@ -501,6 +501,23 @@ input[type="number"] {
     box-sizing: border-box;
 }
 
+/* The earlier rounds a repeat pairing already met in, shown in the Repeats cell:
+   inline next to the count on wide screens, stacked under it on narrow. */
+.repeat-rounds {
+    font-size: 0.75em;
+    font-weight: normal;
+    color: var(--color-muted);
+    white-space: nowrap;
+    margin-left: 0.5em;
+}
+
+@media (max-width: 980px) {
+    .repeat-rounds {
+        display: block;
+        margin-left: 0;
+    }
+}
+
 .errorlist {
     color: var(--color-error-text);
     list-style: none;
