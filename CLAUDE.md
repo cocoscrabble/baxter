@@ -13,7 +13,10 @@ plans there, not in the repo root.
 
 ```bash
 # Install dependencies
-uv sync
+uv sync            # Python deps
+npm install        # JS deps (Tabulator for the edit grids) — served from
+                   # node_modules via django-node-assets. Without it, dev grids
+                   # 404 Tabulator and render blank (prod bakes it in via Dockerfile).
 
 # Run development server
 uv run python manage.py runserver
