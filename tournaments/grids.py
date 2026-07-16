@@ -118,13 +118,15 @@ class EntrantsGrid(EditGrid):
         }
 
     def lookups(self, division):
+        # The synthetic Bye player is never a real entrant, so keep it out of the
+        # add-entrant picker (and out of the valid-id set below).
         return {"players": [
             {"id": p.pk, "label": p.name, "rating": p.rating}
-            for p in Player.objects.all()
+            for p in Player.objects.filter(is_bye=False)
         ]}
 
     def validate_args(self, division):
-        return (set(Player.objects.values_list("pk", flat=True)), set())
+        return (set(Player.objects.filter(is_bye=False).values_list("pk", flat=True)), set())
 
     def can_delete(self, entrant):
         # An entrant with pairings or results can't just be removed — deleting
