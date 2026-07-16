@@ -37,7 +37,7 @@ fn run_strategy(rp: &RoundPairing, ctx: &mut Ctx) -> Result<Pairings, String> {
         RP::QuadsDistributed => quads::pair_distributed_quads(ctx, rp)?,
         RP::QuadsEqualized => quads::pair_equalized_quads(ctx, rp)?,
         RP::Sixes => quads::pair_sixes(ctx, rp)?,
-        RP::Charlottesville => roundrobin::pair_charlottesville(ctx, rp),
+        RP::Charlottesville => roundrobin::pair_charlottesville(ctx, rp)?,
         RP::SwissPlusRandom => swiss::pair_swiss_plus_random(ctx, rp),
         RP::Unknown => return Err("unknown pairing strategy".to_string()),
     })
@@ -156,10 +156,14 @@ fn pair_round(
     rng: &mut ChaCha8Rng,
     rp: &RoundPairing,
 ) -> Result<Pairings, String> {
-    // The round-robin family honors fixed pairings by permuting which round
-    // template lands in which round; the strategy reads them itself and must see
-    // the full field, so skip the exclude/bye/append path entirely.
-    if matches!(rp.pairing, RP::RoundRobin | RP::DoubleRoundRobin) {
+    // The round-robin family (round robin, double round robin, Charlottesville)
+    // honors fixed pairings inside the strategy — it schedules matchings across
+    // the block rather than excluding players — so it must see the full field.
+    // Skip the exclude/bye/append path entirely.
+    if matches!(
+        rp.pairing,
+        RP::RoundRobin | RP::DoubleRoundRobin | RP::Charlottesville
+    ) {
         let empty = HashSet::new();
         let mut ctx = Ctx {
             players,
@@ -1056,6 +1060,117 @@ mod tests {
                 }
             }
         }
+    }
+
+    // --- Charlottesville fixed pairings -------------------------------------
+
+    #[test]
+    fn charlottesville_fixed_pairing_meets_in_requested_round() {
+        // 8 players, 4-round Charlottesville. Force the cross-group pair P1-P4 into
+        // round 2; the block stays a complete bipartite round robin.
+        let json = format!(
+            r#"{{"players":[{}],"round_pairings":[{}],"fixed_pairings":{}}}"#,
+            rr_players_json(8),
+            rr_rounds_json(4, "Charlottesville"),
+            fixed_json(&[(2, ("P1".into(), "P4".into()))]),
+        );
+        let out = pair(&input(&json));
+        assert!(out.iter().all(|r| r.error.is_none()), "{out:?}");
+        assert!(round_pairs(&out, 2).contains(&("P1".into(), "P4".into())));
+        let m = meetings(&out);
+        assert_eq!(m.len(), 16); // 4x4 cross-group pairs
+        assert!(m.values().all(|&c| c == 1), "repeats: {m:?}");
+    }
+
+    #[test]
+    fn charlottesville_two_fixed_pairings_same_round() {
+        // Two disjoint cross-group pairs fixed into one round.
+        let json = format!(
+            r#"{{"players":[{}],"round_pairings":[{}],"fixed_pairings":{}}}"#,
+            rr_players_json(8),
+            rr_rounds_json(4, "Charlottesville"),
+            fixed_json(&[
+                (1, ("P1".into(), "P4".into())),
+                (1, ("P3".into(), "P8".into())),
+            ]),
+        );
+        let out = pair(&input(&json));
+        assert!(out.iter().all(|r| r.error.is_none()), "{out:?}");
+        let r1 = round_pairs(&out, 1);
+        assert!(r1.contains(&("P1".into(), "P4".into())), "{r1:?}");
+        assert!(r1.contains(&("P3".into(), "P8".into())), "{r1:?}");
+        let m = meetings(&out);
+        assert_eq!(m.len(), 16);
+        assert!(m.values().all(|&c| c == 1), "repeats: {m:?}");
+    }
+
+    #[test]
+    fn charlottesville_same_group_fixed_pairing_reports_error() {
+        // P1 and P3 are both in the second snake group and never play; fixing them
+        // together is rejected with a specific message.
+        let json = format!(
+            r#"{{"players":[{}],"round_pairings":[{}],"fixed_pairings":{}}}"#,
+            rr_players_json(8),
+            rr_rounds_json(4, "Charlottesville"),
+            fixed_json(&[(1, ("P1".into(), "P3".into()))]),
+        );
+        let out = pair(&input(&json));
+        let msg = out
+            .iter()
+            .filter_map(|r| r.error.as_deref())
+            .find(|m| m.contains("same Charlottesville group"))
+            .unwrap_or("");
+        assert!(msg.contains("P1") && msg.contains("P3"), "got: {msg}");
+    }
+
+    #[test]
+    fn charlottesville_fixed_bye_odd_field() {
+        // 5 players → phantom Bye. Give P1 the bye in round 2 (a cross-group edge);
+        // every real cross-group pair still meets once.
+        let json = format!(
+            r#"{{"players":[{}],"round_pairings":[{}],"fixed_pairings":{}}}"#,
+            rr_players_json(5),
+            rr_rounds_json(3, "Charlottesville"),
+            fixed_json(&[(2, ("P1".into(), "Bye".into()))]),
+        );
+        let out = pair(&input(&json));
+        assert!(out.iter().all(|r| r.error.is_none()), "{out:?}");
+        let r2 = round_pairs(&out, 2);
+        assert!(r2.contains(&("Bye".into(), "P1".into())), "{r2:?}");
+        // Real cross-group pairs: {P2,P4} x {P1,P3,P5} = 6, each met once.
+        let m = meetings(&out);
+        assert_eq!(m.len(), 6);
+        assert!(m.values().all(|&c| c == 1), "repeats: {m:?}");
+    }
+
+    #[test]
+    fn charlottesville_solver_is_deterministic() {
+        let json = format!(
+            r#"{{"players":[{}],"round_pairings":[{}],"fixed_pairings":{}}}"#,
+            rr_players_json(8),
+            rr_rounds_json(4, "Charlottesville"),
+            fixed_json(&[
+                (2, ("P1".into(), "P4".into())),
+                (3, ("P3".into(), "P2".into())),
+            ]),
+        );
+        assert_eq!(pair(&input(&json)), pair(&input(&json)));
+    }
+
+    #[test]
+    fn charlottesville_without_fixed_pairings_is_unchanged() {
+        // The no-fixed-pairing path must stay the plain rotation (byte-identical):
+        // a complete bipartite round robin with every cross pair exactly once.
+        let json = format!(
+            r#"{{"players":[{}],"round_pairings":[{}]}}"#,
+            rr_players_json(8),
+            rr_rounds_json(4, "Charlottesville"),
+        );
+        let out = pair(&input(&json));
+        assert!(out.iter().all(|r| r.error.is_none()), "{out:?}");
+        let m = meetings(&out);
+        assert_eq!(m.len(), 16);
+        assert!(m.values().all(|&c| c == 1), "repeats: {m:?}");
     }
 
     #[test]

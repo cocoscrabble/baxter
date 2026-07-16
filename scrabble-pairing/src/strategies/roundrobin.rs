@@ -180,6 +180,7 @@ fn validate_block_pins(
     num_positions: usize,
     k: i32,
     start_round: i32,
+    noun: &str,
     played: &HashMap<usize, HashSet<(String, String)>>,
     fixed_by_round: &[(i32, (String, String))],
 ) -> Result<(), String> {
@@ -197,7 +198,7 @@ fn validate_block_pins(
         }
         for who in [a, b] {
             if !names.contains(who.as_str()) {
-                return Err(format!("{who} is not in this round robin."));
+                return Err(format!("{who} is not in this {noun}."));
             }
         }
     }
@@ -268,7 +269,7 @@ fn validate_block_pins(
                 }
                 return Err(format!(
                     "{a} and {b} are fixed in both round {} and round {round}, but \
-                     they meet only once in a round robin.",
+                     they meet only once in a {noun}.",
                     round_of(other)
                 ));
             }
@@ -396,6 +397,7 @@ fn rr_block_pairings(ctx: &Ctx, rp: &RoundPairing, k: i32) -> Result<Pairings, S
         num_positions,
         k,
         rp.start_round,
+        "round robin",
         &played_names,
         &fixed_by_round,
     )?;
@@ -451,7 +453,9 @@ fn rr_block_pairings(ctx: &Ctx, rp: &RoundPairing, k: i32) -> Result<Pairings, S
         p.dedup();
     }
 
-    let solution = solve_block(n, &pins)?;
+    let allowed = complete_universe(n);
+    let templates = circle_templates(n);
+    let solution = solve_block(n, &pins, &allowed, &templates)?;
     let mut matching = solution[position_of(rp.round)].clone();
     matching.sort_unstable();
     let mut out = Pairings::new();
@@ -472,7 +476,9 @@ fn iedge(a: usize, b: usize) -> (usize, usize) {
 
 /// Backtracking state for the general completion solver (Layer 2). Fills one
 /// perfect matching per block position, edge-disjoint across positions, each a
-/// superset of that position's pins. Deterministic and RNG-free.
+/// superset of that position's pins, using only edges from the allowed universe
+/// (all pairs for a round robin; cross-group pairs for Charlottesville).
+/// Deterministic and RNG-free.
 struct BlockSolver<'a> {
     n: usize,
     /// Positions in processing order (most-pinned first).
@@ -481,10 +487,13 @@ struct BlockSolver<'a> {
     forced: Vec<HashMap<usize, usize>>,
     /// Per position: the pin edges (for the lookahead prune).
     pins: &'a [Vec<(usize, usize)>],
-    /// `template_partner[t][v]` = v's partner in circle template `t`; the search
-    /// tries a position's own-index template first, biasing toward the circle
-    /// schedule so adding one pin perturbs as few rounds as possible.
-    template_partner: Vec<Vec<usize>>,
+    /// The edges a matching may use (canonical low-high pairs).
+    allowed: &'a HashSet<(usize, usize)>,
+    /// `template_partner[pos][v]` = v's preferred partner at `pos` (from the
+    /// format's own rotation template for that position), or None. The search
+    /// tries it first, biasing toward the default schedule so adding one pin
+    /// perturbs as few rounds as possible.
+    template_partner: Vec<Vec<Option<usize>>>,
     used: HashSet<(usize, usize)>,
     solution: Vec<Vec<(usize, usize)>>,
     budget: u64,
@@ -582,11 +591,12 @@ impl BlockSolver<'_> {
             .filter(|&u| {
                 u != v
                     && !matched[u]
+                    && self.allowed.contains(&iedge(v, u))
                     && !self.used.contains(&iedge(v, u))
                     && self.forced[pos].get(&u).is_none_or(|&fu| fu == v)
             })
             .collect();
-        cands.sort_by_key(|&u| (u != pref, u));
+        cands.sort_by_key(|&u| (Some(u) != pref, u));
         cands
     }
 
@@ -608,7 +618,7 @@ impl BlockSolver<'_> {
         let mut edges: Vec<(usize, usize, i128)> = Vec::new();
         for a in 0..self.n {
             for b in (a + 1)..self.n {
-                if self.used.contains(&(a, b)) {
+                if !self.allowed.contains(&(a, b)) || self.used.contains(&(a, b)) {
                     continue;
                 }
                 let ok = pinned.get(&a).is_none_or(|&pa| pa == b)
@@ -626,9 +636,16 @@ impl BlockSolver<'_> {
 }
 
 /// General completion solver: one perfect matching per position (0..pins.len()),
-/// pairwise edge-disjoint, each containing that position's pins. Deterministic.
-/// Returns a specific error when the pins can't all be honored.
-fn solve_block(n: usize, pins: &[Vec<(usize, usize)>]) -> Result<Vec<Vec<(usize, usize)>>, String> {
+/// pairwise edge-disjoint, each containing that position's pins and using only
+/// `allowed` edges. `templates[pos]` is the format's default matching for that
+/// position (the stability bias). Deterministic; returns a specific error when
+/// the pins can't all be honored.
+fn solve_block(
+    n: usize,
+    pins: &[Vec<(usize, usize)>],
+    allowed: &HashSet<(usize, usize)>,
+    templates: &[Vec<(usize, usize)>],
+) -> Result<Vec<Vec<(usize, usize)>>, String> {
     let num_positions = pins.len();
 
     // Forced partner map per position; contradictory pins (already screened by
@@ -639,20 +656,21 @@ fn solve_block(n: usize, pins: &[Vec<(usize, usize)>]) -> Result<Vec<Vec<(usize,
             if forced[pos].get(&a).is_some_and(|&x| x != b)
                 || forced[pos].get(&b).is_some_and(|&x| x != a)
             {
-                return Err("No valid round robin contains all these fixed pairings.".to_string());
+                return Err("No valid schedule contains all these fixed pairings.".to_string());
             }
             forced[pos].insert(a, b);
             forced[pos].insert(b, a);
         }
     }
 
-    // Circle templates, for the stability bias.
-    let mut template_partner = vec![vec![0usize; n]; n.saturating_sub(1)];
-    for (t, tp) in template_partner.iter_mut().enumerate() {
-        let (h1, h2) = pair_rr(n, t as i32);
-        for i in 0..(n / 2) {
-            tp[h1[i]] = h2[i];
-            tp[h2[i]] = h1[i];
+    // Preferred partner per position, from that position's default template.
+    let mut template_partner = vec![vec![None; n]; num_positions];
+    for (pos, tp) in template_partner.iter_mut().enumerate() {
+        if let Some(matching) = templates.get(pos) {
+            for &(a, b) in matching {
+                tp[a] = Some(b);
+                tp[b] = Some(a);
+            }
         }
     }
 
@@ -665,6 +683,7 @@ fn solve_block(n: usize, pins: &[Vec<(usize, usize)>]) -> Result<Vec<Vec<(usize,
         order,
         forced,
         pins,
+        allowed,
         template_partner,
         used: HashSet::new(),
         solution: vec![Vec::new(); num_positions],
@@ -677,21 +696,38 @@ fn solve_block(n: usize, pins: &[Vec<(usize, usize)>]) -> Result<Vec<Vec<(usize,
     } else if solver.exhausted {
         Err("Could not schedule these fixed pairings — try removing one.".to_string())
     } else {
-        Err("No valid round robin contains all these fixed pairings.".to_string())
+        Err("No valid schedule contains all these fixed pairings.".to_string())
     }
 }
 
-/// Charlottesville: split the field into two snaking groups and rotate one group
-/// against the other. An odd field gets a bye player so the two groups are equal;
-/// whoever is drawn against the bye sits the round out.
-pub fn pair_charlottesville(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
-    let mut seeding = ctx.standings(0);
-    if !seeding.len().is_multiple_of(2) {
-        seeding.push(Player::bye());
+/// The complete-graph edge universe over `n` vertices: every pair `(i, j)`, i<j.
+fn complete_universe(n: usize) -> HashSet<(usize, usize)> {
+    let mut s = HashSet::new();
+    for a in 0..n {
+        for b in (a + 1)..n {
+            s.insert((a, b));
+        }
     }
+    s
+}
+
+/// The E-1 circle templates over `n` players, as index-edge matchings, used as
+/// the round-robin stability bias.
+fn circle_templates(n: usize) -> Vec<Vec<(usize, usize)>> {
+    (0..n.saturating_sub(1))
+        .map(|t| {
+            let (h1, h2) = pair_rr(n, t as i32);
+            (0..(n / 2)).map(|i| iedge(h1[i], h2[i])).collect()
+        })
+        .collect()
+}
+
+/// Snake-split `n` seeded players into the two Charlottesville groups; members
+/// meet only across groups. `g2` is reversed (the rotating group).
+fn charlottesville_groups(n: usize) -> (Vec<usize>, Vec<usize>) {
     let mut g1: Vec<usize> = Vec::new();
     let mut g2: Vec<usize> = Vec::new();
-    for i in 0..seeding.len() {
+    for i in 0..n {
         if i % 4 == 1 || i % 4 == 3 {
             g1.push(i);
         } else {
@@ -699,12 +735,23 @@ pub fn pair_charlottesville(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
         }
     }
     g2.reverse();
+    (g1, g2)
+}
+
+/// One round of the plain Charlottesville rotation: rotate `g2` by `offset` and
+/// pair it index-for-index against `g1`. This is the historical schedule, kept
+/// as the fast path so a block with no fixed pairings is byte-identical.
+fn charlottesville_rotation(
+    seeding: &[Player],
+    g1: &[usize],
+    g2: &[usize],
+    offset: i32,
+) -> Pairings {
     let mut out = Pairings::new();
     if g2.is_empty() {
         return out;
     }
-    let pos = (rp.round - rp.start_round).rem_euclid(g2.len() as i32) as usize;
-    // rotated = g2[pos:] + g2[:pos]
+    let pos = offset.rem_euclid(g2.len() as i32) as usize;
     let rotated: Vec<usize> = g2[pos..].iter().chain(g2[..pos].iter()).copied().collect();
     for (i, &p1) in g1.iter().enumerate() {
         if let (Some(a), Some(b)) = (
@@ -715,6 +762,169 @@ pub fn pair_charlottesville(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
         }
     }
     out
+}
+
+/// Charlottesville: a bipartite round robin. Snake-split the field into two equal
+/// groups (an odd field gets a phantom Bye so they balance); every player meets
+/// each member of the other group. Fixed pairings, played games, and an
+/// in-progress round's published games are pins, honored by the same general
+/// completion solver restricted to cross-group edges. A block with no fixed
+/// pairings takes the plain-rotation fast path (byte-identical to the historical
+/// schedule).
+pub fn pair_charlottesville(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings, String> {
+    let mut seeding = ctx.standings(0);
+    if !seeding.len().is_multiple_of(2) {
+        seeding.push(Player::bye());
+    }
+    let n = seeding.len();
+    let (g1, g2) = charlottesville_groups(n);
+    if g2.is_empty() {
+        return Ok(Pairings::new());
+    }
+
+    let block_rounds: HashSet<i32> = ctx
+        .round_pairings
+        .iter()
+        .filter(|o| o.pairing == rp.pairing && o.start_round == rp.start_round)
+        .map(|o| o.round)
+        .collect();
+
+    // No fixed pairings anywhere in the block → the rotation is authoritative.
+    let has_fixed = ctx
+        .fixed_pairings
+        .iter()
+        .any(|(r, pairs)| block_rounds.contains(r) && !pairs.is_empty());
+    if !has_fixed {
+        return Ok(charlottesville_rotation(
+            &seeding,
+            &g1,
+            &g2,
+            rp.round - rp.start_round,
+        ));
+    }
+
+    // --- General completion over the cross-group edge universe. ---
+    guard_no_dropped_in_block(ctx, &block_rounds, "Charlottesville", "Charlottesville blocks")?;
+
+    let m = g2.len();
+    let position_of = |round: i32| (round - rp.start_round) as usize;
+
+    let mut group = vec![0u8; n];
+    for &i in &g2 {
+        group[i] = 1;
+    }
+    let mut allowed: HashSet<(usize, usize)> = HashSet::new();
+    for a in 0..n {
+        for b in (a + 1)..n {
+            if group[a] != group[b] {
+                allowed.insert((a, b));
+            }
+        }
+    }
+
+    // Rotation templates as the stability bias (position -> its default matching).
+    let templates: Vec<Vec<(usize, usize)>> = (0..m)
+        .map(|pos| {
+            let rotated: Vec<usize> =
+                g2[pos..].iter().chain(g2[..pos].iter()).copied().collect();
+            g1.iter()
+                .zip(rotated.iter())
+                .map(|(&p1, &p2)| iedge(p1, p2))
+                .collect()
+        })
+        .collect();
+
+    let name_to_idx: HashMap<&str, usize> = seeding
+        .iter()
+        .enumerate()
+        .map(|(i, p)| (p.name.as_str(), i))
+        .collect();
+    let idx_of = |name: &str| name_to_idx.get(name).copied();
+
+    let mut played_names: HashMap<usize, HashSet<(String, String)>> = HashMap::new();
+    for s in ctx.slips {
+        if block_rounds.contains(&s.round) {
+            played_names
+                .entry(position_of(s.round))
+                .or_default()
+                .insert(canon(&s.winner_name, &s.loser_name));
+        }
+    }
+    for (round, pairs) in ctx.published_pairings {
+        if block_rounds.contains(round) {
+            for (a, b) in pairs {
+                played_names
+                    .entry(position_of(*round))
+                    .or_default()
+                    .insert(canon(a, b));
+            }
+        }
+    }
+
+    let mut fixed_by_round: Vec<(i32, (String, String))> = Vec::new();
+    for (round, pairs) in ctx.fixed_pairings {
+        if block_rounds.contains(round) {
+            for (a, b) in pairs {
+                fixed_by_round.push((*round, canon(a, b)));
+            }
+        }
+    }
+    fixed_by_round.sort_by(|x, y| x.0.cmp(&y.0).then_with(|| x.1.cmp(&y.1)));
+
+    // A fixed pairing within one group can never happen — flag it before the
+    // format-agnostic checks.
+    for (_r, (a, b)) in &fixed_by_round {
+        if let (Some(i), Some(j)) = (idx_of(a), idx_of(b)) {
+            if group[i] == group[j] {
+                return Err(format!(
+                    "{a} and {b} are in the same Charlottesville group and never \
+                     play each other."
+                ));
+            }
+        }
+    }
+    validate_block_pins(
+        &seeding,
+        m,
+        1,
+        rp.start_round,
+        "Charlottesville block",
+        &played_names,
+        &fixed_by_round,
+    )?;
+
+    let max_pos = block_rounds
+        .iter()
+        .map(|&r| position_of(r))
+        .max()
+        .unwrap_or(0);
+    let mut pins: Vec<Vec<(usize, usize)>> = vec![Vec::new(); max_pos + 1];
+    for (pos, pairset) in &played_names {
+        for (a, b) in pairset {
+            if let (Some(i), Some(j)) = (idx_of(a), idx_of(b)) {
+                pins[*pos].push(iedge(i, j));
+            }
+        }
+    }
+    for (round, (a, b)) in &fixed_by_round {
+        if let (Some(i), Some(j)) = (idx_of(a), idx_of(b)) {
+            pins[position_of(*round)].push(iedge(i, j));
+        }
+    }
+    for p in pins.iter_mut() {
+        p.sort_unstable();
+        p.dedup();
+    }
+
+    let solution = solve_block(n, &pins, &allowed, &templates)?;
+    let pos = position_of(rp.round);
+    let mut matching = solution[pos].clone();
+    matching.sort_unstable();
+    let mut out = Pairings::new();
+    for (i, j) in matching {
+        out.add(seeding[i].clone(), seeding[j].clone());
+    }
+    Ok(out)
 }
 
 // --- helpers ---------------------------------------------------------------
