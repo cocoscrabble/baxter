@@ -1255,14 +1255,18 @@ class DivisionPairingsRoundContentTests(TestCase):
 
         r1, rr1 = repeat_rounds_for(1)
         self.assertTrue(all(v == () for v in rr1.values()))
+        # A first meeting is not a repeat: the cell is blank, no count, no rounds.
+        self.assertNotContains(r1, "repeat-rounds")
 
-        _, rr2 = repeat_rounds_for(2)
+        r2, rr2 = repeat_rounds_for(2)
         self.assertEqual(rr2[pair12], (1,))
+        # The count is the number of repeats (one less than times played): 1 here.
+        self.assertContains(r2, '>1<span class="repeat-rounds">rd. 1</span>')
 
         r3, rr3 = repeat_rounds_for(3)
         self.assertEqual(rr3[pair12], (1, 2))
-        # Multiple prior rounds render comma-separated with the "rd." label.
-        self.assertContains(r3, "rd. 1, 2")
+        # Two prior meetings → count 2, rounds comma-separated with the "rd." label.
+        self.assertContains(r3, '>2<span class="repeat-rounds">rd. 1, 2</span>')
 
     def test_finished_round_shows_all_pairings_with_results(self):
         _, pairings = self._create_round(

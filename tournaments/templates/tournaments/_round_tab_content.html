@@ -119,7 +119,7 @@
                 <td>{{ entry.pairing.first.name }}</td>
                 <td>{% if entry.is_fixed %}&#x1F512;{% endif %}</td>
                 <td>{{ entry.pairing.second.name }}</td>
-                <td class="num">{{ entry.pairing.repeats }}{% if entry.repeat_rounds %}<span class="repeat-rounds">rd. {{ entry.repeat_rounds|join:", " }}</span>{% endif %}</td>
+                <td class="num">{% if entry.repeat_rounds %}{{ entry.repeat_rounds|length }}<span class="repeat-rounds">rd. {{ entry.repeat_rounds|join:", " }}</span>{% endif %}</td>
                 <td>
                     {% if entry.result %}
                         {{ entry.result }}
