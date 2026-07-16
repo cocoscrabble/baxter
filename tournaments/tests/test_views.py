@@ -1217,6 +1217,53 @@ class DivisionPairingsRoundContentTests(TestCase):
         self.assertEqual(by_table[1].result, "450 - 380")
         self.assertEqual(by_table[2].result, "")
 
+    def test_repeat_pairing_lists_prior_rounds(self):
+        # The same pairs meet in rounds 1, 2 and 3. Each round lists only the
+        # earlier meetings; the first meeting (round 1) lists nothing, and round 3
+        # lists both prior rounds, comma-separated, rendered as "rd. 1, 2".
+        settings = self.division.settings
+        settings.round_pairings = [
+            {"round": 1, "pairing": "KotH", "start_round": 0},
+            {"round": 2, "pairing": "KotH", "start_round": 1},
+            {"round": 3, "pairing": "KotH", "start_round": 2},
+        ]
+        settings.save()
+        _, r1p = self._create_round(
+            1,
+            RoundPairings.FINISHED,
+            [(self.entrant1, self.entrant2), (self.entrant3, self.entrant4)],
+        )
+        self._create_slip(1, r1p[0], self.entrant1, self.entrant2, 450, 380)
+        self._create_slip(1, r1p[1], self.entrant3, self.entrant4, 500, 400)
+        for r in (2, 3):
+            self._create_round(
+                r,
+                RoundPairings.PUBLISHED,
+                [(self.entrant1, self.entrant2), (self.entrant3, self.entrant4)],
+            )
+
+        def repeat_rounds_for(round_num):
+            resp = self.client.get(
+                reverse("round_pairings_tab", kwargs={**self.division.slug_kwargs(), "round": round_num})
+            )
+            return resp, {
+                frozenset({e.pairing.first_id, e.pairing.second_id}): e.repeat_rounds
+                for e in resp.context["round_pairings"]
+            }
+
+        pair12 = frozenset({self.entrant1.id, self.entrant2.id})
+
+        r1, rr1 = repeat_rounds_for(1)
+        self.assertTrue(all(v == () for v in rr1.values()))
+
+        _, rr2 = repeat_rounds_for(2)
+        self.assertEqual(rr2[pair12], (1,))
+
+        r3, rr3 = repeat_rounds_for(3)
+        self.assertEqual(rr3[pair12], (1, 2))
+        # Multiple prior rounds render comma-separated with the "rd." label.
+        self.assertContains(r3, "rd. 1, 2")
+
     def test_finished_round_shows_all_pairings_with_results(self):
         _, pairings = self._create_round(
             1,

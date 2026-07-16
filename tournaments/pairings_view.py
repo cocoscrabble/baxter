@@ -10,7 +10,8 @@ result slips are only consulted to decorate per-pairing rows, never to
 infer round-level state.
 """
 
-from dataclasses import dataclass
+from collections import defaultdict
+from dataclasses import dataclass, field
 from enum import Enum
 from functools import cached_property
 from itertools import groupby
@@ -27,6 +28,9 @@ class AnnotatedPairing:
     pairing: Pairing
     result: str = ""
     is_fixed: bool = False
+    # Earlier rounds in which these two players already met (the repeat rounds).
+    # Empty for a first meeting; populated only when the pair repeats.
+    repeat_rounds: tuple[int, ...] = field(default_factory=tuple)
 
 
 class RoundTabStatus(Enum):
@@ -148,6 +152,16 @@ class PairingsPresenter:
         )
 
     @cached_property
+    def pair_meeting_rounds(self) -> dict[frozenset, list[int]]:
+        """Every round each unordered entrant pair is scheduled in, drawn from all
+        persisted pairings. Used to list the rounds a repeat pairing already met
+        in. Rounds come out sorted (``db_pairings`` is ordered by round)."""
+        meetings: dict[frozenset, list[int]] = defaultdict(list)
+        for p in self.db_pairings:
+            meetings[frozenset({p.first_id, p.second_id})].append(p.round)
+        return meetings
+
+    @cached_property
     def played(self):
         return {
             (slip.round, frozenset({slip.winner_id, slip.loser_id})): slip
@@ -253,10 +267,15 @@ class PairingsPresenter:
                 result = f"{scores[p.first_id]} - {scores[p.second_id]}"
             else:
                 result = ""
+            # Prior rounds in which this same pair already met (a repeat). Earlier
+            # rounds only, so the list matches the running Repeats count shown.
+            meetings = self.pair_meeting_rounds.get(frozenset({p.first_id, p.second_id}), [])
+            repeat_rounds = tuple(r for r in meetings if r < round_num)
             rows.append(AnnotatedPairing(
                 pairing=p,
                 result=result,
                 is_fixed=key in self.fixed_lookup,
+                repeat_rounds=repeat_rounds,
             ))
         return rows
 
