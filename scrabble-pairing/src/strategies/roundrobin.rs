@@ -7,10 +7,16 @@
 
 use std::collections::{HashMap, HashSet};
 
+use crate::matching::max_weight_matching_pairs;
 use crate::round_pairing::RoundPairing;
-use crate::standings::{Pairings, Player, BYE_NAME};
+use crate::standings::{Pairings, Player};
 
 use super::{guard_no_dropped_in_block, Ctx};
+
+/// Cap on backtracking-solver expansions. At E ≤ ~22 with a handful of pins the
+/// search is milliseconds and never approaches this; hitting it means we bail
+/// with a distinct message rather than falsely claiming impossibility.
+const SOLVER_BUDGET: u64 = 200_000;
 
 /// Round robin, honoring fixed pairings by permuting which round template lands
 /// in which round. Always seeds from the initial seedings (round 0), never the
@@ -308,12 +314,19 @@ fn validate_block_pins(
     Ok(())
 }
 
-/// Round-robin family pairing for one calendar round, honoring fixed pairings by
-/// permuting which template lands in which round (`k` calendar rounds per
-/// template: 1 for round robin, 2 for double round robin).
+/// Round-robin family pairing for one calendar round. Fixed pairings, played
+/// games, and the published games of any in-progress round are *pins* — edges
+/// forced into a particular round. The engine finds a full block schedule
+/// honoring every pin (`k` calendar rounds per position: 1 for round robin, 2
+/// for double round robin), then reads off the requested round.
+///
+/// Two layers: the historical template permutation (byte-identical output for
+/// every pin set that already worked) and, when that can't place the pins, a
+/// general backtracking completion that searches matchings directly.
 fn rr_block_pairings(ctx: &Ctx, rp: &RoundPairing, k: i32) -> Result<Pairings, String> {
     let players = rr_players(ctx);
-    let num_positions = players.len() - 1;
+    let n = players.len();
+    let num_positions = n - 1;
     let template_of_pair = rr_template_of_pair(&players);
 
     let block_rounds: HashSet<i32> = ctx
@@ -341,19 +354,32 @@ fn rr_block_pairings(ctx: &Ctx, rp: &RoundPairing, k: i32) -> Result<Pairings, S
         ));
     }
 
-    // Played rounds become fixed points, identified from their recorded games.
-    let mut played_pairs: HashMap<usize, HashSet<(String, String)>> = HashMap::new();
+    // Pins from played games (result slips) and the published games of any
+    // non-draft round in the block. A finished round contributes its whole
+    // matching; a partially-played (in-progress) round contributes its published
+    // remainder, so those printed-but-unplayed games are honored, never
+    // recomputed or duplicated elsewhere. Bye games are kept as (player, Bye)
+    // edges so the bye assignment is pinned too.
+    let mut played_names: HashMap<usize, HashSet<(String, String)>> = HashMap::new();
     for s in ctx.slips {
-        if block_rounds.contains(&s.round)
-            && !s.winner_name.eq_ignore_ascii_case(BYE_NAME)
-            && !s.loser_name.eq_ignore_ascii_case(BYE_NAME)
-        {
-            played_pairs
+        if block_rounds.contains(&s.round) {
+            played_names
                 .entry(position_of(s.round))
                 .or_default()
                 .insert(canon(&s.winner_name, &s.loser_name));
         }
     }
+    for (round, pairs) in ctx.published_pairings {
+        if block_rounds.contains(round) {
+            for (a, b) in pairs {
+                played_names
+                    .entry(position_of(*round))
+                    .or_default()
+                    .insert(canon(a, b));
+            }
+        }
+    }
+
     let mut fixed_by_round: Vec<(i32, (String, String))> = Vec::new();
     for (round, pairs) in ctx.fixed_pairings {
         if block_rounds.contains(round) {
@@ -364,31 +390,295 @@ fn rr_block_pairings(ctx: &Ctx, rp: &RoundPairing, k: i32) -> Result<Pairings, S
     }
     fixed_by_round.sort_by(|x, y| x.0.cmp(&y.0).then_with(|| x.1.cmp(&y.1)));
 
-    // Cheap, specific conflict checks before the search (and before template
-    // identification below, which can also fail — but with a vaguer message).
+    // Cheap, specific conflict checks before either solver layer.
     validate_block_pins(
         &players,
         num_positions,
         k,
         rp.start_round,
-        &played_pairs,
+        &played_names,
         &fixed_by_round,
     )?;
 
-    let mut played: HashMap<usize, usize> = HashMap::new();
-    for (position, pairset) in &played_pairs {
-        played.insert(*position, identify_template(pairset, &template_of_pair)?);
+    // Layer 1: the template permutation. Succeeds (and reproduces the historical
+    // schedule exactly) whenever every pin lands on a seeding-order circle
+    // template. A template mismatch or an unplaceable pin is a fast-path miss, not
+    // an error — fall through to the general solver.
+    let layer1: Option<Vec<usize>> = (|| {
+        let mut played: HashMap<usize, usize> = HashMap::new();
+        for (position, pairset) in &played_names {
+            played.insert(*position, identify_template(pairset, &template_of_pair).ok()?);
+        }
+        let fixed: Vec<(usize, (String, String))> = fixed_by_round
+            .iter()
+            .map(|(round, edge)| (position_of(*round), edge.clone()))
+            .collect();
+        rr_permutation(num_positions, &template_of_pair, &played, &fixed).ok()
+    })();
+    if let Some(assign) = layer1 {
+        let t = assign[position_of(rp.round)];
+        return Ok(pair_rr_into(&players, n, t as i32));
     }
 
-    let fixed: Vec<(usize, (String, String))> = fixed_by_round
+    // Layer 2: general backtracking completion over the block's actual positions.
+    let name_to_idx: HashMap<&str, usize> = players
         .iter()
-        .map(|(round, edge)| (position_of(*round), edge.clone()))
+        .enumerate()
+        .map(|(i, p)| (p.name.as_str(), i))
         .collect();
+    let idx_of = |name: &str| name_to_idx.get(name).copied();
 
-    let assign = rr_permutation(num_positions, &template_of_pair, &played, &fixed)?;
+    let max_pos = block_rounds
+        .iter()
+        .map(|&r| position_of(r))
+        .max()
+        .unwrap_or(0);
+    let mut pins: Vec<Vec<(usize, usize)>> = vec![Vec::new(); max_pos + 1];
+    for (pos, pairset) in &played_names {
+        for (a, b) in pairset {
+            if let (Some(i), Some(j)) = (idx_of(a), idx_of(b)) {
+                pins[*pos].push(iedge(i, j));
+            }
+        }
+    }
+    for (round, (a, b)) in &fixed_by_round {
+        if let (Some(i), Some(j)) = (idx_of(a), idx_of(b)) {
+            pins[position_of(*round)].push(iedge(i, j));
+        }
+    }
+    for p in pins.iter_mut() {
+        p.sort_unstable();
+        p.dedup();
+    }
 
-    let t = assign[position_of(rp.round)];
-    Ok(pair_rr_into(&players, players.len(), t as i32))
+    let solution = solve_block(n, &pins)?;
+    let mut matching = solution[position_of(rp.round)].clone();
+    matching.sort_unstable();
+    let mut out = Pairings::new();
+    for (i, j) in matching {
+        out.add(players[i].clone(), players[j].clone());
+    }
+    Ok(out)
+}
+
+/// Canonical (low, high) index edge.
+fn iedge(a: usize, b: usize) -> (usize, usize) {
+    if a < b {
+        (a, b)
+    } else {
+        (b, a)
+    }
+}
+
+/// Backtracking state for the general completion solver (Layer 2). Fills one
+/// perfect matching per block position, edge-disjoint across positions, each a
+/// superset of that position's pins. Deterministic and RNG-free.
+struct BlockSolver<'a> {
+    n: usize,
+    /// Positions in processing order (most-pinned first).
+    order: Vec<usize>,
+    /// Per position: vertex -> forced partner, derived from the pins.
+    forced: Vec<HashMap<usize, usize>>,
+    /// Per position: the pin edges (for the lookahead prune).
+    pins: &'a [Vec<(usize, usize)>],
+    /// `template_partner[t][v]` = v's partner in circle template `t`; the search
+    /// tries a position's own-index template first, biasing toward the circle
+    /// schedule so adding one pin perturbs as few rounds as possible.
+    template_partner: Vec<Vec<usize>>,
+    used: HashSet<(usize, usize)>,
+    solution: Vec<Vec<(usize, usize)>>,
+    budget: u64,
+    exhausted: bool,
+}
+
+impl BlockSolver<'_> {
+    /// Solve from processing step `idx`. Returns true once every position is
+    /// filled.
+    fn solve(&mut self, idx: usize) -> bool {
+        if self.exhausted {
+            return false;
+        }
+        if idx == self.order.len() {
+            return true;
+        }
+        let pos = self.order[idx];
+        // Prune (b): a perfect matching containing this position's pins must
+        // still exist in the graph minus the edges used elsewhere.
+        if !self.completion_exists(pos) {
+            return false;
+        }
+        let mut matched = vec![false; self.n];
+        let mut chosen: Vec<(usize, usize)> = Vec::new();
+        self.fill(pos, idx, &mut matched, &mut chosen)
+    }
+
+    /// Build one perfect matching for `pos` by matching the lowest unmatched
+    /// vertex against each admissible partner in turn, then recursing.
+    fn fill(
+        &mut self,
+        pos: usize,
+        idx: usize,
+        matched: &mut [bool],
+        chosen: &mut Vec<(usize, usize)>,
+    ) -> bool {
+        if self.exhausted {
+            return false;
+        }
+        let v = match matched.iter().position(|&m| !m) {
+            None => {
+                // A full matching for this position: commit it and recurse.
+                for &e in chosen.iter() {
+                    self.used.insert(e);
+                }
+                let mut sorted = chosen.clone();
+                sorted.sort_unstable();
+                self.solution[pos] = sorted;
+                let ok = self.remaining_pins_ok(idx) && self.solve(idx + 1);
+                if !ok {
+                    for &e in chosen.iter() {
+                        self.used.remove(&e);
+                    }
+                }
+                return ok;
+            }
+            Some(v) => v,
+        };
+        matched[v] = true;
+        for u in self.partners(pos, v, matched) {
+            if self.budget == 0 {
+                self.exhausted = true;
+                matched[v] = false;
+                return false;
+            }
+            self.budget -= 1;
+            matched[u] = true;
+            chosen.push(iedge(v, u));
+            if self.fill(pos, idx, matched, chosen) {
+                return true;
+            }
+            chosen.pop();
+            matched[u] = false;
+            if self.exhausted {
+                matched[v] = false;
+                return false;
+            }
+        }
+        matched[v] = false;
+        false
+    }
+
+    /// Admissible partners for vertex `v` at `pos`: its forced partner if pinned,
+    /// else every unmatched vertex reachable by an unused edge (skipping partners
+    /// pinned to someone else), circle-template partner first for stability.
+    fn partners(&self, pos: usize, v: usize, matched: &[bool]) -> Vec<usize> {
+        if let Some(&w) = self.forced[pos].get(&v) {
+            if !matched[w] && !self.used.contains(&iedge(v, w)) {
+                return vec![w];
+            }
+            return Vec::new();
+        }
+        let pref = self.template_partner[pos][v];
+        let mut cands: Vec<usize> = (0..self.n)
+            .filter(|&u| {
+                u != v
+                    && !matched[u]
+                    && !self.used.contains(&iedge(v, u))
+                    && self.forced[pos].get(&u).is_none_or(|&fu| fu == v)
+            })
+            .collect();
+        cands.sort_by_key(|&u| (u != pref, u));
+        cands
+    }
+
+    /// Prune (a): every not-yet-processed position's pins must still be free of
+    /// the edges already used.
+    fn remaining_pins_ok(&self, idx: usize) -> bool {
+        self.order[idx + 1..].iter().all(|&q| {
+            self.pins[q]
+                .iter()
+                .all(|e| !self.used.contains(e))
+        })
+    }
+
+    /// Whether a perfect matching over all `n` vertices exists using only unused
+    /// edges and honoring `pos`'s pins (each pinned vertex reachable solely by its
+    /// pin edge). Exact, via a maximum-cardinality matching.
+    fn completion_exists(&self, pos: usize) -> bool {
+        let pinned = &self.forced[pos];
+        let mut edges: Vec<(usize, usize, i128)> = Vec::new();
+        for a in 0..self.n {
+            for b in (a + 1)..self.n {
+                if self.used.contains(&(a, b)) {
+                    continue;
+                }
+                let ok = pinned.get(&a).is_none_or(|&pa| pa == b)
+                    && pinned.get(&b).is_none_or(|&pb| pb == a);
+                if ok {
+                    edges.push((a, b, 1));
+                }
+            }
+        }
+        if self.n == 0 {
+            return true;
+        }
+        max_weight_matching_pairs(self.n, &edges).len() == self.n / 2
+    }
+}
+
+/// General completion solver: one perfect matching per position (0..pins.len()),
+/// pairwise edge-disjoint, each containing that position's pins. Deterministic.
+/// Returns a specific error when the pins can't all be honored.
+fn solve_block(n: usize, pins: &[Vec<(usize, usize)>]) -> Result<Vec<Vec<(usize, usize)>>, String> {
+    let num_positions = pins.len();
+
+    // Forced partner map per position; contradictory pins (already screened by
+    // validation) make the whole block infeasible.
+    let mut forced: Vec<HashMap<usize, usize>> = vec![HashMap::new(); num_positions];
+    for (pos, edges) in pins.iter().enumerate() {
+        for &(a, b) in edges {
+            if forced[pos].get(&a).is_some_and(|&x| x != b)
+                || forced[pos].get(&b).is_some_and(|&x| x != a)
+            {
+                return Err("No valid round robin contains all these fixed pairings.".to_string());
+            }
+            forced[pos].insert(a, b);
+            forced[pos].insert(b, a);
+        }
+    }
+
+    // Circle templates, for the stability bias.
+    let mut template_partner = vec![vec![0usize; n]; n.saturating_sub(1)];
+    for (t, tp) in template_partner.iter_mut().enumerate() {
+        let (h1, h2) = pair_rr(n, t as i32);
+        for i in 0..(n / 2) {
+            tp[h1[i]] = h2[i];
+            tp[h2[i]] = h1[i];
+        }
+    }
+
+    // Process the most-constrained positions first.
+    let mut order: Vec<usize> = (0..num_positions).collect();
+    order.sort_by_key(|&p| (std::cmp::Reverse(pins[p].len()), p));
+
+    let mut solver = BlockSolver {
+        n,
+        order,
+        forced,
+        pins,
+        template_partner,
+        used: HashSet::new(),
+        solution: vec![Vec::new(); num_positions],
+        budget: SOLVER_BUDGET,
+        exhausted: false,
+    };
+
+    if solver.solve(0) {
+        Ok(solver.solution)
+    } else if solver.exhausted {
+        Err("Could not schedule these fixed pairings — try removing one.".to_string())
+    } else {
+        Err("No valid round robin contains all these fixed pairings.".to_string())
+    }
 }
 
 /// Charlottesville: split the field into two snaking groups and rotate one group

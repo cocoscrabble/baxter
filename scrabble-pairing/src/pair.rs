@@ -151,6 +151,7 @@ fn pair_round(
     slips: &[ResultSlipData],
     round_pairings: &[RoundPairing],
     fixed_map: &HashMap<i32, Vec<(String, String)>>,
+    published_map: &HashMap<i32, Vec<(String, String)>>,
     repeats: &Repeats,
     rng: &mut ChaCha8Rng,
     rp: &RoundPairing,
@@ -166,6 +167,7 @@ fn pair_round(
             round_pairings,
             excluded: &empty,
             fixed_pairings: fixed_map,
+            published_pairings: published_map,
             repeats,
             rng,
         };
@@ -193,6 +195,7 @@ fn pair_round(
             round_pairings,
             excluded: &excluded,
             fixed_pairings: fixed_map,
+            published_pairings: published_map,
             repeats,
             rng,
         };
@@ -247,6 +250,7 @@ pub fn pair(input: &PairingInput) -> Vec<RoundResult> {
                 slips,
                 &rps,
                 &input.fixed_pairings,
+                &input.published_pairings,
                 &repeats,
                 &mut rng,
                 rp,
@@ -806,6 +810,252 @@ mod tests {
         }
         assert_eq!(m.len(), 15);
         assert!(m.values().all(|&c| c == 1), "repeats: {m:?}");
+    }
+
+    /// Build a `fixed_pairings` JSON object from `(round, (a, b))` pins.
+    fn fixed_json(pins: &[(i32, (String, String))]) -> String {
+        let mut by_round: HashMap<i32, Vec<(String, String)>> = HashMap::new();
+        for (r, (a, b)) in pins {
+            by_round.entry(*r).or_default().push((a.clone(), b.clone()));
+        }
+        let mut rounds: Vec<i32> = by_round.keys().copied().collect();
+        rounds.sort_unstable();
+        let entries: Vec<String> = rounds
+            .iter()
+            .map(|r| {
+                let pairs: Vec<String> = by_round[r]
+                    .iter()
+                    .map(|(a, b)| format!(r#"["{a}","{b}"]"#))
+                    .collect();
+                format!(r#""{r}":[{}]"#, pairs.join(","))
+            })
+            .collect();
+        format!("{{{}}}", entries.join(","))
+    }
+
+    /// Assert every produced round is a valid matching (no player twice) and
+    /// return the meeting counts across the block.
+    fn valid_matchings(out: &[RoundResult]) {
+        for round in out {
+            let mut seen: HashSet<&str> = HashSet::new();
+            for p in &round.pairings {
+                assert!(seen.insert(&p.first), "dup in round {}", round.round);
+                assert!(seen.insert(&p.second), "dup in round {}", round.round);
+            }
+        }
+    }
+
+    #[test]
+    fn round_robin_two_pairs_same_round_solves() {
+        // The Background repro: P1-P2 and P3-P4 sit in different circle templates,
+        // so the template permutation can't co-locate them. The general solver
+        // finds a valid round robin with both in round 1.
+        let json = format!(
+            r#"{{"players":[{}],"round_pairings":[{}],"fixed_pairings":{}}}"#,
+            rr_players_json(6),
+            rr_rounds_json(5, "RoundRobin"),
+            fixed_json(&[
+                (1, ("P1".into(), "P2".into())),
+                (1, ("P3".into(), "P4".into())),
+            ]),
+        );
+        let out = pair(&input(&json));
+        assert!(out.iter().all(|r| r.error.is_none()), "{out:?}");
+        let r1 = round_pairs(&out, 1);
+        assert!(r1.contains(&("P1".into(), "P2".into())));
+        assert!(r1.contains(&("P3".into(), "P4".into())));
+        let m = meetings(&out);
+        assert_eq!(m.len(), 15); // C(6, 2)
+        assert!(m.values().all(|&c| c == 1), "repeats: {m:?}");
+    }
+
+    #[test]
+    fn round_robin_noncircle_full_round_solves() {
+        // Pin an entire round to the four adjacent-seed pairs {P1P2,P3P4,P5P6,
+        // P7P8} — not a circle template, so this forces a non-circle-isomorphic
+        // factorization the fast path can't reach. The solver completes it.
+        let json = format!(
+            r#"{{"players":[{}],"round_pairings":[{}],"fixed_pairings":{}}}"#,
+            rr_players_json(8),
+            rr_rounds_json(7, "RoundRobin"),
+            fixed_json(&[
+                (1, ("P1".into(), "P2".into())),
+                (1, ("P3".into(), "P4".into())),
+                (1, ("P5".into(), "P6".into())),
+                (1, ("P7".into(), "P8".into())),
+            ]),
+        );
+        let out = pair(&input(&json));
+        assert!(out.iter().all(|r| r.error.is_none()), "{out:?}");
+        let r1 = round_pairs(&out, 1);
+        for pair in [("P1", "P2"), ("P3", "P4"), ("P5", "P6"), ("P7", "P8")] {
+            assert!(r1.contains(&(pair.0.into(), pair.1.into())), "{r1:?}");
+        }
+        let m = meetings(&out);
+        assert_eq!(m.len(), 28); // C(8, 2)
+        assert!(m.values().all(|&c| c == 1), "repeats: {m:?}");
+    }
+
+    #[test]
+    fn round_robin_fully_pinned_round_plus_later_pin() {
+        // A complete matching pinned in round 1, plus a separate pin in round 3.
+        let json = format!(
+            r#"{{"players":[{}],"round_pairings":[{}],"fixed_pairings":{}}}"#,
+            rr_players_json(6),
+            rr_rounds_json(5, "RoundRobin"),
+            fixed_json(&[
+                (1, ("P1".into(), "P2".into())),
+                (1, ("P3".into(), "P4".into())),
+                (1, ("P5".into(), "P6".into())),
+                (3, ("P1".into(), "P3".into())),
+            ]),
+        );
+        let out = pair(&input(&json));
+        assert!(out.iter().all(|r| r.error.is_none()), "{out:?}");
+        assert!(round_pairs(&out, 1).contains(&("P5".into(), "P6".into())));
+        assert!(round_pairs(&out, 3).contains(&("P1".into(), "P3".into())));
+        let m = meetings(&out);
+        assert_eq!(m.len(), 15);
+        assert!(m.values().all(|&c| c == 1), "repeats: {m:?}");
+    }
+
+    #[test]
+    fn round_robin_fixed_bye_and_pair_same_round() {
+        // Odd field: a phantom Bye is vertex 6. Fix P1-P2 and give P4 the bye, both
+        // in round 1. The solver composes the bye pin with the other fixed pairing.
+        let json = format!(
+            r#"{{"players":[{}],"round_pairings":[{}],"fixed_pairings":{}}}"#,
+            rr_players_json(5),
+            rr_rounds_json(5, "RoundRobin"),
+            fixed_json(&[
+                (1, ("P1".into(), "P2".into())),
+                (1, ("P4".into(), "Bye".into())),
+            ]),
+        );
+        let out = pair(&input(&json));
+        assert!(out.iter().all(|r| r.error.is_none()), "{out:?}");
+        let r1 = round_pairs(&out, 1);
+        assert!(r1.contains(&("P1".into(), "P2".into())), "{r1:?}");
+        assert!(r1.contains(&("Bye".into(), "P4".into())), "{r1:?}");
+        let m = meetings(&out);
+        assert_eq!(m.len(), 10); // C(5, 2), byes excluded
+        assert!(m.values().all(|&c| c == 1), "repeats: {m:?}");
+    }
+
+    #[test]
+    fn double_round_robin_two_pairs_same_round_solves() {
+        // DRR: rounds 1 & 2 share position 0. Two pairs fixed into round 1 must
+        // both appear in rounds 1 and 2, and every pair is met twice.
+        let json = format!(
+            r#"{{"players":[{}],"round_pairings":[{}],"fixed_pairings":{}}}"#,
+            rr_players_json(6),
+            rr_rounds_json(10, "DoubleRoundRobin"),
+            fixed_json(&[
+                (1, ("P1".into(), "P2".into())),
+                (1, ("P3".into(), "P4".into())),
+            ]),
+        );
+        let out = pair(&input(&json));
+        assert!(out.iter().all(|r| r.error.is_none()), "{out:?}");
+        for r in [1, 2] {
+            let rp = round_pairs(&out, r);
+            assert!(rp.contains(&("P1".into(), "P2".into())), "round {r}: {rp:?}");
+            assert!(rp.contains(&("P3".into(), "P4".into())), "round {r}: {rp:?}");
+        }
+        let m = meetings(&out);
+        assert_eq!(m.len(), 15);
+        assert!(m.values().all(|&c| c == 2), "expected twice: {m:?}");
+    }
+
+    #[test]
+    fn round_robin_partial_block_same_round() {
+        // An 8-player field but only a 4-round block. Two pairs fixed into round 1
+        // (again different circle templates) — feasible inside 4 disjoint rounds.
+        let json = format!(
+            r#"{{"players":[{}],"round_pairings":[{}],"fixed_pairings":{}}}"#,
+            rr_players_json(8),
+            rr_rounds_json(4, "RoundRobin"),
+            fixed_json(&[
+                (1, ("P1".into(), "P2".into())),
+                (1, ("P3".into(), "P4".into())),
+            ]),
+        );
+        let out = pair(&input(&json));
+        assert_eq!(out.len(), 4);
+        assert!(out.iter().all(|r| r.error.is_none()), "{out:?}");
+        valid_matchings(&out);
+        let r1 = round_pairs(&out, 1);
+        assert!(r1.contains(&("P1".into(), "P2".into())));
+        assert!(r1.contains(&("P3".into(), "P4".into())));
+        // 4 disjoint rounds of 4 games = 16 distinct meetings, none repeated.
+        let m = meetings(&out);
+        assert_eq!(m.len(), 16);
+        assert!(m.values().all(|&c| c == 1), "repeats: {m:?}");
+    }
+
+    #[test]
+    fn round_robin_solver_is_deterministic() {
+        // The solver is RNG-free: two runs of the same pinned block are identical.
+        let json = format!(
+            r#"{{"players":[{}],"round_pairings":[{}],"fixed_pairings":{}}}"#,
+            rr_players_json(8),
+            rr_rounds_json(7, "RoundRobin"),
+            fixed_json(&[
+                (1, ("P1".into(), "P2".into())),
+                (1, ("P3".into(), "P4".into())),
+                (4, ("P1".into(), "P5".into())),
+            ]),
+        );
+        assert_eq!(pair(&input(&json)), pair(&input(&json)));
+    }
+
+    #[test]
+    fn round_robin_solver_output_always_valid_under_random_pins() {
+        // Fuzz random pin sets: whenever the block pairs without error, it must be
+        // a valid, complete, repeat-free round robin honoring every pin (the
+        // solver never emits an invalid schedule).
+        let n = 8usize;
+        let mut state: u64 = 0x9e3779b97f4a7c15;
+        let mut rng = || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        for _ in 0..40 {
+            let mut pins: Vec<(i32, (String, String))> = Vec::new();
+            let k = 2 + (rng() % 4) as usize;
+            for _ in 0..k {
+                let a = 1 + (rng() % n as u64);
+                let mut b = 1 + (rng() % n as u64);
+                while b == a {
+                    b = 1 + (rng() % n as u64);
+                }
+                let r = 1 + (rng() % (n as u64 - 1)) as i32;
+                pins.push((r, (format!("P{a}"), format!("P{b}"))));
+            }
+            let json = format!(
+                r#"{{"players":[{}],"round_pairings":[{}],"fixed_pairings":{}}}"#,
+                rr_players_json(n),
+                rr_rounds_json(n - 1, "RoundRobin"),
+                fixed_json(&pins),
+            );
+            let out = pair(&input(&json));
+            valid_matchings(&out);
+            if out.iter().all(|r| r.error.is_none()) {
+                let m = meetings(&out);
+                assert_eq!(m.len(), n * (n - 1) / 2, "incomplete RR for pins {pins:?}");
+                assert!(m.values().all(|&c| c == 1), "repeat for pins {pins:?}: {m:?}");
+                for (r, (a, b)) in &pins {
+                    let mut names = [a.clone(), b.clone()];
+                    names.sort();
+                    assert!(
+                        round_pairs(&out, *r).contains(&(names[0].clone(), names[1].clone())),
+                        "pin {a}-{b}@{r} not honored: {out:?}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

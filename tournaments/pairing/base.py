@@ -88,6 +88,13 @@ class PairingData:
     # pairs that must be matched regardless of what the pairing strategy would choose.
     fixed_pairings: dict[int, list[tuple[str, str]]] = field(default_factory=dict)
 
+    # Already-published pairings of every non-draft round, keyed by round number.
+    # The round-robin solver pins these so an in-progress round's printed-but-
+    # unplayed games are honored (never recomputed or duplicated elsewhere). Draft
+    # rounds are absent — they are free to re-pair. Empty by default, so callers
+    # that build PairingData by hand (tests) need not supply it.
+    published_pairings: dict[int, list[tuple[str, str]]] = field(default_factory=dict)
+
     # Temporary filter used by pair_round() while invoking a strategy for a round that has
     # fixed pairings. pair_round() sets this to the names of all fixed players before calling
     # the strategy, so that standings_after_round() omits them and the strategy only sees the
@@ -112,6 +119,22 @@ class PairingData:
         fixed: dict[int, list[tuple[str, str]]] = defaultdict(list)
         for fp in division.fixed_pairings.select_related("entrant1__player", "entrant2__player").all():
             fixed[fp.round_number].append((fp.entrant1.player.name, fp.entrant2.player.name))
+        # Published pairings of non-draft rounds, so the round-robin solver can pin
+        # an in-progress round's remaining games. Draft rounds are excluded (free to
+        # re-pair); null-round_pairings rows are ignored. Imported locally to keep
+        # this module free of module-level Django model dependencies.
+        from tournaments.models import RoundPairings
+
+        published: dict[int, list[tuple[str, str]]] = defaultdict(list)
+        published_qs = division.pairings.filter(
+            round_pairings__status__in=[
+                RoundPairings.PUBLISHED,
+                RoundPairings.IN_PROGRESS,
+                RoundPairings.FINISHED,
+            ]
+        ).select_related("first__player", "second__player")
+        for p in published_qs:
+            published[p.round].append((p.first.player.name, p.second.player.name))
         # A division with no settings row yet has no configured pairings.
         # Malformed blobs are rejected at write time (_validate_blocks), so a
         # missing row is the only thing to tolerate here. Imported locally to
