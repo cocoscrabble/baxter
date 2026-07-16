@@ -59,6 +59,23 @@ class ByePlayerModelTests(TestCase):
         self.assertTrue(first.is_provisional)
         self.assertEqual(Player.objects.filter(is_bye=True).count(), 1)
 
+    def test_bye_excluded_from_entrants_grid_picker(self):
+        from tournaments.grids import EntrantsGrid
+
+        user = User.objects.create_user(username="g", password="p")
+        division = make_division(user, 2, 2)
+        bye = Player.get_bye()
+
+        grid = EntrantsGrid()
+        players = grid.lookups(division)["players"]
+        self.assertNotIn(bye.pk, [p["id"] for p in players])
+        self.assertNotIn("Bye", [p["label"] for p in players])
+        # The two real players are still offered.
+        self.assertEqual(len(players), 2)
+
+        valid_ids, _ = grid.validate_args(division)
+        self.assertNotIn(bye.pk, valid_ids)
+
     def test_default_manager_hides_bye_entrant(self):
         user = User.objects.create_user(username="o", password="p")
         division = make_division(user, 3, 2)
