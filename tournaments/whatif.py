@@ -8,6 +8,7 @@ real score if the hypothetical pairing actually happened); ``actual_rows`` build
 the same rows from the round's real result, for the side-by-side comparison.
 """
 
+import copy
 from collections import defaultdict
 from dataclasses import dataclass, replace
 
@@ -34,7 +35,7 @@ class ExploreRow:
     common: bool = False   # this pair appears on both the what-if and actual side
 
 
-def explore_pairing(division, target_round, strategy, based_on, seed):
+def explore_pairing(division, target_round, strategy, based_on, seed, pd=None):
     """Pair ``target_round`` with ``strategy`` off the standings as of
     ``based_on`` (0 = seedings). Returns ``[DisplayPairing, ...]``.
 
@@ -42,8 +43,12 @@ def explore_pairing(division, target_round, strategy, based_on, seed):
     round as unplayed and fixes the based-on standings; fixed and published
     pairings are cleared so the output is the pure strategy result. Raises
     ``PairingError`` if the round can't be paired. No DB writes.
+
+    Pass a prebuilt ``pd`` (``PairingData.for_division``) to share it with
+    ``decorate``/``actual_rows`` and avoid rebuilding it; it is shallow-copied
+    before its slips are truncated, so the caller's ``pd`` is left untouched.
     """
-    pd = PairingData.for_division(division)
+    pd = copy.copy(pd) if pd is not None else PairingData.for_division(division)
     pd.result_slips = [s for s in pd.result_slips if s.round <= based_on]
     pd.round_pairings = [RoundPairing(target_round, based_on, str(strategy))]
     pd.fixed_pairings = {}
@@ -83,12 +88,12 @@ def _score(slip, name):
     return slip.winner_score if slip.winner_name == name else slip.loser_score
 
 
-def decorate(division, target_round, based_on, pairings):
+def decorate(division, target_round, based_on, pairings, pd=None):
     """Decorate engine ``pairings`` into ``[ExploreRow]``: board order by min
     standings rank (byes last), the repeat rounds through ``based_on``, and the
     real score when the hypothetical pairing actually happened in the target
     round."""
-    pd = PairingData.for_division(division)
+    pd = pd or PairingData.for_division(division)
     rank = _ranked(pd, based_on)
     meetings = _meeting_rounds(pd, based_on)
     actual = {
@@ -116,12 +121,12 @@ def decorate(division, target_round, based_on, pairings):
     return rows
 
 
-def actual_rows(division, target_round):
+def actual_rows(division, target_round, pd=None):
     """The real pairings of ``target_round`` as ``[ExploreRow]`` (with scores), or
     ``None`` if the round wasn't played — for the side-by-side comparison. Repeats
     count meetings before the target round; board order is by the standings going
     into it."""
-    pd = PairingData.for_division(division)
+    pd = pd or PairingData.for_division(division)
     slips = [s for s in pd.result_slips if s.round == target_round]
     if not slips:
         return None
@@ -146,11 +151,12 @@ def actual_rows(division, target_round):
     return rows
 
 
-def configured_pairing(division, round_num):
+def configured_pairing(division, round_num, pd=None):
     """The ``RoundPairing`` the division has configured for ``round_num`` — its
     strategy and basis round, shown on the Actual side so it reads like the
     what-if descriptor — or ``None`` if the round isn't configured."""
-    for rp in PairingData.for_division(division).round_pairings:
+    pd = pd or PairingData.for_division(division)
+    for rp in pd.round_pairings:
         if rp.round == round_num:
             return rp
     return None
