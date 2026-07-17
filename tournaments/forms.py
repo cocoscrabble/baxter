@@ -256,6 +256,27 @@ class FakeTournamentForm(forms.Form):
         return num
 
 
+class WhatIfImportForm(forms.Form):
+    """Paste or upload a historical division (JSON bundle or coco-ratings CSV)
+    to build a what-if sandbox. The file wins if both are given."""
+
+    name = forms.CharField(
+        max_length=200, required=False, label="Tournament name",
+        help_text="Leave blank to name it from the import.",
+    )
+    pasted = forms.CharField(
+        widget=forms.Textarea(attrs={"rows": 10}), required=False,
+        label="Paste JSON or CSV",
+    )
+    upload = forms.FileField(required=False, label="…or upload a file")
+
+    def clean(self):
+        cleaned = super().clean()
+        if not (cleaned.get("pasted", "").strip() or cleaned.get("upload")):
+            raise forms.ValidationError("Paste or upload a JSON bundle or CSV file.")
+        return cleaned
+
+
 class RoundCountForm(forms.Form):
     num_rounds = forms.IntegerField(min_value=1, label="Number of rounds")
 

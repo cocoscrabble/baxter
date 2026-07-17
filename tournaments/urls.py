@@ -46,6 +46,7 @@ from .views import (
     TournamentEventLogExportView,
     TournamentListView,
     TournamentUpdateView,
+    WhatIfImportView,
 )
 
 # Division routes are nested under the tournament + division slugs so neither
@@ -61,6 +62,7 @@ urlpatterns = [
     path("", TournamentListView.as_view(), name="tournament_list"),
     path("create/", TournamentCreateView.as_view(), name="tournament_create"),
     path("fake-tournament/", FakeTournamentCreateView.as_view(), name="fake_tournament_create"),
+    path("what-if/import/", WhatIfImportView.as_view(), name="whatif_import"),
     path("create-player/", CreatePlayerView.as_view(), name="create_player"),
     path("players/import/", PlayerImportView.as_view(), name="player_import"),
 
