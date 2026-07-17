@@ -2,39 +2,31 @@
 {% if explore_error %}
 <p class="error">{{ explore_error }}</p>
 {% else %}
-<div class="round-header">
-<h2>Round {{ target_round }}
-    <span class="round-status-badge badge-pairable">What-if</span>
-</h2>
-<p>{{ strategy }} off {% if based_on == 0 %}seedings{% else %}round {{ based_on }} standings{% endif %}</p>
+<div class="{% if actual_rows %}explore-compare{% endif %}">
+    <div class="pairings-main">
+        <div class="round-header">
+            <h2>Round {{ target_round }}
+                <span class="round-status-badge badge-pairable">What-if</span>
+            </h2>
+            <p>{{ strategy }} off {% if based_on == 0 %}seedings{% else %}round {{ based_on }} standings{% endif %}</p>
+        </div>
+        {% if explore_rows %}
+            {% include "tournaments/_explore_table.html" with rows=explore_rows %}
+        {% else %}
+            {% include "tournaments/_empty_state.html" with message="No pairings produced for this round." %}
+        {% endif %}
+    </div>
+    {% if actual_rows %}
+    <div class="pairings-main">
+        <div class="round-header">
+            <h2>Round {{ target_round }}
+                <span class="round-status-badge badge-finished">Actual</span>
+            </h2>
+            <p>{% if actual_strategy %}{{ actual_strategy }} off {% if actual_based_on == 0 %}seedings{% else %}round {{ actual_based_on }} standings{% endif %} &middot; {% endif %}&#x2713; = same pairing as the what-if</p>
+        </div>
+        {% include "tournaments/_explore_table.html" with rows=actual_rows %}
+    </div>
+    {% endif %}
 </div>
-{% if explore_rows %}
-<table>
-    <thead>
-        <tr>
-            <th class="num-left">Table</th>
-            <th>First Player</th>
-            <th></th>
-            <th>Second Player</th>
-            <th class="num">Repeats</th>
-            <th class="num">Result</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for row in explore_rows %}
-        <tr>
-            <td class="num-left">{{ row.table|default_if_none:"" }}</td>
-            <td>{{ row.first }}</td>
-            <td></td>
-            <td>{{ row.second }}</td>
-            <td class="num">{% if row.repeat_rounds %}{{ row.repeat_rounds|length }}<span class="repeat-rounds">rd. {{ row.repeat_rounds|join:", " }}</span>{% endif %}</td>
-            <td class="num">{{ row.result }}</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
-{% else %}
-{% include "tournaments/_empty_state.html" with message="No pairings produced for this round." %}
-{% endif %}
 {% endif %}
 </div>

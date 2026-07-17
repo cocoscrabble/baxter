@@ -1,0 +1,24 @@
+<table>
+    <thead>
+        <tr>
+            <th class="num-left">Table</th>
+            <th>First Player</th>
+            <th></th>
+            <th>Second Player</th>
+            <th class="num">Repeats</th>
+            <th class="num">Result</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in rows %}
+        <tr>
+            <td class="num-left">{{ row.table|default_if_none:"" }}</td>
+            <td>{{ row.first }}</td>
+            <td>{% if row.common %}<span class="common-mark" title="Also in the other column">&#x2713;</span>{% endif %}</td>
+            <td>{{ row.second }}</td>
+            <td class="num">{% if row.repeat_rounds %}{{ row.repeat_rounds|length }}<span class="repeat-rounds">rd. {{ row.repeat_rounds|join:", " }}</span>{% endif %}</td>
+            <td class="num">{{ row.result }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>

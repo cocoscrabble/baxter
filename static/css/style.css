@@ -501,6 +501,29 @@ input[type="number"] {
     box-sizing: border-box;
 }
 
+/* Explore comparison: the what-if and actual round tables side by side (stacked
+   on narrow screens). */
+.explore-compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-lg);
+    align-items: start;
+}
+.explore-compare .pairings-main {
+    max-width: none;
+}
+@media (max-width: 980px) {
+    .explore-compare {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* A pairing that appears on both the what-if and actual side. */
+.common-mark {
+    color: var(--color-finished);
+    font-weight: bold;
+}
+
 /* The earlier rounds a repeat pairing already met in, shown in the Repeats cell:
    inline next to the count on wide screens, stacked under it on narrow. */
 .repeat-rounds {
