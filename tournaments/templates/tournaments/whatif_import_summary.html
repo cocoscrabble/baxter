@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Import complete - Baxter{% endblock %}
+
+{% block page_class %}page--narrow{% endblock %}
+
+{% block content %}
+<h1>Imported “{{ tournament.name }}”</h1>
+
+<p>
+    <a class="btn-save" href="{% url 'division_pair_rounds' division.tournament.slug division.slug %}">
+        Open {{ division.name }}
+    </a>
+</p>
+
+{% for s in summaries %}
+<section class="card">
+    <h2>{{ s.division }}</h2>
+    <ul>
+        <li>{{ s.entrants }} entrant{{ s.entrants|pluralize }}, {{ s.results }} result{{ s.results|pluralize }} imported.</li>
+        {% if s.matched_players %}<li>Matched to the roster: {{ s.matched_players|join:", " }}.</li>{% endif %}
+        {% if s.created_players %}<li>Created as provisional: {{ s.created_players|join:", " }}.</li>{% endif %}
+        {% if s.inferred_byes %}
+        <li>
+            Inferred byes (players with no result in a played round — spot-check for forfeits):
+            <ul>
+                {% for round, player in s.inferred_byes %}<li>Round {{ round }}: {{ player }}</li>{% endfor %}
+            </ul>
+        </li>
+        {% else %}
+        <li>No byes inferred.</li>
+        {% endif %}
+    </ul>
+</section>
+{% endfor %}
+
+<p><a href="{% url 'tournament_detail' tournament.slug %}">Go to the tournament</a></p>
+{% endblock %}

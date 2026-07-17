@@ -47,6 +47,7 @@ COMMAND_BACKED = {
     "DivisionFixedTablesEditView",
     "DivisionBoardTableMapEditView",
     "BulkImportEntrantsView",
+    "WhatIfImportView",
     "ResultSlipCreateView",
     "AddFixedPairingView",
     "RemoveFixedPairingView",

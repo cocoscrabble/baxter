@@ -4,8 +4,9 @@ from collections import defaultdict
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.core.exceptions import PermissionDenied
-from django.db import models
+from django.db import models, transaction
 from django.http import Http404, HttpResponse, JsonResponse
+from django.utils import timezone
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils.text import slugify
@@ -24,6 +25,7 @@ from .forms import (
     FakeTournamentForm,
     ResultSlipForm,
     TournamentForm,
+    WhatIfImportForm,
 )
 from .fake_tournament import create_fake_tournament, default_fake_tournament_name
 from .fixed_pairings import (
@@ -41,6 +43,7 @@ from .commands import (
     edit_result,
     delete_division,
     delete_tournament,
+    import_division,
     publish_all_rounds,
     publish_round,
     remove_fixed_pairing_cmd,
@@ -155,6 +158,67 @@ class FakeTournamentCreateView(LoginRequiredMixin, View):
             f"with {num_players} players over {num_rounds} rounds.",
         )
         return redirect("division_pair_rounds", **division.slug_kwargs())
+
+
+def _default_whatif_name(source_name):
+    stamp = timezone.now().strftime("%Y-%m-%d %H:%M")
+    return f"What-if: {source_name or 'import'} {stamp}"
+
+
+class WhatIfImportView(LoginRequiredMixin, View):
+    """Import a historical division (JSON bundle or coco-ratings CSV) into a
+    sandbox tournament the user owns, for what-if exploration. GET renders the
+    form; POST parses, builds the sandbox via commands, and shows a summary."""
+
+    template_name = "tournaments/whatif_import.html"
+
+    def get(self, request):
+        return render(request, self.template_name, {"form": WhatIfImportForm()})
+
+    def post(self, request):
+        from .whatif_import import ImportParseError, parse_import
+
+        form = WhatIfImportForm(request.POST, request.FILES)
+        if not form.is_valid():
+            return render(request, self.template_name, {"form": form})
+
+        upload = form.cleaned_data.get("upload")
+        if upload is not None:
+            try:
+                text = upload.read().decode("utf-8")
+            except UnicodeDecodeError:
+                form.add_error("upload", "The file isn't valid UTF-8 text.")
+                return render(request, self.template_name, {"form": form})
+        else:
+            text = form.cleaned_data["pasted"]
+
+        try:
+            source_name, divisions = parse_import(text)
+        except ImportParseError as e:
+            form.add_error(None, str(e))
+            return render(request, self.template_name, {"form": form})
+
+        name = form.cleaned_data.get("name") or _default_whatif_name(source_name)
+        # All-or-nothing: a failure importing any division rolls back the whole
+        # sandbox (each command is atomic; the outer atomic ties them together).
+        with transaction.atomic():
+            tournament = create_tournament(None, request.user, {
+                "name": name,
+                "location": "What-if sandbox",
+                "start_date": timezone.now().date().isoformat(),
+                "is_fake": True,
+                "default_division": {"name": divisions[0]["name"]},
+            })
+            summaries = [
+                import_division(tournament, request.user, d) for d in divisions
+            ]
+
+        first_division = tournament.divisions.get(name=divisions[0]["name"])
+        return render(request, "tournaments/whatif_import_summary.html", {
+            "tournament": tournament,
+            "division": first_division,
+            "summaries": summaries,
+        })
 
 
 def _resolve_tournament(slug):

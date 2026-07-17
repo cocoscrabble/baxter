@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Import for what-if - Baxter{% endblock %}
+
+{% block page_class %}page--narrow{% endblock %}
+
+{% block content %}
+<h1>Import a division for what-if</h1>
+
+<p>Load a finished division into a private sandbox tournament you own, then use
+the <strong>Explore</strong> tab to re-pair any round with a different strategy.
+Accepts a Baxter JSON bundle or a coco-ratings results CSV
+(<code>Submitted On, Round, Winner, Winners Score, Opponent, Opponents Score</code>).</p>
+
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {% if form.non_field_errors %}<p class="error">{{ form.non_field_errors }}</p>{% endif %}
+    <p>
+        {{ form.name.label_tag }}
+        {{ form.name }}
+        <span class="help">{{ form.name.help_text }}</span>
+        {{ form.name.errors }}
+    </p>
+    <p>
+        {{ form.pasted.label_tag }}
+        {{ form.pasted }}
+        {{ form.pasted.errors }}
+    </p>
+    <p>
+        {{ form.upload.label_tag }}
+        {{ form.upload }}
+        {{ form.upload.errors }}
+    </p>
+    <button type="submit" class="btn-save">Import</button>
+</form>
+
+<p><a href="{% url 'tournament_list' %}">Cancel</a></p>
+{% endblock %}
