@@ -53,12 +53,14 @@ def _apply_seed(division, payload):
 @records_event("tournament_created")
 def create_tournament(tournament, actor, payload):
     """payload: {name, location, start_date (ISO), editors: [username],
-    default_division: {name, pairing_seed}}. ``actor`` becomes the owner."""
+    is_fake, default_division: {name, pairing_seed}}. ``actor`` becomes the
+    owner. ``is_fake`` marks a sandbox tournament (e.g. a what-if import)."""
     t = Tournament.objects.create(
         name=payload["name"],
         location=payload["location"],
         start_date=date.fromisoformat(payload["start_date"]),
         owner=actor,
+        is_fake=payload.get("is_fake", False),
     )
     editors = set(_resolve_editors(payload.get("editors", [])))
     editors.add(actor)
@@ -329,6 +331,122 @@ def bulk_import_entrants(tournament, actor, payload):
     if errors:
         return EventResult(payload=payload, result=(None, errors), record=False)
     return EventResult(payload=payload, division=division, result=(result, errors))
+
+
+@records_event("division_imported")
+def import_division(tournament, actor, payload):
+    """payload: a portable division (see ``whatif_import``): {name, entrants:
+    [{player, rating, number}], results: [{round, winner, loser, winner_score,
+    loser_score, winner_started}]}.
+
+    Reconstructs a finished sandbox division from historical results: entrants,
+    ``Pairing`` + ``ResultSlip`` rows derived from the results (a 50–0 bye
+    inferred for any entrant idle in a played round), and a nominal Swiss
+    schedule with every round FINISHED. The division is ``is_test`` — hidden from
+    non-editors and excluded from registry export. Bye inference lives here (not
+    in the parser) so a replay reproduces it. Returns an import summary."""
+    from collections import defaultdict
+
+    from tournaments.generate_pairings import BYE_LOSER_SCORE, BYE_WINNER_SCORE
+    from tournaments.grids import resolve_player
+    from tournaments.models import Entrant, Pairing, Player, RoundPairings
+    from tournaments.pairing.round_pairing import blocks_to_round_pairings
+
+    division, _ = Division.objects.get_or_create(
+        tournament=tournament, name=payload["name"]
+    )
+    if not division.is_test:
+        division.is_test = True
+        division.save(update_fields=["is_test"])
+
+    ent_by_name = {}
+    created, matched = [], []
+    for e in payload["entrants"]:
+        exists = Player.objects.filter(name__iexact=e["player"]).exists()
+        player = resolve_player(e["player"], e.get("rating", 0))
+        (matched if exists else created).append(player.name)
+        ent_by_name[e["player"]] = Entrant.objects.create(
+            division=division, player=player, number=e["number"]
+        )
+
+    def entrant(name):
+        ent = ent_by_name.get(name)
+        if ent is None:  # a result names a non-entrant — add them at the bottom
+            ent = Entrant.objects.create(
+                division=division, player=resolve_player(name),
+                number=1000 + len(ent_by_name),
+            )
+            ent_by_name[name] = ent
+        return ent
+
+    by_round = defaultdict(list)
+    for r in payload["results"]:
+        by_round[r["round"]].append(r)
+
+    inferred_byes = []
+    for round_num in sorted(by_round):
+        rp = RoundPairings.objects.create(
+            division=division, round=round_num, status=RoundPairings.FINISHED
+        )
+        played = set()
+        games = []
+        for r in by_round[round_num]:
+            w, l = entrant(r["winner"]), entrant(r["loser"])
+            games.append(
+                (w, l, r["winner_score"], r["loser_score"], r["winner_started"])
+            )
+            played.update({w.pk, l.pk})
+        # The top game (lowest entrant number in the pair) claims board 1.
+        games.sort(key=lambda g: min(g[0].number, g[1].number))
+        for table, (w, l, wscore, lscore, wstarted) in enumerate(games, start=1):
+            first, second = (w, l) if wstarted else (l, w)
+            pairing = Pairing.objects.create(
+                division=division, round=round_num, round_pairings=rp,
+                first=first, second=second, table=table,
+            )
+            ResultSlip.objects.create(
+                division=division, round=round_num, pairing=pairing,
+                winner=w, winner_score=wscore, loser=l, loser_score=lscore,
+                winner_started=wstarted,
+            )
+        # Infer a bye for every non-dropped entrant idle in this played round.
+        bye_ent = None
+        for e in list(ent_by_name.values()):
+            if e.pk in played or e.dropped:
+                continue
+            if bye_ent is None:
+                bye_ent = division.bye_entrant()
+            pairing = Pairing.objects.create(
+                division=division, round=round_num, round_pairings=rp,
+                first=e, second=bye_ent, table=0,
+            )
+            ResultSlip.objects.create(
+                division=division, round=round_num, pairing=pairing,
+                winner=e, winner_score=BYE_WINNER_SCORE,
+                loser=bye_ent, loser_score=BYE_LOSER_SCORE, winner_started=False,
+            )
+            inferred_byes.append([round_num, e.player.name])
+
+    # A nominal schedule so the Pair-rounds page renders; every round is already
+    # FINISHED, so nothing is regenerated.
+    max_round = max(by_round) if by_round else 0
+    blocks = [{"pairing": "Swiss", "rounds": max_round, "pair_from": 1}]
+    settings_obj, _ = DivisionSettings.objects.get_or_create(division=division)
+    settings_obj.pairing_blocks = blocks
+    settings_obj.round_pairings = [
+        rp.to_dict() for rp in blocks_to_round_pairings(blocks)
+    ]
+    settings_obj.save()
+
+    summary = {
+        "division": division.name,
+        "entrants": len(ent_by_name),
+        "results": len(payload["results"]),
+        "created_players": sorted(set(created)),
+        "matched_players": sorted(set(matched)),
+        "inferred_byes": inferred_byes,
+    }
+    return EventResult(payload=payload, division=division, result=summary)
 
 
 def _sim_result_dict(slip):
