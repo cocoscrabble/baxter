@@ -13,8 +13,13 @@ function fieldIsDirty(el) {
     if (!el.name || el.disabled) return false;
     const type = el.type;
     if (type === "hidden" || type === "submit" || type === "button" ||
-        type === "reset" || type === "file") {
+        type === "reset") {
         return false;
+    }
+    // A file input has no comparable default value, but a chosen file is itself
+    // an unsaved change.
+    if (type === "file") {
+        return el.files && el.files.length > 0;
     }
     if (type === "checkbox" || type === "radio") {
         return el.checked !== el.defaultChecked;
