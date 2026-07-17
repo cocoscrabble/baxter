@@ -25,3 +25,6 @@ Current plans:
 - `PLAN_DESKTOP_APP.md` — package Baxter as a downloadable offline desktop app
   (PyInstaller + waitress launcher). **Potential future work**; not started,
   not scheduled.
+- `PLAN_WHAT_IF.md` — "what if" scenarios: import a historical division (JSON
+  bundle or ratings CSV) into a sandbox tournament, plus an Explore tab that
+  hypothetically re-pairs any round with a chosen strategy. **Not started.**
