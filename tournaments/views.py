@@ -941,6 +941,10 @@ class DivisionExploreView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionM
         max_round = division.max_round()
         strategies = [str(s) for s in STRATEGY_TYPES]
         get = self.request.GET
+        # Only pair when the user actually asks (the Pair/Reshuffle button, or a
+        # shared URL, carries `round`). A bare tab visit shows a placeholder, so
+        # the page loads without an engine call.
+        explored = "round" in get
 
         # Round to pair: 1 .. max_round + 1 (the +1 explores the next round).
         target = _int_or(get.get("round"), max(max_round, 1))
@@ -955,24 +959,26 @@ class DivisionExploreView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionM
 
         error, rows, actual = None, [], None
         actual_strategy, actual_based_on = "", None
-        try:
-            pairings = explore_pairing(division, target, strategy, based_on, seed)
-            rows = decorate(division, target, based_on, pairings)
-            # Only compare against reality when the target round was really played.
-            actual = actual_rows(division, target) if target <= max_round else None
-            rows, actual = mark_common(rows, actual)
-            configured = configured_pairing(division, target) if actual else None
-            if configured is not None:
-                actual_strategy = configured.pairing
-                actual_based_on = configured.start_round
-        except PairingError as e:
-            error = str(e)
+        if explored:
+            try:
+                pairings = explore_pairing(division, target, strategy, based_on, seed)
+                rows = decorate(division, target, based_on, pairings)
+                # Compare against reality only when the target round was played.
+                actual = actual_rows(division, target) if target <= max_round else None
+                rows, actual = mark_common(rows, actual)
+                configured = configured_pairing(division, target) if actual else None
+                if configured is not None:
+                    actual_strategy = configured.pairing
+                    actual_based_on = configured.start_round
+            except PairingError as e:
+                error = str(e)
 
         context.update({
             "target_round": target,
             "based_on": based_on,
             "strategy": strategy,
             "seed": seed,
+            "explored": explored,
             "explore_rows": rows,
             "actual_rows": actual,
             "actual_strategy": actual_strategy,
