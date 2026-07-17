@@ -1,0 +1,32 @@
+{% extends "tournaments/base_division.html" %}
+
+{% block title %}Explore - {{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
+
+{% block content %}
+<h1>Explore: {{ division.name }}</h1>
+<p class="help">Hypothetically re-pair a round with a different strategy off any earlier
+standings. Nothing is saved.</p>
+
+<div class="explore-controls"
+     data-signals="{exRound: '{{ target_round }}', exStrategy: '{{ strategy }}', exBasedOn: '{{ based_on }}', exSeed: '{{ seed }}'}">
+    <label>Round to pair
+        <select data-bind="exRound">
+            {% for r in round_choices %}<option value="{{ r }}"{% if r == target_round %} selected{% endif %}>{{ r }}</option>{% endfor %}
+        </select>
+    </label>
+    <label>Strategy
+        <select data-bind="exStrategy">
+            {% for s in strategies %}<option value="{{ s }}"{% if s == strategy %} selected{% endif %}>{{ s }}</option>{% endfor %}
+        </select>
+    </label>
+    <label>Based on
+        <select data-bind="exBasedOn">
+            {% for b in based_on_choices %}<option value="{{ b }}"{% if b == based_on %} selected{% endif %}>{% if b == 0 %}seedings{% else %}round {{ b }}{% endif %}</option>{% endfor %}
+        </select>
+    </label>
+    <button type="button" class="btn-save"
+        data-on:click="@get('{% url 'division_explore' division.tournament.slug division.slug %}?round=' + $exRound + '&strategy=' + $exStrategy + '&based_on=' + $exBasedOn + '&seed=' + $exSeed)">Pair</button>
+</div>
+
+{% include "tournaments/_explore_content.html" %}
+{% endblock %}
