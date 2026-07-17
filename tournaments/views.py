@@ -960,13 +960,18 @@ class DivisionExploreView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionM
         error, rows, actual = None, [], None
         actual_strategy, actual_based_on = "", None
         if explored:
+            from .pairing.base import PairingData
+
+            # Build the PairingData once and share it across the helpers below
+            # (each would otherwise rebuild it — a costly per-call query set).
+            pd = PairingData.for_division(division)
             try:
-                pairings = explore_pairing(division, target, strategy, based_on, seed)
-                rows = decorate(division, target, based_on, pairings)
+                pairings = explore_pairing(division, target, strategy, based_on, seed, pd=pd)
+                rows = decorate(division, target, based_on, pairings, pd=pd)
                 # Compare against reality only when the target round was played.
-                actual = actual_rows(division, target) if target <= max_round else None
+                actual = actual_rows(division, target, pd=pd) if target <= max_round else None
                 rows, actual = mark_common(rows, actual)
-                configured = configured_pairing(division, target) if actual else None
+                configured = configured_pairing(division, target, pd=pd) if actual else None
                 if configured is not None:
                     actual_strategy = configured.pairing
                     actual_based_on = configured.start_round
