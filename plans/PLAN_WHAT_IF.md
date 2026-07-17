@@ -1,7 +1,7 @@
 # Plan: "What if" scenarios
 
-**Status: not started.** Design agreed 2026-07-16; code references pinned at
-commit `7b0acc6`.
+**Status: implemented** (all four phases, 2026-07-17). Design agreed 2026-07-16;
+code references pinned at commit `7b0acc6`.
 
 ## Goal
 

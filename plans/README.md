@@ -27,4 +27,7 @@ Current plans:
   not scheduled.
 - `PLAN_WHAT_IF.md` — "what if" scenarios: import a historical division (JSON
   bundle or ratings CSV) into a sandbox tournament, plus an Explore tab that
-  hypothetically re-pairs any round with a chosen strategy. **Not started.**
+  hypothetically re-pairs any round with a chosen strategy. **Implemented** (all
+  four phases): `whatif_import.py` + the `division_imported` command, the import
+  view, and the Explore tab (`whatif.py`, `DivisionExploreView`) with a
+  side-by-side actual-vs-what-if comparison.
