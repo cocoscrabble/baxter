@@ -111,11 +111,19 @@ class PairingData:
 
     @classmethod
     def for_division(cls, division) -> "PairingData":
+        # select_related the joined rows every DTO touches: without it, each
+        # e.player / slip.winner.player.name is a separate query — an N+1 that
+        # dominated for_division for finished divisions (hundreds of slips).
         entrants = [
             EntrantData(PlayerData.from_db(e.player), dropped=e.dropped)
-            for e in division.entrants.all()
+            for e in division.entrants.select_related("player")
         ]
-        slips = [ResultSlipData.from_db(r) for r in division.result_slips.all()]
+        slips = [
+            ResultSlipData.from_db(r)
+            for r in division.result_slips.select_related(
+                "winner__player", "loser__player"
+            )
+        ]
         fixed: dict[int, list[tuple[str, str]]] = defaultdict(list)
         for fp in division.fixed_pairings.select_related("entrant1__player", "entrant2__player").all():
             fixed[fp.round_number].append((fp.entrant1.player.name, fp.entrant2.player.name))
