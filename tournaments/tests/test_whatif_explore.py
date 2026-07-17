@@ -78,17 +78,17 @@ class ExplorePairingTests(ExploreBase):
             {frozenset({"Alice", "Bob"}), frozenset({"Cara", "Dan"})},
         )
 
-    def test_actual_result_is_decorated_when_pairing_really_happened(self):
-        # Exploring round 1 off seedings reproduces the real round-1 pairing, so
-        # each row carries the real score.
-        pairings = explore_pairing(self.division, 1, "KotH", 0, 0)
-        rows = decorate(self.division, 1, 0, pairings)
-        ab = next(r for r in rows if {r.first, r.second} == {"Alice", "Bob"})
-        self.assertIn("500", ab.result)
-        self.assertIn("300", ab.result)
-        # A pairing that did not happen carries no result.
-        rows2 = decorate(self.division, 2, 1, explore_pairing(self.division, 2, "KotH", 1, 0))
-        self.assertTrue(all(r.result == "" for r in rows2))
+    def test_rows_carry_record_and_spread(self):
+        # Each row shows the players' record + spread as of the basis round.
+        rows = decorate(self.division, 2, 1, explore_pairing(self.division, 2, "KotH", 1, 0))
+        record = {}
+        for r in rows:
+            record[r.first] = r.first_record
+            record[r.second] = r.second_record
+        # Round 1: Alice beat Bob 500-300, Cara beat Dan 450-400.
+        self.assertEqual(record["Alice"], "1-0 (+200)")
+        self.assertEqual(record["Bob"], "0-1 (-200)")
+        self.assertEqual(record["Cara"], "1-0 (+50)")
 
 
 class ExploreOddFieldTests(ExploreBase):
@@ -112,8 +112,8 @@ class ExploreComparisonTests(ExploreBase):
     def test_mark_common_is_order_insensitive_and_partial(self):
         from tournaments.whatif import ExploreRow, mark_common
 
-        whatif = [ExploreRow(1, "A", "B", (), ""), ExploreRow(2, "C", "D", (), "")]
-        actual = [ExploreRow(1, "B", "A", (), "10 - 5"), ExploreRow(2, "C", "E", (), "9 - 8")]
+        whatif = [ExploreRow(1, "A", "", "B", "", ()), ExploreRow(2, "C", "", "D", "", ())]
+        actual = [ExploreRow(1, "B", "", "A", "", ()), ExploreRow(2, "C", "", "E", "", ())]
         whatif, actual = mark_common(whatif, actual)
         self.assertEqual([r.common for r in whatif], [True, False])  # {A,B} shared
         self.assertEqual([r.common for r in actual], [True, False])

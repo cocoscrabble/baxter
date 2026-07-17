@@ -29,9 +29,10 @@ class ExploreRow:
 
     table: int | None      # board number; None for a bye row
     first: str
+    first_record: str      # "3-2 (+235)" as of the pairing's basis round
     second: str
+    second_record: str
     repeat_rounds: tuple[int, ...]  # earlier rounds this pair had already met
-    result: str            # score when this pairing was really played, else ""
     common: bool = False   # this pair appears on both the what-if and actual side
 
 
@@ -69,38 +70,48 @@ def _meeting_rounds(pd, upto):
     return {pair: tuple(sorted(rounds)) for pair, rounds in meetings.items()}
 
 
-def _ranked(pd, upto):
-    """{player name -> standings rank} as of round ``upto`` (seedings at 0)."""
-    return {p.name: i for i, p in enumerate(standings_after_round(pd, upto))}
+def _standings_info(pd, upto):
+    """``(rank, record)`` as of round ``upto`` (seedings at 0): name -> board rank,
+    and name -> "W-L (±spread)" for the record column."""
+    standings = standings_after_round(pd, upto)
+    rank = {p.name: i for i, p in enumerate(standings)}
+    record = {p.name: f"{p.record} ({p.spread:+d})" for p in standings}
+    return rank, record
 
 
-def _order(real, rank):
-    """Board-order real ``(first, second, repeat_rounds, result)`` tuples by min
-    standings rank and number them 1..n."""
+def _order(real, rank, record):
+    """Board-order real ``(first, second, repeat_rounds)`` tuples by min standings
+    rank, number them 1..n, and attach each player's record."""
     real.sort(key=lambda r: min(rank.get(r[0], 10**9), rank.get(r[1], 10**9)))
     return [
-        ExploreRow(table=i, first=f, second=s, repeat_rounds=rr, result=res)
-        for i, (f, s, rr, res) in enumerate(real, start=1)
+        ExploreRow(
+            table=i, first=f, first_record=record.get(f, ""),
+            second=s, second_record=record.get(s, ""), repeat_rounds=rr,
+        )
+        for i, (f, s, rr) in enumerate(real, start=1)
     ]
 
 
-def _score(slip, name):
-    return slip.winner_score if slip.winner_name == name else slip.loser_score
+def _bye_rows(byes, record):
+    """Bye rows (real player first, no board), carrying the real player's record."""
+    rows = []
+    for first, second in byes:
+        if _is_bye(first):
+            first, second = second, first
+        rows.append(ExploreRow(
+            table=None, first=first, first_record=record.get(first, ""),
+            second=second, second_record="", repeat_rounds=(),
+        ))
+    return rows
 
 
 def decorate(division, target_round, based_on, pairings, pd=None):
     """Decorate engine ``pairings`` into ``[ExploreRow]``: board order by min
-    standings rank (byes last), the repeat rounds through ``based_on``, and the
-    real score when the hypothetical pairing actually happened in the target
-    round."""
+    standings rank (byes last), each player's record+spread as of ``based_on``,
+    and the repeat rounds through it."""
     pd = pd or PairingData.for_division(division)
-    rank = _ranked(pd, based_on)
+    rank, record = _standings_info(pd, based_on)
     meetings = _meeting_rounds(pd, based_on)
-    actual = {
-        frozenset({s.winner_name, s.loser_name}): s
-        for s in pd.result_slips
-        if s.round == target_round
-    }
 
     real, byes = [], []
     for p in pairings:
@@ -109,28 +120,20 @@ def decorate(division, target_round, based_on, pairings, pd=None):
             byes.append((first, second))
             continue
         pair = frozenset({first, second})
-        slip = actual.get(pair)
-        result = f"{_score(slip, first)} - {_score(slip, second)}" if slip else ""
-        real.append((first, second, meetings.get(pair, ()), result))
+        real.append((first, second, meetings.get(pair, ())))
 
-    rows = _order(real, rank)
-    for first, second in byes:
-        if _is_bye(first):  # show the real player first
-            first, second = second, first
-        rows.append(ExploreRow(table=None, first=first, second=second, repeat_rounds=(), result=""))
-    return rows
+    return _order(real, rank, record) + _bye_rows(byes, record)
 
 
 def actual_rows(division, target_round, pd=None):
-    """The real pairings of ``target_round`` as ``[ExploreRow]`` (with scores), or
-    ``None`` if the round wasn't played — for the side-by-side comparison. Repeats
-    count meetings before the target round; board order is by the standings going
-    into it."""
+    """The real pairings of ``target_round`` as ``[ExploreRow]``, or ``None`` if
+    the round wasn't played — for the side-by-side comparison. Records are as of
+    the round before; board order is by the standings going into it."""
     pd = pd or PairingData.for_division(division)
     slips = [s for s in pd.result_slips if s.round == target_round]
     if not slips:
         return None
-    rank = _ranked(pd, target_round - 1)
+    rank, record = _standings_info(pd, target_round - 1)
     meetings = _meeting_rounds(pd, target_round - 1)
 
     real, byes = [], []
@@ -140,15 +143,9 @@ def actual_rows(division, target_round, pd=None):
             byes.append((first, second))
             continue
         pair = frozenset({first, second})
-        result = f"{_score(s, first)} - {_score(s, second)}"
-        real.append((first, second, meetings.get(pair, ()), result))
+        real.append((first, second, meetings.get(pair, ())))
 
-    rows = _order(real, rank)
-    for first, second in byes:
-        if _is_bye(first):
-            first, second = second, first
-        rows.append(ExploreRow(table=None, first=first, second=second, repeat_rounds=(), result=""))
-    return rows
+    return _order(real, rank, record) + _bye_rows(byes, record)
 
 
 def configured_pairing(division, round_num, pd=None):
