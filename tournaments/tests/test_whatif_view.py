@@ -75,6 +75,21 @@ class WhatIfImportViewTests(TestCase):
         self.assertTrue(tournament.is_fake)
         self.assertEqual(tournament.divisions.get().entrants.count(), 2)
 
+    def test_name_inferred_from_uploaded_filename(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        Player.objects.create(name="Alice", player_number="1", rating=1600)
+        self.client.force_login(self.user)
+        csv = ("Submitted On,Round,Winner,Winners Score,Opponent,Opponents Score\n"
+               ",1,Alice,420,Bob,388\n")
+        upload = SimpleUploadedFile("nationals-2019.csv", csv.encode(), content_type="text/csv")
+        response = self.client.post(self.url, {"name": "", "upload": upload})
+        self.assertEqual(response.status_code, 200)
+        # Named from the filename stem, not the literal "import".
+        tournament = Tournament.objects.get(is_fake=True)
+        self.assertIn("nationals-2019", tournament.name)
+        self.assertNotIn("import", tournament.name)
+
     def test_parse_error_creates_nothing(self):
         self.client.force_login(self.user)
         response = self.client.post(self.url, {"name": "", "pasted": "{ bad json"})
