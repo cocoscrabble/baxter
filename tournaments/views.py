@@ -923,7 +923,13 @@ class DivisionExploreView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionM
     active_tab = "explore"
 
     def get_context_data(self, **kwargs):
-        from .whatif import decorate, explore_pairing
+        from .whatif import (
+            actual_rows,
+            configured_pairing,
+            decorate,
+            explore_pairing,
+            mark_common,
+        )
 
         context = super().get_context_data(**kwargs)
         division = self.object
@@ -942,10 +948,18 @@ class DivisionExploreView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionM
             strategy = "Swiss"
         seed = _int_or(get.get("seed"), _division_seed(division))
 
-        error, rows = None, []
+        error, rows, actual = None, [], None
+        actual_strategy, actual_based_on = "", None
         try:
             pairings = explore_pairing(division, target, strategy, based_on, seed)
             rows = decorate(division, target, based_on, pairings)
+            # Only compare against reality when the target round was really played.
+            actual = actual_rows(division, target) if target <= max_round else None
+            rows, actual = mark_common(rows, actual)
+            configured = configured_pairing(division, target) if actual else None
+            if configured is not None:
+                actual_strategy = configured.pairing
+                actual_based_on = configured.start_round
         except PairingError as e:
             error = str(e)
 
@@ -955,6 +969,9 @@ class DivisionExploreView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionM
             "strategy": strategy,
             "seed": seed,
             "explore_rows": rows,
+            "actual_rows": actual,
+            "actual_strategy": actual_strategy,
+            "actual_based_on": actual_based_on,
             "explore_error": error,
             "strategies": strategies,
             "round_choices": range(1, max_round + 2),

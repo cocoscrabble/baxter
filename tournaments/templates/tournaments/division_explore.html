@@ -26,6 +26,9 @@ standings. Nothing is saved.</p>
     </label>
     <button type="button" class="btn-save"
         data-on:click="@get('{% url 'division_explore' division.tournament.slug division.slug %}?round=' + $exRound + '&strategy=' + $exStrategy + '&based_on=' + $exBasedOn + '&seed=' + $exSeed)">Pair</button>
+    <button type="button" class="btn-secondary"
+        data-show="$exStrategy == 'Random' || $exStrategy == 'RandomNoRepeats' || $exStrategy == 'SwissPlusRandom'"
+        data-on:click="$exSeed = Math.floor(Math.random() * 1000000000); @get('{% url 'division_explore' division.tournament.slug division.slug %}?round=' + $exRound + '&strategy=' + $exStrategy + '&based_on=' + $exBasedOn + '&seed=' + $exSeed)">Reshuffle</button>
 </div>
 
 {% include "tournaments/_explore_content.html" %}

@@ -103,6 +103,49 @@ class ExploreOddFieldTests(ExploreBase):
         self.assertIsNone(bye_rows[0].table)
 
 
+class ExploreComparisonTests(ExploreBase):
+    def setUp(self):
+        super().setUp()
+        self._slip(1, "Alice", "Bob", 500, 300)
+        self._slip(1, "Cara", "Dan", 450, 400)
+
+    def test_mark_common_is_order_insensitive_and_partial(self):
+        from tournaments.whatif import ExploreRow, mark_common
+
+        whatif = [ExploreRow(1, "A", "B", (), ""), ExploreRow(2, "C", "D", (), "")]
+        actual = [ExploreRow(1, "B", "A", (), "10 - 5"), ExploreRow(2, "C", "E", (), "9 - 8")]
+        whatif, actual = mark_common(whatif, actual)
+        self.assertEqual([r.common for r in whatif], [True, False])  # {A,B} shared
+        self.assertEqual([r.common for r in actual], [True, False])
+
+    def test_actual_side_only_for_played_round(self):
+        from tournaments.whatif import actual_rows
+
+        self.assertIsNotNone(actual_rows(self.division, 1))
+        self.assertIsNone(actual_rows(self.division, 2))  # round 2 not played
+
+    def test_configured_pairing_for_actual_side(self):
+        from tournaments.whatif import configured_pairing
+
+        self.division.settings.round_pairings = [
+            {"round": 2, "start_round": 1, "pairing": "Swiss"}
+        ]
+        self.division.settings.save()
+        rp = configured_pairing(self.division, 2)
+        self.assertEqual((rp.pairing, rp.start_round), ("Swiss", 1))
+        self.assertIsNone(configured_pairing(self.division, 9))
+
+    def test_view_shows_comparison_with_common_marks(self):
+        # KotH off seedings reproduces the real round 1, so every pairing is common.
+        self.client.force_login(self.owner)
+        url = reverse("division_explore", kwargs=self.division.slug_kwargs())
+        response = self.client.get(url, {"round": 1, "strategy": "KotH", "based_on": 0})
+        self.assertContains(response, "explore-compare")
+        self.assertContains(response, "Actual")
+        self.assertTrue(all(r.common for r in response.context["explore_rows"]))
+        self.assertTrue(all(r.common for r in response.context["actual_rows"]))
+
+
 class ExploreViewTests(ExploreBase):
     def setUp(self):
         super().setUp()

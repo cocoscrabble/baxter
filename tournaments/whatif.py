@@ -4,11 +4,12 @@
 round, as a pure function of the division's existing results — no DB writes. It
 works on any editable division, not just imported ones. ``decorate`` turns the
 engine's pairings into lightweight view rows (board order, repeat detail, and the
-real score if the hypothetical pairing actually happened).
+real score if the hypothetical pairing actually happened); ``actual_rows`` builds
+the same rows from the round's real result, for the side-by-side comparison.
 """
 
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from tournaments.pairing.base import PairingData, standings_after_round
 from tournaments.pairing.engine import pair_with_engine
@@ -23,13 +24,14 @@ def _is_bye(name: str) -> bool:
 
 @dataclass(frozen=True)
 class ExploreRow:
-    """One hypothetical pairing, decorated for display."""
+    """One pairing (hypothetical or actual), decorated for display."""
 
     table: int | None      # board number; None for a bye row
     first: str
     second: str
-    repeat_rounds: tuple[int, ...]  # earlier rounds (≤ based_on) this pair met
-    result: str            # real score if this pairing actually happened, else ""
+    repeat_rounds: tuple[int, ...]  # earlier rounds this pair had already met
+    result: str            # score when this pairing was really played, else ""
+    common: bool = False   # this pair appears on both the what-if and actual side
 
 
 def explore_pairing(division, target_round, strategy, based_on, seed):
@@ -53,47 +55,114 @@ def explore_pairing(division, target_round, strategy, based_on, seed):
     return []
 
 
+def _meeting_rounds(pd, upto):
+    """{pair -> sorted rounds ≤ upto they met}, byes excluded."""
+    meetings: dict[frozenset, list[int]] = defaultdict(list)
+    for s in pd.result_slips:
+        if s.round <= upto and not (_is_bye(s.winner_name) or _is_bye(s.loser_name)):
+            meetings[frozenset({s.winner_name, s.loser_name})].append(s.round)
+    return {pair: tuple(sorted(rounds)) for pair, rounds in meetings.items()}
+
+
+def _ranked(pd, upto):
+    """{player name -> standings rank} as of round ``upto`` (seedings at 0)."""
+    return {p.name: i for i, p in enumerate(standings_after_round(pd, upto))}
+
+
+def _order(real, rank):
+    """Board-order real ``(first, second, repeat_rounds, result)`` tuples by min
+    standings rank and number them 1..n."""
+    real.sort(key=lambda r: min(rank.get(r[0], 10**9), rank.get(r[1], 10**9)))
+    return [
+        ExploreRow(table=i, first=f, second=s, repeat_rounds=rr, result=res)
+        for i, (f, s, rr, res) in enumerate(real, start=1)
+    ]
+
+
+def _score(slip, name):
+    return slip.winner_score if slip.winner_name == name else slip.loser_score
+
+
 def decorate(division, target_round, based_on, pairings):
     """Decorate engine ``pairings`` into ``[ExploreRow]``: board order by min
     standings rank (byes last), the repeat rounds through ``based_on``, and the
-    actual score when the hypothetical pairing really happened in the target
+    real score when the hypothetical pairing actually happened in the target
     round."""
     pd = PairingData.for_division(division)
-    # standings_after_round already counts only rounds ≤ based_on, so the full pd
-    # gives the based-on ranking (seedings when based_on == 0).
-    rank = {p.name: i for i, p in enumerate(standings_after_round(pd, based_on))}
-
-    meetings: dict[frozenset, list[int]] = defaultdict(list)
-    actual = {}
-    for s in pd.result_slips:
-        pair = frozenset({s.winner_name, s.loser_name})
-        if s.round <= based_on and not (_is_bye(s.winner_name) or _is_bye(s.loser_name)):
-            meetings[pair].append(s.round)
-        if s.round == target_round:
-            actual[pair] = s
-
-    def score(slip, name):
-        return slip.winner_score if slip.winner_name == name else slip.loser_score
+    rank = _ranked(pd, based_on)
+    meetings = _meeting_rounds(pd, based_on)
+    actual = {
+        frozenset({s.winner_name, s.loser_name}): s
+        for s in pd.result_slips
+        if s.round == target_round
+    }
 
     real, byes = [], []
     for p in pairings:
         first, second = p.first.name, p.second.name
-        pair = frozenset({first, second})
         if _is_bye(first) or _is_bye(second):
             byes.append((first, second))
             continue
+        pair = frozenset({first, second})
         slip = actual.get(pair)
-        result = f"{score(slip, first)} - {score(slip, second)}" if slip else ""
-        repeat_rounds = tuple(sorted(meetings.get(pair, [])))
-        real.append((first, second, repeat_rounds, result))
+        result = f"{_score(slip, first)} - {_score(slip, second)}" if slip else ""
+        real.append((first, second, meetings.get(pair, ()), result))
 
-    real.sort(key=lambda r: min(rank.get(r[0], 10**9), rank.get(r[1], 10**9)))
-    rows = [
-        ExploreRow(table=i, first=f, second=s, repeat_rounds=rr, result=res)
-        for i, (f, s, rr, res) in enumerate(real, start=1)
-    ]
+    rows = _order(real, rank)
     for first, second in byes:
         if _is_bye(first):  # show the real player first
             first, second = second, first
         rows.append(ExploreRow(table=None, first=first, second=second, repeat_rounds=(), result=""))
     return rows
+
+
+def actual_rows(division, target_round):
+    """The real pairings of ``target_round`` as ``[ExploreRow]`` (with scores), or
+    ``None`` if the round wasn't played — for the side-by-side comparison. Repeats
+    count meetings before the target round; board order is by the standings going
+    into it."""
+    pd = PairingData.for_division(division)
+    slips = [s for s in pd.result_slips if s.round == target_round]
+    if not slips:
+        return None
+    rank = _ranked(pd, target_round - 1)
+    meetings = _meeting_rounds(pd, target_round - 1)
+
+    real, byes = [], []
+    for s in slips:
+        first, second = s.first_name, s.second_name
+        if _is_bye(first) or _is_bye(second):
+            byes.append((first, second))
+            continue
+        pair = frozenset({first, second})
+        result = f"{_score(s, first)} - {_score(s, second)}"
+        real.append((first, second, meetings.get(pair, ()), result))
+
+    rows = _order(real, rank)
+    for first, second in byes:
+        if _is_bye(first):
+            first, second = second, first
+        rows.append(ExploreRow(table=None, first=first, second=second, repeat_rounds=(), result=""))
+    return rows
+
+
+def configured_pairing(division, round_num):
+    """The ``RoundPairing`` the division has configured for ``round_num`` — its
+    strategy and basis round, shown on the Actual side so it reads like the
+    what-if descriptor — or ``None`` if the round isn't configured."""
+    for rp in PairingData.for_division(division).round_pairings:
+        if rp.round == round_num:
+            return rp
+    return None
+
+
+def mark_common(whatif, actual):
+    """Set ``common=True`` on the rows of each side whose pair appears on both,
+    returning ``(whatif, actual)``. ``actual`` may be ``None``."""
+    if not actual:
+        return whatif, actual
+    whatif_pairs = {frozenset({r.first, r.second}) for r in whatif}
+    actual_pairs = {frozenset({r.first, r.second}) for r in actual}
+    whatif = [replace(r, common=frozenset({r.first, r.second}) in actual_pairs) for r in whatif]
+    actual = [replace(r, common=frozenset({r.first, r.second}) in whatif_pairs) for r in actual]
+    return whatif, actual
