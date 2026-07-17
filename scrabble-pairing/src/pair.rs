@@ -95,22 +95,31 @@ fn bye_pairing(
     Some((eligible.last().unwrap().name.clone(), BYE_NAME.to_string()))
 }
 
-/// Status of every round that has any results, by game count.
+/// Status of every round that has any results.
+///
+/// A round is finished when every *real* (non-bye) player has a result — a game
+/// or a bye. Counting real-player appearances (2 per game, 1 per bye) rather than
+/// a fixed games-per-round makes this robust to a round with several byes
+/// (absences/forfeits, common in imported historical data); such a round would
+/// otherwise be stuck as Partial and never pair the next round.
 fn round_status(players: &[PlayerData], slips: &[ResultSlipData]) -> HashMap<i32, RoundStatus> {
     let n_real = players
         .iter()
         .filter(|e| !e.name.eq_ignore_ascii_case(BYE_NAME))
         .count();
-    let n_games = n_real.div_ceil(2);
-    let mut round_counts: HashMap<i32, usize> = HashMap::new();
+    let mut appearances: HashMap<i32, usize> = HashMap::new();
     for s in slips {
-        *round_counts.entry(s.round).or_insert(0) += 1;
+        let real = [&s.winner_name, &s.loser_name]
+            .iter()
+            .filter(|name| !name.eq_ignore_ascii_case(BYE_NAME))
+            .count();
+        *appearances.entry(s.round).or_insert(0) += real;
     }
     let mut counts = HashMap::new();
-    for (round, count) in round_counts {
-        let st = if count == n_games {
+    for (round, real) in appearances {
+        let st = if real >= n_real {
             RoundStatus::Finished
-        } else if count > 0 {
+        } else if real > 0 {
             RoundStatus::Partial
         } else {
             RoundStatus::Empty
@@ -350,6 +359,36 @@ mod tests {
             (p.first == "C" && p.second == "Bye") || (p.first == "Bye" && p.second == "C")
         });
         assert!(c_has_bye);
+    }
+
+    #[test]
+    fn round_with_multiple_byes_is_finished_and_pairs_next() {
+        // Round 1 has one real game and two byes (four players, two absent). Every
+        // real player is accounted for, so round 1 counts as finished and round 2
+        // pairs off it — a round with several byes must not be stuck as Partial.
+        let inp = input(
+            r#"{
+                "players": [
+                    {"name": "A", "rating": 1900},
+                    {"name": "B", "rating": 1800},
+                    {"name": "C", "rating": 1700},
+                    {"name": "D", "rating": 1600}
+                ],
+                "round_pairings": [
+                    {"round": 1, "start_round": 0, "pairing": "Swiss"},
+                    {"round": 2, "start_round": 1, "pairing": "Swiss"}
+                ],
+                "result_slips": [
+                    {"round": 1, "winner_name": "A", "loser_name": "B", "winner_score": 400, "loser_score": 350, "winner_started": true},
+                    {"round": 1, "winner_name": "C", "loser_name": "Bye", "winner_score": 50, "loser_score": 0, "winner_started": false},
+                    {"round": 1, "winner_name": "D", "loser_name": "Bye", "winner_score": 50, "loser_score": 0, "winner_started": false}
+                ]
+            }"#,
+        );
+        let out = pair(&inp);
+        let r2 = out.iter().find(|r| r.round == 2).unwrap();
+        assert!(r2.error.is_none(), "{r2:?}");
+        assert_eq!(r2.pairings.len(), 2);
     }
 
     #[test]
