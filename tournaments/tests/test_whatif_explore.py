@@ -172,9 +172,18 @@ class ExploreViewTests(ExploreBase):
         self.assertEqual(response.context["target_round"], 2)  # max_round(1) + 1
         self.assertEqual(response.context["based_on"], 1)
 
+    def test_initial_load_does_not_pair(self):
+        # A bare tab visit shows a placeholder and runs no engine pairing.
+        self.client.force_login(self.owner)
+        response = self.client.get(self.url)
+        self.assertFalse(response.context["explored"])
+        self.assertEqual(response.context["explore_rows"], [])
+        self.assertContains(response, "hit Pair")
+
     def test_renders_whatif_table(self):
         self.client.force_login(self.owner)
         response = self.client.get(self.url, {"round": 2, "strategy": "Swiss", "based_on": 1})
         self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["explored"])
         self.assertContains(response, "What-if")
         self.assertContains(response, "Swiss off round 1 standings")
