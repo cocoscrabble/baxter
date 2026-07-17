@@ -160,9 +160,13 @@ class FakeTournamentCreateView(LoginRequiredMixin, View):
         return redirect("division_pair_rounds", **division.slug_kwargs())
 
 
-def _default_whatif_name(source_name):
+def _default_whatif_name(source_name, filename=None):
+    from pathlib import Path
+
+    stem = Path(filename).stem if filename else None
+    label = source_name or stem or "import"
     stamp = timezone.now().strftime("%Y-%m-%d %H:%M")
-    return f"What-if: {source_name or 'import'} {stamp}"
+    return f"What-if: {label} {stamp}"
 
 
 class WhatIfImportView(LoginRequiredMixin, View):
@@ -183,6 +187,7 @@ class WhatIfImportView(LoginRequiredMixin, View):
             return render(request, self.template_name, {"form": form})
 
         upload = form.cleaned_data.get("upload")
+        filename = upload.name if upload is not None else None
         if upload is not None:
             try:
                 text = upload.read().decode("utf-8")
@@ -198,7 +203,7 @@ class WhatIfImportView(LoginRequiredMixin, View):
             form.add_error(None, str(e))
             return render(request, self.template_name, {"form": form})
 
-        name = form.cleaned_data.get("name") or _default_whatif_name(source_name)
+        name = form.cleaned_data.get("name") or _default_whatif_name(source_name, filename)
         # All-or-nothing: a failure importing any division rolls back the whole
         # sandbox (each command is atomic; the outer atomic ties them together).
         with transaction.atomic():
