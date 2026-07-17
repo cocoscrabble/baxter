@@ -904,6 +904,82 @@ class RoundPairingsTabView(LoginRequiredMixin, DivisionNavMixin, CanEditDivision
         return self.render_to_response(context)
 
 
+def _int_or(value, default):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+class DivisionExploreView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixin, DetailView):
+    """"Explore" tab: hypothetically re-pair one round with a chosen strategy off
+    a chosen based-on round. Pure read — nothing is persisted. Editor-only, like
+    Pair rounds. Query params (round, strategy, based_on, seed) make results
+    shareable; a datastar request swaps just the result panel."""
+
+    model = Division
+    template_name = "tournaments/division_explore.html"
+    context_object_name = "division"
+    active_tab = "explore"
+
+    def get_context_data(self, **kwargs):
+        from .whatif import decorate, explore_pairing
+
+        context = super().get_context_data(**kwargs)
+        division = self.object
+        max_round = division.max_round()
+        strategies = [str(s) for s in STRATEGY_TYPES]
+        get = self.request.GET
+
+        # Round to pair: 1 .. max_round + 1 (the +1 explores the next round).
+        target = _int_or(get.get("round"), max(max_round, 1))
+        target = max(1, min(target, max_round + 1))
+        # Based-on round: 0 (seedings) .. target - 1.
+        based_on = _int_or(get.get("based_on"), target - 1)
+        based_on = max(0, min(based_on, target - 1))
+        strategy = get.get("strategy") or "Swiss"
+        if strategy not in strategies:
+            strategy = "Swiss"
+        seed = _int_or(get.get("seed"), _division_seed(division))
+
+        error, rows = None, []
+        try:
+            pairings = explore_pairing(division, target, strategy, based_on, seed)
+            rows = decorate(division, target, based_on, pairings)
+        except PairingError as e:
+            error = str(e)
+
+        context.update({
+            "target_round": target,
+            "based_on": based_on,
+            "strategy": strategy,
+            "seed": seed,
+            "explore_rows": rows,
+            "explore_error": error,
+            "strategies": strategies,
+            "round_choices": range(1, max_round + 2),
+            "based_on_choices": range(0, max_round + 1),
+            "is_random_strategy": strategy in ("Random", "RandomNoRepeats", "SwissPlusRandom"),
+        })
+        return context
+
+    def get(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        context = self.get_context_data(object=self.object)
+        if is_datastar(request):
+            return fragment_response(
+                "tournaments/_explore_content.html", context, request=request
+            )
+        return self.render_to_response(context)
+
+
+def _division_seed(division):
+    try:
+        return division.settings.pairing_seed
+    except DivisionSettings.DoesNotExist:
+        return 0
+
+
 class _PublishedPairingsMixin(VisibleDivisionMixin):
     """Shared published-pairings context (the rounds + their pairings) for both the
     in-nav tab and the standalone page. The two differ only in base template."""

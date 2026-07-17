@@ -17,6 +17,7 @@
 {% if can_edit %}
 <span class="nav-tab-sep"></span>
 <a href="{% url 'division_pair_rounds' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'pair_rounds' %} active{% endif %}">Pair rounds</a>
+<a href="{% url 'division_explore' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'explore' %} active{% endif %}">Explore</a>
 <a href="{% url 'division_edit_results' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'edit_results' %} active{% endif %}">Edit Results</a>
 <a href="{% url 'division_round_pairings' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'round_pairings' %} active{% endif %}">Round Pairings</a>
 {# Secondary menu: a native <details> so it opens on click with no JS; #}
