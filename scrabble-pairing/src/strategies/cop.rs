@@ -22,6 +22,9 @@
 
 use std::collections::{HashMap, HashSet};
 
+use rand_chacha::ChaCha8Rng;
+use rand_core::RngCore;
+
 use crate::matching::max_weight_matching_pairs;
 use crate::model::CopConfig;
 use crate::round_pairing::RoundPairing;
@@ -34,8 +37,13 @@ use super::Ctx;
 /// `PROHIBITIVE_WEIGHT`).
 const PROHIBITIVE_WEIGHT: i128 = 1_000_000;
 
-/// One competitor inside the COP computation. `index` is the original
-/// standings-rank position, used (in Phase 2) to record simulated finishes.
+/// COP's `INITIAL_FACTOR`: a factor width so large the simulation always uses the
+/// rounds-remaining cap instead (the first, un-tuned simulation pass).
+const INITIAL_FACTOR: i32 = 1_000_000;
+
+/// One competitor inside the COP computation. `index` is the rank position used
+/// to record simulated finishes; `start_*` snapshot the real record so a
+/// simulation can reset the player after each iteration.
 #[derive(Debug, Clone)]
 struct CopPlayer {
     name: String,
@@ -44,6 +52,15 @@ struct CopPlayer {
     wins: i32,
     spread: i32,
     is_bye: bool,
+    start_wins: i32,
+    start_spread: i32,
+}
+
+impl CopPlayer {
+    fn reset(&mut self) {
+        self.wins = self.start_wins;
+        self.spread = self.start_spread;
+    }
 }
 
 /// Runtime config: `CopConfig` with the per-round arrays forward-filled to the
@@ -51,22 +68,17 @@ struct CopPlayer {
 /// `%config` hash carries.
 struct CopRuntime {
     rounds_remaining: i32,
+    round_to_pair: i32,        // 0-indexed round being paired
     lowest_ranked_payout: i32, // 0-indexed
+    gibson_spreads: Vec<i32>,
     cumulative_gibson_spreads: Vec<i32>,
+    hopefulness: Vec<f64>,
+    control_loss_thresholds: Vec<f64>,
+    control_loss_activation_round: i32,
+    number_of_sims: u32,
+    always_wins_number_of_sims: u32,
     disallow_repeat_byes: bool,
     bye_active: bool,
-    // Populated now but only read once the simulation / control-loss logic lands
-    // in Phase 2.
-    #[allow(dead_code)]
-    round_to_pair: i32, // 0-indexed round being paired
-    #[allow(dead_code)]
-    gibson_spreads: Vec<i32>,
-    #[allow(dead_code)]
-    hopefulness: Vec<f64>,
-    #[allow(dead_code)]
-    control_loss_thresholds: Vec<f64>,
-    #[allow(dead_code)]
-    control_loss_activation_round: i32,
 }
 
 /// The decisions the weight graph consumes. Split out as an explicit input so the
@@ -427,12 +439,17 @@ pub fn pair_cop(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings, String> {
     let mut players: Vec<CopPlayer> = field
         .iter()
         .enumerate()
-        .map(|(i, p)| CopPlayer {
-            name: p.name.clone(),
-            index: i,
-            wins: 2 * p.wins + p.ties,
-            spread: p.spread,
-            is_bye: false,
+        .map(|(i, p)| {
+            let wins = 2 * p.wins + p.ties;
+            CopPlayer {
+                name: p.name.clone(),
+                index: i,
+                wins,
+                spread: p.spread,
+                is_bye: false,
+                start_wins: wins,
+                start_spread: p.spread,
+            }
         })
         .collect();
     sort_by_record(&mut players);
@@ -445,6 +462,8 @@ pub fn pair_cop(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings, String> {
             wins: 0,
             spread: 0,
             is_bye: true,
+            start_wins: 0,
+            start_spread: 0,
         });
     }
     let n = players.len();
@@ -496,7 +515,7 @@ pub fn pair_cop(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings, String> {
         }
     }
 
-    let dec = stub_decisions(&players, &rt, number_of_repeats);
+    let dec = compute_decisions(ctx.rng, &players, &rt, number_of_repeats);
     let class_prize: HashMap<usize, usize> = HashMap::new(); // class prizes: Phase 5
 
     let (edges, max_weight) =
@@ -541,42 +560,396 @@ fn build_runtime(
         hopefulness: extend(&cfg.hopefulness, total_rounds, 0.05),
         control_loss_thresholds: extend(&cfg.control_loss_thresholds, total_rounds, 0.25),
         control_loss_activation_round: cfg.control_loss_activation_round,
+        number_of_sims: cfg.simulations.max(1),
+        always_wins_number_of_sims: cfg.always_wins_simulations.max(1),
         disallow_repeat_byes: cfg.disallow_repeat_byes,
         bye_active,
     }
 }
 
-/// Phase-1 placeholder for the simulation-derived decisions. Gibson rank and the
-/// cash boundary are computed for real (RNG-independent); the contender set for
-/// every prize rank is stubbed to the whole cash group, and control loss /
-/// destiny control is disabled. Replaced by the real Monte Carlo in Phase 2.
-fn stub_decisions(
-    players: &[CopPlayer],
+// --- Monte Carlo simulation (COP.pm's factor-pair projection) ----------------
+
+/// Per-player final-rank tallies over the simulations. `array[n*index + place]`
+/// counts how often the player with stable `index` finished in `place`.
+struct TournamentResults {
+    n: usize,
+    array: Vec<u32>,
+}
+
+impl TournamentResults {
+    fn new(n: usize) -> Self {
+        TournamentResults {
+            n,
+            array: vec![0; n * n],
+        }
+    }
+
+    /// Record one finished simulation: `sim` is sorted by record, so its position
+    /// `i` is each player's final rank.
+    fn record(&mut self, sim: &[CopPlayer]) {
+        for (i, p) in sim.iter().enumerate() {
+            self.array[self.n * p.index + i] += 1;
+        }
+    }
+
+    fn get(&self, player: &CopPlayer, place: usize) -> u32 {
+        self.array[self.n * player.index + place]
+    }
+}
+
+/// Factor pairing (COP's `factor_pair`): rank `i` plays rank `i + nrl`. Gibsonized
+/// players are paired to the bottom; the factor width `nrl` is capped at half the
+/// non-gibsonized field and at `max_factor`. Returns pairs of current-rank
+/// positions. The half-integer cap (odd non-gibsonized field) is handled exactly
+/// as Perl's fractional index truncation would.
+fn factor_pair(sim: &[CopPlayer], nrl_in: i32, gibson: i32, max_factor: i32) -> Vec<(usize, usize)> {
+    let n = sim.len();
+    let g = (gibson + 1).max(0) as usize; // number gibsonized
+    let factor2 = if gibson >= 0 { n - g } else { n }; // players to factor
+    let mut nrl = nrl_in;
+    let mut half = false;
+    if 2 * nrl > factor2 as i32 {
+        nrl = (factor2 / 2) as i32;
+        half = factor2 % 2 == 1;
+    }
+    if nrl > max_factor {
+        nrl = max_factor;
+        half = false;
+    }
+    let q = nrl.max(0) as usize;
+
+    let mut pairings = Vec::new();
+    for i in 0..g {
+        pairings.push((i, (n - 1) - i));
+    }
+    let upper2 = g + q + usize::from(half);
+    for i in g..upper2 {
+        pairings.push((i, i + q));
+    }
+    let mut i = 2 * q + usize::from(half) + g;
+    let bound = n - g;
+    while i < bound {
+        pairings.push((i, i + 1));
+        i += 2;
+    }
+    pairings
+}
+
+/// Factor pairing with the leader pinned to a target player (COP's
+/// `factor_pair_minus_player`): first (rank 0) plays the target, and everyone
+/// else is factor-paired among themselves. Used by the control-loss "can this
+/// player always win?" simulation.
+fn factor_pair_minus_player(
+    sim: &[CopPlayer],
+    nrl_in: i32,
+    target_index: usize,
+) -> Vec<(usize, usize)> {
+    let index_to_rank: HashMap<usize, usize> =
+        sim.iter().enumerate().map(|(r, p)| (p.index, r)).collect();
+    let player_rank_index = index_to_rank[&target_index];
+    // Everyone except the leader (rank 0) and the target.
+    let reduced: Vec<&CopPlayer> = sim
+        .iter()
+        .enumerate()
+        .filter(|(r, _)| *r != 0 && *r != player_rank_index)
+        .map(|(_, p)| p)
+        .collect();
+    let m = reduced.len();
+    let mut nrl = nrl_in;
+    if nrl * 2 > m as i32 {
+        nrl = (m / 2) as i32;
+    }
+    let q = nrl.max(0) as usize;
+
+    let mut pairings = vec![(0usize, player_rank_index)];
+    for i in 0..q {
+        pairings.push((
+            index_to_rank[&reduced[i].index],
+            index_to_rank[&reduced[i + q].index],
+        ));
+    }
+    let mut i = 2 * q;
+    while i < m {
+        pairings.push((
+            index_to_rank[&reduced[i].index],
+            index_to_rank[&reduced[i + 1].index],
+        ));
+        i += 2;
+    }
+    pairings
+}
+
+/// Play one simulated round (COP's `play_round`): each game's spread is drawn
+/// uniformly from `[-max_spread, max_spread]`; a bye is a 2-win, +50 for the real
+/// player; `forced` (a rank position, or -1) always wins by ≥1. Re-sorts by record.
+fn play_round(
+    rng: &mut ChaCha8Rng,
+    pairings: &[(usize, usize)],
+    sim: &mut [CopPlayer],
+    forced: i32,
+    max_spread: i32,
+) {
+    for &(a, b) in pairings {
+        if sim[a].is_bye || sim[b].is_bye {
+            let real = if sim[a].is_bye { b } else { a };
+            sim[real].spread += 50;
+            sim[real].wins += 2;
+            continue;
+        }
+        let span = (2 * max_spread + 1).max(1) as u64;
+        let mut spread = max_spread - (rng.next_u64() % span) as i32;
+        if forced >= 0 {
+            if a as i32 == forced {
+                spread = spread.abs() + 1;
+            } else if b as i32 == forced {
+                spread = -spread.abs() - 1;
+            }
+        }
+        let (p1win, p2win) = match spread.cmp(&0) {
+            std::cmp::Ordering::Greater => (2, 0),
+            std::cmp::Ordering::Less => (0, 2),
+            std::cmp::Ordering::Equal => (1, 1),
+        };
+        sim[a].spread += spread;
+        sim[a].wins += p1win;
+        sim[b].spread -= spread;
+        sim[b].wins += p2win;
+    }
+    sort_by_record(sim);
+}
+
+/// Run the factor-pair Monte Carlo `number_of_sims` times, tallying final ranks
+/// (COP's `sim_factor_pair`). Each iteration simulates every remaining round,
+/// then resets the players.
+fn sim_factor_pair(
+    rng: &mut ChaCha8Rng,
+    rt: &CopRuntime,
+    sim: &mut [CopPlayer],
+    gibson: i32,
+    max_factor: i32,
+) -> TournamentResults {
+    let mut results = TournamentResults::new(sim.len());
+    for _ in 0..rt.number_of_sims {
+        for remaining in (1..=rt.rounds_remaining).rev() {
+            let pairings = factor_pair(sim, remaining, gibson, max_factor);
+            let max_spread = rt.gibson_spreads[(remaining - 1) as usize];
+            play_round(rng, &pairings, sim, -1, max_spread);
+        }
+        results.record(sim);
+        for p in sim.iter_mut() {
+            p.reset();
+        }
+        sort_by_record(sim);
+    }
+    results
+}
+
+/// For each final rank, the lowest-ranked current player who reaches it in more
+/// than `hopefulness` of the sims ("statistically") and at least once
+/// ("absolutely"). COP's `get_lowest_ranked_players_who_can_finish_in_nth`. `sim`
+/// must be sorted by record.
+fn lowest_finishers(
+    rt: &CopRuntime,
+    results: &TournamentResults,
+    sim: &[CopPlayer],
+) -> (Vec<i32>, Vec<i32>) {
+    let sim_n = sim.len();
+    let adj_hope = rt.hopefulness[(rt.rounds_remaining - 1) as usize];
+    let mut stat = vec![0i32; sim_n];
+    let mut abs = vec![0i32; sim_n];
+    for final_rank in 0..sim_n {
+        for (cur_rank, player) in sim.iter().enumerate() {
+            let mut sum = 0u32;
+            for place in 0..=final_rank {
+                sum += results.get(player, place);
+            }
+            let pct = sum as f64 / rt.number_of_sims as f64;
+            if pct > adj_hope {
+                stat[final_rank] = cur_rank as i32;
+            }
+            if sum > 0 {
+                abs[final_rank] = cur_rank as i32;
+            }
+        }
+    }
+    (stat, abs)
+}
+
+/// How often each catchable player reaches first if they always win, under
+/// pair-with-first vs plain factor pairing (COP's `sim_player_always_wins`).
+/// Indexed by rank-1 (position 0 = the 2nd-ranked player).
+fn sim_player_always_wins(
+    rng: &mut ChaCha8Rng,
+    rt: &CopRuntime,
+    sim: &mut [CopPlayer],
+) -> (Vec<u32>, Vec<u32>) {
+    let mut pwf_list = Vec::new();
+    let mut fp_list = Vec::new();
+    let first_wins = sim[0].wins;
+    for rank in 1..sim.len() {
+        if first_wins - sim[rank].wins > 2 * rt.rounds_remaining {
+            break; // can't reach first
+        }
+        if sim[rank].is_bye {
+            pwf_list.push(0);
+            fp_list.push(0);
+            continue;
+        }
+        let target_index = sim[rank].index;
+        let (pwf, fp) = sim_player_always_wins_one(rng, rt, sim, target_index);
+        pwf_list.push(pwf);
+        fp_list.push(fp);
+    }
+    (pwf_list, fp_list)
+}
+
+/// One player's always-wins tally (COP's `sim_player_always_wins_worker`): each
+/// sim runs a pair-with-first pass and a factor-pair pass, counting how often the
+/// target — forced to win every game — ends up first.
+fn sim_player_always_wins_one(
+    rng: &mut ChaCha8Rng,
+    rt: &CopRuntime,
+    sim: &mut [CopPlayer],
+    target_index: usize,
+) -> (u32, u32) {
+    let gs_len = rt.gibson_spreads.len();
+    let mut pwf = 0u32;
+    let mut fp = 0u32;
+    for _ in 0..rt.always_wins_number_of_sims {
+        // Phase A: leader pinned to the target (pair with first).
+        for remaining in (1..=rt.rounds_remaining).rev() {
+            let target_rank = sim.iter().position(|p| p.index == target_index).unwrap() as i32;
+            let pairings = factor_pair_minus_player(sim, remaining, target_index);
+            let max_spread = rt.gibson_spreads[gs_len - remaining as usize];
+            play_round(rng, &pairings, sim, target_rank, max_spread);
+            if sim[0].index == target_index {
+                pwf += 1;
+                break;
+            }
+        }
+        for p in sim.iter_mut() {
+            p.reset();
+        }
+        sort_by_record(sim);
+        // Phase B: plain factor pairing.
+        for remaining in (1..=rt.rounds_remaining).rev() {
+            let target_rank = sim.iter().position(|p| p.index == target_index).unwrap() as i32;
+            let pairings = factor_pair(sim, remaining, -1, INITIAL_FACTOR);
+            let max_spread = rt.gibson_spreads[gs_len - remaining as usize];
+            play_round(rng, &pairings, sim, target_rank, max_spread);
+            if sim[0].index == target_index {
+                fp += 1;
+                break;
+            }
+        }
+        for p in sim.iter_mut() {
+            p.reset();
+        }
+        sort_by_record(sim);
+    }
+    (pwf, fp)
+}
+
+/// Control loss (COP's `get_control_loss`): the deepest rank that always reaches
+/// first when it always wins, and how much control the leader has lost.
+fn get_control_loss(rng: &mut ChaCha8Rng, rt: &CopRuntime, sim: &mut [CopPlayer]) -> (i32, f64) {
+    let (pwf, fp) = sim_player_always_wins(rng, rt, sim);
+    let mut lowest_ranked_always_wins = 0i32;
+    for (i, &w) in pwf.iter().enumerate() {
+        if w == rt.always_wins_number_of_sims {
+            lowest_ranked_always_wins = (i + 1) as i32;
+        }
+    }
+    let mut control_loss = 0.0;
+    if lowest_ranked_always_wins > 0 {
+        let fpw = fp[(lowest_ranked_always_wins - 1) as usize];
+        control_loss =
+            (rt.always_wins_number_of_sims as f64 - fpw as f64) / rt.always_wins_number_of_sims as f64;
+    }
+    (lowest_ranked_always_wins, control_loss)
+}
+
+/// Run the full COP decision pipeline: gibson rank, the two-pass factor-pair
+/// simulation, contender arrays, control loss, and destiny's child. Mirrors the
+/// orchestration in `cop()` (COP.pm ~1030–1264).
+fn compute_decisions(
+    rng: &mut ChaCha8Rng,
+    players_full: &[CopPlayer],
     rt: &CopRuntime,
     number_of_repeats: HashMap<String, i32>,
 ) -> Decisions {
-    let n = players.len();
-    let n_real = players.iter().filter(|p| !p.is_bye).count();
-    let sim = sim_players(players, rt);
+    let n = players_full.len();
+    let mut sim = sim_players(players_full, rt);
+    // Re-index to sim positions (0..sim_n) so the results matrix is compact.
+    for (i, p) in sim.iter_mut().enumerate() {
+        p.index = i;
+    }
+    let sim_n = sim.len();
     let gibson = lowest_gibson_rank(&sim, rt);
 
-    // Cash boundary: the deepest cash rank that actually exists.
-    let boundary = rt
-        .lowest_ranked_payout
-        .min(n_real as i32 - 1)
-        .max(0);
+    // Pass 1: initial (untuned) factor pairing → an improved factor constant.
+    let pass1 = sim_factor_pair(rng, rt, &mut sim, gibson, INITIAL_FACTOR);
+    sort_by_record(&mut sim);
+    let (_stat1, abs1) = lowest_finishers(rt, &pass1, &sim);
+    let idx = ((gibson + 1).max(0) as usize).min(sim_n.saturating_sub(1));
+    let improved_factor = abs1[idx] - (gibson + 1);
+
+    // Pass 2: the tuned simulation the contenders come from.
+    let pass2 = sim_factor_pair(rng, rt, &mut sim, gibson, improved_factor);
+
+    // Control loss only matters when no one is gibsonized.
+    let (mut lowest_ranked_always_wins, mut control_loss) = (-1i32, -1.0f64);
+    if gibson < 0 {
+        let (law, cl) = get_control_loss(rng, rt, &mut sim);
+        lowest_ranked_always_wins = law;
+        control_loss = cl;
+    }
+    let adj_threshold = rt.control_loss_thresholds[(rt.rounds_remaining - 1) as usize];
+
+    sort_by_record(&mut sim);
+    let (stat, abs) = lowest_finishers(rt, &pass2, &sim);
+    let lrp = (rt.lowest_ranked_payout.max(0) as usize).min(sim_n.saturating_sub(1));
+    let lowest_cash_statistical = stat[lrp];
+    let lowest_cash_absolute = abs[lrp];
+
+    let control_loss_active = rt.round_to_pair >= rt.control_loss_activation_round;
+
+    // Destiny's child: which single opponent first place must be pinned to. The
+    // COP loop only acts for i == 0 (and only when no one is gibsonized, since the
+    // enclosing branch requires neither player gibsonized).
+    let mut destinys_child = -1i32;
+    let mut control_loss_weight_used = false;
+    if rt.rounds_remaining != 1 && control_loss_active && gibson < 0 {
+        let lrpcw = if stat[0] == 0 { 1 } else { stat[0] };
+        for j in 1..n as i32 {
+            if players_full[j as usize].is_bye {
+                continue;
+            }
+            let forced_elsewhere = (control_loss > adj_threshold
+                && j != lrpcw.min(lowest_ranked_always_wins))
+                || (control_loss <= adj_threshold && j != lrpcw);
+            if forced_elsewhere {
+                control_loss_weight_used = true;
+            } else {
+                destinys_child = j;
+            }
+        }
+    }
+
+    // Pad the per-rank contender array to the full field so the weight graph can
+    // index any rank (ranks past the sim set are never contenders).
     let lowest_finishers_statistical: Vec<i32> = (0..n)
-        .map(|i| if (i as i32) <= boundary { boundary } else { i as i32 })
+        .map(|i| if i < sim_n { stat[i] } else { i as i32 })
         .collect();
 
     Decisions {
         lowest_gibson_rank: gibson,
         lowest_finishers_statistical,
-        lowest_cash_statistical: boundary,
-        lowest_cash_absolute: boundary,
-        destinys_child: -1,
-        control_loss_weight_used: false,
-        control_loss_active: false,
+        lowest_cash_statistical,
+        lowest_cash_absolute,
+        destinys_child,
+        control_loss_weight_used,
+        control_loss_active,
         number_of_repeats,
     }
 }
@@ -807,6 +1180,8 @@ mod tests {
             wins: wins_doubled,
             spread,
             is_bye: false,
+            start_wins: wins_doubled,
+            start_spread: spread,
         }
     }
 
@@ -845,6 +1220,114 @@ mod tests {
         let r = rt(1, 1);
         assert_eq!(lowest_gibson_rank(&close, &r), -1);
         assert_eq!(lowest_gibson_rank(&far, &r), 0);
+    }
+
+    /// Build the weight graph + matching for constructed players and injected
+    /// decisions — the Tier-1 surface, decoupled from the RNG-driven sims.
+    fn matching_of(players: &[CopPlayer], rt: &CopRuntime, dec: &Decisions) -> Vec<(usize, usize)> {
+        let tp: HashMap<(String, String), i32> = HashMap::new();
+        let prev: HashSet<(String, String)> = HashSet::new();
+        let pre: HashMap<String, String> = HashMap::new();
+        let cls: HashMap<usize, usize> = HashMap::new();
+        let (edges, mw) = build_weight_edges(players, rt, dec, &tp, &prev, &pre, &cls);
+        solve(&edges, mw, players.len())
+    }
+
+    fn partner_of(matching: &[(usize, usize)], v: usize) -> usize {
+        for &(a, b) in matching {
+            if a == v {
+                return b;
+            }
+            if b == v {
+                return a;
+            }
+        }
+        panic!("{v} unmatched");
+    }
+
+    fn ranked(n: usize) -> Vec<CopPlayer> {
+        (0..n)
+            .map(|i| cp(&format!("P{}", i + 1), i, (2 * (n - i)) as i32, 0))
+            .collect()
+    }
+
+    #[test]
+    fn weight_graph_gibsonized_leader_avoids_cash_contenders() {
+        // 6 players, P1 (rank 0) gibsonized, top-3 cash. The weight graph must not
+        // pair the locked leader with a live cash contender (rank 1 or 2) — those
+        // edges are prohibitive — so P1's partner is outside the cash group.
+        let players = ranked(6);
+        let rt = rt(3, 3);
+        let dec = Decisions {
+            lowest_gibson_rank: 0,
+            lowest_finishers_statistical: vec![2, 2, 2, 3, 4, 5],
+            lowest_cash_statistical: 2,
+            lowest_cash_absolute: 2,
+            destinys_child: -1,
+            control_loss_weight_used: false,
+            control_loss_active: false,
+            number_of_repeats: HashMap::new(),
+        };
+        let m = matching_of(&players, &rt, &dec);
+        assert!(
+            partner_of(&m, 0) > 2,
+            "gibsonized leader paired inside the cash group: {m:?}"
+        );
+    }
+
+    #[test]
+    fn weight_graph_leader_pairs_its_only_catcher() {
+        // No gibson, top-2 cash, and only rank 1 can still catch the leader
+        // (finishers[0] = 1). Every leader-vs-non-contender edge is prohibitive, so
+        // the leader must be paired with rank 1.
+        let players = ranked(6);
+        let rt = rt(2, 3);
+        let dec = Decisions {
+            lowest_gibson_rank: -1,
+            lowest_finishers_statistical: vec![1, 1, 3, 3, 4, 5],
+            lowest_cash_statistical: 1,
+            lowest_cash_absolute: 3,
+            destinys_child: -1,
+            control_loss_weight_used: false,
+            control_loss_active: false,
+            number_of_repeats: HashMap::new(),
+        };
+        let m = matching_of(&players, &rt, &dec);
+        assert_eq!(partner_of(&m, 0), 1, "leader not paired with its catcher: {m:?}");
+    }
+
+    #[test]
+    fn compute_decisions_is_deterministic_under_a_fixed_seed() {
+        // The RNG-driven pipeline is reproducible: same seed → same contender
+        // arrays and cash boundaries.
+        let players = ranked(6);
+        let rt = rt(3, 3);
+        let run = || {
+            let mut rng = crate::rng::seeded(99);
+            compute_decisions(&mut rng, &players, &rt, HashMap::new())
+        };
+        let a = run();
+        let b = run();
+        assert_eq!(a.lowest_gibson_rank, b.lowest_gibson_rank);
+        assert_eq!(a.lowest_cash_statistical, b.lowest_cash_statistical);
+        assert_eq!(a.lowest_cash_absolute, b.lowest_cash_absolute);
+        assert_eq!(
+            a.lowest_finishers_statistical,
+            b.lowest_finishers_statistical
+        );
+        assert_eq!(a.destinys_child, b.destinys_child);
+    }
+
+    #[test]
+    fn compute_decisions_bounds_are_in_range() {
+        // A tight 6-player field, top-3 cash, 3 rounds left: the cash boundaries
+        // land within the field and are monotone (statistical ⊆ absolute).
+        let players = ranked(6);
+        let rt = rt(3, 3);
+        let mut rng = crate::rng::seeded(7);
+        let dec = compute_decisions(&mut rng, &players, &rt, HashMap::new());
+        assert!(dec.lowest_cash_absolute >= 0 && dec.lowest_cash_absolute < 6);
+        assert!(dec.lowest_cash_statistical <= dec.lowest_cash_absolute);
     }
 
     #[test]

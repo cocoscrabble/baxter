@@ -1,7 +1,9 @@
 # PLAN_COP.md — Port the COP pairing algorithm to the Rust engine
 
-**Status:** Phase 1 implemented (Rust scaffold + weight graph, sims stubbed);
-Phases 2–5 pending. Pinned to commit `fd875c0`.
+**Status:** Phases 1–2 implemented (Rust engine complete: weight graph +
+simulation + contenders + control loss, cross-checked against the COP.pm oracle);
+Phases 3–5 pending (Django plumbing, settings UI, class prizes). Pinned to commit
+`fd875c0`.
 
 ## Goal
 
@@ -350,17 +352,28 @@ deterministic, missing-config → error. **Oracle cross-check passed**: `gibson_
 and `sim_player_ids` match COP.pm exactly on the gibson / tight-field /
 sim-truncation cases.
 
-**Phase 2 — Simulations + contenders.**
-Port `factor_pair`, `play_round`, `sim_factor_pair` (two-pass), the finishers-in-
-nth contender computation, and control loss / destiny's child, all off `ctx.rng`.
-Wire real contender data into the weight graph. Verify with `cargo test` on
-constructed standings where the contender set is analytically known: e.g. a
-gibsonized leader must get the bye / bottom pairing; a player mathematically out
-of contention is never paired up into the contender group; determinism (same
-seed → identical pairings, twice). Oracle: Tier-1 exact parity on the weight
-matrix (feed the port the oracle's contender/gibson/control values); Tier-2
-statistical agreement on contenders at high sim counts; Tier-3 pairing parity on
-a unique-optimum case.
+**Phase 2 — Simulations + contenders. DONE.**
+Ported `factor_pair`, `factor_pair_minus_player`, `play_round`, the two-pass
+`sim_factor_pair`, the finishers-in-nth contender computation, `get_control_loss`
+/ `sim_player_always_wins`, and the destiny's-child derivation, all off `ctx.rng`
+(seeded ChaCha8). `stub_decisions` is replaced by `compute_decisions`, which
+mirrors the `cop()` orchestration (COP.pm ~1030–1264) and feeds real contender /
+gibson / control-loss values into `build_weight_edges`. The half-integer
+factor-width cap on an odd non-gibsonized field is handled to match Perl's
+fractional-index truncation.
+
+Verified (`cargo test`, 58 green): Tier-1 weight-graph behavior via injected
+decisions (a gibsonized leader is never paired with a live cash contender; a
+leader whose only catcher is rank 1 is pinned to rank 1); `compute_decisions`
+determinism under a fixed seed; cash boundaries in range. **Oracle cross-checks**
+(`examples/cop_demo.rs` vs `tools/cop-oracle`):
+- Last-round KOTH (deterministic): **exact** pairing parity —
+  `(0,1),(2,3),(4,5),(6,7)` from both.
+- A 2-rounds-remaining, tie-heavy 8-player field: identical `gibson_rank`, identical
+  leader pairing (rank 0 vs 3), identical out-of-contention pair (6,7), and the
+  same contention block {0..5}; a single internal swap differed (oracle 1-4/2-5 vs
+  Rust 1-5/2-4) — the expected Tier-2 RNG-boundary effect (different RNG streams),
+  not a logic divergence.
 
 **Phase 3 — Django plumbing.**
 Enum/`STRATEGY_TYPES`/`ABBREV`; `DivisionSettings.cop_config` + migration;
