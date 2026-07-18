@@ -1,9 +1,8 @@
 # PLAN_COP.md — Port the COP pairing algorithm to the Rust engine
 
-**Status:** Phases 1–2 implemented (Rust engine complete: weight graph +
-simulation + contenders + control loss, cross-checked against the COP.pm oracle);
-Phases 3–5 pending (Django plumbing, settings UI, class prizes). Pinned to commit
-`fd875c0`.
+**Status:** Phases 1–3 implemented (Rust engine complete + reachable from Django:
+strategy registered, `DivisionSettings.cop_config` + migration, adapter plumbing).
+Phases 4–5 pending (settings UI, class prizes). Pinned to commit `fd875c0`.
 
 ## Goal
 
@@ -375,12 +374,19 @@ determinism under a fixed seed; cash boundaries in range. **Oracle cross-checks*
   Rust 1-5/2-4) — the expected Tier-2 RNG-boundary effect (different RNG streams),
   not a logic divergence.
 
-**Phase 3 — Django plumbing.**
-Enum/`STRATEGY_TYPES`/`ABBREV`; `DivisionSettings.cop_config` + migration;
-`PairingData.cop_config` + `for_division`; `engine.py` serialization. Verify: a
-Django test builds a division with a COP round + config, calls
-`pair_with_engine`, and gets a full valid round; a COP round with no config
-raises `PairingError`.
+**Phase 3 — Django plumbing. DONE.**
+`RP.COP` + `STRATEGY_TYPES` + `ABBREV` (`"CO"`) in `round_pairing.py` (COP is a
+sliding strategy, so block expansion needed no change);
+`DivisionSettings.cop_config` JSONField + migration `0033`;
+`PairingData.cop_config` + `for_division`; `engine.py::_cop_config_to_input`
+expands the scalar config into the engine's `CopConfig` (per-round-array fields →
+1-element arrays), emitting `null` when unusable so a COP round fails loudly.
+Verified: adapter shape test, empty-config → null, `pair_with_engine` pairs a full
+COP round end-to-end, and a COP round with no config raises `PairingError`
+(527-test suite green). **Rebuilding the PyO3 extension (`make rust-engine`) is
+required** for the Python boundary to see `RP::Cop`. Note: COP is now selectable
+in the schedule editor, but there's no config *form* until Phase 4 — selecting it
+without setting `cop_config` errors at pair time.
 
 **Phase 4 — Settings UI + end-to-end.**
 COP config form/section; validation; make COP selectable in the schedule editor.
