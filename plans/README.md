@@ -25,6 +25,12 @@ Current plans:
 - `PLAN_DESKTOP_APP.md` — package Baxter as a downloadable offline desktop app
   (PyInstaller + waitress launcher). **Potential future work**; not started,
   not scheduled.
+- `PLAN_COP.md` — port the COP (Cost-Optimized Pairing) algorithm from `COP.pm`
+  (Perl, `jvc56/tournament_pairing_algorithms`) into the `scrabble-pairing` Rust
+  crate as a new `COP` strategy: Monte Carlo contender simulation + weighted
+  min-cost matching, plus new `DivisionSettings` fields (prizes, gibson spread,
+  hopefulness, control-loss, sim counts). **Not started**; 5 phases, class prizes
+  deferred.
 - `PLAN_WHAT_IF.md` — "what if" scenarios: import a historical division (JSON
   bundle or ratings CSV) into a sandbox tournament, plus an Explore tab that
   hypothetically re-pairs any round with a chosen strategy. **Implemented** (all
