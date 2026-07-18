@@ -267,6 +267,12 @@ class DivisionSettings(models.Model):
     # so lazy draft re-pairing doesn't reshuffle random rounds on every render.
     # Re-rolled only by an explicit reshuffle action.
     pairing_seed = models.BigIntegerField(default=random_pairing_seed)
+    # Prize + tuning config for the COP pairing strategy. Empty unless a round
+    # uses COP. Scalar-valued (place_prizes, gibson_spread, hopefulness,
+    # control_loss_threshold, control_loss_activation_round, simulations,
+    # always_wins_simulations, disallow_repeat_byes); the engine adapter expands
+    # the per-round-array fields. See tournaments/pairing/engine.py.
+    cop_config = models.JSONField(default=dict)
 
     def __str__(self):
         return f"Settings for {self.division}"
