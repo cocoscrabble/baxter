@@ -77,3 +77,6 @@ t.py
 # Rust build artifacts (scrabble-pairing crates)
 scrabble-pairing/target/
 scrabble-pairing-py/target/
+
+# vendored code for Testing
+vendor/

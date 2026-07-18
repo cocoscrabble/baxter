@@ -22,6 +22,8 @@ pub enum RP {
     Sixes,
     Charlottesville,
     SwissPlusRandom,
+    #[serde(rename = "COP")]
+    Cop,
     /// Any unrecognized strategy string. The engine pairs nobody for it.
     #[serde(other)]
     Unknown,

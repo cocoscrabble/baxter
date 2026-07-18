@@ -5,6 +5,7 @@
 //! read from.
 
 pub mod basic;
+pub mod cop;
 pub mod quads;
 pub mod roundrobin;
 pub mod swiss;
@@ -15,7 +16,7 @@ use rand_chacha::ChaCha8Rng;
 use rand_core::RngCore;
 
 use crate::matching::max_weight_matching_pairs;
-use crate::model::{PlayerData, ResultSlipData};
+use crate::model::{CopConfig, PlayerData, ResultSlipData};
 use crate::round_pairing::RoundPairing;
 use crate::standings::{standings_after_round, Pairing, Pairings, Player, Repeats};
 
@@ -40,6 +41,8 @@ pub struct Ctx<'a> {
     pub published_pairings: &'a HashMap<i32, Vec<(String, String)>>,
     pub repeats: &'a Repeats,
     pub rng: &'a mut ChaCha8Rng,
+    /// COP tuning/prize config, when the division uses the COP strategy.
+    pub cop_config: Option<&'a CopConfig>,
 }
 
 impl Ctx<'_> {

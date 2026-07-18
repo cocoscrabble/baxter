@@ -1,0 +1,26 @@
+{
+  "seed": 12345,
+  "config": {
+    "number_of_rounds": 8,
+    "number_of_rounds_remaining": 3,
+    "round_to_pair": 5,
+    "lowest_ranked_payout": 2,
+    "gibson_spread": [250],
+    "hopefulness": [0.1, 0.1, 0.05, 0.02, 0.01],
+    "control_loss_thresholds": [0.25],
+    "control_loss_activation_round": 0,
+    "number_of_sims": 2000,
+    "always_wins_number_of_sims": 1000,
+    "disallow_repeat_byes": false
+  },
+  "players": [
+    {"id": 1, "name": "P1", "wins": 10, "spread": 400},
+    {"id": 2, "name": "P2", "wins": 8,  "spread": 300},
+    {"id": 3, "name": "P3", "wins": 8,  "spread": 200},
+    {"id": 4, "name": "P4", "wins": 6,  "spread": 100},
+    {"id": 5, "name": "P5", "wins": 6,  "spread": 50},
+    {"id": 6, "name": "P6", "wins": 4,  "spread": -100}
+  ],
+  "times_played": [],
+  "previous_pairings": []
+}

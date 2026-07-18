@@ -5,11 +5,11 @@ use std::collections::{HashMap, HashSet};
 
 use rand_chacha::ChaCha8Rng;
 
-use crate::model::{OutPairing, PairingInput, PlayerData, ResultSlipData, RoundResult};
+use crate::model::{CopConfig, OutPairing, PairingInput, PlayerData, ResultSlipData, RoundResult};
 use crate::rng::seeded;
 use crate::round_pairing::{normalize_round_robin_start_rounds, RoundPairing, RP};
 use crate::standings::{standings_after_round, Pairings, Player, Repeats, Starts, BYE_NAME};
-use crate::strategies::{basic, quads, roundrobin, swiss, Ctx};
+use crate::strategies::{basic, cop, quads, roundrobin, swiss, Ctx};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RoundStatus {
@@ -39,6 +39,7 @@ fn run_strategy(rp: &RoundPairing, ctx: &mut Ctx) -> Result<Pairings, String> {
         RP::Sixes => quads::pair_sixes(ctx, rp)?,
         RP::Charlottesville => roundrobin::pair_charlottesville(ctx, rp)?,
         RP::SwissPlusRandom => swiss::pair_swiss_plus_random(ctx, rp),
+        RP::Cop => cop::pair_cop(ctx, rp)?,
         RP::Unknown => return Err("unknown pairing strategy".to_string()),
     })
 }
@@ -163,15 +164,18 @@ fn pair_round(
     published_map: &HashMap<i32, Vec<(String, String)>>,
     repeats: &Repeats,
     rng: &mut ChaCha8Rng,
+    cop_config: Option<&CopConfig>,
     rp: &RoundPairing,
 ) -> Result<Pairings, String> {
     // The round-robin family (round robin, double round robin, Charlottesville)
     // honors fixed pairings inside the strategy — it schedules matchings across
     // the block rather than excluding players — so it must see the full field.
-    // Skip the exclude/bye/append path entirely.
+    // COP joins them: it owns bye assignment (via its weight graph) and reads
+    // fixed pairings as its own "prepaired" constraints, so it too needs the full
+    // field with no pre-injected bye. Skip the exclude/bye/append path entirely.
     if matches!(
         rp.pairing,
-        RP::RoundRobin | RP::DoubleRoundRobin | RP::Charlottesville
+        RP::RoundRobin | RP::DoubleRoundRobin | RP::Charlottesville | RP::Cop
     ) {
         let empty = HashSet::new();
         let mut ctx = Ctx {
@@ -183,6 +187,7 @@ fn pair_round(
             published_pairings: published_map,
             repeats,
             rng,
+            cop_config,
         };
         return run_strategy(rp, &mut ctx);
     }
@@ -211,6 +216,7 @@ fn pair_round(
             published_pairings: published_map,
             repeats,
             rng,
+            cop_config,
         };
         run_strategy(rp, &mut ctx)?
     };
@@ -266,6 +272,7 @@ pub fn pair(input: &PairingInput) -> Vec<RoundResult> {
                 &input.published_pairings,
                 &repeats,
                 &mut rng,
+                input.cop_config.as_ref(),
                 rp,
             ) {
                 Ok(paired) => {

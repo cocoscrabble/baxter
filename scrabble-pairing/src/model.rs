@@ -28,6 +28,38 @@ pub struct ResultSlipData {
     pub winner_started: bool,
 }
 
+/// Tuning + prize configuration for the COP strategy (per division). Mirrors the
+/// TSH config values COP.pm reads; the per-round arrays are forward-filled to the
+/// round count inside the engine, so a single-element array (the common case,
+/// produced by the Django adapter from a scalar setting) is fine.
+#[derive(Debug, Clone, Deserialize)]
+pub struct CopConfig {
+    /// Number of place prizes (1-indexed count). COP's 0-indexed
+    /// `lowest_ranked_payout` is `place_prizes - 1`.
+    pub place_prizes: i32,
+    /// Max winning spread per round, by rounds-remaining (forward-filled).
+    #[serde(default)]
+    pub gibson_spreads: Vec<i32>,
+    /// Contender threshold: a player counts as a contender for a rank when they
+    /// reach it in more than this fraction of sims. By rounds-remaining.
+    #[serde(default)]
+    pub hopefulness: Vec<f64>,
+    /// Control-loss thresholds, by rounds-remaining (forward-filled).
+    #[serde(default)]
+    pub control_loss_thresholds: Vec<f64>,
+    /// 0-indexed round at/after which control loss (destiny control) is enforced.
+    #[serde(default)]
+    pub control_loss_activation_round: i32,
+    /// Monte Carlo iteration counts (unused until sims land in Phase 2).
+    #[serde(default)]
+    pub simulations: u32,
+    #[serde(default)]
+    pub always_wins_simulations: u32,
+    /// Penalize giving a player a second bye.
+    #[serde(default)]
+    pub disallow_repeat_byes: bool,
+}
+
 /// Everything a tournament needs to be paired. The full input to `pair`.
 #[derive(Debug, Clone, Deserialize)]
 pub struct PairingInput {
@@ -36,6 +68,10 @@ pub struct PairingInput {
     pub result_slips: Vec<ResultSlipData>,
     #[serde(default)]
     pub round_pairings: Vec<RoundPairing>,
+    /// COP tuning/prize config for this division. Present only when a round uses
+    /// the COP strategy; `#[serde(default)]` keeps every other caller parsing.
+    #[serde(default)]
+    pub cop_config: Option<CopConfig>,
     /// Round number -> list of unordered (name1, name2) pairs forced that round.
     /// JSON object keys are strings; serde_json parses them back to `i32`.
     #[serde(default)]
