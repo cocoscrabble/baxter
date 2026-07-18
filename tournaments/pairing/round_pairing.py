@@ -18,6 +18,7 @@ class RP(StrEnum):
     Sixes = "Sixes"
     Charlottesville = "Charlottesville"
     SwissPlusRandom = "SwissPlusRandom"
+    COP = "COP"
 
     @staticmethod
     def is_round_robin(name) -> bool:
@@ -45,6 +46,9 @@ STRATEGY_TYPES = [
     RP.Sixes,
     RP.Charlottesville,
     RP.SwissPlusRandom,
+    # COP pairs off the previous round like a sliding strategy; it additionally
+    # needs DivisionSettings.cop_config (prizes + tuning) to pair.
+    RP.COP,
 ]
 
 
@@ -61,6 +65,7 @@ ABBREV = {
     "QE": RP.Quads_Equalized,
     "SX": RP.Sixes,
     "SR": RP.SwissPlusRandom,
+    "CO": RP.COP,
 }
 
 
