@@ -109,6 +109,10 @@ class PairingData:
     # input; unused by the Python engine (which uses the global RNG).
     seed: int = 0
 
+    # COP prize/tuning config (DivisionSettings.cop_config), passed through to the
+    # engine when a round uses the COP strategy. Empty/None otherwise.
+    cop_config: dict | None = None
+
     @classmethod
     def for_division(cls, division) -> "PairingData":
         # select_related the joined rows every DTO touches: without it, each
@@ -153,9 +157,11 @@ class PairingData:
             settings = division.settings
             raw_rps = settings.round_pairings or []
             seed = settings.pairing_seed
+            cop_config = settings.cop_config or None
         except DivisionSettings.DoesNotExist:
             raw_rps = []
             seed = 0
+            cop_config = None
         rps = [RoundPairing.from_dict(x) for x in raw_rps]
         normalize_round_robin_start_rounds(rps)
         return cls(
@@ -165,6 +171,7 @@ class PairingData:
             fixed_pairings=dict(fixed),
             round_pairings=rps,
             seed=seed,
+            cop_config=cop_config,
         )
 
 

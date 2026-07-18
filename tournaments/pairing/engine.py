@@ -15,6 +15,30 @@ from tournaments.pairing.base import (
 )
 
 
+def _cop_config_to_input(c: dict | None) -> dict | None:
+    """Expand DivisionSettings' scalar ``cop_config`` into the engine's
+    ``CopConfig`` shape (``scrabble-pairing/src/model.rs``): the per-round-array
+    fields become single-element arrays (the engine forward-fills them to the
+    round count). Returns ``None`` when there's nothing usable, so a COP round
+    without config fails loudly in the engine rather than pairing on defaults."""
+    if not c or not c.get("place_prizes"):
+        return None
+
+    def arr(v):
+        return v if isinstance(v, list) else [v]
+
+    return {
+        "place_prizes": int(c["place_prizes"]),
+        "gibson_spreads": arr(c.get("gibson_spread", 250)),
+        "hopefulness": arr(c.get("hopefulness", 0.05)),
+        "control_loss_thresholds": arr(c.get("control_loss_threshold", 0.25)),
+        "control_loss_activation_round": int(c.get("control_loss_activation_round", 0)),
+        "simulations": int(c.get("simulations", 1000)),
+        "always_wins_simulations": int(c.get("always_wins_simulations", 1000)),
+        "disallow_repeat_byes": bool(c.get("disallow_repeat_byes", False)),
+    }
+
+
 def pairing_data_to_input(pd: PairingData) -> dict:
     """Serialize a ``PairingData`` into the Rust engine's JSON boundary shape
     (``scrabble-pairing/src/model.rs``)."""
@@ -47,6 +71,7 @@ def pairing_data_to_input(pd: PairingData) -> dict:
             for k, v in pd.published_pairings.items()
         },
         "seed": pd.seed,
+        "cop_config": _cop_config_to_input(pd.cop_config),
     }
 
 
