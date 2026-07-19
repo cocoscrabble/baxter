@@ -130,6 +130,7 @@ def _replay_snapshot(ctx, payload):
             settings_obj.pairing_blocks = d.get("pairing_blocks", [])
             settings_obj.round_pairings = d.get("round_pairings", [])
             settings_obj.board_table_map = d.get("board_table_map", [])
+            settings_obj.cop_config = d.get("cop_config", {})
             settings_obj.save()
 
             ent_by_name = {}

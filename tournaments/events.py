@@ -35,6 +35,7 @@ EVENT_TYPES = frozenset(
         "division_deleted",
         "division_restored",
         "division_settings_saved",
+        "division_cop_config_saved",
         "division_imported",
         "entrants_saved",
         "entrants_bulk_imported",
@@ -402,8 +403,9 @@ def build_snapshot(tournament) -> dict:
             blocks = settings_obj.pairing_blocks
             round_pairings = settings_obj.round_pairings
             board_table_map = settings_obj.board_table_map
+            cop_config = settings_obj.cop_config
         except Exception:
-            seed, blocks, round_pairings, board_table_map = 0, [], [], []
+            seed, blocks, round_pairings, board_table_map, cop_config = 0, [], [], [], {}
         rounds = []
         for rp in division.round_pairings_set.exclude(
             status=RoundPairings.DRAFT
@@ -444,6 +446,7 @@ def build_snapshot(tournament) -> dict:
                 "pairing_blocks": blocks,
                 "round_pairings": round_pairings,
                 "board_table_map": board_table_map,
+                "cop_config": cop_config,
                 "entrants": entrants,
                 "rounds": rounds,
                 "results": results,
@@ -492,6 +495,7 @@ def describe_event(event) -> str:
         "division_deleted": lambda: f"Deleted division “{p.get('name', '')}”",
         "division_restored": lambda: f"Restored division “{p.get('name', '')}”",
         "division_settings_saved": lambda: f"Saved pairing schedule for {div}",
+        "division_cop_config_saved": lambda: f"Saved COP settings for {div}",
         "division_imported": lambda: f"Imported division “{p.get('name', '')}” from history",
         "entrants_saved": lambda: f"Saved entrants for {div} ({rows()})",
         "entrants_bulk_imported": lambda: f"Imported entrants for {div}",

@@ -320,6 +320,16 @@ def save_settings(tournament, actor, payload):
     return EventResult(payload=payload, division=division, result=settings_obj)
 
 
+@records_event("division_cop_config_saved")
+def save_cop_config(tournament, actor, payload):
+    """payload: {division, cop_config} — COP's prize/tuning config for the division."""
+    division = _division(tournament, payload["division"])
+    settings_obj, _ = DivisionSettings.objects.get_or_create(division=division)
+    settings_obj.cop_config = payload["cop_config"]
+    settings_obj.save(update_fields=["cop_config"])
+    return EventResult(payload=payload, division=division, result=settings_obj)
+
+
 @records_event("entrants_bulk_imported")
 def bulk_import_entrants(tournament, actor, payload):
     """payload: {division, csv} — the raw CSV text. New players are created by
