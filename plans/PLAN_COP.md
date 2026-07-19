@@ -1,8 +1,9 @@
 # PLAN_COP.md — Port the COP pairing algorithm to the Rust engine
 
-**Status:** Phases 1–3 implemented (Rust engine complete + reachable from Django:
-strategy registered, `DivisionSettings.cop_config` + migration, adapter plumbing).
-Phases 4–5 pending (settings UI, class prizes). Pinned to commit `fd875c0`.
+**Status:** Phases 1–4 implemented and runtime-verified — COP is fully usable in
+the app (Rust engine, Django plumbing, settings-tab config form). Phase 5 (class
+prizes) is the only remaining piece, deferred pending an in-division class model.
+Pinned to commit `fd875c0`.
 
 ## Goal
 
@@ -388,12 +389,20 @@ required** for the Python boundary to see `RP::Cop`. Note: COP is now selectable
 in the schedule editor, but there's no config *form* until Phase 4 — selecting it
 without setting `cop_config` errors at pair time.
 
-**Phase 4 — Settings UI + end-to-end.**
-COP config form/section; validation; make COP selectable in the schedule editor.
-Verify with `/run` (or the verify skill): configure a small test division for
-COP via the "create test tournament" action (memory:
-`feedback_no_password_changes`), enter a few rounds of results, pair a round with
-COP, confirm sane pairings and that regenerate is idempotent under a fixed seed.
+**Phase 4 — Settings UI + end-to-end. DONE.**
+`CopConfigForm` (forms.py) with validation; `DivisionSettingsEditView` gains a
+POST routing through the `save_cop_config` command (new event type
+`division_cop_config_saved`, with activity description + snapshot/replay
+symmetry); the settings-tab placeholder becomes the COP form (pre-populates from
+saved config, notes when no round uses COP). COP is already selectable in the
+schedule editor (Phase 3). Tests: view GET/POST/validation/prepopulation +
+`for_division` pickup + completeness allowlist (533-test suite green).
+**Runtime-verified** (isolated temp-DB server, fake tournament with an unpaired
+COP round): the form renders and saves ("COP settings saved."); an unconfigured
+COP round fails loudly in Pair Rounds ("COP round configured but no cop_config
+supplied"); after saving config the COP round pairs all players; the
+disallow-repeat-byes boolean round-trips. Recipe saved as
+`.claude/skills/verify/SKILL.md`.
 
 **Phase 5 — Class prizes (optional/later).**
 Only if/when Baxter models an in-division class. Port `get_class_prize_pairings`
