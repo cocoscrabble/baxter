@@ -5,5 +5,41 @@
 {% block content %}
 <h1>Settings: {{ division.name }}</h1>
 
-<p class="empty-state">Placeholder for per-division configuration. Nothing to set here yet.</p>
+<section class="settings-section">
+    <h2>COP pairing</h2>
+    <p class="settings-intro">
+        Prize and tuning settings for the COP (Cost-Optimized Pairing) strategy.
+        These only take effect for rounds set to <strong>COP</strong> in the
+        <a href="{% url 'division_round_pairings' division.tournament.slug division.slug %}">round pairings</a>.
+    </p>
+
+    {% if not uses_cop %}
+    <p class="empty-state">No round in this division currently uses COP. You can
+    still configure it here; it will apply once a COP round is scheduled.</p>
+    {% endif %}
+
+    <form method="post">
+        {% csrf_token %}
+        {% for field in form.basic_fields %}
+        <p>
+            {{ field.label_tag }}
+            {{ field }}
+            {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+            {{ field.errors }}
+        </p>
+        {% endfor %}
+        <fieldset class="advanced-settings">
+            <legend>Advanced settings</legend>
+            {% for field in form.advanced_fields %}
+            <p>
+                {{ field.label_tag }}
+                {{ field }}
+                {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+                {{ field.errors }}
+            </p>
+            {% endfor %}
+        </fieldset>
+        <button type="submit" class="btn-save">Save COP settings</button>
+    </form>
+</section>
 {% endblock %}

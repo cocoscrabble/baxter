@@ -277,6 +277,66 @@ class WhatIfImportForm(forms.Form):
         return cleaned
 
 
+class CopConfigForm(forms.Form):
+    """Prize + tuning config for the COP pairing strategy
+    (DivisionSettings.cop_config). Stored as a scalar dict; the engine adapter
+    expands the per-round-array fields."""
+
+    place_prizes = forms.IntegerField(
+        min_value=1, initial=3, label="Number of place prizes",
+        help_text="How many top finishers win a place (cash) prize.",
+    )
+    gibson_spread = forms.IntegerField(
+        min_value=0, initial=250, label="Gibson spread",
+        help_text="Per-round spread cushion used to decide a player is "
+        "mathematically locked into a placing.",
+    )
+    hopefulness = forms.FloatField(
+        min_value=0.0, max_value=1.0, initial=0.05, label="Hopefulness",
+        help_text="A player is a contender for a prize when they reach it in more "
+        "than this fraction of simulations (0–1).",
+    )
+    control_loss_threshold = forms.FloatField(
+        min_value=0.0, max_value=1.0, initial=0.25, label="Control-loss threshold",
+        help_text="How much control the leader may lose before COP forces a "
+        "specific top pairing (0–1).",
+    )
+    control_loss_activation_round = forms.IntegerField(
+        min_value=0, initial=0, label="Control-loss activation round",
+        help_text="0-indexed round at/after which control loss is enforced "
+        "(0 = from the start).",
+    )
+    simulations = forms.IntegerField(
+        min_value=1, initial=1000, label="Simulations",
+        help_text="Monte Carlo runs used to identify contenders. Higher is more "
+        "accurate but slower.",
+    )
+    always_wins_simulations = forms.IntegerField(
+        min_value=1, initial=1000, label="Control-loss simulations",
+    )
+    disallow_repeat_byes = forms.BooleanField(
+        required=False, initial=True, label="Disallow repeat byes",
+    )
+
+    # Field grouping for the settings page: the basic fields show at the top, the
+    # rest inside the "Advanced settings" box.
+    _BASIC = ["place_prizes", "disallow_repeat_byes"]
+    _ADVANCED = [
+        "gibson_spread", "hopefulness", "control_loss_threshold",
+        "control_loss_activation_round", "simulations", "always_wins_simulations",
+    ]
+
+    def basic_fields(self):
+        return [self[name] for name in self._BASIC]
+
+    def advanced_fields(self):
+        return [self[name] for name in self._ADVANCED]
+
+    def to_config(self) -> dict:
+        """The cleaned config dict (the shape stored in cop_config)."""
+        return {f: self.cleaned_data[f] for f in self._BASIC + self._ADVANCED}
+
+
 class RoundCountForm(forms.Form):
     num_rounds = forms.IntegerField(min_value=1, label="Number of rounds")
 

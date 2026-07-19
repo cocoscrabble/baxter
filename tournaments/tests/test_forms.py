@@ -3,6 +3,7 @@ from datetime import date
 from django.test import TestCase
 
 from tournaments.forms import (
+    CopConfigForm,
     ResultSlipForm,
     RoundPairingForm,
     RoundPairingFormSet,
@@ -422,3 +423,15 @@ class RoundPairingFormSetTests(TestCase):
         })
         formset = RoundPairingFormSet(data)
         self.assertFalse(formset.is_valid())
+
+
+class CopConfigFormTests(TestCase):
+    def test_disallow_repeat_byes_defaults_to_true(self):
+        # A fresh form (new division) pre-checks the box.
+        self.assertTrue(CopConfigForm()["disallow_repeat_byes"].value())
+
+    def test_saved_false_is_preserved(self):
+        # An existing config that turned it off stays off (initial doesn't
+        # override the saved value).
+        form = CopConfigForm(initial={"disallow_repeat_byes": False})
+        self.assertFalse(form["disallow_repeat_byes"].value())

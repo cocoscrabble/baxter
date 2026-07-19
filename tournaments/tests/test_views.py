@@ -2952,3 +2952,90 @@ class SlugURLRedirectTests(TestCase):
     def test_stale_numeric_tournament_url_404s(self):
         response = self.client.get(f"/tournaments/{self.tournament.pk}/")
         self.assertEqual(response.status_code, 404)
+
+
+class DivisionSettingsCopConfigTests(TestCase):
+    """The settings tab's COP config form."""
+
+    def setUp(self):
+        setUpTournament(self)
+        self.client.login(username="owner", password="testpass123")
+        self.url = reverse("division_settings", kwargs=self.division.slug_kwargs())
+
+    VALID = {
+        "place_prizes": 3,
+        "gibson_spread": 250,
+        "hopefulness": 0.05,
+        "control_loss_threshold": 0.25,
+        "control_loss_activation_round": 0,
+        "simulations": 500,
+        "always_wins_simulations": 200,
+    }
+
+    def test_get_renders_form(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "COP pairing")
+        self.assertContains(response, "Number of place prizes")
+
+    def test_basic_fields_above_advanced_box(self):
+        html = self.client.get(self.url).content.decode()
+        self.assertIn('<fieldset class="advanced-settings">', html)
+        self.assertIn("Advanced settings", html)
+        # Place prizes and disallow-repeat-byes sit above the box; the tuning
+        # fields sit inside it.
+        prizes = html.index("Number of place prizes")
+        byes = html.index("Disallow repeat byes")
+        box = html.index('<fieldset class="advanced-settings">')
+        gibson = html.index("Gibson spread")
+        self.assertLess(prizes, byes)
+        self.assertLess(byes, box)
+        self.assertLess(box, gibson)
+
+    def test_post_saves_cop_config(self):
+        response = self.client.post(self.url, self.VALID)
+        self.assertRedirects(response, self.url)
+        cfg = DivisionSettings.objects.get(division=self.division).cop_config
+        self.assertEqual(cfg["place_prizes"], 3)
+        self.assertEqual(cfg["gibson_spread"], 250)
+        self.assertEqual(cfg["disallow_repeat_byes"], False)
+        # The save is recorded in the event log.
+        from tournaments.models import TournamentEvent
+
+        self.assertTrue(
+            TournamentEvent.objects.filter(
+                tournament=self.tournament, event_type="division_cop_config_saved"
+            ).exists()
+        )
+
+    def test_post_invalid_place_prizes_reraises_form(self):
+        bad = {**self.VALID, "place_prizes": 0}
+        response = self.client.post(self.url, bad)
+        self.assertEqual(response.status_code, 200)  # re-rendered, not redirected
+        self.assertFalse(
+            DivisionSettings.objects.filter(division=self.division)
+            .exclude(cop_config={})
+            .exists()
+        )
+
+    def test_get_prepopulates_existing_config(self):
+        DivisionSettings.objects.update_or_create(
+            division=self.division, defaults={"cop_config": {**self.VALID, "place_prizes": 5}}
+        )
+        response = self.client.get(self.url)
+        self.assertContains(response, 'value="5"')
+
+    def test_for_division_picks_up_cop_config(self):
+        # The saved config reaches the engine via PairingData.for_division.
+        from tournaments.pairing.base import PairingData
+
+        DivisionSettings.objects.update_or_create(
+            division=self.division, defaults={"cop_config": self.VALID}
+        )
+        pd = PairingData.for_division(self.division)
+        self.assertEqual(pd.cop_config, self.VALID)
+
+    def test_for_division_without_config_is_none(self):
+        from tournaments.pairing.base import PairingData
+
+        self.assertIsNone(PairingData.for_division(self.division).cop_config)

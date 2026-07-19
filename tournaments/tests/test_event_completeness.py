@@ -41,6 +41,7 @@ COMMAND_BACKED = {
     "DivisionDeleteView",
     "DivisionRestoreView",
     "DivisionRoundPairingsEditView",
+    "DivisionSettingsEditView",
     "DivisionEntrantsEditView",
     "DivisionEditResultsView",
     "DivisionFixedPairingsEditView",

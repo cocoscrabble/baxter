@@ -22,6 +22,7 @@ from django.views.generic import (
 from .datastar_utils import fragment_response, is_datastar
 from datastar_py.django import read_signals
 from .forms import (
+    CopConfigForm,
     FakeTournamentForm,
     ResultSlipForm,
     TournamentForm,
@@ -50,6 +51,7 @@ from .commands import (
     remove_fixed_pairings_cmd,
     rename_division,
     restore_division,
+    save_cop_config,
     save_settings,
     simulate_match_cmd,
     simulate_round_cmd,
@@ -73,6 +75,7 @@ from editgrid.concurrency import check_conflict
 from editgrid.models import EditVersion
 from editgrid.views import BaseEditGridView, EditPresenceBaseView, build_grid_context
 from .pairing.round_pairing import (
+    RP,
     blocks_to_round_pairings,
     default_block_rounds,
     round_pairings_to_blocks,
@@ -1184,18 +1187,50 @@ class DivisionResultsExportView(LoginRequiredMixin, CanEditDivisionMixin, Detail
 
 
 class DivisionSettingsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
-    """Placeholder for future per-division configuration. Round pairings, which
-    used to live here, now have their own tab."""
+    """Per-division configuration. Currently the COP pairing strategy's prize +
+    tuning settings (round pairings have their own tab)."""
 
     template_name = "tournaments/division_settings_edit.html"
 
     def get(self, request, *args, **kwargs):
         division = self.get_division()
-        return render(request, self.template_name, {
+        cop_config = self._cop_config(division)
+        form = CopConfigForm(initial=cop_config or None)
+        return render(request, self.template_name, self._context(division, form))
+
+    def post(self, request, *args, **kwargs):
+        division = self.get_division()
+        form = CopConfigForm(request.POST)
+        if form.is_valid():
+            save_cop_config(
+                division.tournament, request.user,
+                {"division": division.name, "cop_config": form.to_config()},
+            )
+            messages.success(request, "COP settings saved.")
+            return redirect("division_settings", **division.slug_kwargs())
+        return render(request, self.template_name, self._context(division, form))
+
+    def _cop_config(self, division) -> dict:
+        try:
+            return division.settings.cop_config or {}
+        except DivisionSettings.DoesNotExist:
+            return {}
+
+    def _uses_cop(self, division) -> bool:
+        try:
+            rps = division.settings.round_pairings or []
+        except DivisionSettings.DoesNotExist:
+            return False
+        return any(rp.get("pairing") == str(RP.COP) for rp in rps)
+
+    def _context(self, division, form) -> dict:
+        return {
             "division": division,
             "active_tab": "settings",
             "can_edit": True,
-        })
+            "form": form,
+            "uses_cop": self._uses_cop(division),
+        }
 
 
 def _validate_blocks(raw):
