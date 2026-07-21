@@ -5,6 +5,13 @@ the app (Rust engine, Django plumbing, settings-tab config form). Phase 5 (class
 prizes) is the only remaining piece, deferred pending an in-division class model.
 Pinned to commit `fd875c0`.
 
+Post-Phase-4 refinement: `regenerate_pairings` seeds `DEFAULT_COP_CONFIG`
+(`models.py`, also the settings form's field-default source) the first time a
+division with a COP round is paired without config, so COP works out of the box;
+the organizer can then tune it. The engine boundary stays strict (a direct
+`pair_with_engine` with no config still raises) — the seeding is an app-layer
+convenience, done as a derived write inside `regenerate_pairings`.
+
 ## Goal
 
 Add **COP** (Cost-Optimized Pairing) as a selectable pairing strategy. COP is
