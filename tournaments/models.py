@@ -250,6 +250,26 @@ class DivisionSlugAlias(models.Model):
         return self.slug
 
 
+# Default COP prize/tuning config. Seeded lazily the first time a COP round is
+# paired (see generate_pairings) when the division has none, and used as the
+# settings form's field defaults so the two never drift.
+DEFAULT_COP_CONFIG = {
+    "place_prizes": 3,
+    "gibson_spread": 250,
+    "hopefulness": 0.05,
+    "control_loss_threshold": 0.25,
+    "control_loss_activation_round": 0,
+    "simulations": 1000,
+    "always_wins_simulations": 1000,
+    "disallow_repeat_byes": True,
+}
+
+
+def default_cop_config() -> dict:
+    """A fresh copy of the default COP config."""
+    return dict(DEFAULT_COP_CONFIG)
+
+
 class DivisionSettings(models.Model):
     """Settings for a division."""
 
