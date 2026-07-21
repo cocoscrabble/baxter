@@ -4,7 +4,15 @@ from users.models import User
 
 from django.forms import formset_factory
 
-from .models import Entrant, Pairing, Player, ResultSlip, RoundPairings, Tournament
+from .models import (
+    DEFAULT_COP_CONFIG,
+    Entrant,
+    Pairing,
+    Player,
+    ResultSlip,
+    RoundPairings,
+    Tournament,
+)
 from .pairing.round_pairing import STRATEGY_TYPES
 
 
@@ -282,41 +290,48 @@ class CopConfigForm(forms.Form):
     (DivisionSettings.cop_config). Stored as a scalar dict; the engine adapter
     expands the per-round-array fields."""
 
+    # Field defaults come from DEFAULT_COP_CONFIG (applied in __init__), so the
+    # form and the lazily-seeded config never drift.
     place_prizes = forms.IntegerField(
-        min_value=1, initial=3, label="Number of place prizes",
+        min_value=1, label="Number of place prizes",
         help_text="How many top finishers win a place (cash) prize.",
     )
     gibson_spread = forms.IntegerField(
-        min_value=0, initial=250, label="Gibson spread",
+        min_value=0, label="Gibson spread",
         help_text="Per-round spread cushion used to decide a player is "
         "mathematically locked into a placing.",
     )
     hopefulness = forms.FloatField(
-        min_value=0.0, max_value=1.0, initial=0.05, label="Hopefulness",
+        min_value=0.0, max_value=1.0, label="Hopefulness",
         help_text="A player is a contender for a prize when they reach it in more "
         "than this fraction of simulations (0–1).",
     )
     control_loss_threshold = forms.FloatField(
-        min_value=0.0, max_value=1.0, initial=0.25, label="Control-loss threshold",
+        min_value=0.0, max_value=1.0, label="Control-loss threshold",
         help_text="How much control the leader may lose before COP forces a "
         "specific top pairing (0–1).",
     )
     control_loss_activation_round = forms.IntegerField(
-        min_value=0, initial=0, label="Control-loss activation round",
+        min_value=0, label="Control-loss activation round",
         help_text="0-indexed round at/after which control loss is enforced "
         "(0 = from the start).",
     )
     simulations = forms.IntegerField(
-        min_value=1, initial=1000, label="Simulations",
+        min_value=1, label="Simulations",
         help_text="Monte Carlo runs used to identify contenders. Higher is more "
         "accurate but slower.",
     )
     always_wins_simulations = forms.IntegerField(
-        min_value=1, initial=1000, label="Control-loss simulations",
+        min_value=1, label="Control-loss simulations",
     )
     disallow_repeat_byes = forms.BooleanField(
-        required=False, initial=True, label="Disallow repeat byes",
+        required=False, label="Disallow repeat byes",
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, value in DEFAULT_COP_CONFIG.items():
+            self.fields[name].initial = value
 
     # Field grouping for the settings page: the basic fields show at the top, the
     # rest inside the "Advanced settings" box.

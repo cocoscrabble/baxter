@@ -887,3 +887,70 @@ class RoundRobinUnplayedRoundsTests(PairingDBTestBase):
 
 
 
+
+
+class CopConfigLazySeedTests(PairingDBTestBase):
+    """A division with a COP round gets default cop_config seeded the first time
+    it's paired (regenerate_pairings), so COP works without prior configuration."""
+
+    def _schedule(self, rps):
+        DivisionSettings.objects.update_or_create(
+            division=self.division, defaults={"round_pairings": rps}
+        )
+
+    def _regen(self):
+        from tournaments.generate_pairings import regenerate_pairings
+        regenerate_pairings(self.division)
+
+    def _cop_config(self):
+        return DivisionSettings.objects.get(division=self.division).cop_config
+
+    def test_cop_round_seeds_default_config(self):
+        from tournaments.models import default_cop_config
+        self._schedule([
+            {"round": 1, "start_round": 0, "pairing": "Swiss"},
+            {"round": 2, "start_round": 1, "pairing": "COP"},
+        ])
+        self._regen()
+        self.assertEqual(self._cop_config(), default_cop_config())
+
+    def test_non_cop_schedule_leaves_config_empty(self):
+        self._schedule([{"round": 1, "start_round": 0, "pairing": "Swiss"}])
+        self._regen()
+        self.assertEqual(self._cop_config(), {})
+
+    def test_cop_round_pairs_after_seeding(self):
+        # End-to-end through the production path: a pairable COP round pairs
+        # (rather than erroring) once defaults are seeded.
+        self._schedule([
+            {"round": 1, "start_round": 0, "pairing": "Swiss"},
+            {"round": 2, "start_round": 1, "pairing": "COP"},
+        ])
+        self._regen()  # pairs round 1
+        for p in self.division.pairings.filter(round=1):
+            ResultSlip.objects.create(
+                division=self.division, round=1,
+                winner=p.first, winner_score=400, loser=p.second, loser_score=350,
+                winner_started=True,
+            )
+        self.division.round_pairings_set.filter(round=1).update(
+            status=RoundPairings.FINISHED
+        )
+        self._regen()  # round 2 (COP) now pairs using the seeded config
+        self.assertEqual(self.division.pairings.filter(round=2).count(), 2)
+
+    def test_existing_config_is_preserved(self):
+        from tournaments.models import default_cop_config
+        custom = {**default_cop_config(), "place_prizes": 5, "simulations": 200}
+        DivisionSettings.objects.update_or_create(
+            division=self.division,
+            defaults={
+                "round_pairings": [
+                    {"round": 1, "start_round": 0, "pairing": "Swiss"},
+                    {"round": 2, "start_round": 1, "pairing": "COP"},
+                ],
+                "cop_config": custom,
+            },
+        )
+        self._regen()
+        self.assertEqual(self._cop_config(), custom)

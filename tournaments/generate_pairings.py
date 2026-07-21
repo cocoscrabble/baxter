@@ -9,9 +9,17 @@ from django.db.models import Q
 
 from .assign_tables import assign_tables, parse_board_table_map
 from .events import as_derived, derived_writes
-from .models import BYE_PLAYER_NAME, DivisionSettings, Pairing, ResultSlip, RoundPairings
+from .models import (
+    BYE_PLAYER_NAME,
+    DivisionSettings,
+    Pairing,
+    ResultSlip,
+    RoundPairings,
+    default_cop_config,
+)
 from .pairing.base import PairingData, standings_after_round
 from .pairing.engine import pair_with_engine
+from .pairing.round_pairing import RP
 
 # A bye is scored as a win with a fixed +50 spread (50–0), no game played.
 BYE_WINNER_SCORE = 50
@@ -144,6 +152,21 @@ def resolve_fixed_table(first_ft, second_ft, first_rank, second_rank):
     return first_ft[0] if first_rank < second_rank else second_ft[0]
 
 
+def _ensure_cop_config(division, pd):
+    """Seed default COP config the first time a division with a COP round is
+    paired. COP can't pair without ``cop_config``; rather than fail, drop in the
+    defaults (persisted, so the organizer can then tune them on the settings tab)
+    and use them for this pairing. A division already configured is left alone;
+    a schedule with no COP round never gets one."""
+    if pd.cop_config or not any(rp.pairing == RP.COP for rp in pd.round_pairings):
+        return
+    cfg = default_cop_config()
+    settings_obj, _ = DivisionSettings.objects.get_or_create(division=division)
+    settings_obj.cop_config = cfg
+    settings_obj.save(update_fields=["cop_config"])
+    pd.cop_config = cfg
+
+
 @transaction.atomic
 @as_derived
 def regenerate_pairings(division):
@@ -159,6 +182,7 @@ def regenerate_pairings(division):
         division.round_pairings_set.filter(status=RoundPairings.DRAFT).delete()
         division.pairings.filter(round_pairings__isnull=True).delete()
         return
+    _ensure_cop_config(division, pd)
     pairings = pair_with_engine(pd)
     entrant_by_name = {
         e.player.name: e
