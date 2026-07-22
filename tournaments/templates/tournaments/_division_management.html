@@ -43,6 +43,7 @@
             <td></td>
             <td></td>
             <td>
+                <a href="{% url 'division_standings' division.tournament.slug division.slug %}">Standings</a>
                 <a href="#" data-on:click__prevent="$renamingPk = {{ division.pk }}; $renameName = '{{ division.name|escapejs }}'">Rename</a>
                 <a href="{% url 'division_delete' division.tournament.slug division.slug %}">Delete</a>
             </td>
@@ -54,6 +55,7 @@
             <td><input type="checkbox" checked disabled></td>
             <td></td>
             <td>
+                <a href="{% url 'division_standings' division.tournament.slug division.slug %}">Standings</a>
                 <a href="#" data-on:click__prevent="$renamingPk = {{ division.pk }}; $renameName = '{{ division.name|escapejs }}'">Rename</a>
                 <a href="{% url 'division_delete' division.tournament.slug division.slug %}">Delete</a>
             </td>
