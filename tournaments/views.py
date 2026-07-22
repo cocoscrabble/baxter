@@ -8,6 +8,7 @@ from django.db import models, transaction
 from django.http import Http404, HttpResponse, JsonResponse
 from django.utils import timezone
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.urls import reverse, reverse_lazy
 from django.utils.text import slugify
 from django.views import View
@@ -618,6 +619,24 @@ class DivisionEntrantsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
         return context
 
 
+def division_standings(division, current_round):
+    """Return the standings list after ``current_round``, annotated with each
+    entrant's seed number and dropped flag (as ``_standings_table.html`` expects).
+
+    Display standings keep withdrawn players visible (marked ``dropped`` below);
+    their games are always counted in everyone's record.
+    """
+    pd = PairingData.for_division(division)
+    standings = standings_after_round(pd, current_round, include_dropped=True)
+    entrants = list(division.entrants.all())
+    seed_by_name = {e.name: e.number for e in entrants}
+    dropped_names = {e.name for e in entrants if e.dropped}
+    for p in standings:
+        p.seed = seed_by_name.get(p.name)
+        p.dropped = p.name in dropped_names
+    return standings
+
+
 class DivisionStandingsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
     model = Division
     template_name = "tournaments/division_standings.html"
@@ -627,20 +646,9 @@ class DivisionStandingsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         division = self.object
-        pd = PairingData.for_division(division)
         max_round = division.max_round()
         current_round = self.kwargs.get("round", max_round)
-        # Display standings keep withdrawn players visible (marked below); their
-        # games always counted in everyone's record.
-        standings = standings_after_round(pd, current_round, include_dropped=True)
-        # Annotate each standing with the entrant's seed number and dropped flag.
-        entrants = list(division.entrants.all())
-        seed_by_name = {e.name: e.number for e in entrants}
-        dropped_names = {e.name for e in entrants if e.dropped}
-        for p in standings:
-            p.seed = seed_by_name.get(p.name)
-            p.dropped = p.name in dropped_names
-        context["standings"] = standings
+        context["standings"] = division_standings(division, current_round)
         context["round"] = current_round
         context["rounds"] = range(1, max_round + 1)
         return context
@@ -653,6 +661,29 @@ class DivisionStandingsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
                 "tournaments/_standings_content.html", context, request=request
             )
         return self.render_to_response(context)
+
+
+class DivisionStandingsTableView(VisibleDivisionMixin, DetailView):
+    """Return the current standings as a bare ``<table>`` HTML fragment, intended
+    to be embedded in other pages (no navbar, tabs, or page chrome). Defaults to
+    the latest round; an optional ``round`` kwarg pins an earlier round."""
+
+    model = Division
+
+    def get(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        division = self.object
+        current_round = self.kwargs.get("round", division.max_round())
+        html = render_to_string(
+            "tournaments/_standings_table.html",
+            {
+                "standings": division_standings(division, current_round),
+                # Firsts is an organiser-only column; keep the public embed lean.
+                "can_edit": False,
+            },
+            request=request,
+        )
+        return HttpResponse(html)
 
 
 
