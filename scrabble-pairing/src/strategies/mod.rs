@@ -16,7 +16,7 @@ use rand_chacha::ChaCha8Rng;
 use rand_core::RngCore;
 
 use crate::matching::max_weight_matching_pairs;
-use crate::model::{CopConfig, PlayerData, ResultSlipData};
+use crate::model::{CopConfig, PlayerData, ResultSlipData, SwissConfig};
 use crate::round_pairing::RoundPairing;
 use crate::standings::{standings_after_round, Pairing, Pairings, Player, Repeats};
 
@@ -43,6 +43,8 @@ pub struct Ctx<'a> {
     pub rng: &'a mut ChaCha8Rng,
     /// COP tuning/prize config, when the division uses the COP strategy.
     pub cop_config: Option<&'a CopConfig>,
+    /// Swiss tuning knobs (weight, max distance, SwissPlusRandom split).
+    pub swiss_config: &'a SwissConfig,
 }
 
 impl Ctx<'_> {

@@ -270,6 +270,26 @@ def default_cop_config() -> dict:
     return dict(DEFAULT_COP_CONFIG)
 
 
+# Tuning for the Swiss family (Swiss, SwissPlusRandom). These were hardcoded in
+# the engine; the values here are those constants, so an empty config pairs
+# exactly as before. The Google Sheets script Baxter's Swiss was ported from
+# exposes swiss_weight and swiss_distance, and uses swiss_distance for *both*
+# max_distance and spr_split — set the two equal to reproduce a sheet.
+DEFAULT_SWISS_CONFIG = {
+    # Cost of a repeat pairing, relative to one place of standings distance.
+    "swiss_weight": 30,
+    # Don't pair candidates this many places apart or more.
+    "max_distance": 11,
+    # SwissPlusRandom: size of the Swiss-paired top slice; the rest go random.
+    "spr_split": 10,
+}
+
+
+def default_swiss_config() -> dict:
+    """A fresh copy of the default Swiss config."""
+    return dict(DEFAULT_SWISS_CONFIG)
+
+
 class DivisionSettings(models.Model):
     """Settings for a division."""
 
@@ -293,6 +313,9 @@ class DivisionSettings(models.Model):
     # always_wins_simulations, disallow_repeat_byes); the engine adapter expands
     # the per-round-array fields. See tournaments/pairing/engine.py.
     cop_config = models.JSONField(default=dict)
+    # Tuning for the Swiss family (swiss_weight, max_distance, spr_split). Empty
+    # means the engine's built-in defaults, which are DEFAULT_SWISS_CONFIG.
+    swiss_config = models.JSONField(default=dict)
 
     def __str__(self):
         return f"Settings for {self.division}"

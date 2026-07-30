@@ -58,6 +58,63 @@ pub struct CopConfig {
     /// Penalize giving a player a second bye.
     #[serde(default)]
     pub disallow_repeat_byes: bool,
+    /// Count the rounds still to play from the round being paired rather than
+    /// from `start_round`.
+    ///
+    /// COP reads its standings from `start_round` and, by default, derives the
+    /// horizon from the same place — self-consistent, and identical either way
+    /// for the usual sliding COP round where `start_round == round - 1`. They
+    /// diverge only when a round pairs off an *older* snapshot (`pair_from > 1`),
+    /// where counting from `start_round` overstates the rounds left and inflates
+    /// the contention analysis. Set this to count `total_rounds - round + 1`
+    /// instead: standings stay where they were asked for, but "how much is still
+    /// to play" reflects the round actually being paired.
+    #[serde(default)]
+    pub horizon_from_paired_round: bool,
+}
+
+/// Tuning knobs for the Swiss family (Swiss and SwissPlusRandom).
+///
+/// The Google Sheets script these strategies were ported from exposes two of
+/// these as `swiss_weight` and `swiss_distance`, and uses `swiss_distance` for
+/// *two* different jobs: the max candidate distance inside `pair_candidates`,
+/// and the size of the Swiss-paired top slice in SwissPlusRandom. They are split
+/// here so each can be set independently; set both to the same value to
+/// reproduce the sheet.
+#[derive(Debug, Clone, Deserialize)]
+pub struct SwissConfig {
+    /// How heavily a repeat pairing is penalized relative to standings distance.
+    #[serde(default = "default_swiss_weight")]
+    pub swiss_weight: i32,
+    /// Don't pair candidates this many places apart or more (strict `<`).
+    #[serde(default = "default_max_distance")]
+    pub max_distance: i32,
+    /// SwissPlusRandom: the top this many players are paired Swiss, the rest
+    /// RandomNoRepeats.
+    #[serde(default = "default_spr_split")]
+    pub spr_split: usize,
+}
+
+fn default_swiss_weight() -> i32 {
+    30
+}
+
+fn default_max_distance() -> i32 {
+    11
+}
+
+fn default_spr_split() -> usize {
+    10
+}
+
+impl Default for SwissConfig {
+    fn default() -> Self {
+        SwissConfig {
+            swiss_weight: default_swiss_weight(),
+            max_distance: default_max_distance(),
+            spr_split: default_spr_split(),
+        }
+    }
 }
 
 /// Everything a tournament needs to be paired. The full input to `pair`.
@@ -72,6 +129,10 @@ pub struct PairingInput {
     /// the COP strategy; `#[serde(default)]` keeps every other caller parsing.
     #[serde(default)]
     pub cop_config: Option<CopConfig>,
+    /// Swiss tuning for this division. Absent means the built-in defaults, so
+    /// every existing caller pairs exactly as before.
+    #[serde(default)]
+    pub swiss_config: SwissConfig,
     /// Round number -> list of unordered (name1, name2) pairs forced that round.
     /// JSON object keys are strings; serde_json parses them back to `i32`.
     #[serde(default)]
