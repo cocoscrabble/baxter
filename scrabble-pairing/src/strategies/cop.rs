@@ -417,7 +417,13 @@ pub fn pair_cop(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings, String> {
         .map(|r| r.round)
         .max()
         .unwrap_or(rp.round);
-    let rounds_remaining = total_rounds - rp.start_round;
+    // Standings come from `start_round` (below); the horizon may be counted from
+    // the round being paired instead — see `CopConfig::horizon_from_paired_round`.
+    let rounds_remaining = if cfg.horizon_from_paired_round {
+        total_rounds - rp.round + 1
+    } else {
+        total_rounds - rp.start_round
+    };
     if rounds_remaining <= 0 {
         return Err(format!(
             "COP: invalid rounds remaining ({rounds_remaining}); nothing left to pair"
@@ -1094,6 +1100,82 @@ mod tests {
         );
     }
 
+    /// `horizon_from_paired_round` changes only *how many rounds COP thinks are
+    /// left*; the standings still come from `start_round`. For the usual sliding
+    /// COP round the two counts are equal, so the flag must be a no-op — that is
+    /// the property that keeps it from disturbing existing divisions.
+    #[test]
+    fn cop_horizon_flag_is_a_no_op_for_a_sliding_round() {
+        let base = cop_input(
+            6,
+            8,
+            3,
+            &[
+                ("P1", "P2", 500, 400),
+                ("P3", "P4", 500, 400),
+                ("P5", "P6", 500, 400),
+            ],
+        );
+        // cop_input builds every round with start_round == round - 1.
+        let flagged = base.replace(
+            r#""place_prizes""#,
+            r#""horizon_from_paired_round":true,"place_prizes""#,
+        );
+        assert_ne!(base, flagged, "test setup: flag was not injected");
+        assert_eq!(
+            round_pairs(&base, 2),
+            round_pairs(&flagged, 2),
+            "flag must not change a round whose start_round is already round - 1"
+        );
+    }
+
+    /// A COP round pairing off an older snapshot still produces a full, valid
+    /// round with the flag set — this is the path the flag exists to serve.
+    #[test]
+    fn cop_pairs_a_full_round_off_an_older_snapshot() {
+        let players: Vec<String> = (1..=6)
+            .map(|i| format!(r#"{{"name":"P{i}","rating":{}}}"#, 2000 - 10 * i))
+            .collect();
+        // Round 3 pairs off round 1 — two rounds back, so the horizon flag bites.
+        let rounds: Vec<String> = (1..=8)
+            .map(|r| {
+                let strat = if r == 1 { "Swiss" } else { "COP" };
+                let start = if r == 3 { 1 } else { r - 1 };
+                format!(r#"{{"round":{r},"start_round":{start},"pairing":"{strat}"}}"#)
+            })
+            .collect();
+        let slips: Vec<String> = [
+            (1, "P1", "P2"), (1, "P3", "P4"), (1, "P5", "P6"),
+            (2, "P1", "P3"), (2, "P5", "P2"), (2, "P4", "P6"),
+        ]
+        .iter()
+        .map(|(r, w, l)| {
+            format!(
+                r#"{{"round":{r},"winner_name":"{w}","loser_name":"{l}","winner_score":500,"loser_score":420,"winner_started":true}}"#
+            )
+        })
+        .collect();
+        let json = format!(
+            r#"{{"players":[{}],"round_pairings":[{}],"result_slips":[{}],
+                "cop_config":{{"place_prizes":3,"gibson_spreads":[250],
+                "hopefulness":[0.05],"control_loss_thresholds":[0.25],
+                "simulations":100,"always_wins_simulations":100,
+                "horizon_from_paired_round":true}}}}"#,
+            players.join(","),
+            rounds.join(","),
+            slips.join(","),
+        );
+        let pairs = round_pairs(&json, 3);
+        assert_eq!(pairs.len(), 3, "expected a full 6-player round: {pairs:?}");
+        let mut seen: Vec<&str> = pairs
+            .iter()
+            .flat_map(|(a, b)| [a.as_str(), b.as_str()])
+            .collect();
+        seen.sort();
+        seen.dedup();
+        assert_eq!(seen.len(), 6, "every player paired exactly once: {pairs:?}");
+    }
+
     #[test]
     fn cop_is_deterministic() {
         let json = cop_input(
@@ -1166,6 +1248,7 @@ mod tests {
                 simulations: 0,
                 always_wins_simulations: 0,
                 disallow_repeat_byes: false,
+                horizon_from_paired_round: false,
             },
             rounds_remaining,
             rounds_remaining, // round number irrelevant here

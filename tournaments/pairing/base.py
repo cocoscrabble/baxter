@@ -113,6 +113,10 @@ class PairingData:
     # engine when a round uses the COP strategy. Empty/None otherwise.
     cop_config: dict | None = None
 
+    # Swiss tuning (DivisionSettings.swiss_config): swiss_weight, max_distance,
+    # spr_split. None means the engine's built-in defaults.
+    swiss_config: dict | None = None
+
     @classmethod
     def for_division(cls, division) -> "PairingData":
         # select_related the joined rows every DTO touches: without it, each
@@ -158,10 +162,12 @@ class PairingData:
             raw_rps = settings.round_pairings or []
             seed = settings.pairing_seed
             cop_config = settings.cop_config or None
+            swiss_config = settings.swiss_config or None
         except DivisionSettings.DoesNotExist:
             raw_rps = []
             seed = 0
             cop_config = None
+            swiss_config = None
         rps = [RoundPairing.from_dict(x) for x in raw_rps]
         normalize_round_robin_start_rounds(rps)
         return cls(
@@ -172,6 +178,7 @@ class PairingData:
             round_pairings=rps,
             seed=seed,
             cop_config=cop_config,
+            swiss_config=swiss_config,
         )
 
 

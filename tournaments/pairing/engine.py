@@ -36,6 +36,10 @@ def _cop_config_to_input(c: dict | None) -> dict | None:
         "simulations": int(c.get("simulations", 1000)),
         "always_wins_simulations": int(c.get("always_wins_simulations", 1000)),
         "disallow_repeat_byes": bool(c.get("disallow_repeat_byes", False)),
+        # Count the rounds left from the round being paired rather than from
+        # start_round. Only differs when a COP round pairs off an older snapshot
+        # (pair_from > 1); see CopConfig in scrabble-pairing/src/model.rs.
+        "horizon_from_paired_round": bool(c.get("horizon_from_paired_round", False)),
     }
 
 
@@ -72,6 +76,9 @@ def pairing_data_to_input(pd: PairingData) -> dict:
         },
         "seed": pd.seed,
         "cop_config": _cop_config_to_input(pd.cop_config),
+        # Omitted keys fall back to the engine's defaults, so a partial config
+        # (or none at all) pairs exactly as the hardcoded constants used to.
+        "swiss_config": pd.swiss_config or {},
     }
 
 

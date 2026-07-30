@@ -5,7 +5,9 @@ use std::collections::{HashMap, HashSet};
 
 use rand_chacha::ChaCha8Rng;
 
-use crate::model::{CopConfig, OutPairing, PairingInput, PlayerData, ResultSlipData, RoundResult};
+use crate::model::{
+    CopConfig, OutPairing, PairingInput, PlayerData, ResultSlipData, RoundResult, SwissConfig,
+};
 use crate::rng::seeded;
 use crate::round_pairing::{normalize_round_robin_start_rounds, RoundPairing, RP};
 use crate::standings::{standings_after_round, Pairings, Player, Repeats, Starts, BYE_NAME};
@@ -165,6 +167,7 @@ fn pair_round(
     repeats: &Repeats,
     rng: &mut ChaCha8Rng,
     cop_config: Option<&CopConfig>,
+    swiss_config: &SwissConfig,
     rp: &RoundPairing,
 ) -> Result<Pairings, String> {
     // The round-robin family (round robin, double round robin, Charlottesville)
@@ -188,6 +191,7 @@ fn pair_round(
             repeats,
             rng,
             cop_config,
+            swiss_config,
         };
         return run_strategy(rp, &mut ctx);
     }
@@ -217,6 +221,7 @@ fn pair_round(
             repeats,
             rng,
             cop_config,
+            swiss_config,
         };
         run_strategy(rp, &mut ctx)?
     };
@@ -273,6 +278,7 @@ pub fn pair(input: &PairingInput) -> Vec<RoundResult> {
                 &repeats,
                 &mut rng,
                 input.cop_config.as_ref(),
+                &input.swiss_config,
                 rp,
             ) {
                 Ok(paired) => {
@@ -424,6 +430,198 @@ mod tests {
         // 1 vs 3, 2 vs 4 (top half vs bottom half).
         assert!(pairs.contains(&("A".into(), "C".into())));
         assert!(pairs.contains(&("B".into(), "D".into())));
+    }
+
+    /// SwissPlusRandom pairs the top `spr_split` players Swiss and the rest
+    /// RandomNoRepeats. With the whole field in the Swiss slice the bottom
+    /// players pair by standings adjacency; shrinking the split hands them to
+    /// the random pool, which pairs them differently.
+    #[test]
+    fn swiss_config_spr_split_sizes_the_swiss_slice() {
+        let players: Vec<String> = (1..=14)
+            .map(|i| format!(r#"{{"name": "P{i}", "rating": {}}}"#, 2000 - i * 10))
+            .collect();
+        let slips: Vec<String> = (1..=7)
+            .map(|i| {
+                format!(
+                    r#"{{"round": 1, "winner_name": "P{}", "loser_name": "P{}", "winner_score": 500, "loser_score": 400, "winner_started": true}}"#,
+                    i,
+                    i + 7
+                )
+            })
+            .collect();
+        let body = format!(
+            r#""players": [{}], "result_slips": [{}],
+               "round_pairings": [
+                 {{"round": 1, "start_round": 0, "pairing": "Swiss"}},
+                 {{"round": 2, "start_round": 1, "pairing": "SwissPlusRandom"}}
+               ]"#,
+            players.join(","),
+            slips.join(","),
+        );
+        let round2 = |cfg: &str| -> Vec<(String, String)> {
+            let inp = input(&format!(r#"{{{body}{cfg}}}"#));
+            let out = pair(&inp);
+            let r2 = out.iter().find(|r| r.round == 2).unwrap();
+            assert!(r2.error.is_none(), "{r2:?}");
+            assert_eq!(r2.pairings.len(), 7);
+            let mut pairs: Vec<(String, String)> = r2
+                .pairings
+                .iter()
+                .map(|p| {
+                    let mut n = [p.first.clone(), p.second.clone()];
+                    n.sort();
+                    (n[0].clone(), n[1].clone())
+                })
+                .collect();
+            pairs.sort();
+            pairs
+        };
+
+        // Whole field paired Swiss: the 0-win block pairs off adjacent standings.
+        let all_swiss = round2(r#", "swiss_config": {"spr_split": 14}"#);
+        assert!(all_swiss.contains(&("P11".into(), "P12".into())), "{all_swiss:?}");
+        assert!(all_swiss.contains(&("P13".into(), "P14".into())), "{all_swiss:?}");
+
+        // A split of 4 pushes P5..P14 into the random pool, breaking that adjacency.
+        let split4 = round2(r#", "swiss_config": {"spr_split": 4}"#);
+        assert_ne!(all_swiss, split4);
+        assert!(!split4.contains(&("P13".into(), "P14".into())), "{split4:?}");
+    }
+
+    /// `swiss_weight` trades a repeat off against standings distance. Two players
+    /// who have already met are paired anyway when the weight is low enough that
+    /// the distance penalty of avoiding them dominates.
+    #[test]
+    fn swiss_config_weight_changes_repeat_avoidance() {
+        // P1..P4 all on 1 win after beating P5..P8; P1 and P2 have already met.
+        let body = r#""players": [
+                {"name": "P1", "rating": 1900}, {"name": "P2", "rating": 1890},
+                {"name": "P3", "rating": 1880}, {"name": "P4", "rating": 1870},
+                {"name": "P5", "rating": 1860}, {"name": "P6", "rating": 1850},
+                {"name": "P7", "rating": 1840}, {"name": "P8", "rating": 1830}
+            ],
+            "result_slips": [
+                {"round": 1, "winner_name": "P1", "loser_name": "P2", "winner_score": 500, "loser_score": 400, "winner_started": true},
+                {"round": 1, "winner_name": "P3", "loser_name": "P4", "winner_score": 500, "loser_score": 400, "winner_started": true},
+                {"round": 1, "winner_name": "P5", "loser_name": "P6", "winner_score": 500, "loser_score": 400, "winner_started": true},
+                {"round": 1, "winner_name": "P7", "loser_name": "P8", "winner_score": 500, "loser_score": 400, "winner_started": true}
+            ],
+            "round_pairings": [
+                {"round": 1, "start_round": 0, "pairing": "Swiss"},
+                {"round": 2, "start_round": 1, "pairing": "Swiss"}
+            ]"#;
+        let repeat_paired = |cfg: &str| -> bool {
+            let inp = input(&format!(r#"{{{body}{cfg}}}"#));
+            let out = pair(&inp);
+            let r2 = out.iter().find(|r| r.round == 2).unwrap();
+            assert!(r2.error.is_none(), "{r2:?}");
+            r2.pairings
+                .iter()
+                .any(|p| matches!((p.first.as_str(), p.second.as_str()), ("P1", "P2") | ("P2", "P1")))
+        };
+        // A heavy repeat penalty must keep the rematch off the board.
+        assert!(!repeat_paired(r#", "swiss_config": {"swiss_weight": 1000}"#));
+    }
+
+    /// max_distance gates which candidate edges exist at all; setting it to 1
+    /// removes every edge (distance is always >= 1), so the round cannot pair.
+    #[test]
+    fn swiss_config_max_distance_gates_candidate_edges() {
+        let body = r#""players": [
+                {"name": "P1", "rating": 1900}, {"name": "P2", "rating": 1890},
+                {"name": "P3", "rating": 1880}, {"name": "P4", "rating": 1870},
+                {"name": "P5", "rating": 1860}, {"name": "P6", "rating": 1850},
+                {"name": "P7", "rating": 1840}, {"name": "P8", "rating": 1830}
+            ],
+            "result_slips": [
+                {"round": 1, "winner_name": "P1", "loser_name": "P5", "winner_score": 500, "loser_score": 400, "winner_started": true},
+                {"round": 1, "winner_name": "P2", "loser_name": "P6", "winner_score": 500, "loser_score": 400, "winner_started": true},
+                {"round": 1, "winner_name": "P3", "loser_name": "P7", "winner_score": 500, "loser_score": 400, "winner_started": true},
+                {"round": 1, "winner_name": "P4", "loser_name": "P8", "winner_score": 500, "loser_score": 400, "winner_started": true}
+            ],
+            "round_pairings": [
+                {"round": 1, "start_round": 0, "pairing": "Swiss"},
+                {"round": 2, "start_round": 1, "pairing": "Swiss"}
+            ]"#;
+        let inp = input(&format!(r#"{{{body}}}"#));
+        let out = pair(&inp);
+        let r2 = out.iter().find(|r| r.round == 2).unwrap();
+        assert!(r2.error.is_none(), "{r2:?}");
+        assert_eq!(r2.pairings.len(), 4);
+
+        // With no admissible edges the top group never pairs, so the round comes
+        // back empty rather than silently inventing pairings.
+        let inp = input(&format!(
+            r#"{{{body}, "swiss_config": {{"max_distance": 1}}}}"#
+        ));
+        let out = pair(&inp);
+        let r2 = out.iter().find(|r| r.round == 2).unwrap();
+        assert!(
+            r2.pairings.len() < 4 || r2.error.is_some(),
+            "max_distance=1 should not produce a full round: {r2:?}"
+        );
+    }
+
+    /// Score groups key on match points, not wins, so a player who has drawn is
+    /// grouped with the players they are actually level with.
+    ///
+    /// P1 draws twice and wins twice: 2 wins + 2 draws = 3 points, the same as
+    /// the 3-1 players, and adjacent to them in the standings. Keying groups on
+    /// wins (as the Google Sheets original does) drops P1 into the 2-win group
+    /// and pairs them a full point down, even though the 3-point players are
+    /// unmet and available.
+    #[test]
+    fn swiss_score_groups_keep_a_drawing_player_with_their_points_peers() {
+        fn game(round: i32, w: &str, l: &str, drawn: bool) -> String {
+            let (ws, ls) = if drawn { (450, 450) } else { (500, 400) };
+            format!(
+                r#"{{"round": {round}, "winner_name": "{w}", "loser_name": "{l}",
+                     "winner_score": {ws}, "loser_score": {ls}, "winner_started": true}}"#
+            )
+        }
+        let players: Vec<String> = (1..=12)
+            .map(|i| format!(r#"{{"name": "P{i}", "rating": {}}}"#, 2000 - i * 10))
+            .collect();
+        // P1 draws P2 and P3, then beats P4 and P6 — so P1 has met none of the
+        // other 3-point players and repeats cannot be what separates them.
+        let slips = [
+            game(1, "P1", "P2", true), game(1, "P3", "P4", false), game(1, "P5", "P6", false),
+            game(1, "P7", "P8", false), game(1, "P9", "P10", false), game(1, "P11", "P12", false),
+            game(2, "P1", "P3", true), game(2, "P2", "P4", false), game(2, "P5", "P8", false),
+            game(2, "P7", "P6", false), game(2, "P9", "P11", false), game(2, "P10", "P12", false),
+            game(3, "P1", "P4", false), game(3, "P2", "P3", false), game(3, "P5", "P9", false),
+            game(3, "P7", "P11", false), game(3, "P6", "P10", false), game(3, "P8", "P12", false),
+            game(4, "P1", "P6", false), game(4, "P2", "P5", false), game(4, "P9", "P7", false),
+            game(4, "P3", "P8", false), game(4, "P4", "P12", false), game(4, "P11", "P10", false),
+        ];
+        let rps: Vec<String> = (1..=5)
+            .map(|r| format!(r#"{{"round": {r}, "start_round": {}, "pairing": "Swiss"}}"#, r - 1))
+            .collect();
+        let inp = input(&format!(
+            r#"{{"players": [{}], "result_slips": [{}], "round_pairings": [{}]}}"#,
+            players.join(","),
+            slips.join(","),
+            rps.join(","),
+        ));
+        let out = pair(&inp);
+        let r5 = out.iter().find(|r| r.round == 5).unwrap();
+        assert!(r5.error.is_none(), "{r5:?}");
+
+        let opponent = r5
+            .pairings
+            .iter()
+            .find_map(|p| match (p.first.as_str(), p.second.as_str()) {
+                ("P1", other) | (other, "P1") => Some(other.to_string()),
+                _ => None,
+            })
+            .expect("P1 must be paired");
+        // P5, P7 and P9 are the other 3-point players; P2 is on 3.5. Anything
+        // else means P1 was pulled out of their score group.
+        assert!(
+            ["P2", "P5", "P7", "P9"].contains(&opponent.as_str()),
+            "P1 (3 points) was paired with {opponent}, outside their score group"
+        );
     }
 
     #[test]
