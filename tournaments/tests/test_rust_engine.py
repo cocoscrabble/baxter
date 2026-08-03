@@ -24,15 +24,31 @@ class RustEngineSmokeTest(TestCase):
                     {"name": "C", "rating": 1400},
                     {"name": "D", "rating": 1300},
                 ],
-                "round_pairings": [
-                    {"round": 1, "start_round": 0, "pairing": "Swiss"}
-                ],
+                "round_pairings": [{"round": 1, "start_round": 0, "pairing": "Swiss"}],
             }
         )
         self.assertEqual(len(out), 1)
         pairs = [(p["first"], p["second"]) for p in out[0]["pairings"]]
         # Swiss initial: top half vs bottom half.
         self.assertEqual(pairs, [("A", "C"), ("B", "D")])
+        self.assertIsNone(out[0]["error"])
+
+    def test_strict_swiss_strategy_crosses_the_python_boundary(self):
+        out = self._pair(
+            {
+                "players": [
+                    {"name": "A", "rating": 1600},
+                    {"name": "B", "rating": 1500},
+                    {"name": "C", "rating": 1400},
+                    {"name": "D", "rating": 1300},
+                ],
+                "round_pairings": [
+                    {"round": 1, "start_round": 0, "pairing": "SwissNoRepeats"}
+                ],
+            }
+        )
+
+        self.assertEqual(len(out[0]["pairings"]), 2)
         self.assertIsNone(out[0]["error"])
 
     def test_invalid_json_raises_valueerror(self):

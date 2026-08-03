@@ -9,6 +9,7 @@ pub enum RP {
     KotH,
     QotH,
     Swiss,
+    SwissNoRepeats,
     RoundRobin,
     DoubleRoundRobin,
     Random,
@@ -83,6 +84,11 @@ mod tests {
         let rp: RoundPairing =
             serde_json::from_str(r#"{"round":3,"start_round":2,"pairing":"Swiss"}"#).unwrap();
         assert_eq!(rp.pairing, RP::Swiss);
+
+        let strict: RoundPairing =
+            serde_json::from_str(r#"{"round":4,"start_round":3,"pairing":"SwissNoRepeats"}"#)
+                .unwrap();
+        assert_eq!(strict.pairing, RP::SwissNoRepeats);
 
         let q: RoundPairing =
             serde_json::from_str(r#"{"round":1,"start_round":0,"pairing":"Quads_Clustered"}"#)

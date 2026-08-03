@@ -269,6 +269,60 @@ pub fn pair_swiss(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
     pair_swiss_players(&players, ctx.repeats)
 }
 
+/// Swiss pairing with a hard no-repeat constraint.
+///
+/// Unlike regular Swiss, this considers the full field at once.  Win-group
+/// distance is the primary cost and standings distance is secondary; blossom
+/// matching then finds the best perfect matching using only opponents who have
+/// not met.  Keeping the constraint in the edge set means it can never be
+/// silently relaxed.
+pub fn pair_swiss_no_repeats(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings, String> {
+    if rp.start_round < 1 {
+        return Ok(pair_swiss_initial(&ctx.standings(0)));
+    }
+
+    let players = ctx.standings(rp.start_round);
+    let n = players.len();
+    if !n.is_multiple_of(2) {
+        return Err(format!(
+            "round {} has an odd strict-Swiss field after bye assignment",
+            rp.round
+        ));
+    }
+    let mut edges: Vec<(usize, usize, i128)> = Vec::new();
+    for i in 0..n {
+        for j in (i + 1)..n {
+            if ctx
+                .repeats
+                .get(&Pairing::new(players[i].clone(), players[j].clone()))
+                > 0
+            {
+                continue;
+            }
+            let win_distance = (players[i].wins - players[j].wins).abs() as i128;
+            let standings_distance = (j - i) as i128;
+            // One win group must dominate every possible standings distance.
+            let cost = (n as i128 + 1) * win_distance + standings_distance;
+            let weight = -WEIGHT_SCALE * cost + match_tiebreak(i, j);
+            edges.push((i, j, weight));
+        }
+    }
+
+    let pairs = max_weight_matching_pairs(n, &edges);
+    if pairs.len() != n / 2 {
+        return Err(format!(
+            "round {} has no repeat-free Swiss pairing for the remaining field",
+            rp.round
+        ));
+    }
+
+    let mut out = Pairings::new();
+    for (i, j) in pairs {
+        out.add(players[i].clone(), players[j].clone());
+    }
+    Ok(out)
+}
+
 /// Top `SWISS_DISTANCE` players paired Swiss; the rest paired RandomNoRepeats.
 pub fn pair_swiss_plus_random(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
     if rp.start_round < 1 {

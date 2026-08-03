@@ -812,6 +812,21 @@ td a:hover {
     color: var(--color-muted);
 }
 
+/* Schedule-method inputs share a toolbar; keep the numeric field compact so
+   all controls wrap as units instead of forcing horizontal page overflow. */
+.pairing-method-controls input[type="number"] {
+    width: 7rem;
+}
+
+.pairing-method-controls select {
+    width: auto;
+    min-width: 10rem;
+}
+
+.pairing-method-controls label {
+    margin: 0;
+}
+
 .form-narrow {
     max-width: 480px;
 }

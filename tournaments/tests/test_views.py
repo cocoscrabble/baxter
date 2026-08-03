@@ -1011,6 +1011,25 @@ class DivisionRoundPairingsEditViewTests(TestCase):
             ],
         )
 
+    def test_post_with_cop_seeds_default_config(self):
+        from tournaments.models import default_cop_config
+
+        self.client.login(username="owner", password="testpass123")
+        payload = {
+            "blocks": [
+                {"pairing": "Swiss", "rounds": 7, "pair_from": 1},
+                {"pairing": "COP", "rounds": 7, "pair_from": 1},
+            ]
+        }
+
+        response = self.client.post(
+            self.url, json.dumps(payload), content_type="application/json"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        settings = DivisionSettings.objects.get(division=self.division)
+        self.assertEqual(settings.cop_config, default_cop_config())
+
     def test_post_invalid_pairing_rejected(self):
         self.client.login(username="owner", password="testpass123")
         payload = {"blocks": [{"pairing": "Nope", "rounds": 2, "pair_from": 1}]}
@@ -1035,6 +1054,58 @@ class DivisionRoundPairingsEditViewTests(TestCase):
         self.assertFalse(
             DivisionSettings.objects.filter(division=self.division).exists()
         )
+
+    def test_three_phase_method_preview_returns_editable_blocks(self):
+        for number in range(3, 19):
+            player = Player.objects.create(
+                name=f"Player {number}",
+                player_number=f"{number:03}",
+                rating=1700 - number,
+            )
+            Entrant.objects.create(
+                division=self.division,
+                player=player,
+                number=number,
+            )
+        self.client.login(username="owner", password="testpass123")
+        url = reverse("division_pairing_method_preview", kwargs=self.division.slug_kwargs())
+        response = self.client.post(
+            url,
+            json.dumps({
+                "method": "ThreePhase",
+                "opening": "Auto",
+                "total_rounds": 24,
+            }),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["opening"], "Fontes")
+        self.assertEqual(response.json()["blocks"], [
+            {"pairing": "Quads_Equalized", "rounds": 3, "pair_from": 1},
+            {"pairing": "SwissNoRepeats", "rounds": 9, "pair_from": 1},
+            {"pairing": "COP", "rounds": 12, "pair_from": 1},
+        ])
+        self.assertEqual(len(response.json()["rows"]), 24)
+        self.assertFalse(
+            DivisionSettings.objects.filter(division=self.division).exists()
+        )
+
+    def test_three_phase_method_preview_rejects_short_event(self):
+        self.client.login(username="owner", password="testpass123")
+        url = reverse("division_pairing_method_preview", kwargs=self.division.slug_kwargs())
+        response = self.client.post(
+            url,
+            json.dumps({
+                "method": "ThreePhase",
+                "opening": "Fontes",
+                "total_rounds": 13,
+            }),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("at least 14 rounds", response.json()["errors"][0])
 
 
 @tag("slow")
