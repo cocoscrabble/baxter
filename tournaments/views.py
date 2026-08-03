@@ -82,7 +82,6 @@ from .pairing.round_pairing import (
 )
 from .pairing.methods import (
     PairingMethod,
-    SwissContendersOpening,
     pairing_method_schedule,
 )
 from .player_sync import import_players
@@ -1283,9 +1282,6 @@ class DivisionRoundPairingsEditView(LoginRequiredMixin, CanEditDivisionMixin, Vi
             "default_rounds_json": json.dumps(default_block_rounds(division.entrants.count())),
             "strategy_types_json": json.dumps([str(s) for s in STRATEGY_TYPES]),
             "pairing_methods": [(str(m), m.label) for m in PairingMethod],
-            "swiss_contenders_openings": [
-                (str(opening), opening.label) for opening in SwissContendersOpening
-            ],
             "method_total_rounds": method_total_rounds,
             "edit_version": EditVersion.version_for(key),
             "presence_url": reverse(
@@ -1347,15 +1343,11 @@ class DivisionPairingMethodPreviewView(LoginRequiredMixin, CanEditDivisionMixin,
         try:
             data = json.loads(request.body)
             method = PairingMethod(data.get("method"))
-            opening = SwissContendersOpening(
-                data.get("opening", SwissContendersOpening.AUTO)
-            )
             total_rounds = int(data.get("total_rounds"))
             schedule = pairing_method_schedule(
                 method,
                 entrants=division.entrants.filter(dropped=False).count(),
                 total_rounds=total_rounds,
-                opening=opening,
             )
         except (json.JSONDecodeError, TypeError, ValueError) as error:
             return JsonResponse({"errors": [str(error)]}, status=400)
@@ -1364,7 +1356,6 @@ class DivisionPairingMethodPreviewView(LoginRequiredMixin, CanEditDivisionMixin,
         return JsonResponse({
             "ok": True,
             "method": str(schedule.method),
-            "opening": str(schedule.opening),
             "blocks": schedule.blocks,
             "rows": rows,
         })

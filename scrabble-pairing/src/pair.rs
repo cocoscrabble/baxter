@@ -428,6 +428,59 @@ mod tests {
     }
 
     #[test]
+    fn swiss_avoids_repeats_when_a_no_repeat_group_matching_exists() {
+        let inp = input(
+            r#"{
+                "players": [
+                    {"name": "A", "rating": 1900},
+                    {"name": "B", "rating": 1800},
+                    {"name": "C", "rating": 1700},
+                    {"name": "D", "rating": 1600}
+                ],
+                "round_pairings": [
+                    {"round": 1, "start_round": 0, "pairing": "Swiss"},
+                    {"round": 2, "start_round": 1, "pairing": "Swiss"}
+                ],
+                "result_slips": [
+                    {"round": 1, "winner_name": "A", "loser_name": "B", "winner_score": 400, "loser_score": 350, "winner_started": true},
+                    {"round": 1, "winner_name": "C", "loser_name": "D", "winner_score": 400, "loser_score": 350, "winner_started": true}
+                ]
+            }"#,
+        );
+        let out = pair(&inp);
+        let round = out.iter().find(|round| round.round == 2).unwrap();
+
+        assert!(round.error.is_none(), "{round:?}");
+        assert_eq!(round.pairings.len(), 2);
+        assert!(round.pairings.iter().all(|pairing| pairing.repeats == 1));
+    }
+
+    #[test]
+    fn swiss_allows_the_minimum_repeat_level_when_a_repeat_is_unavoidable() {
+        let inp = input(
+            r#"{
+                "players": [
+                    {"name": "A", "rating": 1900},
+                    {"name": "B", "rating": 1800}
+                ],
+                "round_pairings": [
+                    {"round": 1, "start_round": 0, "pairing": "Swiss"},
+                    {"round": 2, "start_round": 1, "pairing": "Swiss"}
+                ],
+                "result_slips": [
+                    {"round": 1, "winner_name": "A", "loser_name": "B", "winner_score": 400, "loser_score": 350, "winner_started": true}
+                ]
+            }"#,
+        );
+        let out = pair(&inp);
+        let round = out.iter().find(|round| round.round == 2).unwrap();
+
+        assert!(round.error.is_none(), "{round:?}");
+        assert_eq!(round.pairings.len(), 1);
+        assert_eq!(round.pairings[0].repeats, 2);
+    }
+
+    #[test]
     fn strict_swiss_never_repeats_when_a_perfect_matching_exists() {
         let inp = input(
             r#"{

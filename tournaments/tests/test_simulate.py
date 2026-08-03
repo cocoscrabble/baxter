@@ -9,10 +9,7 @@ from unittest import TestCase
 
 from django.test import tag
 
-from tournaments.pairing.methods import (
-    SwissContendersOpening,
-    swiss_contenders_schedule,
-)
+from tournaments.pairing.methods import swiss_contenders_schedule
 from tournaments.pairing.round_pairing import blocks_to_round_pairings, make_pairings
 from tournaments.simulate import (
     Round,
@@ -44,12 +41,8 @@ def _player_opponents(rounds: list[Round]) -> dict[str, list[str]]:
 
 
 def _swiss_contenders_pre_cop_schedule(n_entrants: int) -> list[dict]:
-    """Expand the Fontes and strict-Swiss half of a 24-round schedule."""
-    schedule = swiss_contenders_schedule(
-        entrants=n_entrants,
-        total_rounds=24,
-        opening=SwissContendersOpening.FONTES,
-    )
+    """Expand the strict- and minimal-repeat Swiss phases of a 24-round event."""
+    schedule = swiss_contenders_schedule(entrants=n_entrants, total_rounds=24)
     return [
         pairing.to_dict() for pairing in blocks_to_round_pairings(schedule.blocks[:-1])
     ]
@@ -70,9 +63,9 @@ def _assert_no_real_repeats(test_case: TestCase, rounds: list[Round]) -> None:
 
 @tag("slow")
 class SwissContendersSimulationTests(TestCase):
-    """Exercise the complete Fontes/strict-Swiss half through the real engine."""
+    """Exercise both Swiss thirds through the real engine."""
 
-    def test_even_nacc_fields_pair_every_player_once_without_repeats(self):
+    def test_even_nacc_fields_pair_every_player_in_both_swiss_phases(self):
         for n_entrants in (18, 22):
             schedule = _swiss_contenders_pre_cop_schedule(n_entrants)
             expected_names = {f"Player {number}" for number in range(1, n_entrants + 1)}
@@ -80,7 +73,7 @@ class SwissContendersSimulationTests(TestCase):
                 with self.subTest(n_entrants=n_entrants, seed=seed):
                     rounds = simulate(schedule, n_entrants, seed=seed)
 
-                    self.assertEqual(len(rounds), 12)
+                    self.assertEqual(len(rounds), 16)
                     for round in rounds:
                         self.assertEqual(len(round.pairings), n_entrants // 2)
                         self.assertEqual(len(round.results), n_entrants // 2)
@@ -90,10 +83,10 @@ class SwissContendersSimulationTests(TestCase):
                             for player in (pairing.first.name, pairing.second.name)
                         }
                         self.assertEqual(names, expected_names)
-                    _assert_no_real_repeats(self, rounds)
+                    _assert_no_real_repeats(self, rounds[:8])
                     check_starts_balancing(rounds)
 
-    def test_odd_field_rotates_the_bye_without_repeats(self):
+    def test_odd_field_rotates_byes_during_the_strict_swiss_third(self):
         n_entrants = 23
         schedule = _swiss_contenders_pre_cop_schedule(n_entrants)
         expected_names = {f"Player {number}" for number in range(1, n_entrants + 1)}
@@ -102,7 +95,7 @@ class SwissContendersSimulationTests(TestCase):
                 rounds = simulate(schedule, n_entrants, seed=seed)
                 bye_recipients = []
 
-                self.assertEqual(len(rounds), 12)
+                self.assertEqual(len(rounds), 16)
                 for round in rounds:
                     self.assertEqual(len(round.pairings), 12)
                     real_names = set()
@@ -114,10 +107,12 @@ class SwissContendersSimulationTests(TestCase):
                             round_byes.extend(names - {"Bye"})
                     self.assertEqual(real_names, expected_names)
                     self.assertEqual(len(round_byes), 1)
-                    bye_recipients.extend(round_byes)
+                    if round.number <= 8:
+                        bye_recipients.extend(round_byes)
 
-                self.assertEqual(len(set(bye_recipients)), 12)
-                _assert_no_real_repeats(self, rounds)
+                self.assertEqual(len(bye_recipients), 8)
+                self.assertEqual(len(set(bye_recipients)), 8)
+                _assert_no_real_repeats(self, rounds[:8])
 
 
 @tag("slow")

@@ -13,10 +13,6 @@ from .round_pairing import RP
 
 
 MIN_SWISS_CONTENDERS_ROUNDS = 14
-FONTES_ROUNDS = 3
-# A full round robin is the useful opening for a compact field.  Above this
-# size it consumes too much of the event and init fontes gives a broader mix.
-MAX_AUTO_ROUND_ROBIN_ENTRANTS = 14
 
 
 class PairingMethod(StrEnum):
@@ -27,26 +23,11 @@ class PairingMethod(StrEnum):
         return {self.SWISS_CONTENDERS: "Swiss Contenders"}[self]
 
 
-class SwissContendersOpening(StrEnum):
-    AUTO = "Auto"
-    FONTES = "Fontes"
-    ROUND_ROBIN = "RoundRobin"
-
-    @property
-    def label(self) -> str:
-        return {
-            self.AUTO: "Automatic",
-            self.FONTES: "Init fontes",
-            self.ROUND_ROBIN: "Full round robin",
-        }[self]
-
-
 @dataclass(frozen=True)
 class PairingMethodSchedule:
     """The editable blocks produced by a schedule-level pairing method."""
 
     method: PairingMethod
-    opening: SwissContendersOpening
     blocks: list[dict]
 
 
@@ -54,34 +35,25 @@ def _block(pairing: RP, rounds: int) -> dict:
     return {"pairing": str(pairing), "rounds": rounds, "pair_from": 1}
 
 
-def _round_robin_rounds(entrants: int) -> int:
-    # An odd field needs the ghost-player round so everyone receives one bye.
+def _no_repeat_capacity(entrants: int) -> int:
+    """Maximum rounds possible before an opponent (or bye) must repeat."""
+
+    # An even field has entrants - 1 distinct opponents. An odd field can also
+    # schedule one distinct bye per player, so its complete rotation is one
+    # round longer.
     return entrants - 1 if entrants % 2 == 0 else entrants
-
-
-def _resolve_opening(
-    opening: SwissContendersOpening, *, entrants: int
-) -> SwissContendersOpening:
-    if opening != SwissContendersOpening.AUTO:
-        return opening
-    if entrants <= MAX_AUTO_ROUND_ROBIN_ENTRANTS:
-        return SwissContendersOpening.ROUND_ROBIN
-    return SwissContendersOpening.FONTES
 
 
 def swiss_contenders_schedule(
     *,
     entrants: int,
     total_rounds: int,
-    opening: SwissContendersOpening = SwissContendersOpening.AUTO,
 ) -> PairingMethodSchedule:
     """Build CoCo's Swiss Contenders schedule.
 
-    The standard form is three init-fontes rounds, strict no-repeat Swiss
-    through ``floor(total_rounds / 2)``, then COP.  A compact field may instead
-    begin with a complete round robin; because that exhausts every opponent,
-    the remaining rounds move directly to COP rather than claiming that a
-    repeat-free Swiss phase is possible.
+    Divide the event into thirds: strict no-repeat Swiss, Swiss minimizing
+    repeats, then COP. If the round count is not divisible by three, assign the
+    first extra round to the middle Swiss phase and the second to strict Swiss.
     """
 
     if total_rounds < MIN_SWISS_CONTENDERS_ROUNDS:
@@ -91,33 +63,26 @@ def swiss_contenders_schedule(
     if entrants < 2:
         raise ValueError("Swiss Contenders requires at least two entrants.")
 
-    resolved = _resolve_opening(opening, entrants=entrants)
-    if resolved == SwissContendersOpening.ROUND_ROBIN:
-        round_robin_rounds = _round_robin_rounds(entrants)
-        cop_rounds = total_rounds - round_robin_rounds
-        if cop_rounds < 1:
-            raise ValueError(
-                "The event needs at least one round after the full round robin "
-                "for the COP phase."
-            )
-        blocks = [
-            _block(RP.RoundRobin, round_robin_rounds),
-            _block(RP.COP, cop_rounds),
-        ]
-    else:
-        if entrants < 4:
-            raise ValueError("An init-fontes opening requires at least four entrants.")
-        first_half_rounds = total_rounds // 2
-        swiss_rounds = first_half_rounds - FONTES_ROUNDS
-        cop_rounds = total_rounds - first_half_rounds
-        blocks = [_block(RP.Quads_Equalized, FONTES_ROUNDS)]
-        if swiss_rounds:
-            blocks.append(_block(RP.SwissNoRepeats, swiss_rounds))
-        blocks.append(_block(RP.COP, cop_rounds))
+    rounds_per_phase, extra_rounds = divmod(total_rounds, 3)
+    no_repeat_rounds = rounds_per_phase + (1 if extra_rounds == 2 else 0)
+    minimal_repeat_rounds = rounds_per_phase + (1 if extra_rounds >= 1 else 0)
+    cop_rounds = rounds_per_phase
+
+    capacity = _no_repeat_capacity(entrants)
+    if no_repeat_rounds > capacity:
+        raise ValueError(
+            f"Swiss Contenders needs {no_repeat_rounds} no-repeat rounds, but "
+            f"{entrants} entrants can support at most {capacity}."
+        )
+
+    blocks = [
+        _block(RP.SwissNoRepeats, no_repeat_rounds),
+        _block(RP.Swiss, minimal_repeat_rounds),
+        _block(RP.COP, cop_rounds),
+    ]
 
     return PairingMethodSchedule(
         method=PairingMethod.SWISS_CONTENDERS,
-        opening=resolved,
         blocks=blocks,
     )
 
@@ -127,7 +92,6 @@ def pairing_method_schedule(
     *,
     entrants: int,
     total_rounds: int,
-    opening: SwissContendersOpening = SwissContendersOpening.AUTO,
 ) -> PairingMethodSchedule:
     """Dispatch a first-class pairing method to its schedule builder."""
 
@@ -135,6 +99,5 @@ def pairing_method_schedule(
         return swiss_contenders_schedule(
             entrants=entrants,
             total_rounds=total_rounds,
-            opening=opening,
         )
     raise ValueError(f"Unsupported pairing method: {method}")

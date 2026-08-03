@@ -1011,9 +1011,9 @@ class SwissContendersLifecycleTests(PairingDBTestBase):
         settings.save(update_fields=["cop_config"])
 
         regenerate_pairings(self.division)
-        for round_number in range(1, 8):
+        for round_number in range(1, 11):
             self._finish_round(round_number, expected_games=9)
             regenerate_pairings(self.division)
 
-        self.assertEqual(settings.round_pairings[7]["pairing"], "COP")
-        self.assertEqual(self.division.pairings.filter(round=8).count(), 9)
+        self.assertEqual(settings.round_pairings[10]["pairing"], "COP")
+        self.assertEqual(self.division.pairings.filter(round=11).count(), 9)
