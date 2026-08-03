@@ -962,6 +962,8 @@ class DivisionRoundPairingsEditViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("default_rounds_json", response.context)
         self.assertIn("KotH", json.loads(response.context["strategy_types_json"]))
+        self.assertContains(response, "Swiss Contenders")
+        self.assertNotContains(response, "Three Phase")
 
     def test_get_backfills_blocks_from_existing_schedule(self):
         DivisionSettings.objects.create(
@@ -1079,7 +1081,7 @@ class DivisionRoundPairingsEditViewTests(TestCase):
             DivisionSettings.objects.filter(division=self.division).exists()
         )
 
-    def test_three_phase_method_preview_returns_editable_blocks(self):
+    def test_swiss_contenders_method_preview_returns_editable_blocks(self):
         for number in range(3, 19):
             player = Player.objects.create(
                 name=f"Player {number}",
@@ -1096,7 +1098,7 @@ class DivisionRoundPairingsEditViewTests(TestCase):
         response = self.client.post(
             url,
             json.dumps({
-                "method": "ThreePhase",
+                "method": "SwissContenders",
                 "opening": "Auto",
                 "total_rounds": 24,
             }),
@@ -1104,6 +1106,7 @@ class DivisionRoundPairingsEditViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["method"], "SwissContenders")
         self.assertEqual(response.json()["opening"], "Fontes")
         self.assertEqual(response.json()["blocks"], [
             {"pairing": "Quads_Equalized", "rounds": 3, "pair_from": 1},
@@ -1115,13 +1118,13 @@ class DivisionRoundPairingsEditViewTests(TestCase):
             DivisionSettings.objects.filter(division=self.division).exists()
         )
 
-    def test_three_phase_method_preview_rejects_short_event(self):
+    def test_swiss_contenders_method_preview_rejects_short_event(self):
         self.client.login(username="owner", password="testpass123")
         url = reverse("division_pairing_method_preview", kwargs=self.division.slug_kwargs())
         response = self.client.post(
             url,
             json.dumps({
-                "method": "ThreePhase",
+                "method": "SwissContenders",
                 "opening": "Fontes",
                 "total_rounds": 13,
             }),
@@ -1131,14 +1134,14 @@ class DivisionRoundPairingsEditViewTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("at least 14 rounds", response.json()["errors"][0])
 
-    def test_three_phase_method_preview_forbids_non_editor(self):
+    def test_swiss_contenders_method_preview_forbids_non_editor(self):
         self.client.login(username="other", password="testpass123")
         url = reverse("division_pairing_method_preview", kwargs=self.division.slug_kwargs())
 
         response = self.client.post(
             url,
             json.dumps({
-                "method": "ThreePhase",
+                "method": "SwissContenders",
                 "opening": "Auto",
                 "total_rounds": 24,
             }),

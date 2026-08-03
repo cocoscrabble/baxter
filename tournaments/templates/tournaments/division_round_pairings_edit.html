@@ -25,9 +25,9 @@
         </select>
         <label for="method-total-rounds">Total rounds</label>
         <input id="method-total-rounds" type="number" min="14" value="{{ method_total_rounds }}">
-        <label for="three-phase-opening">Opening</label>
-        <select id="three-phase-opening">
-            {% for value, label in three_phase_openings %}
+        <label for="swiss-contenders-opening">Opening</label>
+        <select id="swiss-contenders-opening">
+            {% for value, label in swiss_contenders_openings %}
             <option value="{{ value }}">{{ label }}</option>
             {% endfor %}
         </select>
@@ -35,7 +35,7 @@
         <span id="method-status"></span>
     </div>
     <p class="empty-state">
-        Three Phase uses init fontes, strict no-repeat Swiss through the first
+        Swiss Contenders uses init fontes, strict no-repeat Swiss through the first
         half, and COP for the second half. Automatic opening uses a full round
         robin for fields of 14 or fewer and init fontes for larger fields.
     </p>

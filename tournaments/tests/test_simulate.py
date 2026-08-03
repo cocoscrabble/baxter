@@ -9,7 +9,10 @@ from unittest import TestCase
 
 from django.test import tag
 
-from tournaments.pairing.methods import ThreePhaseOpening, three_phase_schedule
+from tournaments.pairing.methods import (
+    SwissContendersOpening,
+    swiss_contenders_schedule,
+)
 from tournaments.pairing.round_pairing import blocks_to_round_pairings, make_pairings
 from tournaments.simulate import (
     Round,
@@ -40,16 +43,15 @@ def _player_opponents(rounds: list[Round]) -> dict[str, list[str]]:
     return opponents
 
 
-def _three_phase_pre_cop_schedule(n_entrants: int) -> list[dict]:
+def _swiss_contenders_pre_cop_schedule(n_entrants: int) -> list[dict]:
     """Expand the Fontes and strict-Swiss half of a 24-round schedule."""
-    schedule = three_phase_schedule(
+    schedule = swiss_contenders_schedule(
         entrants=n_entrants,
         total_rounds=24,
-        opening=ThreePhaseOpening.FONTES,
+        opening=SwissContendersOpening.FONTES,
     )
     return [
-        pairing.to_dict()
-        for pairing in blocks_to_round_pairings(schedule.blocks[:-1])
+        pairing.to_dict() for pairing in blocks_to_round_pairings(schedule.blocks[:-1])
     ]
 
 
@@ -60,20 +62,20 @@ def _assert_no_real_repeats(test_case: TestCase, rounds: list[Round]) -> None:
             names = frozenset((pairing.first.name, pairing.second.name))
             if "Bye" in names:
                 continue
-            test_case.assertNotIn(names, seen, f"repeated pairing in round {round.number}")
+            test_case.assertNotIn(
+                names, seen, f"repeated pairing in round {round.number}"
+            )
             seen.add(names)
 
 
 @tag("slow")
-class ThreePhaseSimulationTests(TestCase):
+class SwissContendersSimulationTests(TestCase):
     """Exercise the complete Fontes/strict-Swiss half through the real engine."""
 
     def test_even_nacc_fields_pair_every_player_once_without_repeats(self):
         for n_entrants in (18, 22):
-            schedule = _three_phase_pre_cop_schedule(n_entrants)
-            expected_names = {
-                f"Player {number}" for number in range(1, n_entrants + 1)
-            }
+            schedule = _swiss_contenders_pre_cop_schedule(n_entrants)
+            expected_names = {f"Player {number}" for number in range(1, n_entrants + 1)}
             for seed in range(5):
                 with self.subTest(n_entrants=n_entrants, seed=seed):
                     rounds = simulate(schedule, n_entrants, seed=seed)
@@ -93,10 +95,8 @@ class ThreePhaseSimulationTests(TestCase):
 
     def test_odd_field_rotates_the_bye_without_repeats(self):
         n_entrants = 23
-        schedule = _three_phase_pre_cop_schedule(n_entrants)
-        expected_names = {
-            f"Player {number}" for number in range(1, n_entrants + 1)
-        }
+        schedule = _swiss_contenders_pre_cop_schedule(n_entrants)
+        expected_names = {f"Player {number}" for number in range(1, n_entrants + 1)}
         for seed in range(5):
             with self.subTest(seed=seed):
                 rounds = simulate(schedule, n_entrants, seed=seed)

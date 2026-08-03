@@ -161,7 +161,7 @@ document.getElementById("generate-method-btn").addEventListener("click", () => {
         csrfToken: pageData.csrfToken,
         payload: {
             method: document.getElementById("pairing-method").value,
-            opening: document.getElementById("three-phase-opening").value,
+            opening: document.getElementById("swiss-contenders-opening").value,
             total_rounds: totalRounds,
         },
     }).then(res => {

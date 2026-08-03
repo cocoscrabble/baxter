@@ -2,18 +2,18 @@ from unittest import TestCase
 
 from tournaments.pairing.methods import (
     PairingMethod,
-    ThreePhaseOpening,
+    SwissContendersOpening,
     pairing_method_schedule,
-    three_phase_schedule,
+    swiss_contenders_schedule,
 )
 
 
-class ThreePhaseScheduleTests(TestCase):
+class SwissContendersScheduleTests(TestCase):
     def test_nacc_division_two_shape(self):
-        schedule = three_phase_schedule(entrants=18, total_rounds=24)
+        schedule = swiss_contenders_schedule(entrants=18, total_rounds=24)
 
-        self.assertEqual(schedule.method, PairingMethod.THREE_PHASE)
-        self.assertEqual(schedule.opening, ThreePhaseOpening.FONTES)
+        self.assertEqual(schedule.method, PairingMethod.SWISS_CONTENDERS)
+        self.assertEqual(schedule.opening, SwissContendersOpening.FONTES)
         self.assertEqual(
             schedule.blocks,
             [
@@ -24,9 +24,9 @@ class ThreePhaseScheduleTests(TestCase):
         )
 
     def test_nacc_division_one_uses_the_fontes_opening_for_4n_plus_2_field(self):
-        schedule = three_phase_schedule(entrants=22, total_rounds=24)
+        schedule = swiss_contenders_schedule(entrants=22, total_rounds=24)
 
-        self.assertEqual(schedule.opening, ThreePhaseOpening.FONTES)
+        self.assertEqual(schedule.opening, SwissContendersOpening.FONTES)
         self.assertEqual(
             schedule.blocks[0],
             {
@@ -37,18 +37,18 @@ class ThreePhaseScheduleTests(TestCase):
         )
 
     def test_odd_total_puts_extra_round_in_cop_half(self):
-        schedule = three_phase_schedule(
+        schedule = swiss_contenders_schedule(
             entrants=28,
             total_rounds=31,
-            opening=ThreePhaseOpening.FONTES,
+            opening=SwissContendersOpening.FONTES,
         )
 
         self.assertEqual([block["rounds"] for block in schedule.blocks], [3, 12, 16])
 
     def test_compact_field_automatically_uses_full_round_robin(self):
-        schedule = three_phase_schedule(entrants=14, total_rounds=20)
+        schedule = swiss_contenders_schedule(entrants=14, total_rounds=20)
 
-        self.assertEqual(schedule.opening, ThreePhaseOpening.ROUND_ROBIN)
+        self.assertEqual(schedule.opening, SwissContendersOpening.ROUND_ROBIN)
         self.assertEqual(
             schedule.blocks,
             [
@@ -58,47 +58,47 @@ class ThreePhaseScheduleTests(TestCase):
         )
 
     def test_field_above_compact_threshold_automatically_uses_fontes(self):
-        schedule = three_phase_schedule(entrants=15, total_rounds=24)
+        schedule = swiss_contenders_schedule(entrants=15, total_rounds=24)
 
-        self.assertEqual(schedule.opening, ThreePhaseOpening.FONTES)
+        self.assertEqual(schedule.opening, SwissContendersOpening.FONTES)
         self.assertEqual(schedule.blocks[0]["pairing"], "Quads_Equalized")
 
     def test_director_can_force_fontes_for_compact_field(self):
-        schedule = three_phase_schedule(
+        schedule = swiss_contenders_schedule(
             entrants=10,
             total_rounds=20,
-            opening=ThreePhaseOpening.FONTES,
+            opening=SwissContendersOpening.FONTES,
         )
 
-        self.assertEqual(schedule.opening, ThreePhaseOpening.FONTES)
+        self.assertEqual(schedule.opening, SwissContendersOpening.FONTES)
         self.assertEqual([block["rounds"] for block in schedule.blocks], [3, 7, 10])
 
     def test_odd_field_uses_same_fontes_phase_shape(self):
-        schedule = three_phase_schedule(
+        schedule = swiss_contenders_schedule(
             entrants=23,
             total_rounds=24,
-            opening=ThreePhaseOpening.FONTES,
+            opening=SwissContendersOpening.FONTES,
         )
 
         self.assertEqual([block["rounds"] for block in schedule.blocks], [3, 9, 12])
 
     def test_rejects_short_event(self):
         with self.assertRaisesRegex(ValueError, "at least 14 rounds"):
-            three_phase_schedule(entrants=18, total_rounds=13)
+            swiss_contenders_schedule(entrants=18, total_rounds=13)
 
     def test_round_robin_must_leave_room_for_cop(self):
         with self.assertRaisesRegex(ValueError, "at least one round"):
-            three_phase_schedule(
+            swiss_contenders_schedule(
                 entrants=15,
                 total_rounds=14,
-                opening=ThreePhaseOpening.ROUND_ROBIN,
+                opening=SwissContendersOpening.ROUND_ROBIN,
             )
 
     def test_first_class_dispatch(self):
         schedule = pairing_method_schedule(
-            PairingMethod.THREE_PHASE,
+            PairingMethod.SWISS_CONTENDERS,
             entrants=18,
             total_rounds=24,
         )
 
-        self.assertEqual(schedule.method, PairingMethod.THREE_PHASE)
+        self.assertEqual(schedule.method, PairingMethod.SWISS_CONTENDERS)

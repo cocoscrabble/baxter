@@ -956,8 +956,8 @@ class CopConfigLazySeedTests(PairingDBTestBase):
         self.assertEqual(self._cop_config(), custom)
 
 
-class ThreePhaseLifecycleTests(PairingDBTestBase):
-    """Run a generated Three Phase schedule through the first COP pairing."""
+class SwissContendersLifecycleTests(PairingDBTestBase):
+    """Run a generated Swiss Contenders schedule through the first COP pairing."""
 
     def _add_players(self, total: int) -> None:
         for number in range(len(self.entrants) + 1, total + 1):
@@ -993,10 +993,10 @@ class ThreePhaseLifecycleTests(PairingDBTestBase):
     def test_generated_schedule_reaches_first_cop_round(self):
         from tournaments.commands import save_settings
         from tournaments.generate_pairings import regenerate_pairings
-        from tournaments.pairing.methods import three_phase_schedule
+        from tournaments.pairing.methods import swiss_contenders_schedule
 
         self._add_players(total=18)
-        schedule = three_phase_schedule(entrants=18, total_rounds=14)
+        schedule = swiss_contenders_schedule(entrants=18, total_rounds=14)
         save_settings(
             self.tournament,
             self.owner,
