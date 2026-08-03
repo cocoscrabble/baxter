@@ -1030,6 +1030,30 @@ class DivisionRoundPairingsEditViewTests(TestCase):
         settings = DivisionSettings.objects.get(division=self.division)
         self.assertEqual(settings.cop_config, default_cop_config())
 
+    def test_post_with_cop_preserves_custom_config(self):
+        from tournaments.models import default_cop_config
+
+        custom = {**default_cop_config(), "place_prizes": 5, "simulations": 200}
+        DivisionSettings.objects.create(division=self.division, cop_config=custom)
+        self.client.login(username="owner", password="testpass123")
+
+        response = self.client.post(
+            self.url,
+            json.dumps({
+                "blocks": [
+                    {"pairing": "Swiss", "rounds": 7, "pair_from": 1},
+                    {"pairing": "COP", "rounds": 7, "pair_from": 1},
+                ]
+            }),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            DivisionSettings.objects.get(division=self.division).cop_config,
+            custom,
+        )
+
     def test_post_invalid_pairing_rejected(self):
         self.client.login(username="owner", password="testpass123")
         payload = {"blocks": [{"pairing": "Nope", "rounds": 2, "pair_from": 1}]}
@@ -1106,6 +1130,22 @@ class DivisionRoundPairingsEditViewTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("at least 14 rounds", response.json()["errors"][0])
+
+    def test_three_phase_method_preview_forbids_non_editor(self):
+        self.client.login(username="other", password="testpass123")
+        url = reverse("division_pairing_method_preview", kwargs=self.division.slug_kwargs())
+
+        response = self.client.post(
+            url,
+            json.dumps({
+                "method": "ThreePhase",
+                "opening": "Auto",
+                "total_rounds": 24,
+            }),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 403)
 
 
 @tag("slow")

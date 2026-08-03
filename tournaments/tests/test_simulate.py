@@ -9,7 +9,8 @@ from unittest import TestCase
 
 from django.test import tag
 
-from tournaments.pairing.round_pairing import make_pairings
+from tournaments.pairing.methods import ThreePhaseOpening, three_phase_schedule
+from tournaments.pairing.round_pairing import blocks_to_round_pairings, make_pairings
 from tournaments.simulate import (
     Round,
     check_starts_balancing,
@@ -37,6 +38,86 @@ def _player_opponents(rounds: list[Round]) -> dict[str, list[str]]:
             opponents[p.first.name].append(p.second.name)
             opponents[p.second.name].append(p.first.name)
     return opponents
+
+
+def _three_phase_pre_cop_schedule(n_entrants: int) -> list[dict]:
+    """Expand the Fontes and strict-Swiss half of a 24-round schedule."""
+    schedule = three_phase_schedule(
+        entrants=n_entrants,
+        total_rounds=24,
+        opening=ThreePhaseOpening.FONTES,
+    )
+    return [
+        pairing.to_dict()
+        for pairing in blocks_to_round_pairings(schedule.blocks[:-1])
+    ]
+
+
+def _assert_no_real_repeats(test_case: TestCase, rounds: list[Round]) -> None:
+    seen = set()
+    for round in rounds:
+        for pairing in round.pairings:
+            names = frozenset((pairing.first.name, pairing.second.name))
+            if "Bye" in names:
+                continue
+            test_case.assertNotIn(names, seen, f"repeated pairing in round {round.number}")
+            seen.add(names)
+
+
+@tag("slow")
+class ThreePhaseSimulationTests(TestCase):
+    """Exercise the complete Fontes/strict-Swiss half through the real engine."""
+
+    def test_even_nacc_fields_pair_every_player_once_without_repeats(self):
+        for n_entrants in (18, 22):
+            schedule = _three_phase_pre_cop_schedule(n_entrants)
+            expected_names = {
+                f"Player {number}" for number in range(1, n_entrants + 1)
+            }
+            for seed in range(5):
+                with self.subTest(n_entrants=n_entrants, seed=seed):
+                    rounds = simulate(schedule, n_entrants, seed=seed)
+
+                    self.assertEqual(len(rounds), 12)
+                    for round in rounds:
+                        self.assertEqual(len(round.pairings), n_entrants // 2)
+                        self.assertEqual(len(round.results), n_entrants // 2)
+                        names = {
+                            player
+                            for pairing in round.pairings
+                            for player in (pairing.first.name, pairing.second.name)
+                        }
+                        self.assertEqual(names, expected_names)
+                    _assert_no_real_repeats(self, rounds)
+                    check_starts_balancing(rounds)
+
+    def test_odd_field_rotates_the_bye_without_repeats(self):
+        n_entrants = 23
+        schedule = _three_phase_pre_cop_schedule(n_entrants)
+        expected_names = {
+            f"Player {number}" for number in range(1, n_entrants + 1)
+        }
+        for seed in range(5):
+            with self.subTest(seed=seed):
+                rounds = simulate(schedule, n_entrants, seed=seed)
+                bye_recipients = []
+
+                self.assertEqual(len(rounds), 12)
+                for round in rounds:
+                    self.assertEqual(len(round.pairings), 12)
+                    real_names = set()
+                    round_byes = []
+                    for pairing in round.pairings:
+                        names = {pairing.first.name, pairing.second.name}
+                        real_names.update(names - {"Bye"})
+                        if "Bye" in names:
+                            round_byes.extend(names - {"Bye"})
+                    self.assertEqual(real_names, expected_names)
+                    self.assertEqual(len(round_byes), 1)
+                    bye_recipients.extend(round_byes)
+
+                self.assertEqual(len(set(bye_recipients)), 12)
+                _assert_no_real_repeats(self, rounds)
 
 
 @tag("slow")

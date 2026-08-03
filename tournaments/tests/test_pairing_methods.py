@@ -57,6 +57,12 @@ class ThreePhaseScheduleTests(TestCase):
             ],
         )
 
+    def test_field_above_compact_threshold_automatically_uses_fontes(self):
+        schedule = three_phase_schedule(entrants=15, total_rounds=24)
+
+        self.assertEqual(schedule.opening, ThreePhaseOpening.FONTES)
+        self.assertEqual(schedule.blocks[0]["pairing"], "Quads_Equalized")
+
     def test_director_can_force_fontes_for_compact_field(self):
         schedule = three_phase_schedule(
             entrants=10,
