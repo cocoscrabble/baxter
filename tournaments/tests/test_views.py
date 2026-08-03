@@ -962,6 +962,9 @@ class DivisionRoundPairingsEditViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("default_rounds_json", response.context)
         self.assertIn("KotH", json.loads(response.context["strategy_types_json"]))
+        self.assertIn(
+            "SwissMinRepeats", json.loads(response.context["strategy_types_json"])
+        )
         self.assertContains(response, "Swiss Contenders")
         self.assertNotContains(response, "Three Phase")
         self.assertNotContains(response, "fontes", html=False)
@@ -1109,7 +1112,7 @@ class DivisionRoundPairingsEditViewTests(TestCase):
         self.assertEqual(response.json()["method"], "SwissContenders")
         self.assertEqual(response.json()["blocks"], [
             {"pairing": "SwissNoRepeats", "rounds": 8, "pair_from": 1},
-            {"pairing": "Swiss", "rounds": 8, "pair_from": 1},
+            {"pairing": "SwissMinRepeats", "rounds": 8, "pair_from": 1},
             {"pairing": "COP", "rounds": 8, "pair_from": 1},
         ])
         self.assertEqual(len(response.json()["rows"]), 24)

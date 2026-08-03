@@ -30,6 +30,7 @@ fn run_strategy(rp: &RoundPairing, ctx: &mut Ctx) -> Result<Pairings, String> {
         RP::QotH => basic::pair_qoth(ctx, rp),
         RP::Swiss => swiss::pair_swiss(ctx, rp),
         RP::SwissNoRepeats => swiss::pair_swiss_no_repeats(ctx, rp)?,
+        RP::SwissMinRepeats => swiss::pair_swiss_min_repeats(ctx, rp)?,
         RP::RoundRobin => roundrobin::pair_round_robin(ctx, rp)?,
         RP::DoubleRoundRobin => roundrobin::pair_double_round_robin(ctx, rp)?,
         RP::Random => basic::pair_random(ctx, rp),
@@ -428,7 +429,7 @@ mod tests {
     }
 
     #[test]
-    fn swiss_avoids_repeats_when_a_no_repeat_group_matching_exists() {
+    fn minimal_repeat_swiss_avoids_repeats_when_a_no_repeat_matching_exists() {
         let inp = input(
             r#"{
                 "players": [
@@ -439,7 +440,7 @@ mod tests {
                 ],
                 "round_pairings": [
                     {"round": 1, "start_round": 0, "pairing": "Swiss"},
-                    {"round": 2, "start_round": 1, "pairing": "Swiss"}
+                    {"round": 2, "start_round": 1, "pairing": "SwissMinRepeats"}
                 ],
                 "result_slips": [
                     {"round": 1, "winner_name": "A", "loser_name": "B", "winner_score": 400, "loser_score": 350, "winner_started": true},
@@ -456,7 +457,7 @@ mod tests {
     }
 
     #[test]
-    fn swiss_allows_the_minimum_repeat_level_when_a_repeat_is_unavoidable() {
+    fn minimal_repeat_swiss_repeats_when_a_repeat_is_unavoidable() {
         let inp = input(
             r#"{
                 "players": [
@@ -465,7 +466,7 @@ mod tests {
                 ],
                 "round_pairings": [
                     {"round": 1, "start_round": 0, "pairing": "Swiss"},
-                    {"round": 2, "start_round": 1, "pairing": "Swiss"}
+                    {"round": 2, "start_round": 1, "pairing": "SwissMinRepeats"}
                 ],
                 "result_slips": [
                     {"round": 1, "winner_name": "A", "loser_name": "B", "winner_score": 400, "loser_score": 350, "winner_started": true}
@@ -481,7 +482,7 @@ mod tests {
     }
 
     #[test]
-    fn strict_swiss_never_repeats_when_a_perfect_matching_exists() {
+    fn no_repeat_swiss_never_repeats_when_a_perfect_matching_exists() {
         let inp = input(
             r#"{
                 "players": [
@@ -518,7 +519,7 @@ mod tests {
     }
 
     #[test]
-    fn strict_swiss_reports_when_repeat_free_pairing_is_impossible() {
+    fn no_repeat_swiss_reports_when_repeat_free_pairing_is_impossible() {
         let inp = input(
             r#"{
                 "players": [

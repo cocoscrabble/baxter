@@ -105,7 +105,7 @@ class EnginePathTests(TestCase):
         names = {(p.first.name, p.second.name) for _, ps in out for p in ps}
         self.assertIn(("A", "B"), names)
 
-    def test_strict_swiss_impossible_pairing_reaches_python_as_error(self):
+    def test_no_repeat_swiss_impossible_pairing_reaches_python_as_error(self):
         names = ["A", "B", "C", "D"]
         completed_round_robin = [
             ResultSlipData(1, "A", "B", 450, 400, True),

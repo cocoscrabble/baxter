@@ -41,7 +41,7 @@ def _player_opponents(rounds: list[Round]) -> dict[str, list[str]]:
 
 
 def _swiss_contenders_pre_cop_schedule(n_entrants: int) -> list[dict]:
-    """Expand the strict- and minimal-repeat Swiss phases of a 24-round event."""
+    """Expand the no-repeat and minimal-repeat Swiss phases of a 24-round event."""
     schedule = swiss_contenders_schedule(entrants=n_entrants, total_rounds=24)
     return [
         pairing.to_dict() for pairing in blocks_to_round_pairings(schedule.blocks[:-1])
@@ -61,9 +61,95 @@ def _assert_no_real_repeats(test_case: TestCase, rounds: list[Round]) -> None:
             seen.add(names)
 
 
+def _minimum_repeated_games(
+    players: tuple[str, ...], played: set[frozenset[str]]
+) -> int:
+    """Brute-force the fewest already-played edges in a perfect matching."""
+
+    if not players:
+        return 0
+    first = players[0]
+    best = len(players)
+    for index in range(1, len(players)):
+        opponent = players[index]
+        remaining = players[1:index] + players[index + 1 :]
+        repeat = int(frozenset((first, opponent)) in played)
+        best = min(best, repeat + _minimum_repeated_games(remaining, played))
+    return best
+
+
 @tag("slow")
 class SwissContendersSimulationTests(TestCase):
     """Exercise both Swiss thirds through the real engine."""
+
+    def test_minimal_repeat_swiss_uses_repeats_only_when_globally_unavoidable(self):
+        n_entrants = 8
+        schedule = swiss_contenders_schedule(
+            entrants=n_entrants,
+            total_rounds=14,
+        )
+        pre_cop = [
+            pairing.to_dict()
+            for pairing in blocks_to_round_pairings(schedule.blocks[:-1])
+        ]
+
+        required_repeats = set()
+        for seed in range(5):
+            with self.subTest(seed=seed):
+                rounds = simulate(pre_cop, n_entrants, seed=seed)
+                no_repeat_rounds = rounds[:5]
+                first_minimal_repeat_round = rounds[5]
+                _assert_no_real_repeats(self, no_repeat_rounds)
+
+                played = {
+                    frozenset((pairing.first.name, pairing.second.name))
+                    for round in no_repeat_rounds
+                    for pairing in round.pairings
+                }
+                players = tuple(f"Player {number}" for number in range(1, 9))
+                minimum = _minimum_repeated_games(players, played)
+                actual = sum(
+                    frozenset((pairing.first.name, pairing.second.name)) in played
+                    for pairing in first_minimal_repeat_round.pairings
+                )
+
+                self.assertEqual(actual, minimum)
+                required_repeats.add(minimum)
+
+        # Exercise both sides of the rule across the deterministic cases.
+        self.assertIn(0, required_repeats)
+        self.assertTrue(any(repeats > 0 for repeats in required_repeats))
+
+    def test_minimal_repeat_swiss_starts_after_no_repeat_capacity_is_exhausted(self):
+        n_entrants = 6
+        schedule = swiss_contenders_schedule(
+            entrants=n_entrants,
+            total_rounds=14,
+        )
+        pre_cop = [
+            pairing.to_dict()
+            for pairing in blocks_to_round_pairings(schedule.blocks[:-1])
+        ]
+
+        rounds = simulate(pre_cop, n_entrants, seed=0)
+        no_repeat_rounds = rounds[:5]
+        first_minimal_repeat_round = rounds[5]
+
+        # Five rounds exhaust all C(6, 2) = 15 possible opponents exactly once.
+        _assert_no_real_repeats(self, no_repeat_rounds)
+        exhausted_pairs = {
+            frozenset((pairing.first.name, pairing.second.name))
+            for round in no_repeat_rounds
+            for pairing in round.pairings
+        }
+        self.assertEqual(len(exhausted_pairs), 15)
+
+        # A sixth no-repeat round is impossible. Minimal-repeat Swiss must still
+        # pair a complete round, using one unavoidable repeat per player.
+        self.assertEqual(len(first_minimal_repeat_round.pairings), 3)
+        for pairing in first_minimal_repeat_round.pairings:
+            names = frozenset((pairing.first.name, pairing.second.name))
+            self.assertIn(names, exhausted_pairs)
 
     def test_even_nacc_fields_pair_every_player_in_both_swiss_phases(self):
         for n_entrants in (18, 22):
@@ -86,7 +172,7 @@ class SwissContendersSimulationTests(TestCase):
                     _assert_no_real_repeats(self, rounds[:8])
                     check_starts_balancing(rounds)
 
-    def test_odd_field_rotates_byes_during_the_strict_swiss_third(self):
+    def test_odd_field_rotates_byes_during_the_no_repeat_swiss_third(self):
         n_entrants = 23
         schedule = _swiss_contenders_pre_cop_schedule(n_entrants)
         expected_names = {f"Player {number}" for number in range(1, n_entrants + 1)}

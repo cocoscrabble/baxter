@@ -16,7 +16,7 @@ class SwissContendersScheduleTests(TestCase):
             schedule.blocks,
             [
                 {"pairing": "SwissNoRepeats", "rounds": 8, "pair_from": 1},
-                {"pairing": "Swiss", "rounds": 8, "pair_from": 1},
+                {"pairing": "SwissMinRepeats", "rounds": 8, "pair_from": 1},
                 {"pairing": "COP", "rounds": 8, "pair_from": 1},
             ],
         )

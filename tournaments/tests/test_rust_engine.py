@@ -33,7 +33,7 @@ class RustEngineSmokeTest(TestCase):
         self.assertEqual(pairs, [("A", "C"), ("B", "D")])
         self.assertIsNone(out[0]["error"])
 
-    def test_strict_swiss_strategy_crosses_the_python_boundary(self):
+    def test_no_repeat_swiss_strategy_crosses_the_python_boundary(self):
         out = self._pair(
             {
                 "players": [

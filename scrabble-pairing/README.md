@@ -32,7 +32,8 @@ let out_json: String = pair_json(json)?;
 
 `pairing` strings are: `KotH`, `QotH`, `Swiss`, `RoundRobin`, `DoubleRoundRobin`,
 `Random`, `RandomNoRepeats`, `Quads_Clustered`, `Quads_Distributed`,
-`Quads_Equalized`, `Sixes`, `Charlottesville`, `SwissPlusRandom`.
+`Quads_Equalized`, `Sixes`, `Charlottesville`, `SwissMinRepeats`,
+`SwissPlusRandom`.
 
 ### Output
 

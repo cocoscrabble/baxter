@@ -9,6 +9,7 @@ class RP(StrEnum):
     QotH = "QotH"
     Swiss = "Swiss"
     SwissNoRepeats = "SwissNoRepeats"
+    SwissMinRepeats = "SwissMinRepeats"
     RoundRobin = "RoundRobin"
     DoubleRoundRobin = "DoubleRoundRobin"
     Random = "Random"
@@ -38,6 +39,7 @@ STRATEGY_TYPES = [
     RP.QotH,
     RP.Swiss,
     RP.SwissNoRepeats,
+    RP.SwissMinRepeats,
     RP.RoundRobin,
     RP.DoubleRoundRobin,
     RP.Random,
@@ -59,6 +61,7 @@ ABBREV = {
     "QH": RP.QotH,
     "SW": RP.Swiss,
     "SN": RP.SwissNoRepeats,
+    "SM": RP.SwissMinRepeats,
     "RR": RP.RoundRobin,
     "DR": RP.DoubleRoundRobin,
     "RA": RP.Random,

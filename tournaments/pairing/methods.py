@@ -51,9 +51,9 @@ def swiss_contenders_schedule(
 ) -> PairingMethodSchedule:
     """Build CoCo's Swiss Contenders schedule.
 
-    Divide the event into thirds: strict no-repeat Swiss, Swiss minimizing
+    Divide the event into thirds: no-repeat Swiss, Swiss minimizing
     repeats, then COP. If the round count is not divisible by three, assign the
-    first extra round to the middle Swiss phase and the second to strict Swiss.
+    first extra round to the middle Swiss phase and the second to no-repeat Swiss.
     """
 
     if total_rounds < MIN_SWISS_CONTENDERS_ROUNDS:
@@ -77,7 +77,7 @@ def swiss_contenders_schedule(
 
     blocks = [
         _block(RP.SwissNoRepeats, no_repeat_rounds),
-        _block(RP.Swiss, minimal_repeat_rounds),
+        _block(RP.SwissMinRepeats, minimal_repeat_rounds),
         _block(RP.COP, cop_rounds),
     ]
 
