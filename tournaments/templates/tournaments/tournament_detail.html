@@ -28,7 +28,7 @@
             {% include "tournaments/_division_management.html" %}
         {% else %}
             {% for division in divisions %}
-                <div><a href="{% url 'division_detail' division.tournament.slug division.slug %}">{{ division.name }}</a>{% if division.is_test %} <span class="test-badge">test</span>{% endif %}</div>
+                <div><a href="{% url 'division_detail' division.tournament.slug division.slug %}">{{ division.name }}</a>{% if division.is_test %} <span class="test-badge">test</span>{% endif %} <a href="{% url 'division_standings' division.tournament.slug division.slug %}">Standings</a></div>
             {% empty %}
                 None
             {% endfor %}

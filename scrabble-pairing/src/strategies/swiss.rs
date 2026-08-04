@@ -7,14 +7,11 @@ use std::collections::VecDeque;
 use indexmap::IndexMap;
 
 use crate::matching::max_weight_matching_pairs;
+use crate::model::SwissConfig;
 use crate::round_pairing::RoundPairing;
 use crate::standings::{Pairing, Pairings, Player, Repeats};
 
 use super::{pair_no_repeats_blossom, Ctx};
-
-const SWISS_DISTANCE: usize = 10;
-/// Don't pair candidates more than this many rating-rank places apart.
-const MAX_DISTANCE: i32 = 11;
 
 // Deterministic tie-break for the blossom matching. Equally-good pairings (same
 // repeats, same total seed-distance) admit many max-weight matchings; perturbing
@@ -34,22 +31,39 @@ fn match_tiebreak(a: usize, b: usize) -> i128 {
     (x % TIEBREAK_MOD) as i128
 }
 
-/// Win-count groups, highest first, each an ordered queue of players.
+/// Bucket key for a player's score group: match points in halves, so a draw
+/// lands a player between the win counts either side of it.
+///
+/// This must be the same quantity the standings are *ranked* by (`score`, i.e.
+/// `wins + 0.5*ties`). Keying on `wins` instead — as the Google Sheets script
+/// this was ported from does — puts a drawing player in a group that doesn't
+/// match their rank: 2-0-2 and 3-1-0 are both 3 points and adjacent in the
+/// standings, but split into different win groups, so the drawer gets paired a
+/// full point down. It also makes groups non-contiguous in the standings, which
+/// breaks the distance metric the matching weighs.
+///
+/// With no draws every score is a whole number, so the odd buckets are empty and
+/// `compact` removes them — grouping is then identical to keying on wins.
+fn points_key(p: &Player) -> usize {
+    (p.score * 2.0).round().max(0.0) as usize
+}
+
+/// Score groups, highest first, each an ordered queue of players.
 struct Groups {
     groups: VecDeque<VecDeque<Player>>,
 }
 
 impl Groups {
     fn from_standings(standings: &[Player]) -> Groups {
-        let max_wins = standings.iter().map(|p| p.wins).max().unwrap_or(0).max(0);
+        let max_key = standings.iter().map(points_key).max().unwrap_or(0);
         let mut groups: VecDeque<VecDeque<Player>> =
-            (0..=max_wins).map(|_| VecDeque::new()).collect();
+            (0..=max_key).map(|_| VecDeque::new()).collect();
         for p in standings {
-            groups[p.wins as usize].push_back(p.clone());
+            groups[points_key(p)].push_back(p.clone());
         }
         let mut g = Groups { groups };
         g.compact();
-        // Reverse so the highest win-count group is at the front.
+        // Reverse so the highest-scoring group is at the front.
         g.groups = g.groups.drain(..).rev().collect();
         g.balance();
         g.compact();
@@ -159,7 +173,7 @@ fn pair_swiss_top(groups: &Groups, repeats: &Repeats, nrep: i32) -> Vec<Vec<Cand
 
 /// Match the top-group anchors to opponents via blossom, minimizing repeats and
 /// rating distance. Returns the matched (name1, name2) pairs.
-fn pair_candidates(bracket: &[Vec<Candidate>]) -> Vec<(String, String)> {
+fn pair_candidates(bracket: &[Vec<Candidate>], cfg: &SwissConfig) -> Vec<(String, String)> {
     // Anchor name -> node index (the anchor of bracket[i] is its candidates'
     // shared `name2`). Every node references anchors only.
     let mut names: IndexMap<String, usize> = IndexMap::new();
@@ -176,11 +190,12 @@ fn pair_candidates(bracket: &[Vec<Candidate>]) -> Vec<(String, String)> {
     let mut seen: IndexMap<(usize, usize), i128> = IndexMap::new();
     for player_candidates in bracket {
         for c in player_candidates {
-            if c.distance < MAX_DISTANCE {
+            if c.distance < cfg.max_distance {
                 let v1 = names[&c.name1];
                 let v2 = names[&c.name2];
                 let key = if v1 <= v2 { (v1, v2) } else { (v2, v1) };
-                let weight = WEIGHT_SCALE * -(30 * c.repeats as i128 + c.distance as i128)
+                let weight = WEIGHT_SCALE
+                    * -(cfg.swiss_weight as i128 * c.repeats as i128 + c.distance as i128)
                     + match_tiebreak(key.0, key.1);
                 seen.entry(key).or_insert(weight);
             }
@@ -195,7 +210,7 @@ fn pair_candidates(bracket: &[Vec<Candidate>]) -> Vec<(String, String)> {
 }
 
 /// Core Swiss pairing for a list of players (already in standings order).
-fn pair_swiss_players(players: &[Player], repeats: &Repeats) -> Pairings {
+fn pair_swiss_players(players: &[Player], repeats: &Repeats, cfg: &SwissConfig) -> Pairings {
     let by_name: IndexMap<String, Player> = players
         .iter()
         .map(|p| (p.name.clone(), p.clone()))
@@ -236,7 +251,7 @@ fn pair_swiss_players(players: &[Player], repeats: &Repeats) -> Pairings {
             }
             // Fall through to re-loop with the promoted top group at the same nrep.
         } else {
-            let pairs = pair_candidates(&candidates);
+            let pairs = pair_candidates(&candidates, cfg);
             groups.compact();
             if pairs.is_empty() || pairs.len() != candidates.len() / 2 {
                 // Couldn't fully pair the top group at this repeat limit.
@@ -245,6 +260,13 @@ fn pair_swiss_players(players: &[Player], repeats: &Repeats) -> Pairings {
             }
             groups.groups.pop_front();
             paired.push(pairs);
+            nrep = 1;
+            // Each score group gets to start from the strictest repeat limit.
+            // `nrep` is raised only to get a *particular* group paired; carrying
+            // that relaxation forward lets one hard group at the top authorize
+            // rematches all the way down the field — and worse, a later group
+            // whose members have already met then looks pairable, so the code
+            // never tries promoting players up to avoid the rematch.
             if groups.length() == 0 {
                 break;
             }
@@ -266,7 +288,7 @@ pub fn pair_swiss(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
         return pair_swiss_initial(&seeding);
     }
     let players = ctx.standings(rp.start_round);
-    pair_swiss_players(&players, ctx.repeats)
+    pair_swiss_players(&players, ctx.repeats, ctx.swiss_config)
 }
 
 /// Swiss pairing with a hard no-repeat constraint.
@@ -393,20 +415,80 @@ pub fn pair_swiss_min_repeats(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairin
     Ok(out)
 }
 
-/// Top `SWISS_DISTANCE` players paired Swiss; the rest paired RandomNoRepeats.
+/// Top `spr_split` players paired Swiss; the rest paired RandomNoRepeats.
 pub fn pair_swiss_plus_random(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
     if rp.start_round < 1 {
         let seeding = ctx.standings(0);
         return pair_swiss_initial(&seeding);
     }
     let players = ctx.standings(rp.start_round);
-    let split = SWISS_DISTANCE.min(players.len());
+    let split = ctx.swiss_config.spr_split.min(players.len());
     let swiss_players = &players[..split];
     let rand_players = &players[split..];
-    let swiss_pairings = pair_swiss_players(swiss_players, ctx.repeats);
+    let swiss_pairings = pair_swiss_players(swiss_players, ctx.repeats, ctx.swiss_config);
     let random_pairings = pair_no_repeats_blossom(rand_players, ctx.repeats, ctx.rng);
     let mut out = Pairings::new();
     out.pairings.extend(swiss_pairings.pairings);
     out.pairings.extend(random_pairings.pairings);
     out
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn player(name: &str, score: f64) -> Player {
+        let mut p = Player::new(name);
+        p.wins = score as i32;
+        p.score = score;
+        p
+    }
+
+    fn met(repeats: &mut Repeats, a: &Player, b: &Player) {
+        repeats.add(&Pairing::new(a.clone(), b.clone()));
+    }
+
+    /// The repeat limit is raised to get a *particular* score group paired; it
+    /// must not stay raised for the groups below it.
+    ///
+    /// Group A (4 players on 5 points) cannot be paired at all without a rematch
+    /// — A2, A3 and A4 have all met each other, so every one of them can only
+    /// play A1 — which forces `nrep` up. Group B is two players on 4 points who
+    /// have also met, but who have *not* met anyone in group C. With the limit
+    /// still relaxed, B1 v B2 looks acceptable and is paired as a rematch; reset,
+    /// group B has no legal pairing at the strict limit, so players are promoted
+    /// up from C and the rematch is avoided.
+    #[test]
+    fn a_raised_repeat_limit_does_not_leak_into_later_score_groups() {
+        let a: Vec<Player> = (1..=4).map(|i| player(&format!("A{i}"), 5.0)).collect();
+        let b: Vec<Player> = (1..=2).map(|i| player(&format!("B{i}"), 4.0)).collect();
+        // Six, so the bottom group is not merged upward into B.
+        let c: Vec<Player> = (1..=6).map(|i| player(&format!("C{i}"), 3.0)).collect();
+
+        let mut repeats = Repeats::default();
+        met(&mut repeats, &a[1], &a[2]);
+        met(&mut repeats, &a[1], &a[3]);
+        met(&mut repeats, &a[2], &a[3]);
+        met(&mut repeats, &b[0], &b[1]);
+
+        let field: Vec<Player> = a.iter().chain(&b).chain(&c).cloned().collect();
+        let out = pair_swiss_players(&field, &repeats, &SwissConfig::default());
+
+        let paired_together = out.pairings.iter().any(|p| {
+            matches!(
+                (p.first.name.as_str(), p.second.name.as_str()),
+                ("B1", "B2") | ("B2", "B1")
+            )
+        });
+        assert!(
+            !paired_together,
+            "B1 and B2 have already met and had unmet opponents available; \
+             they were rematched anyway: {:?}",
+            out.pairings
+                .iter()
+                .map(|p| (p.first.name.as_str(), p.second.name.as_str()))
+                .collect::<Vec<_>>()
+        );
+    }
 }
