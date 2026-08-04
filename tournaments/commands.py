@@ -18,7 +18,13 @@ from django.contrib.auth import get_user_model
 from django.db.models import Q
 
 from tournaments.events import EventResult, command_context, records_event
-from tournaments.models import Division, DivisionSettings, ResultSlip, Tournament
+from tournaments.models import (
+    Division,
+    DivisionSettings,
+    ResultSlip,
+    Tournament,
+    default_cop_config,
+)
 
 User = get_user_model()
 
@@ -308,7 +314,7 @@ def edit_result(tournament, actor, payload):
 @records_event("division_settings_saved")
 def save_settings(tournament, actor, payload):
     """payload: {division, blocks}. round_pairings are derived from the blocks."""
-    from tournaments.pairing.round_pairing import blocks_to_round_pairings
+    from tournaments.pairing.round_pairing import RP, blocks_to_round_pairings
 
     division = _division(tournament, payload["division"])
     blocks = payload["blocks"]
@@ -316,7 +322,13 @@ def save_settings(tournament, actor, payload):
     settings_obj, _ = DivisionSettings.objects.get_or_create(division=division)
     settings_obj.pairing_blocks = blocks
     settings_obj.round_pairings = round_pairings
-    settings_obj.save(update_fields=["pairing_blocks", "round_pairings"])
+    update_fields = ["pairing_blocks", "round_pairings"]
+    if not settings_obj.cop_config and any(
+        pairing["pairing"] == str(RP.COP) for pairing in round_pairings
+    ):
+        settings_obj.cop_config = default_cop_config()
+        update_fields.append("cop_config")
+    settings_obj.save(update_fields=update_fields)
     return EventResult(payload=payload, division=division, result=settings_obj)
 
 

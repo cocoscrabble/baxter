@@ -291,6 +291,130 @@ pub fn pair_swiss(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
     pair_swiss_players(&players, ctx.repeats, ctx.swiss_config)
 }
 
+/// Swiss pairing with a hard no-repeat constraint.
+///
+/// Unlike regular Swiss, this considers the full field at once.  Win-group
+/// distance is the primary cost and standings distance is secondary; blossom
+/// matching then finds the best perfect matching using only opponents who have
+/// not met.  Keeping the constraint in the edge set means it can never be
+/// silently relaxed.
+pub fn pair_swiss_no_repeats(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings, String> {
+    if rp.start_round < 1 {
+        return Ok(pair_swiss_initial(&ctx.standings(0)));
+    }
+
+    let players = ctx.standings(rp.start_round);
+    let n = players.len();
+    if !n.is_multiple_of(2) {
+        return Err(format!(
+            "round {} has an odd no-repeat Swiss field after bye assignment",
+            rp.round
+        ));
+    }
+    let mut edges: Vec<(usize, usize, i128)> = Vec::new();
+    for i in 0..n {
+        for j in (i + 1)..n {
+            if ctx
+                .repeats
+                .get(&Pairing::new(players[i].clone(), players[j].clone()))
+                > 0
+            {
+                continue;
+            }
+            let win_distance = (players[i].wins - players[j].wins).abs() as i128;
+            let standings_distance = (j - i) as i128;
+            // One win group must dominate every possible standings distance.
+            let cost = (n as i128 + 1) * win_distance + standings_distance;
+            let weight = -WEIGHT_SCALE * cost + match_tiebreak(i, j);
+            edges.push((i, j, weight));
+        }
+    }
+
+    let pairs = max_weight_matching_pairs(n, &edges);
+    if pairs.len() != n / 2 {
+        return Err(format!(
+            "round {} has no repeat-free Swiss pairing for the remaining field",
+            rp.round
+        ));
+    }
+
+    let mut out = Pairings::new();
+    for (i, j) in pairs {
+        out.add(players[i].clone(), players[j].clone());
+    }
+    Ok(out)
+}
+
+/// Swiss pairing that minimizes repeats across the entire field.
+///
+/// The number of repeated games is the primary matching cost, so a repeat-free
+/// perfect matching always wins when one exists. Prior meetings (avoiding a
+/// third meeting before a second), win-group distance, and standings distance
+/// are successive tiebreaks. This differs deliberately from legacy `Swiss`,
+/// which pairs one win group at a time and can therefore repeat even when a
+/// full-field no-repeat matching exists.
+pub fn pair_swiss_min_repeats(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings, String> {
+    if rp.start_round < 1 {
+        return Ok(pair_swiss_initial(&ctx.standings(0)));
+    }
+
+    let players = ctx.standings(rp.start_round);
+    let n = players.len();
+    if !n.is_multiple_of(2) {
+        return Err(format!(
+            "round {} has an odd minimal-repeat Swiss field after bye assignment",
+            rp.round
+        ));
+    }
+
+    let min_wins = players.iter().map(|player| player.wins).min().unwrap_or(0);
+    let max_wins = players.iter().map(|player| player.wins).max().unwrap_or(0);
+    let max_win_distance = (max_wins - min_wins) as i128;
+    let pairs_per_round = n as i128 / 2;
+    let max_standings_distance = n.saturating_sub(1) as i128;
+    let win_distance_scale = pairs_per_round * max_standings_distance + 1;
+    let max_secondary_per_pair = win_distance_scale * max_win_distance + max_standings_distance;
+    let max_secondary_total = pairs_per_round * max_secondary_per_pair;
+    let prior_meetings_scale = max_secondary_total + 1;
+    let max_prior_meetings = rp.start_round.max(0) as i128;
+    let max_lower_cost_total =
+        pairs_per_round * (prior_meetings_scale * max_prior_meetings + max_secondary_per_pair);
+    let repeated_game_scale = max_lower_cost_total + 1;
+
+    let mut edges: Vec<(usize, usize, i128)> = Vec::new();
+    for i in 0..n {
+        for j in (i + 1)..n {
+            let prior_meetings = ctx
+                .repeats
+                .get(&Pairing::new(players[i].clone(), players[j].clone()))
+                as i128;
+            let win_distance = (players[i].wins - players[j].wins).abs() as i128;
+            let standings_distance = (j - i) as i128;
+            let secondary_cost = win_distance_scale * win_distance + standings_distance;
+            let repeated_game = i128::from(prior_meetings > 0);
+            let cost = repeated_game_scale * repeated_game
+                + prior_meetings_scale * prior_meetings
+                + secondary_cost;
+            let weight = -WEIGHT_SCALE * cost + match_tiebreak(i, j);
+            edges.push((i, j, weight));
+        }
+    }
+
+    let pairs = max_weight_matching_pairs(n, &edges);
+    if pairs.len() != n / 2 {
+        return Err(format!(
+            "round {} has no complete minimal-repeat Swiss pairing",
+            rp.round
+        ));
+    }
+
+    let mut out = Pairings::new();
+    for (i, j) in pairs {
+        out.add(players[i].clone(), players[j].clone());
+    }
+    Ok(out)
+}
+
 /// Top `spr_split` players paired Swiss; the rest paired RandomNoRepeats.
 pub fn pair_swiss_plus_random(ctx: &mut Ctx, rp: &RoundPairing) -> Pairings {
     if rp.start_round < 1 {

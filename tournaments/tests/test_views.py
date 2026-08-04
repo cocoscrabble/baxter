@@ -962,6 +962,12 @@ class DivisionRoundPairingsEditViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("default_rounds_json", response.context)
         self.assertIn("KotH", json.loads(response.context["strategy_types_json"]))
+        self.assertIn(
+            "SwissMinRepeats", json.loads(response.context["strategy_types_json"])
+        )
+        self.assertContains(response, "Swiss Contenders")
+        self.assertNotContains(response, "Three Phase")
+        self.assertNotContains(response, "fontes", html=False)
 
     def test_get_backfills_blocks_from_existing_schedule(self):
         DivisionSettings.objects.create(
@@ -1011,6 +1017,49 @@ class DivisionRoundPairingsEditViewTests(TestCase):
             ],
         )
 
+    def test_post_with_cop_seeds_default_config(self):
+        from tournaments.models import default_cop_config
+
+        self.client.login(username="owner", password="testpass123")
+        payload = {
+            "blocks": [
+                {"pairing": "Swiss", "rounds": 7, "pair_from": 1},
+                {"pairing": "COP", "rounds": 7, "pair_from": 1},
+            ]
+        }
+
+        response = self.client.post(
+            self.url, json.dumps(payload), content_type="application/json"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        settings = DivisionSettings.objects.get(division=self.division)
+        self.assertEqual(settings.cop_config, default_cop_config())
+
+    def test_post_with_cop_preserves_custom_config(self):
+        from tournaments.models import default_cop_config
+
+        custom = {**default_cop_config(), "place_prizes": 5, "simulations": 200}
+        DivisionSettings.objects.create(division=self.division, cop_config=custom)
+        self.client.login(username="owner", password="testpass123")
+
+        response = self.client.post(
+            self.url,
+            json.dumps({
+                "blocks": [
+                    {"pairing": "Swiss", "rounds": 7, "pair_from": 1},
+                    {"pairing": "COP", "rounds": 7, "pair_from": 1},
+                ]
+            }),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            DivisionSettings.objects.get(division=self.division).cop_config,
+            custom,
+        )
+
     def test_post_invalid_pairing_rejected(self):
         self.client.login(username="owner", password="testpass123")
         payload = {"blocks": [{"pairing": "Nope", "rounds": 2, "pair_from": 1}]}
@@ -1035,6 +1084,86 @@ class DivisionRoundPairingsEditViewTests(TestCase):
         self.assertFalse(
             DivisionSettings.objects.filter(division=self.division).exists()
         )
+
+    def test_swiss_contenders_method_preview_returns_editable_blocks(self):
+        for number in range(3, 19):
+            player = Player.objects.create(
+                name=f"Player {number}",
+                player_number=f"{number:03}",
+                rating=1700 - number,
+            )
+            Entrant.objects.create(
+                division=self.division,
+                player=player,
+                number=number,
+            )
+        self.client.login(username="owner", password="testpass123")
+        url = reverse("division_pairing_method_preview", kwargs=self.division.slug_kwargs())
+        response = self.client.post(
+            url,
+            json.dumps({
+                "method": "SwissContenders",
+                "total_rounds": 24,
+            }),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["method"], "SwissContenders")
+        self.assertEqual(response.json()["blocks"], [
+            {"pairing": "SwissNoRepeats", "rounds": 8, "pair_from": 1},
+            {"pairing": "SwissMinRepeats", "rounds": 8, "pair_from": 1},
+            {"pairing": "COP", "rounds": 8, "pair_from": 1},
+        ])
+        self.assertEqual(len(response.json()["rows"]), 24)
+        self.assertFalse(
+            DivisionSettings.objects.filter(division=self.division).exists()
+        )
+
+    def test_swiss_contenders_method_preview_rejects_short_event(self):
+        self.client.login(username="owner", password="testpass123")
+        url = reverse("division_pairing_method_preview", kwargs=self.division.slug_kwargs())
+        response = self.client.post(
+            url,
+            json.dumps({
+                "method": "SwissContenders",
+                "total_rounds": 13,
+            }),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("at least 14 rounds", response.json()["errors"][0])
+
+    def test_swiss_contenders_method_preview_rejects_impossible_no_repeat_third(self):
+        self.client.login(username="owner", password="testpass123")
+        url = reverse("division_pairing_method_preview", kwargs=self.division.slug_kwargs())
+        response = self.client.post(
+            url,
+            json.dumps({
+                "method": "SwissContenders",
+                "total_rounds": 14,
+            }),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("can support at most 1", response.json()["errors"][0])
+
+    def test_swiss_contenders_method_preview_forbids_non_editor(self):
+        self.client.login(username="other", password="testpass123")
+        url = reverse("division_pairing_method_preview", kwargs=self.division.slug_kwargs())
+
+        response = self.client.post(
+            url,
+            json.dumps({
+                "method": "SwissContenders",
+                "total_rounds": 24,
+            }),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 403)
 
 
 @tag("slow")

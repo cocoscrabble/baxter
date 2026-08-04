@@ -954,3 +954,66 @@ class CopConfigLazySeedTests(PairingDBTestBase):
         )
         self._regen()
         self.assertEqual(self._cop_config(), custom)
+
+
+class SwissContendersLifecycleTests(PairingDBTestBase):
+    """Run a generated Swiss Contenders schedule through the first COP pairing."""
+
+    def _add_players(self, total: int) -> None:
+        for number in range(len(self.entrants) + 1, total + 1):
+            player = DBPlayer.objects.create(
+                name=f"Player {number}",
+                player_number=f"{number:03}",
+                rating=1800 - number * 10,
+            )
+            Entrant.objects.create(
+                division=self.division,
+                player=player,
+                number=number,
+            )
+
+    def _finish_round(self, round_number: int, expected_games: int) -> None:
+        pairings = list(self.division.pairings.filter(round=round_number))
+        self.assertEqual(len(pairings), expected_games)
+        for pairing in pairings:
+            ResultSlip.objects.create(
+                division=self.division,
+                round=round_number,
+                pairing=pairing,
+                winner=pairing.first,
+                winner_score=400,
+                loser=pairing.second,
+                loser_score=350,
+                winner_started=True,
+            )
+        self.division.round_pairings_set.filter(round=round_number).update(
+            status=RoundPairings.FINISHED
+        )
+
+    def test_generated_schedule_reaches_first_cop_round(self):
+        from tournaments.commands import save_settings
+        from tournaments.generate_pairings import regenerate_pairings
+        from tournaments.pairing.methods import swiss_contenders_schedule
+
+        self._add_players(total=18)
+        schedule = swiss_contenders_schedule(entrants=18, total_rounds=14)
+        save_settings(
+            self.tournament,
+            self.owner,
+            {"division": self.division.name, "blocks": schedule.blocks},
+        )
+        settings = DivisionSettings.objects.get(division=self.division)
+        settings.cop_config = {
+            **settings.cop_config,
+            "simulations": 20,
+            "always_wins_simulations": 20,
+        }
+        settings.save(update_fields=["cop_config"])
+
+        regenerate_pairings(self.division)
+        for round_number in range(1, 11):
+            self._finish_round(round_number, expected_games=9)
+            regenerate_pairings(self.division)
+
+        self.assertEqual(settings.round_pairings[10]["pairing"], "COP")
+        self.assertEqual(self.division.pairings.filter(round=11).count(), 9)

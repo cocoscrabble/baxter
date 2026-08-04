@@ -10,9 +10,31 @@
 <div data-eg-presence="pairing-blocks-table" class="presence-banner" hidden></div>
 
 <p class="empty-state">
-    Define the round pairings in blocks (e.g. KotH for 3 rounds, then Swiss for 5).
-    Drag rows to reorder; the per-round schedule below regenerates automatically.
+    Choose a pairing method to generate a complete schedule, or define the round
+    pairings directly in blocks. Generated blocks remain fully editable.
 </p>
+
+<section class="settings-section">
+    <h2>Pairing Method</h2>
+    <div class="table-toolbar pairing-method-controls">
+        <label for="pairing-method">Method</label>
+        <select id="pairing-method">
+            {% for value, label in pairing_methods %}
+            <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+        </select>
+        <label for="method-total-rounds">Total rounds</label>
+        <input id="method-total-rounds" type="number" min="14" value="{{ method_total_rounds }}">
+        <button id="generate-method-btn" type="button">Generate Schedule</button>
+        <span id="method-status"></span>
+    </div>
+    <p class="empty-state">
+        Swiss Contenders uses no-repeat Swiss for the first third,
+        Swiss pairings minimizing repeats for the middle third, and COP for the
+        final third. Minimal-repeat Swiss remains repeat-free while possible.
+        Extra rounds go first to the middle third, then the first.
+    </p>
+</section>
 
 <div class="editgrid-columns">
     <div>
@@ -45,6 +67,7 @@ const pageData = {
     csrfToken: "{{ csrf_token }}",
     saveUrl: "",
     previewUrl: "{{ preview_url }}",
+    methodPreviewUrl: "{{ method_preview_url }}",
 };
 </script>
 <script type="module" src="{% static 'editgrid/js/presence.js' %}"></script>

@@ -62,6 +62,7 @@ COMMAND_BACKED = {
 
 # POST views that don't mutate logged tournament state.
 EXEMPT = {
+    "DivisionPairingMethodPreviewView",  # method compilation only, no write
     "DivisionRoundPairingsPreviewView",  # preview only, no write
     "EditPresenceView",                  # editing-presence heartbeat
     "CreatePlayerView",                  # global player; roster events carry name+rating

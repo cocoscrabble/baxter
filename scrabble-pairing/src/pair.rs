@@ -31,6 +31,8 @@ fn run_strategy(rp: &RoundPairing, ctx: &mut Ctx) -> Result<Pairings, String> {
         RP::KotH => basic::pair_koth(ctx, rp),
         RP::QotH => basic::pair_qoth(ctx, rp),
         RP::Swiss => swiss::pair_swiss(ctx, rp),
+        RP::SwissNoRepeats => swiss::pair_swiss_no_repeats(ctx, rp)?,
+        RP::SwissMinRepeats => swiss::pair_swiss_min_repeats(ctx, rp)?,
         RP::RoundRobin => roundrobin::pair_round_robin(ctx, rp)?,
         RP::DoubleRoundRobin => roundrobin::pair_double_round_robin(ctx, rp)?,
         RP::Random => basic::pair_random(ctx, rp),
@@ -625,6 +627,132 @@ mod tests {
     }
 
     #[test]
+    fn minimal_repeat_swiss_avoids_repeats_when_a_no_repeat_matching_exists() {
+        let inp = input(
+            r#"{
+                "players": [
+                    {"name": "A", "rating": 1900},
+                    {"name": "B", "rating": 1800},
+                    {"name": "C", "rating": 1700},
+                    {"name": "D", "rating": 1600}
+                ],
+                "round_pairings": [
+                    {"round": 1, "start_round": 0, "pairing": "Swiss"},
+                    {"round": 2, "start_round": 1, "pairing": "SwissMinRepeats"}
+                ],
+                "result_slips": [
+                    {"round": 1, "winner_name": "A", "loser_name": "B", "winner_score": 400, "loser_score": 350, "winner_started": true},
+                    {"round": 1, "winner_name": "C", "loser_name": "D", "winner_score": 400, "loser_score": 350, "winner_started": true}
+                ]
+            }"#,
+        );
+        let out = pair(&inp);
+        let round = out.iter().find(|round| round.round == 2).unwrap();
+
+        assert!(round.error.is_none(), "{round:?}");
+        assert_eq!(round.pairings.len(), 2);
+        assert!(round.pairings.iter().all(|pairing| pairing.repeats == 1));
+    }
+
+    #[test]
+    fn minimal_repeat_swiss_repeats_when_a_repeat_is_unavoidable() {
+        let inp = input(
+            r#"{
+                "players": [
+                    {"name": "A", "rating": 1900},
+                    {"name": "B", "rating": 1800}
+                ],
+                "round_pairings": [
+                    {"round": 1, "start_round": 0, "pairing": "Swiss"},
+                    {"round": 2, "start_round": 1, "pairing": "SwissMinRepeats"}
+                ],
+                "result_slips": [
+                    {"round": 1, "winner_name": "A", "loser_name": "B", "winner_score": 400, "loser_score": 350, "winner_started": true}
+                ]
+            }"#,
+        );
+        let out = pair(&inp);
+        let round = out.iter().find(|round| round.round == 2).unwrap();
+
+        assert!(round.error.is_none(), "{round:?}");
+        assert_eq!(round.pairings.len(), 1);
+        assert_eq!(round.pairings[0].repeats, 2);
+    }
+
+    #[test]
+    fn no_repeat_swiss_never_repeats_when_a_perfect_matching_exists() {
+        let inp = input(
+            r#"{
+                "players": [
+                    {"name": "A", "rating": 1900},
+                    {"name": "B", "rating": 1800},
+                    {"name": "C", "rating": 1700},
+                    {"name": "D", "rating": 1600}
+                ],
+                "round_pairings": [
+                    {"round": 1, "start_round": 0, "pairing": "Swiss"},
+                    {"round": 2, "start_round": 1, "pairing": "SwissNoRepeats"}
+                ],
+                "result_slips": [
+                    {"round": 1, "winner_name": "A", "loser_name": "B", "winner_score": 400, "loser_score": 350, "winner_started": true},
+                    {"round": 1, "winner_name": "C", "loser_name": "D", "winner_score": 400, "loser_score": 350, "winner_started": true}
+                ]
+            }"#,
+        );
+        let out = pair(&inp);
+        assert_eq!(out.len(), 1);
+        assert!(out[0].error.is_none(), "{out:?}");
+        let pairs: HashSet<(String, String)> = out[0]
+            .pairings
+            .iter()
+            .map(|p| {
+                let mut names = [p.first.clone(), p.second.clone()];
+                names.sort();
+                (names[0].clone(), names[1].clone())
+            })
+            .collect();
+        assert!(!pairs.contains(&("A".into(), "B".into())));
+        assert!(!pairs.contains(&("C".into(), "D".into())));
+        assert_eq!(pairs.len(), 2);
+    }
+
+    #[test]
+    fn no_repeat_swiss_reports_when_repeat_free_pairing_is_impossible() {
+        let inp = input(
+            r#"{
+                "players": [
+                    {"name": "A", "rating": 1900},
+                    {"name": "B", "rating": 1800},
+                    {"name": "C", "rating": 1700},
+                    {"name": "D", "rating": 1600}
+                ],
+                "round_pairings": [
+                    {"round": 1, "start_round": 1, "pairing": "RoundRobin"},
+                    {"round": 2, "start_round": 1, "pairing": "RoundRobin"},
+                    {"round": 3, "start_round": 1, "pairing": "RoundRobin"},
+                    {"round": 4, "start_round": 3, "pairing": "SwissNoRepeats"}
+                ],
+                "result_slips": [
+                    {"round": 1, "winner_name": "A", "loser_name": "B", "winner_score": 400, "loser_score": 350, "winner_started": true},
+                    {"round": 1, "winner_name": "C", "loser_name": "D", "winner_score": 400, "loser_score": 350, "winner_started": true},
+                    {"round": 2, "winner_name": "A", "loser_name": "C", "winner_score": 400, "loser_score": 350, "winner_started": true},
+                    {"round": 2, "winner_name": "B", "loser_name": "D", "winner_score": 400, "loser_score": 350, "winner_started": true},
+                    {"round": 3, "winner_name": "A", "loser_name": "D", "winner_score": 400, "loser_score": 350, "winner_started": true},
+                    {"round": 3, "winner_name": "B", "loser_name": "C", "winner_score": 400, "loser_score": 350, "winner_started": true}
+                ]
+            }"#,
+        );
+        let out = pair(&inp);
+        let round = out.iter().find(|round| round.round == 4).unwrap();
+        assert!(round.pairings.is_empty());
+        assert!(round
+            .error
+            .as_deref()
+            .unwrap_or("")
+            .contains("no repeat-free Swiss pairing"));
+    }
+
+    #[test]
     fn odd_round_robin_byes_each_player_once_with_no_repeats() {
         // 5 players over a full 5-round rotation. With the ghost-bye fix, each
         // player should bye exactly once and meet every other player exactly once.
@@ -771,6 +899,64 @@ mod tests {
                 "{strat} n{n} repeats: {meetings:?}"
             );
         }
+    }
+
+    #[test]
+    fn equalized_quads_make_four_quads_and_one_hex_for_22_players() {
+        let players: Vec<String> = (0..22)
+            .map(|i| format!(r#"{{"name":"P{}","rating":{}}}"#, i + 1, 2000 - 10 * i))
+            .collect();
+        let rounds: Vec<String> = (1..=3)
+            .map(|round| {
+                format!(
+                    r#"{{"round":{round},"start_round":0,"pairing":"Quads_Equalized"}}"#
+                )
+            })
+            .collect();
+        let json = format!(
+            r#"{{"players":[{}],"round_pairings":[{}]}}"#,
+            players.join(","),
+            rounds.join(",")
+        );
+
+        let out = pair(&input(&json));
+        assert_eq!(out.len(), 3);
+        let mut opponents: HashMap<String, HashSet<String>> = HashMap::new();
+        let mut meetings: HashSet<(String, String)> = HashSet::new();
+        for round in &out {
+            assert!(round.error.is_none(), "{round:?}");
+            assert_eq!(round.pairings.len(), 11);
+            for pairing in &round.pairings {
+                let mut names = [pairing.first.clone(), pairing.second.clone()];
+                names.sort();
+                assert!(meetings.insert((names[0].clone(), names[1].clone())));
+                opponents
+                    .entry(pairing.first.clone())
+                    .or_default()
+                    .insert(pairing.second.clone());
+                opponents
+                    .entry(pairing.second.clone())
+                    .or_default()
+                    .insert(pairing.first.clone());
+            }
+        }
+
+        let mut component_sizes = Vec::new();
+        let mut unseen: HashSet<String> = opponents.keys().cloned().collect();
+        while let Some(first) = unseen.iter().next().cloned() {
+            let mut stack = vec![first];
+            let mut size = 0;
+            while let Some(player) = stack.pop() {
+                if !unseen.remove(&player) {
+                    continue;
+                }
+                size += 1;
+                stack.extend(opponents[&player].iter().cloned());
+            }
+            component_sizes.push(size);
+        }
+        component_sizes.sort();
+        assert_eq!(component_sizes, vec![4, 4, 4, 4, 6]);
     }
 
     #[test]

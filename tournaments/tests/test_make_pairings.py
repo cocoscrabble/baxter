@@ -92,6 +92,15 @@ class MakePairingsTests(TestCase):
             ],
         )
 
+    def test_minimal_repeat_swiss_abbreviation(self):
+        self.assert_pairings(
+            "SM:2",
+            [
+                {"round": 1, "start_round": 0, "pairing": "SwissMinRepeats"},
+                {"round": 2, "start_round": 1, "pairing": "SwissMinRepeats"},
+            ],
+        )
+
     def test_quads_share_start_round(self):
         # All rounds in a quad block share the same start_round (the round before the block).
         self.assert_pairings(

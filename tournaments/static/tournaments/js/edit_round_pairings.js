@@ -152,4 +152,30 @@ document.getElementById("add-block-btn").addEventListener("click", () => {
         .then(afterChange);
 });
 
+document.getElementById("generate-method-btn").addEventListener("click", () => {
+    const status = document.getElementById("method-status");
+    const totalRounds = parseInt(document.getElementById("method-total-rounds").value);
+    status.textContent = "Generating...";
+    postJson({
+        url: pageData.methodPreviewUrl,
+        csrfToken: pageData.csrfToken,
+        payload: {
+            method: document.getElementById("pairing-method").value,
+            total_rounds: totalRounds,
+        },
+    }).then(res => {
+        if (!res || !res.ok || !res.body) {
+            const errors = res && res.body ? res.body.errors || [] : [];
+            status.textContent = errors.length ? `Error: ${errors.join("; ")}` : "Error generating schedule.";
+            return;
+        }
+        blocksTable.setData(res.body.blocks).then(() => {
+            previewTable.setData(res.body.rows);
+            recomputeRanges();
+            autoSave();
+            status.textContent = "Generated; review the editable blocks below.";
+        });
+    });
+});
+
 document.getElementById("rp-save-btn").addEventListener("click", save);

@@ -81,6 +81,10 @@ from .pairing.round_pairing import (
     default_block_rounds,
     round_pairings_to_blocks,
 )
+from .pairing.methods import (
+    PairingMethod,
+    pairing_method_schedule,
+)
 from .player_sync import import_players
 from users.models import User
 from .generate_pairings import publish_rounds, regenerate_pairings, unpublish_rounds
@@ -1300,6 +1304,7 @@ class DivisionRoundPairingsEditView(LoginRequiredMixin, CanEditDivisionMixin, Vi
         if not blocks and settings_obj.round_pairings:
             blocks = round_pairings_to_blocks(settings_obj.round_pairings)
         preview = [rp.to_dict() for rp in blocks_to_round_pairings(blocks)]
+        method_total_rounds = len(preview) or 24
         key = edit_key(division, "round_pairings")
         return render(request, self.template_name, {
             "division": division,
@@ -1307,6 +1312,8 @@ class DivisionRoundPairingsEditView(LoginRequiredMixin, CanEditDivisionMixin, Vi
             "preview_json": json.dumps(preview),
             "default_rounds_json": json.dumps(default_block_rounds(division.entrants.count())),
             "strategy_types_json": json.dumps([str(s) for s in STRATEGY_TYPES]),
+            "pairing_methods": [(str(m), m.label) for m in PairingMethod],
+            "method_total_rounds": method_total_rounds,
             "edit_version": EditVersion.version_for(key),
             "presence_url": reverse(
                 "edit_presence",
@@ -1314,6 +1321,9 @@ class DivisionRoundPairingsEditView(LoginRequiredMixin, CanEditDivisionMixin, Vi
             ),
             "preview_url": reverse(
                 "division_round_pairings_preview", kwargs=division.slug_kwargs()
+            ),
+            "method_preview_url": reverse(
+                "division_pairing_method_preview", kwargs=division.slug_kwargs()
             ),
             "active_tab": "round_pairings",
             "can_edit": True,
@@ -1354,6 +1364,32 @@ class DivisionRoundPairingsPreviewView(LoginRequiredMixin, CanEditDivisionMixin,
         blocks, _errors = _validate_blocks(data.get("blocks", []))
         rows = [rp.to_dict() for rp in blocks_to_round_pairings(blocks)]
         return JsonResponse({"ok": True, "rows": rows})
+
+
+class DivisionPairingMethodPreviewView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    """Compile a first-class pairing method to editable schedule blocks."""
+
+    def post(self, request, *args, **kwargs):
+        division = self.get_division()
+        try:
+            data = json.loads(request.body)
+            method = PairingMethod(data.get("method"))
+            total_rounds = int(data.get("total_rounds"))
+            schedule = pairing_method_schedule(
+                method,
+                entrants=division.entrants.filter(dropped=False).count(),
+                total_rounds=total_rounds,
+            )
+        except (json.JSONDecodeError, TypeError, ValueError) as error:
+            return JsonResponse({"errors": [str(error)]}, status=400)
+
+        rows = [rp.to_dict() for rp in blocks_to_round_pairings(schedule.blocks)]
+        return JsonResponse({
+            "ok": True,
+            "method": str(schedule.method),
+            "blocks": schedule.blocks,
+            "rows": rows,
+        })
 
 
 class DivisionEditGridView(LoginRequiredMixin, CanEditDivisionMixin, BaseEditGridView):

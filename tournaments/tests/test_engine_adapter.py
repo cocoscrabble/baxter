@@ -105,6 +105,34 @@ class EnginePathTests(TestCase):
         names = {(p.first.name, p.second.name) for _, ps in out for p in ps}
         self.assertIn(("A", "B"), names)
 
+    def test_no_repeat_swiss_impossible_pairing_reaches_python_as_error(self):
+        names = ["A", "B", "C", "D"]
+        completed_round_robin = [
+            ResultSlipData(1, "A", "B", 450, 400, True),
+            ResultSlipData(1, "C", "D", 450, 400, True),
+            ResultSlipData(2, "A", "C", 450, 400, True),
+            ResultSlipData(2, "B", "D", 450, 400, True),
+            ResultSlipData(3, "A", "D", 450, 400, True),
+            ResultSlipData(3, "B", "C", 450, 400, True),
+        ]
+        pairing_data = PairingData(
+            result_slips=completed_round_robin,
+            entrants=[
+                EntrantData(PlayerData(name, 1600 - 10 * index))
+                for index, name in enumerate(names)
+            ],
+            repeats=Repeats(),
+            round_pairings=[
+                RoundPairing(1, 1, RP.RoundRobin),
+                RoundPairing(2, 1, RP.RoundRobin),
+                RoundPairing(3, 1, RP.RoundRobin),
+                RoundPairing(4, 3, RP.SwissNoRepeats),
+            ],
+        )
+
+        with self.assertRaisesRegex(PairingError, "no repeat-free Swiss pairing"):
+            pair_with_engine(pairing_data)
+
 
 def _cop_pd(cop_config):
     """Six players, a finished Swiss round 1, then a COP round 2."""

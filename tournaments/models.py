@@ -250,8 +250,8 @@ class DivisionSlugAlias(models.Model):
         return self.slug
 
 
-# Default COP prize/tuning config. Seeded lazily the first time a COP round is
-# paired (see generate_pairings) when the division has none, and used as the
+# Default COP prize/tuning config. Seeded when a COP schedule is saved, or
+# lazily on first pairing for imported/legacy schedules, and used as the
 # settings form's field defaults so the two never drift.
 DEFAULT_COP_CONFIG = {
     "place_prizes": 3,
