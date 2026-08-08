@@ -1,8 +1,8 @@
-<table>
+<table class="standings-table">
     <thead>
         <tr>
             <th class="num">Rank</th>
-            <th>Player</th>
+            <th class="standings-player">Player</th>
             <th class="num">Score</th>
             <th class="num">Spread</th>
             {% if can_edit %}<th class="num">Firsts</th>{% endif %}
@@ -12,7 +12,7 @@
         {% for player in standings %}
         <tr>
             <td class="num">{{ forloop.counter }}</td>
-            <td>{{ player.name }}{% if player.seed %} (#{{ player.seed }}){% endif %}{% if player.dropped %} <span class="tag tag-dropped">withdrew</span>{% endif %}</td>
+            <td class="standings-player" title="{{ player.name }}{% if player.seed %} (#{{ player.seed }}){% endif %}{% if player.dropped %} — withdrew{% endif %}"><span class="standings-player-line"><span class="standings-player-name">{{ player.name }}</span>{% if player.seed %}<span class="standings-player-number">(#{{ player.seed }})</span>{% endif %}{% if player.dropped %}<span class="tag tag-dropped">withdrew</span>{% endif %}</span></td>
             <td class="num">{{ player.record }}</td>
             <td class="num">{{ player.spread }}</td>
             {% if can_edit %}<td class="num">{{ player.starts }}</td>{% endif %}
