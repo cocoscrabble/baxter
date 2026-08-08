@@ -828,9 +828,18 @@ class DivisionStandingsViewTests(TestCase):
         response = self.client.get(
             reverse("division_standings", kwargs=self.division.slug_kwargs())
         )
-        # Names are shown with the entrant's seed number.
-        self.assertContains(response, "Alice (#1)")
-        self.assertContains(response, "Bob (#2)")
+        # Names and entrant numbers are separate so long names can ellipsize
+        # without hiding the number.
+        self.assertContains(
+            response, '<span class="standings-player-name">Alice</span>'
+        )
+        self.assertContains(
+            response, '<span class="standings-player-number">(#1)</span>'
+        )
+        self.assertContains(response, '<span class="standings-player-name">Bob</span>')
+        self.assertContains(
+            response, '<span class="standings-player-number">(#2)</span>'
+        )
 
     def test_firsts_column_shown_only_to_editor(self):
         # Alice started (winner_started=True and Alice won), Bob did not.

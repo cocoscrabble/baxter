@@ -732,6 +732,70 @@ td a:hover {
     max-width: 680px;
 }
 
+/* Standings are most useful when names, entrant numbers, and records can be
+   scanned down the page. Keep every cell on one line, give the player column
+   the flexible space, and reserve compact fixed widths for numeric columns. */
+.standings-table th,
+.standings-table td {
+    white-space: nowrap;
+}
+
+.standings-table {
+    table-layout: fixed;
+}
+
+.standings-table th:nth-child(1) {
+    width: 4ch;
+}
+
+.standings-table th:nth-child(3) {
+    width: 5ch;
+}
+
+.standings-table th:nth-child(4) {
+    width: 6ch;
+}
+
+.standings-table th:nth-child(5) {
+    width: 5ch;
+}
+
+.standings-table td.standings-player {
+    max-width: 0;
+    overflow: hidden;
+}
+
+.standings-player-line {
+    display: flex;
+    align-items: baseline;
+    gap: 0.25em;
+    min-width: 0;
+}
+
+.standings-player-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.standings-player-number {
+    flex: none;
+}
+
+/* On phones, trade some type size and cell padding for enough horizontal room
+   to keep the player number and win-loss record visible without a second line
+   or a horizontal scrollbar. Exceptionally long names ellipsize first. */
+@media (max-width: 600px) {
+    .standings-table {
+        font-size: clamp(0.75rem, 3.2vw, 0.875rem);
+    }
+
+    .standings-table th,
+    .standings-table td {
+        padding: 4px clamp(1px, 0.6vw, 4px);
+    }
+}
+
 /* ── Layout utilities ─────────────────────────────────────── */
 /* Title row with right-aligned page actions (replaces stacked controls). */
 .page-head {

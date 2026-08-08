@@ -60,6 +60,8 @@ staticfiles/
 htmlcov/
 .pytest_cache/
 .tox/
+playwright-report/
+test-results/
 
 # mypy
 .mypy_cache/
