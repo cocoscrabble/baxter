@@ -104,6 +104,36 @@ async function expectNumericCellsToFit(page) {
   }
 }
 
+async function expectStandingsAlignment(page, { includeFirsts }) {
+  const expected = [
+    [".standings-rank", "right"],
+    [".standings-player", "left"],
+    [".standings-record", "center"],
+    [".standings-spread", "right"],
+  ];
+  if (includeFirsts) {
+    expected.push([".standings-firsts", "right"]);
+  }
+
+  for (const [selector, textAlign] of expected) {
+    const cells = page.locator(`.standings-table ${selector}`);
+    expect(await cells.count(), selector).toBeGreaterThan(0);
+    const styles = await cells.evaluateAll((elements) =>
+      elements.map((element) => ({
+        fontVariantNumeric: getComputedStyle(element).fontVariantNumeric,
+        textAlign: getComputedStyle(element).textAlign,
+      })),
+    );
+    expect(styles.every((style) => style.textAlign === textAlign), selector).toBe(true);
+    if (selector !== ".standings-player") {
+      expect(
+        styles.every((style) => style.fontVariantNumeric.includes("tabular-nums")),
+        selector,
+      ).toBe(true);
+    }
+  }
+}
+
 for (const width of mobileWidths) {
   for (const includeFirsts of [false, true]) {
     test(`mobile standings fit at ${width}px${includeFirsts ? " with Firsts" : ""}`, async ({
@@ -124,6 +154,7 @@ for (const width of mobileWidths) {
         });
       }
       await expectNumericCellsToFit(page);
+      await expectStandingsAlignment(page, { includeFirsts });
 
       const overflow = await page.getByTestId("standings-scroll").evaluate((element) => ({
         clientWidth: element.clientWidth,
@@ -207,6 +238,7 @@ test("tie records widen the W-L column to its widest value", async ({ page }) =>
 
   expect(tieRecordWidth).toBeGreaterThan(wholeRecordWidth);
   await expectNumericCellsToFit(page);
+  await expectStandingsAlignment(page, { includeFirsts: true });
 });
 
 test("desktop standings fill the container without horizontal scrolling", async ({ page }) => {
@@ -219,6 +251,7 @@ test("desktop standings fill the container without horizontal scrolling", async 
   }));
   expect(dimensions.scrollWidth).toBe(dimensions.clientWidth);
   await expectNumericCellsToFit(page);
+  await expectStandingsAlignment(page, { includeFirsts: true });
 
   const measurements = await cellLineCounts(
     page.locator(".standings-table th, .standings-table td"),

@@ -743,6 +743,21 @@ td a:hover {
 
 .standings-table .standings-player {
     width: 100%;
+    text-align: left;
+}
+
+/* Quantities align on their trailing digits for quick comparison. A W-L
+   record is a compact compound value, so center it rather than treating it as
+   either prose or a single amount. Headers share the column classes and follow
+   the alignment of their data. */
+.standings-table .standings-rank,
+.standings-table .standings-spread,
+.standings-table .standings-firsts {
+    text-align: right;
+}
+
+.standings-table .standings-record {
+    text-align: center;
 }
 
 .standings-table td.standings-player {
