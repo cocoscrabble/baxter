@@ -5,31 +5,35 @@ const { expect, test } = require("@playwright/test");
 
 const longPlayerName = "Christopher Alexander-Lewis";
 const longPlayerLabel = `${longPlayerName} (#12)`;
+const mobileWidths = [320, 360, 375, 390, 414, 430, 600];
 
 const stylesheet = fs.readFileSync(
   path.join(__dirname, "../../static/css/style.css"),
   "utf8",
 );
 
-function standingsTable({ includeFirsts }) {
-  const firstsHeading = includeFirsts ? '<th class="num">Firsts</th>' : "";
+function standingsTable({ includeFirsts, includeTies = true }) {
+  const firstsHeading = includeFirsts
+    ? '<th class="num standings-firsts">Firsts</th>'
+    : "";
   const rows = [
-    ["Alec Sjöholm", "1", "16-4", "1977", "10"],
-    ["Jennifer Clinchy", "7", "14-6", "1032", "9"],
-    [longPlayerName, "12", "10-10", "576", "10"],
+    ["Alec Sjöholm", "1", "16-4", "1977", "10", false],
+    ["Jennifer Clinchy", "7", includeTies ? "10.5-9.5" : "14-6", "1032", "9", false],
+    ["Evans Clinchy", "2", includeTies ? "9.5-10.5" : "13-7", "224", "10", false],
+    [longPlayerName, "12", includeTies ? "10.5-3.5" : "10-4", "576", "10", false],
+    ["Eric Fox", "5", "10-10", "-42", "10", true],
   ]
-    .map(([player, number, score, spread, firsts]) => `
+    .map(([player, number, score, spread, firsts, dropped]) => `
       <tr>
-        <td class="num">1</td>
-        <td class="standings-player" title="${player} (#${number})">
-          <span class="standings-player-line">
-            <span class="standings-player-name">${player}</span>
-            <span class="standings-player-number">(#${number})</span>
-          </span>
+        <td class="num standings-rank">1</td>
+        <td class="standings-player" title="${player} (#${number})${dropped ? " — withdrew" : ""}">
+          <span class="standings-player-name">${player}</span>
+          <span class="standings-player-number">(#${number})</span>
+          ${dropped ? '<span class="tag tag-dropped">withdrew</span>' : ""}
         </td>
-        <td class="num">${score}</td>
-        <td class="num">${spread}</td>
-        ${includeFirsts ? `<td class="num">${firsts}</td>` : ""}
+        <td class="num standings-record">${score}</td>
+        <td class="num standings-spread">${spread}</td>
+        ${includeFirsts ? `<td class="num standings-firsts">${firsts}</td>` : ""}
       </tr>`)
     .join("");
 
@@ -38,10 +42,10 @@ function standingsTable({ includeFirsts }) {
       <table class="standings-table">
         <thead>
           <tr>
-            <th class="num">Rank</th>
+            <th class="num standings-rank">Rank</th>
             <th class="standings-player">Player</th>
-            <th class="num">Score</th>
-            <th class="num">Spread</th>
+            <th class="num standings-record">W-L</th>
+            <th class="num standings-spread">Spread</th>
             ${firstsHeading}
           </tr>
         </thead>
@@ -57,13 +61,17 @@ async function renderStandings(page, options) {
       <head><style>${stylesheet}</style></head>
       <body>
         <main class="app-main">
-          <div class="page">${standingsTable(options)}</div>
+          <div class="page">
+            <div id="standings-content">
+              <div id="round-tab-content">${standingsTable(options)}</div>
+            </div>
+          </div>
         </main>
       </body>
     </html>`);
 }
 
-async function lineCounts(locator) {
+async function cellLineCounts(locator) {
   return locator.evaluateAll((cells) =>
     cells.map((cell) => {
       const range = document.createRange();
@@ -74,15 +82,29 @@ async function lineCounts(locator) {
           .map((rect) => Math.round(rect.top)),
       );
       return {
-        text: cell.textContent.trim(),
+        classes: [...cell.classList],
         lines: lineTops.size,
+        text: cell.textContent.replace(/\s+/g, " ").trim(),
         whiteSpace: getComputedStyle(cell).whiteSpace,
       };
     }),
   );
 }
 
-for (const width of [320, 375]) {
+async function expectNumericCellsToFit(page) {
+  const cells = await page.locator(".standings-table .num").evaluateAll((elements) =>
+    elements.map((element) => ({
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+      text: element.textContent.trim(),
+    })),
+  );
+  for (const cell of cells) {
+    expect(cell.scrollWidth, cell.text).toBeLessThanOrEqual(cell.clientWidth);
+  }
+}
+
+for (const width of mobileWidths) {
   for (const includeFirsts of [false, true]) {
     test(`mobile standings fit at ${width}px${includeFirsts ? " with Firsts" : ""}`, async ({
       page,
@@ -90,27 +112,18 @@ for (const width of [320, 375]) {
       await page.setViewportSize({ width, height: 812 });
       await renderStandings(page, { includeFirsts });
 
-      const cells = page.locator(
-        ".standings-table th, .standings-table td:not(.standings-player), .standings-player-name, .standings-player-number",
+      const nonPlayerCells = page.locator(
+        ".standings-table th:not(.standings-player), .standings-table td:not(.standings-player)",
       );
-      const measurements = await lineCounts(cells);
-      expect(measurements).not.toHaveLength(0);
-      for (const measurement of measurements) {
+      const nonPlayerMeasurements = await cellLineCounts(nonPlayerCells);
+      expect(nonPlayerMeasurements).not.toHaveLength(0);
+      for (const measurement of nonPlayerMeasurements) {
         expect(measurement, measurement.text).toMatchObject({
           lines: 1,
           whiteSpace: "nowrap",
         });
       }
-
-      const playerLinesStayInline = await page
-        .locator(".standings-player-line")
-        .evaluateAll((lines) => lines.every((line) => {
-          const tops = [...line.children].map((child) =>
-            Math.round(child.getBoundingClientRect().top),
-          );
-          return new Set(tops).size === 1;
-        }));
-      expect(playerLinesStayInline).toBe(true);
+      await expectNumericCellsToFit(page);
 
       const overflow = await page.getByTestId("standings-scroll").evaluate((element) => ({
         clientWidth: element.clientWidth,
@@ -121,30 +134,80 @@ for (const width of [320, 375]) {
       expect(overflow.scrollWidth).toBe(overflow.clientWidth);
       expect(overflow.pageWidth).toBeLessThanOrEqual(overflow.viewportWidth);
 
+      const allCellMeasurements = await cellLineCounts(
+        page.locator(".standings-table th, .standings-table td"),
+      );
+      expect(
+        allCellMeasurements
+          .filter(({ lines }) => lines > 1)
+          .every(({ classes }) => classes.includes("standings-player")),
+      ).toBe(true);
+
       const longPlayer = page.locator(`td[title="${longPlayerLabel}"]`);
-      const longName = longPlayer.locator(".standings-player-name");
-      const truncation = await longName.evaluate((name) => ({
-        clientWidth: name.clientWidth,
-        scrollWidth: name.scrollWidth,
-        textOverflow: getComputedStyle(name).textOverflow,
+      const longPlayerFit = await longPlayer.evaluate((cell) => ({
+        clientWidth: cell.clientWidth,
+        scrollWidth: cell.scrollWidth,
+        text: cell.textContent.replace(/\s+/g, " ").trim(),
+        textOverflow: getComputedStyle(cell.querySelector(".standings-player-name")).textOverflow,
+        whiteSpace: getComputedStyle(cell).whiteSpace,
       }));
-      expect(truncation.textOverflow).toBe("ellipsis");
-      if (width === 320 || includeFirsts) {
-        expect(truncation.scrollWidth).toBeGreaterThan(truncation.clientWidth);
+      expect(longPlayerFit).toMatchObject({
+        text: longPlayerLabel,
+        textOverflow: "clip",
+        whiteSpace: "normal",
+      });
+      expect(longPlayerFit.scrollWidth).toBeLessThanOrEqual(longPlayerFit.clientWidth);
+      if (width === 320) {
+        const [longPlayerMeasurement] = await cellLineCounts(longPlayer);
+        expect(longPlayerMeasurement.lines).toBeGreaterThan(1);
       }
 
       const number = longPlayer.locator(".standings-player-number");
       expect(await number.innerText()).toBe("(#12)");
-      expect(await longPlayer.getAttribute("title")).toBe(longPlayerLabel);
       const numberFit = await number.evaluate((element) => {
         const numberRect = element.getBoundingClientRect();
         const cellRect = element.closest("td").getBoundingClientRect();
-        return numberRect.right <= cellRect.right;
+        return {
+          fits: numberRect.left >= cellRect.left && numberRect.right <= cellRect.right,
+          whiteSpace: getComputedStyle(element).whiteSpace,
+        };
       });
-      expect(numberFit).toBe(true);
+      expect(numberFit).toEqual({ fits: true, whiteSpace: "nowrap" });
+
+      const dropped = page.locator('td[title="Eric Fox (#5) — withdrew"]');
+      const droppedTagFit = await dropped.locator(".tag-dropped").evaluate((tag) => {
+        const tagRect = tag.getBoundingClientRect();
+        const cellRect = tag.closest("td").getBoundingClientRect();
+        return {
+          fits: tagRect.left >= cellRect.left && tagRect.right <= cellRect.right,
+          text: tag.textContent,
+          whiteSpace: getComputedStyle(tag).whiteSpace,
+        };
+      });
+      expect(droppedTagFit).toEqual({
+        fits: true,
+        text: "withdrew",
+        whiteSpace: "nowrap",
+      });
     });
   }
 }
+
+test("tie records widen the W-L column to its widest value", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await renderStandings(page, { includeFirsts: true, includeTies: false });
+  const wholeRecordWidth = await page.locator("th.standings-record").evaluate(
+    (element) => element.getBoundingClientRect().width,
+  );
+
+  await renderStandings(page, { includeFirsts: true, includeTies: true });
+  const tieRecordWidth = await page.locator("th.standings-record").evaluate(
+    (element) => element.getBoundingClientRect().width,
+  );
+
+  expect(tieRecordWidth).toBeGreaterThan(wholeRecordWidth);
+  await expectNumericCellsToFit(page);
+});
 
 test("desktop standings fill the container without horizontal scrolling", async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
@@ -155,11 +218,14 @@ test("desktop standings fill the container without horizontal scrolling", async 
     scrollWidth: element.scrollWidth,
   }));
   expect(dimensions.scrollWidth).toBe(dimensions.clientWidth);
+  await expectNumericCellsToFit(page);
 
-  const measurements = await lineCounts(
-    page.locator(
-      ".standings-table th, .standings-table td:not(.standings-player), .standings-player-name, .standings-player-number",
-    ),
+  const measurements = await cellLineCounts(
+    page.locator(".standings-table th, .standings-table td"),
   );
-  expect(measurements.every(({ lines }) => lines === 1)).toBe(true);
+  expect(
+    measurements
+      .filter(({ lines }) => lines > 1)
+      .every(({ classes }) => classes.includes("standings-player")),
+  ).toBe(true);
 });

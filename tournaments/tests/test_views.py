@@ -856,8 +856,20 @@ class DivisionStandingsViewTests(TestCase):
         response = self.client.get(
             reverse("division_standings", kwargs=self.division.slug_kwargs())
         )
-        # Names and entrant numbers are separate so long names can ellipsize
-        # without hiding the number.
+        # Semantic column classes keep responsive sizing coupled to the template,
+        # and W-L is clearer than the generic Score heading.
+        content = response.content.decode()
+        headers = [
+            '<th class="num standings-rank">Rank</th>',
+            '<th class="standings-player">Player</th>',
+            '<th class="num standings-record">W-L</th>',
+            '<th class="num standings-spread">Spread</th>',
+        ]
+        positions = [content.index(header) for header in headers]
+        self.assertEqual(positions, sorted(positions))
+
+        # Names and entrant numbers stay distinct so the number remains intact
+        # when a long player cell wraps.
         self.assertContains(
             response, '<span class="standings-player-name">Alice</span>'
         )
@@ -882,10 +894,14 @@ class DivisionStandingsViewTests(TestCase):
         )
         url = reverse("division_standings", kwargs=self.division.slug_kwargs())
         # Anonymous: no Firsts column.
-        self.assertNotContains(self.client.get(url), "Firsts")
+        self.assertNotContains(
+            self.client.get(url), '<th class="num standings-firsts">Firsts</th>'
+        )
         # Editor: the column appears.
         self.client.login(username="owner", password="testpass123")
-        self.assertContains(self.client.get(url), "Firsts")
+        self.assertContains(
+            self.client.get(url), '<th class="num standings-firsts">Firsts</th>'
+        )
 
     def test_standings_for_specific_round(self):
         ResultSlip.objects.create(
