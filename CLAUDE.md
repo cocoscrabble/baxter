@@ -61,6 +61,24 @@ division's results. Consequences worth knowing before changing anything here:
   engine's generic `inactive_players` (round -> names): no game, no bye, and not
   withdrawn. `Entrant.dropped` is never touched by a playoff.
 
+## Starts
+
+A published pairing is a printed board, and it **owns the start**. Its
+first/second assignment is authoritative from the moment the round is published
+— before any result is entered — and a result slip keyed the other way round is
+rewritten to match, as a logged `result_starts_corrected` event.
+
+The rule is stated in two places that must agree: `tournaments/starts.py`
+(`PUBLISHED_PAIRING_OWNS_THE_START`, which drives the rewrite) and
+`scrabble-pairing/src/pair.rs` (`PUBLISHED_ORIENTATION_WINS`, which drives the
+engine's ledger). Both are single constants so the policy can be reversed.
+
+The board owns the *start*, never *who played whom*: a saved pairing whose
+players turn up in some other game that round is stale and dropped. Bye rows are
+excluded throughout — they are stored real-player-first for display, the
+opposite of the ledger's convention that the bye opponent is the notional
+starter (`PairingData.for_division` flips them back).
+
 ## Event log
 
 Every state-changing action is recorded as an append-only `TournamentEvent`

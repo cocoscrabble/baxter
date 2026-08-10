@@ -889,6 +889,150 @@ class RoundRobinUnplayedRoundsTests(PairingDBTestBase):
 
 
 
+class PublishedStartLedgerTests(PairingDBTestBase):
+    """A published round is already printed, so its games and its first/second
+    assignments are history from that moment — not from when its results arrive.
+    Regenerating must replay them into the ledger rather than re-deciding them."""
+
+    def _schedule(self, rps):
+        DivisionSettings.objects.update_or_create(
+            division=self.division, defaults={"round_pairings": rps}
+        )
+
+    def _regenerate(self):
+        from tournaments.generate_pairings import regenerate_pairings
+        regenerate_pairings(self.division)
+
+    def _publish(self, *rounds):
+        from tournaments.generate_pairings import publish_rounds
+        publish_rounds(self.division, list(rounds))
+
+    def _oriented(self, rnd):
+        """{(first, second): repeats} for a round."""
+        return {
+            (p.first.player.name, p.second.player.name): p.repeats
+            for p in self.division.pairings.filter(round=rnd)
+            .select_related("first__player", "second__player")
+        }
+
+    def _entrant(self, name):
+        return self.division.entrants.get(player__name=name)
+
+    def test_for_division_passes_published_pairings(self):
+        self._schedule([{"round": 1, "start_round": 0, "pairing": "KotH"}])
+        self._regenerate()
+        self._publish(1)
+        pd = PairingData.for_division(self.division)
+        self.assertEqual(
+            pd.published_pairings,
+            {1: [("Alice", "Bob"), ("Carol", "Dave")]},
+        )
+
+    def test_draft_rounds_are_not_in_published_pairings(self):
+        self._schedule([{"round": 1, "start_round": 0, "pairing": "KotH"}])
+        self._regenerate()
+        pd = PairingData.for_division(self.division)
+        self.assertEqual(pd.published_pairings, {})
+
+    def test_published_round_with_no_results_is_authoritative(self):
+        # Round 1 is published and then edited to pairs the engine would never
+        # have chosen. Regenerating must build round 2 on what was published —
+        # Alice and Bob have each started once (so the higher seed leads the
+        # tie), and neither pair has met before.
+        self._schedule([
+            {"round": 1, "start_round": 0, "pairing": "KotH"},
+            {"round": 2, "start_round": 0, "pairing": "KotH"},
+        ])
+        self._regenerate()
+        self._publish(1)
+        edited = [("Alice", "Carol"), ("Bob", "Dave")]
+        for p, (first, second) in zip(
+            self.division.pairings.filter(round=1).order_by("table"), edited
+        ):
+            p.first, p.second = self._entrant(first), self._entrant(second)
+            p.save(update_fields=["first", "second"])
+
+        self._regenerate()
+
+        self.assertEqual(set(self._oriented(1)), set(edited))
+        self.assertEqual(
+            self._oriented(2), {("Alice", "Bob"): 1, ("Carol", "Dave"): 1}
+        )
+
+    def test_partial_round_contributes_every_saved_start_once(self):
+        # Round 1 is published in full but only Alice-Bob has been played.
+        # Alice's start comes from the result, Carol's from the saved pairing:
+        # one apiece, so round 2's pin between them is a tie the higher seed
+        # wins. Counting Alice twice (result and pairing) would flip it, and
+        # ignoring the unplayed pairing would flip it too.
+        self._schedule([
+            {"round": 1, "start_round": 0, "pairing": "KotH"},
+            {"round": 2, "start_round": 0, "pairing": "KotH"},
+        ])
+        self._regenerate()
+        self._publish(1)
+        self.assertEqual(set(self._oriented(1)), {("Alice", "Bob"), ("Carol", "Dave")})
+        self.add_result(1, 0, 1, 400, 350, winner_started=True)
+        DBFixedPairing.objects.create(
+            division=self.division,
+            round_number=2,
+            entrant1=self._entrant("Alice"),
+            entrant2=self._entrant("Carol"),
+        )
+
+        self._regenerate()
+
+        self.assertIn(("Alice", "Carol"), self._oriented(2))
+
+    def test_published_bye_charges_nobody_a_start(self):
+        # Five players: Eve draws round 1's bye, which must not cost her a start.
+        # Round 1 stays partial (only the bye result exists), so its two real
+        # games count only through their saved pairings: Alice and Carol have
+        # started once, Bob, Dave and Eve have not.
+        eve = DBPlayer.objects.create(name="Eve", player_number="005", rating=1300)
+        Entrant.objects.create(division=self.division, player=eve, number=5)
+        self._schedule([
+            {"round": 1, "start_round": 0, "pairing": "KotH"},
+            {"round": 2, "start_round": 0, "pairing": "KotH"},
+        ])
+        self._regenerate()
+        self._publish(1)
+        # The bye row is stored real-player-first for display, but reaches the
+        # engine bye-first — the ledger's convention for "nobody was charged".
+        self.assertEqual(
+            set(self._oriented(1)),
+            {("Alice", "Bob"), ("Carol", "Dave"), ("Eve", "Bye")},
+        )
+        self.assertIn(
+            ("Bye", "Eve"), PairingData.for_division(self.division).published_pairings[1]
+        )
+
+        self._regenerate()
+
+        self.assertEqual(
+            set(self._oriented(2)),
+            {("Bob", "Alice"), ("Eve", "Carol"), ("Dave", "Bye")},
+        )
+
+    def test_round_robin_schedule_survives_publishing_a_round(self):
+        # The whole block is generated up front, so publishing round 1 must not
+        # disturb the rounds after it: a regenerated schedule has to match the
+        # one an uninterrupted pass produced, orientation included.
+        self._schedule([
+            {"round": r, "start_round": 0, "pairing": "RoundRobin"} for r in (1, 2, 3)
+        ])
+        self._regenerate()
+        before = {r: self._oriented(r) for r in (1, 2, 3)}
+        self._publish(1)
+
+        self._regenerate()
+
+        self.assertEqual({r: self._oriented(r) for r in (1, 2, 3)}, before)
+        # And it is still a complete round robin: every pair meets exactly once.
+        met = [frozenset(pair) for r in (1, 2, 3) for pair in before[r]]
+        self.assertEqual(len(set(met)), 6)
+
+
 class CopConfigLazySeedTests(PairingDBTestBase):
     """A division with a COP round gets default cop_config seeded the first time
     it's paired (regenerate_pairings), so COP works without prior configuration."""
