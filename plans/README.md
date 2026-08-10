@@ -31,6 +31,16 @@ Current plans:
   min-cost matching, plus new `DivisionSettings` fields (prizes, gibson spread,
   hopefulness, control-loss, sim counts). **Not started**; 5 phases, class prizes
   deferred.
+- `PLAN_PLAYOFFS.md` — configurable 2/4/8-player championship playoffs with
+  per-stage best-of-N series (issue #44), in postscript and concurrent timing
+  modes, with a full placement bracket (third place, and 5th–8th for a top-8) so
+  no eliminated player is left idle. The bracket is *derived* from the confirmed
+  seed snapshot plus the division's results, so unnecessary games are never
+  generated and replay reproduces placements. **Implemented** (all five phases):
+  `tournaments/playoff.py` (derivation + lifecycle), playoff generation inside
+  `generate_pairings.py`, the three playoff commands, the bracket and setup
+  pages, and a generic `inactive_players` field on the Rust engine that lets a
+  round be paired around reserved players.
 - `PLAN_WHAT_IF.md` — "what if" scenarios: import a historical division (JSON
   bundle or ratings CSV) into a sandbox tournament, plus an Explore tab that
   hypothetically re-pairs any round with a chosen strategy. **Implemented** (all

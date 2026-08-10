@@ -139,6 +139,46 @@ class Fuzzer:
         ]
         self._post_json("division_entrants_edit", {"rows": rows})
 
+    def op_create_playoff(self):
+        """Attach a postscript playoff once the main schedule has been played.
+
+        Deliberately small (a top-two championship): the point is to get playoff
+        rounds into the log so the replay meta-invariant covers bracket state,
+        pairings and placements, not to explore bracket shapes — the derivation
+        itself is covered exhaustively by the unit tests.
+        """
+        from tournaments.playoff import CHAMPIONSHIP, playoff_for, qualification_seeds
+
+        if playoff_for(self.division) is not None:
+            return
+        configured = self.division.configured_round_numbers(default=[])
+        if not configured:
+            return
+        last = max(configured)
+        # A postscript playoff starts where the main tournament ends, so every
+        # configured round has to be finished first.
+        finished = set(
+            self.division.round_pairings_set.filter(
+                status=RoundPairings.FINISHED
+            ).values_list("round", flat=True)
+        )
+        if not set(configured) <= finished:
+            return
+        seeds = qualification_seeds(self.division, last, 2)
+        if len(seeds) < 2:
+            return
+        self.client.post(
+            self._url("division_playoff_setup"),
+            {
+                "action": "confirm",
+                "qualification_round": last,
+                "qualifier_count": 2,
+                "timing": "postscript",
+                f"games_{CHAMPIONSHIP}": self.rng.choice([1, 3]),
+                "seed": [s["player"] for s in seeds],
+            },
+        )
+
     OPS = [
         (op_set_entrants, 3),
         (op_save_settings, 3),
@@ -146,6 +186,7 @@ class Fuzzer:
         (op_publish, 3),
         (op_simulate_round, 3),
         (op_drop_entrant, 1),
+        (op_create_playoff, 2),
     ]
 
     def step(self):

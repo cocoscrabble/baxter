@@ -68,12 +68,14 @@ fn bye_pairing(
     slips: &[ResultSlipData],
     rp: &RoundPairing,
     fixed_pairs: &[(String, String)],
+    inactive: &HashSet<String>,
 ) -> Option<(String, String)> {
     if rp.pairing.is_round_robin() || rp.pairing.is_quad() {
         return None;
     }
-    let empty = HashSet::new();
-    let field = standings_after_round(players, slips, rp.start_round, &empty);
+    // Players sitting the round out are not part of the field, so they neither
+    // make it odd nor can receive the bye.
+    let field = standings_after_round(players, slips, rp.start_round, inactive);
     let fixed_names: HashSet<&str> = fixed_pairs
         .iter()
         .flat_map(|(a, b)| [a.as_str(), b.as_str()])
@@ -107,7 +109,15 @@ fn bye_pairing(
 /// a fixed games-per-round makes this robust to a round with several byes
 /// (absences/forfeits, common in imported historical data); such a round would
 /// otherwise be stuck as Partial and never pair the next round.
-fn round_status(players: &[PlayerData], slips: &[ResultSlipData]) -> HashMap<i32, RoundStatus> {
+///
+/// Players marked inactive for a round are not expected to appear in it, so they
+/// are subtracted from that round's target. Without this a round that reserved
+/// anyone could never read as finished, and the round after it would never pair.
+fn round_status(
+    players: &[PlayerData],
+    slips: &[ResultSlipData],
+    inactive_players: &HashMap<i32, Vec<String>>,
+) -> HashMap<i32, RoundStatus> {
     let n_real = players
         .iter()
         .filter(|e| !e.name.eq_ignore_ascii_case(BYE_NAME))
@@ -122,7 +132,18 @@ fn round_status(players: &[PlayerData], slips: &[ResultSlipData]) -> HashMap<i32
     }
     let mut counts = HashMap::new();
     for (round, real) in appearances {
-        let st = if real >= n_real {
+        let expected = n_real.saturating_sub(
+            inactive_players
+                .get(&round)
+                .map(|names| {
+                    names
+                        .iter()
+                        .filter(|n| !n.eq_ignore_ascii_case(BYE_NAME))
+                        .count()
+                })
+                .unwrap_or(0),
+        );
+        let st = if real >= expected {
             RoundStatus::Finished
         } else if real > 0 {
             RoundStatus::Partial
@@ -166,12 +187,17 @@ fn pair_round(
     round_pairings: &[RoundPairing],
     fixed_map: &HashMap<i32, Vec<(String, String)>>,
     published_map: &HashMap<i32, Vec<(String, String)>>,
+    inactive_map: &HashMap<i32, Vec<String>>,
     repeats: &Repeats,
     rng: &mut ChaCha8Rng,
     cop_config: Option<&CopConfig>,
     swiss_config: &SwissConfig,
     rp: &RoundPairing,
 ) -> Result<Pairings, String> {
+    let inactive: HashSet<String> = inactive_map
+        .get(&rp.round)
+        .map(|names| names.iter().cloned().collect())
+        .unwrap_or_default();
     // The round-robin family (round robin, double round robin, Charlottesville)
     // honors fixed pairings inside the strategy — it schedules matchings across
     // the block rather than excluding players — so it must see the full field.
@@ -182,12 +208,17 @@ fn pair_round(
         rp.pairing,
         RP::RoundRobin | RP::DoubleRoundRobin | RP::Charlottesville | RP::Cop
     ) {
-        let empty = HashSet::new();
+        // These strategies see the whole field — `excluded` normally stays empty
+        // because they resolve fixed pairings themselves rather than by removing
+        // players. Reserved players are the one thing they must still not see,
+        // and the exclusion set is the only thing that removes them: from round 1
+        // onward the field comes out of the *results*, so dropping someone from
+        // `players` would leave anyone who has already played still standing.
         let mut ctx = Ctx {
             players,
             slips,
             round_pairings,
-            excluded: &empty,
+            excluded: &inactive,
             fixed_pairings: fixed_map,
             published_pairings: published_map,
             repeats,
@@ -201,11 +232,13 @@ fn pair_round(
     let mut fixed_pairs: Vec<(String, String)> =
         fixed_map.get(&rp.round).cloned().unwrap_or_default();
 
-    if let Some(bye) = bye_pairing(players, slips, rp, &fixed_pairs) {
+    if let Some(bye) = bye_pairing(players, slips, rp, &fixed_pairs, &inactive) {
         fixed_pairs.push(bye);
     }
 
-    let mut excluded: HashSet<String> = HashSet::new();
+    // Excluding a name keeps the strategy from seeing it: fixed players because
+    // their game is already decided, inactive players because they have none.
+    let mut excluded: HashSet<String> = inactive.clone();
     for (a, b) in &fixed_pairs {
         excluded.insert(a.clone());
         excluded.insert(b.clone());
@@ -260,7 +293,7 @@ pub fn pair(input: &PairingInput) -> Vec<RoundResult> {
     let mut repeats = Repeats::default();
     let mut starts = Starts::new();
     let mut rng = seeded(input.seed);
-    let status = round_status(players, slips);
+    let status = round_status(players, slips, &input.inactive_players);
 
     let mut ret: Vec<RoundResult> = Vec::new();
     for rp in &rps {
@@ -277,6 +310,7 @@ pub fn pair(input: &PairingInput) -> Vec<RoundResult> {
                 &rps,
                 &input.fixed_pairings,
                 &input.published_pairings,
+                &input.inactive_players,
                 &repeats,
                 &mut rng,
                 input.cop_config.as_ref(),
@@ -1629,5 +1663,148 @@ mod tests {
         let r2 = out.iter().find(|r| r.round == 2).unwrap();
         assert!(r2.pairings.is_empty());
         assert!(r2.error.as_deref().unwrap_or("").contains("withdrew"));
+    }
+
+    // -- inactive players ------------------------------------------------
+    //
+    // A player marked inactive for a round sits it out entirely: no game, no
+    // bye, and not withdrawn — the rest of the field pairs around them.
+
+    #[test]
+    fn inactive_players_are_left_out_of_the_round() {
+        let inp = input(
+            r#"{
+                "players": [
+                    {"name": "A", "rating": 1900},
+                    {"name": "B", "rating": 1800},
+                    {"name": "C", "rating": 1700},
+                    {"name": "D", "rating": 1600}
+                ],
+                "round_pairings": [{"round": 1, "start_round": 0, "pairing": "KotH"}],
+                "inactive_players": {"1": ["A", "B"]}
+            }"#,
+        );
+        let out = pair(&inp);
+        assert_eq!(out[0].pairings.len(), 1);
+        let p = &out[0].pairings[0];
+        let mut names = [p.first.clone(), p.second.clone()];
+        names.sort();
+        assert_eq!(names, ["C".to_string(), "D".to_string()]);
+    }
+
+    #[test]
+    fn an_inactive_player_never_receives_the_bye() {
+        // Five players with one reserved leaves an even field: no bye at all.
+        let inp = input(
+            r#"{
+                "players": [
+                    {"name": "A", "rating": 1900},
+                    {"name": "B", "rating": 1800},
+                    {"name": "C", "rating": 1700},
+                    {"name": "D", "rating": 1600},
+                    {"name": "E", "rating": 1500}
+                ],
+                "round_pairings": [{"round": 1, "start_round": 0, "pairing": "KotH"}],
+                "inactive_players": {"1": ["E"]}
+            }"#,
+        );
+        let out = pair(&inp);
+        assert_eq!(out[0].pairings.len(), 2);
+        for p in &out[0].pairings {
+            assert!(p.first != "Bye" && p.second != "Bye");
+            assert!(p.first != "E" && p.second != "E");
+        }
+    }
+
+    #[test]
+    fn reserving_a_player_makes_an_even_field_odd_and_someone_gets_the_bye() {
+        let inp = input(
+            r#"{
+                "players": [
+                    {"name": "A", "rating": 1900},
+                    {"name": "B", "rating": 1800},
+                    {"name": "C", "rating": 1700},
+                    {"name": "D", "rating": 1600}
+                ],
+                "round_pairings": [{"round": 1, "start_round": 0, "pairing": "KotH"}],
+                "inactive_players": {"1": ["D"]}
+            }"#,
+        );
+        let out = pair(&inp);
+        let has_bye = out[0]
+            .pairings
+            .iter()
+            .any(|p| p.first == "Bye" || p.second == "Bye");
+        assert!(has_bye, "the remaining three should leave one player byed");
+        // …and it is not the reserved player who gets it.
+        assert!(!out[0]
+            .pairings
+            .iter()
+            .any(|p| p.first == "D" || p.second == "D"));
+    }
+
+    #[test]
+    fn a_round_missing_only_its_inactive_players_still_counts_as_finished() {
+        // Without this, a round that reserved anyone would never read as
+        // finished and the round after it would never pair.
+        let inp = input(
+            r#"{
+                "players": [
+                    {"name": "A", "rating": 1900},
+                    {"name": "B", "rating": 1800},
+                    {"name": "C", "rating": 1700},
+                    {"name": "D", "rating": 1600}
+                ],
+                "round_pairings": [
+                    {"round": 1, "start_round": 0, "pairing": "KotH"},
+                    {"round": 2, "start_round": 1, "pairing": "KotH"}
+                ],
+                "inactive_players": {"1": ["C", "D"]},
+                "result_slips": [
+                    {"round": 1, "winner_name": "A", "loser_name": "B", "winner_score": 400, "loser_score": 300, "winner_started": true}
+                ]
+            }"#,
+        );
+        let out = pair(&inp);
+        let r2 = out.iter().find(|r| r.round == 2);
+        assert!(r2.is_some(), "round 2 should have paired off round 1");
+        assert_eq!(r2.unwrap().pairings.len(), 2);
+    }
+
+    #[test]
+    fn cop_pairs_the_field_left_after_a_reservation() {
+        // COP takes the whole-field path, so a reserved player is removed from
+        // the field it is handed rather than excluded around it.
+        let inp = input(
+            r#"{
+                "players": [
+                    {"name": "A", "rating": 1900},
+                    {"name": "B", "rating": 1800},
+                    {"name": "C", "rating": 1700},
+                    {"name": "D", "rating": 1600},
+                    {"name": "E", "rating": 1500},
+                    {"name": "F", "rating": 1400}
+                ],
+                "round_pairings": [
+                    {"round": 1, "start_round": 0, "pairing": "KotH"},
+                    {"round": 2, "start_round": 1, "pairing": "COP"}
+                ],
+                "cop_config": {"place_prizes": 3, "simulations": 20, "always_wins_simulations": 20},
+                "inactive_players": {"2": ["A", "B"]},
+                "result_slips": [
+                    {"round": 1, "winner_name": "A", "loser_name": "B", "winner_score": 400, "loser_score": 300, "winner_started": true},
+                    {"round": 1, "winner_name": "C", "loser_name": "D", "winner_score": 400, "loser_score": 300, "winner_started": true},
+                    {"round": 1, "winner_name": "E", "loser_name": "F", "winner_score": 400, "loser_score": 300, "winner_started": true}
+                ]
+            }"#,
+        );
+        let out = pair(&inp);
+        let r2 = out.iter().find(|r| r.round == 2).unwrap();
+        assert_eq!(r2.error, None);
+        assert_eq!(r2.pairings.len(), 2);
+        for p in &r2.pairings {
+            assert!(p.first != "A" && p.second != "A");
+            assert!(p.first != "B" && p.second != "B");
+        }
     }
 }

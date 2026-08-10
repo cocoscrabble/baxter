@@ -95,6 +95,12 @@ class PairingData:
     # that build PairingData by hand (tests) need not supply it.
     published_pairings: dict[int, list[tuple[str, str]]] = field(default_factory=dict)
 
+    # Players sitting a round out entirely, keyed by round number: paired into no
+    # game and given no bye, but not withdrawn either. Playoff participants are
+    # reserved this way for the rounds their bracket owns, so the ordinary field
+    # keeps pairing around them. Empty for a division with no playoff.
+    inactive_players: dict[int, list[str]] = field(default_factory=dict)
+
     # Temporary filter used by pair_round() while invoking a strategy for a round that has
     # fixed pairings. pair_round() sets this to the names of all fixed players before calling
     # the strategy, so that standings_after_round() omits them and the strategy only sees the

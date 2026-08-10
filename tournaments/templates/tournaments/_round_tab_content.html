@@ -43,7 +43,7 @@
             {% for entry in round_pairings %}
             <tr>
                 <td class="num-left">{{ entry.pairing.table_label|default:entry.pairing.table }}</td>
-                <td>{{ entry.pairing.first.name }}</td>
+                <td>{{ entry.pairing.first.name }}{% if entry.playoff_label %} <span class="playoff-tag badge-published">{{ entry.playoff_label }}</span>{% endif %}</td>
                 <td>{% if entry.is_fixed %}&#x1F512;{% endif %}</td>
                 <td>{{ entry.pairing.second.name }}</td>
                 <td class="num">{% if entry.repeat_rounds %}{{ entry.repeat_rounds|length }}<span class="repeat-rounds">rd. {{ entry.repeat_rounds|join:", " }}</span>{% endif %}</td>
@@ -118,7 +118,7 @@
             {% for entry in round_pairings %}
             <tr>
                 <td class="num-left">{{ entry.pairing.table_label|default:entry.pairing.table }}</td>
-                <td>{{ entry.pairing.first.name }}</td>
+                <td>{{ entry.pairing.first.name }}{% if entry.playoff_label %} <span class="playoff-tag badge-published">{{ entry.playoff_label }}</span>{% endif %}</td>
                 <td>{% if entry.is_fixed %}&#x1F512;{% endif %}</td>
                 <td>{{ entry.pairing.second.name }}</td>
                 <td class="num">{% if entry.repeat_rounds %}{{ entry.repeat_rounds|length }}<span class="repeat-rounds">rd. {{ entry.repeat_rounds|join:", " }}</span>{% endif %}</td>

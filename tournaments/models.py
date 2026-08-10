@@ -573,22 +573,28 @@ class RoundPairings(models.Model):
         real_results = self.pairings.filter(result__isnull=False).exclude(
             result__loser__player__is_bye=True
         ).count()
-        if real_results == 0 and self.status == RoundPairings.IN_PROGRESS:
-            self.status = RoundPairings.PUBLISHED
-            self.save(update_fields=["status"])
-        elif 0 < real_results < total and self.status == RoundPairings.PUBLISHED:
-            self.status = RoundPairings.IN_PROGRESS
-            self.save(update_fields=["status"])
-        elif (
+        if (
             total > 0
             and with_results == total
             and self.status in (RoundPairings.PUBLISHED, RoundPairings.IN_PROGRESS)
         ):
+            # Tested first so a single call can settle the round outright. When
+            # the last missing result is a bye, `real_results < total` is also
+            # true, and checking that first would stop at IN_PROGRESS — leaving a
+            # fully played round stuck there until something happened to call
+            # this again, which for a batch-entered round nothing does.
+            #
             # `total > 0` guards against an unpaired round (e.g. a round-robin
             # block round created up front but not yet paired): with no pairings
             # `with_results == total` is vacuously true, which would otherwise
             # mark a round with no games as finished.
             self.status = RoundPairings.FINISHED
+            self.save(update_fields=["status"])
+        elif real_results == 0 and self.status == RoundPairings.IN_PROGRESS:
+            self.status = RoundPairings.PUBLISHED
+            self.save(update_fields=["status"])
+        elif 0 < real_results < total and self.status == RoundPairings.PUBLISHED:
+            self.status = RoundPairings.IN_PROGRESS
             self.save(update_fields=["status"])
 
 
@@ -624,6 +630,16 @@ class Pairing(models.Model):
     # organizers (e.g. "S1" for a streamed table); empty falls back to ``table``.
     table = models.IntegerField(default=0)
     table_label = models.CharField(max_length=8, default="", blank=True)
+    # Set on a playoff game: which series it belongs to and its 1-based game
+    # number within that series. Null for every ordinary pairing.
+    series = models.ForeignKey(
+        "PlayoffSeries",
+        on_delete=models.SET_NULL,
+        related_name="pairings",
+        null=True,
+        blank=True,
+    )
+    game_number = models.IntegerField(null=True, blank=True)
 
     class Meta:
         ordering = ["round", "table"]
@@ -671,6 +687,104 @@ class FixedTable(models.Model):
 
     def __str__(self):
         return f"R{self.round_number}: {self.entrant.player.name} at table {self.table_label}"
+
+
+class Playoff(models.Model):
+    """A championship playoff attached to a division.
+
+    Holds only the director's *intent*: which round qualifies, how many
+    qualifiers, the timing mode, the length of each series, and the confirmed
+    seed snapshot. The bracket itself — who meets whom, series scores, which
+    games still need playing, final placements — is derived from this plus the
+    division's results by ``tournaments/playoff.py``, never stored. See
+    ``plans/PLAN_PLAYOFFS.md``.
+    """
+
+    POSTSCRIPT = "postscript"
+    CONCURRENT = "concurrent"
+    TIMING_CHOICES = [
+        (POSTSCRIPT, "Postscript"),
+        (CONCURRENT, "Concurrent"),
+    ]
+
+    division = models.OneToOneField(
+        Division, on_delete=models.CASCADE, related_name="playoff"
+    )
+    # Seeds come from the standings after this round.
+    qualification_round = models.IntegerField()
+    qualifier_count = models.IntegerField()
+    timing = models.CharField(max_length=20, choices=TIMING_CHOICES, default=POSTSCRIPT)
+    # Series key -> maximum games (see playoff.SERIES_LABELS). A placement key
+    # that is missing or 0 means that series is not played.
+    stage_games = models.JSONField(default=dict)
+    # The confirmed qualifiers, best seed first, as recorded at creation:
+    # [{"seed": 1, "player": "…", "wins": 5.0, "spread": 412}, …]. Keyed by
+    # player *name* so it replays into a fresh database, and frozen here so an
+    # exact tie in the qualification standings is resolved once, by the
+    # director, rather than re-derived from an unstable sort.
+    seeds = models.JSONField(default=list)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.qualifier_count}-player playoff — {self.division}"
+
+    def config(self):
+        """The plain-data config the derivation takes."""
+        from tournaments.playoff import PlayoffConfig
+
+        return PlayoffConfig.from_model(self)
+
+    def bracket(self, slips=None):
+        """The derived bracket. Pass ``slips`` to reuse an existing queryset."""
+        from tournaments.playoff import build_bracket
+
+        if slips is None:
+            slips = self.division.result_slips.select_related(
+                "winner__player", "loser__player"
+            )
+        return build_bracket(self.config(), slips)
+
+
+class PlayoffSeries(models.Model):
+    """One series in a playoff bracket — structure only.
+
+    Derived rows, like ``RoundPairings``: the pairing generator upserts them on
+    ``(playoff, key, position)`` and never deletes them while the playoff
+    exists, so a ``Pairing.series`` reference stays valid. Score, winner, loser
+    and status are deliberately absent: they are computed from results.
+    """
+
+    playoff = models.ForeignKey(
+        Playoff, on_delete=models.CASCADE, related_name="series"
+    )
+    # A ``tournaments.playoff`` series key: "semifinal", "championship", …
+    key = models.CharField(max_length=32)
+    position = models.IntegerField(default=0)
+    # The better-seeded participant, once known.
+    high = models.ForeignKey(
+        Entrant,
+        on_delete=models.CASCADE,
+        related_name="playoff_series_as_high",
+        null=True,
+        blank=True,
+    )
+    low = models.ForeignKey(
+        Entrant,
+        on_delete=models.CASCADE,
+        related_name="playoff_series_as_low",
+        null=True,
+        blank=True,
+    )
+    max_games = models.IntegerField(default=1)
+    # First round of this series' stage window.
+    start_round = models.IntegerField()
+
+    class Meta:
+        unique_together = [("playoff", "key", "position")]
+        ordering = ["start_round", "key", "position"]
+
+    def __str__(self):
+        return f"{self.key} {self.position} ({self.playoff.division})"
 
 
 # The bulk-editable grids. Used as the ``scope`` half of the editgrid key

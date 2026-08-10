@@ -380,6 +380,29 @@ class ResultsGrid(EditGrid):
             )
         if errors:
             return [], errors
+        # The grid replaces the division's whole result set, so it *is* the
+        # prospective set the bracket would be derived from.
+        from tournaments.playoff import conflicts_for_results, playoff_for
+
+        playoff = playoff_for(division)
+        if playoff is not None:
+            from tournaments.pairing.base import ResultSlipData
+
+            names = _entrant_name_map(division)
+            prospective = [
+                ResultSlipData(
+                    round=r.round,
+                    winner_name=names.get(r.winner_id),
+                    loser_name=names.get(r.loser_id),
+                    winner_score=r.winner_score,
+                    loser_score=r.loser_score,
+                    winner_started=r.winner_started,
+                )
+                for r in instances
+            ]
+            errors = conflicts_for_results(playoff.config(), prospective)
+            if errors:
+                return [], errors
         return instances, self.reconcile_errors(division, instances)
 
     def after_save(self, division):
@@ -387,6 +410,10 @@ class ResultsGrid(EditGrid):
         # status of every round (update_status is idempotent).
         for rp in division.round_pairings_set.all():
             rp.update_status()
+        # A result can clinch a series, which retires its remaining games.
+        from tournaments.playoff import refresh_after_results
+
+        refresh_after_results(division)
 
 
 class BoardTableMapGrid(JsonBlobGrid):

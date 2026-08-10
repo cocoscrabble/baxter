@@ -38,6 +38,29 @@ regenerate lifecycle. `tests/corpus/cases.json` is a **frozen** regression
 fixture (the Python oracle that generated it is gone); `cargo test` still checks
 the Rust engine against it.
 
+## Playoffs
+
+A division may carry a `Playoff`: a 2/4/8-player bracket with per-series
+best-of-N lengths, run either after the main schedule (postscript) or alongside
+it (concurrent). See `plans/PLAN_PLAYOFFS.md`.
+
+The bracket is **derived, never stored**. The only recorded intent is the
+playoff's configuration plus its confirmed seed snapshot (`playoff_created`);
+who meets whom, series scores, which games still need playing, and final
+placements are all computed by `tournaments/playoff.py` from that plus the
+division's results. Consequences worth knowing before changing anything here:
+
+- A game is only ever generated when it is *certainly* necessary, so a game a
+  clinch made pointless never exists — no bye, no zero score, no export row.
+- `regenerate_pairings` builds playoff games alongside engine pairings; a
+  published window is repaired in both directions (a decider that turns out to
+  be needed is added, a retired game is deleted).
+- `PlayoffSeries` rows are derived structure only (participants, length, window),
+  upserted like `RoundPairings`; never store a score or winner on them.
+- Concurrent mode reserves bracket players from ordinary pairing through the
+  engine's generic `inactive_players` (round -> names): no game, no bye, and not
+  withdrawn. `Entrant.dropped` is never touched by a playoff.
+
 ## Event log
 
 Every state-changing action is recorded as an append-only `TournamentEvent`

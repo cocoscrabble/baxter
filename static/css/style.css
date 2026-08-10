@@ -625,6 +625,17 @@ input[type="submit"]:hover {
     background-color: var(--color-bg-subtle);
 }
 
+/* Destructive actions (remove/delete). Without this the base filled-purple
+   button style applies, which reads as the page's primary action. */
+.btn-danger {
+    background-color: var(--color-danger);
+    color: white;
+}
+
+.btn-danger:hover {
+    background-color: var(--color-danger-hover);
+}
+
 .btn-publish-needed {
     background-color: var(--color-danger);
 }
@@ -1247,5 +1258,136 @@ dd {
 @media (max-width: 900px) {
     .editgrid-columns {
         grid-template-columns: 1fr;
+    }
+}
+
+/* ── Playoff bracket ───────────────────────────────────────
+   A bracket reads as columns — one per stage window — so the rounds run left
+   to right and each series sits under the window it is played in. The row
+   scrolls sideways rather than wrapping, because a wrapped bracket loses the
+   left-to-right reading that makes it a bracket at all; below the breakpoint
+   the columns stack, which is the honest fallback on a phone. */
+.playoff-bracket {
+    display: flex;
+    gap: var(--space-lg);
+    align-items: flex-start;
+    overflow-x: auto;
+    padding-bottom: var(--space-sm);
+    margin-bottom: var(--space-lg);
+}
+
+.playoff-window {
+    flex: 1 1 0;
+    min-width: 280px;
+}
+
+.playoff-window > h2 {
+    margin: 0 0 var(--space-sm);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-muted);
+}
+
+.playoff-series {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: var(--space-md);
+    margin-bottom: var(--space-md);
+    background-color: var(--surface-raised);
+}
+
+.playoff-series > h3 {
+    margin: 0;
+}
+
+.playoff-series-length {
+    margin: 0 0 var(--space-sm);
+    font-size: 0.85em;
+    color: var(--color-muted);
+}
+
+/* A series that is over is settled; dim it slightly so live ones stand out. */
+.playoff-series-clinched {
+    background-color: var(--color-bg-subtle);
+}
+
+.playoff-series-pending {
+    border-style: dashed;
+}
+
+/* The running series score: two rows, player and games won. */
+.playoff-score {
+    margin-bottom: var(--space-sm);
+}
+
+.playoff-score td {
+    padding: 2px var(--space-xs);
+    border-bottom: 0;
+}
+
+.playoff-score .playoff-winner {
+    font-weight: 700;
+}
+
+.playoff-score .playoff-winner td:first-child::after {
+    content: " ▸";
+    color: var(--color-published);
+}
+
+.playoff-games {
+    margin-bottom: 0;
+    font-size: 0.85em;
+}
+
+.playoff-games th,
+.playoff-games td {
+    padding: 3px var(--space-xs);
+}
+
+/* A game that will never be played: present, but visibly not a fixture. */
+.playoff-game-not_needed {
+    color: var(--color-muted);
+    font-style: italic;
+}
+
+.playoff-status {
+    margin: 0 0 var(--space-sm);
+}
+
+/* Same shape as the round-status badges on the pairings tab, reusing their
+   colour modifiers (badge-finished, badge-in-progress, …). */
+.playoff-tag {
+    display: inline-block;
+    font-size: 0.7em;
+    font-weight: bold;
+    padding: 2px var(--space-sm);
+    border-radius: var(--radius);
+    vertical-align: middle;
+    text-transform: uppercase;
+}
+
+/* A bracket-decided place, as opposed to one carried over from the standings. */
+.playoff-placed td {
+    font-weight: 600;
+}
+
+.playoff-unresolved td {
+    color: var(--color-muted);
+}
+
+.playoff-delete {
+    margin-top: var(--space-lg);
+}
+
+@media (max-width: 900px) {
+    .playoff-bracket {
+        flex-direction: column;
+        overflow-x: visible;
+    }
+
+    .playoff-window {
+        min-width: 0;
+        width: 100%;
     }
 }

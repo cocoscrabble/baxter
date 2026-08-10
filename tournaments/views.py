@@ -41,9 +41,11 @@ from .commands import (
     add_result,
     bulk_import_entrants,
     create_division,
+    create_playoff,
     create_tournament,
     edit_result,
     delete_division,
+    delete_playoff,
     delete_tournament,
     import_division,
     publish_all_rounds,
@@ -57,6 +59,7 @@ from .commands import (
     simulate_match_cmd,
     simulate_round_cmd,
     unpublish_round,
+    update_playoff,
     update_tournament,
 )
 from .grids import BoardTableMapGrid, EntrantsGrid, FixedPairingsGrid, FixedTablesGrid, ResultsGrid
@@ -91,6 +94,21 @@ from .generate_pairings import publish_rounds, regenerate_pairings, unpublish_ro
 from .pairing.base import PairingData, PairingError, standings_after_round
 from .pairing.round_pairing import STRATEGY_TYPES
 from .pairings_view import PairingsPresenter, PublishedPairingsPresenter
+from .playoff import (
+    QUALIFIER_COUNTS,
+    SERIES_LABELS,
+    Timing,
+    build_bracket,
+    default_stage_games,
+    final_placements,
+    placement_keys,
+    playoff_for,
+    qualification_seeds,
+    schedule_conflicts,
+    selectable_qualification_rounds,
+    series_keys,
+    validate_config,
+)
 from .scorecards import ScorecardResult, ScorecardSpec, make_rounds, render_scorecards
 from .results_export import ResultRow, render_results_csv
 
@@ -1996,3 +2014,273 @@ class SimulateRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
             {"division": division.name, "round": round_num},
         )
         return _simulation_response(request, division)
+
+
+# ---------------------------------------------------------------------------
+# Playoffs
+# ---------------------------------------------------------------------------
+
+
+def _playoff_context(division, playoff):
+    """Bracket, placements and headline state for a division's playoff pages."""
+    pd = PairingData.for_division(division)
+    bracket = build_bracket(playoff.config(), pd.result_slips)
+    standings = standings_after_round(
+        pd, division.max_round(), include_dropped=True
+    )
+    numbers = {
+        e.player.name: e.number
+        for e in division.entrants.select_related("player")
+    }
+    placements = final_placements(bracket, standings, numbers)
+    # Group the series into their windows so the template can render the bracket
+    # column by column, which is how a bracket is read.
+    windows = [
+        {
+            "index": window.index,
+            "rounds": list(window.rounds),
+            "series": [s for s in bracket.series if s.window == window.index],
+        }
+        for window in bracket.windows
+    ]
+    return {
+        "division": division,
+        "playoff": playoff,
+        "bracket": bracket,
+        "windows": windows,
+        "placements": placements,
+        "bracket_placements": placements[: playoff.qualifier_count],
+        "field_placements": placements[playoff.qualifier_count :],
+        "seeds": playoff.seeds,
+    }
+
+
+class DivisionPlayoffView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
+    """The public bracket: every series with its length, score, status, games and
+    where its winner and loser go, plus the bracket-derived final placements."""
+
+    model = Division
+    template_name = "tournaments/division_playoff.html"
+    context_object_name = "division"
+    active_tab = "playoff"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        playoff = playoff_for(self.object)
+        if playoff is None:
+            context["no_playoff"] = True
+            return context
+        context.update(_playoff_context(self.object, playoff))
+        context["active_tab"] = self.active_tab
+        context["can_edit"] = self.object.tournament.can_edit(self.request.user)
+        return context
+
+
+class PlayoffSetupView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixin, View):
+    """Configure a playoff: pick the qualification round, size, timing and series
+    lengths, preview the qualifiers the standings give, then confirm.
+
+    The preview is a plain re-render on change (no JS needed): the director
+    submits ``preview`` to refresh the qualifier list, and ``confirm`` to create
+    the playoff. Seeds are editable before confirming, because the standings can
+    tie exactly and only a human can settle that.
+    """
+
+    template_name = "tournaments/division_playoff_setup.html"
+
+    def get(self, request, *args, **kwargs):
+        division = self.get_division()
+        return render(request, self.template_name, self._context(division))
+
+    def post(self, request, *args, **kwargs):
+        division = self.get_division()
+        data = request.POST
+        if data.get("action") == "delete":
+            return self._delete(request, division)
+        form = self._read_form(division, data)
+        if data.get("action") == "confirm":
+            errors = self._save(request, division, form)
+            if not errors:
+                messages.success(request, "Playoff created.")
+                return redirect("division_playoff", **division.slug_kwargs())
+            form["errors"] = errors
+        return render(request, self.template_name, self._context(division, form))
+
+    # -- helpers ---------------------------------------------------------
+
+    def _delete(self, request, division):
+        if self._has_results(division):
+            messages.error(
+                request,
+                "This playoff already has results — delete those first.",
+            )
+        else:
+            delete_playoff(
+                division.tournament, request.user, {"division": division.name}
+            )
+            messages.success(request, "Playoff removed.")
+        return redirect("division_playoff_setup", **division.slug_kwargs())
+
+    def _has_results(self, division):
+        """Whether any playoff game has been played. A playoff can be
+        reconfigured or removed freely until then, and not afterwards."""
+        playoff = playoff_for(division)
+        if playoff is None:
+            return False
+        rounds = list(playoff.bracket().rounds)
+        return division.result_slips.filter(round__in=rounds).exists()
+
+    def _read_form(self, division, data):
+        """Pull the submitted configuration out of the POST, falling back to
+        sensible defaults so a half-filled form still renders."""
+        try:
+            count = int(data.get("qualifier_count") or 4)
+        except ValueError:
+            count = 4
+        if count not in QUALIFIER_COUNTS:
+            count = 4
+        try:
+            qualification_round = int(data.get("qualification_round") or 0)
+        except ValueError:
+            qualification_round = 0
+        timing = data.get("timing") or str(Timing.POSTSCRIPT)
+        stage_games = {}
+        for key in series_keys(count):
+            raw = data.get(f"games_{key}")
+            if raw is None:
+                stage_games[key] = default_stage_games(count).get(key, 3)
+                continue
+            try:
+                stage_games[key] = int(raw)
+            except ValueError:
+                stage_games[key] = 0
+        # Concurrent mode plays every placement series: an eliminated bracket
+        # player with nothing to play would be the only idle person in the room.
+        if timing == str(Timing.CONCURRENT):
+            for key in placement_keys(count):
+                if stage_games.get(key, 0) < 1:
+                    stage_games[key] = max(
+                        stage_games.get(key, 0), default_stage_games(count)[key]
+                    )
+        seed_names = data.getlist("seed")
+        return {
+            "qualification_round": qualification_round,
+            "qualifier_count": count,
+            "timing": timing,
+            "stage_games": stage_games,
+            "seed_names": [n for n in seed_names if n],
+            "errors": [],
+        }
+
+    def _seeds(self, division, form):
+        """The seed snapshot to offer: the director's override if they supplied
+        one, else the standings at the qualification round."""
+        auto = qualification_seeds(
+            division, form["qualification_round"], form["qualifier_count"]
+        )
+        names = form.get("seed_names") or []
+        if len(names) != form["qualifier_count"]:
+            return auto
+        by_name = {s["player"]: s for s in auto}
+        return [
+            {
+                "seed": i + 1,
+                "player": name,
+                "wins": by_name.get(name, {}).get("wins", 0),
+                "spread": by_name.get(name, {}).get("spread", 0),
+            }
+            for i, name in enumerate(names)
+        ]
+
+    def _save(self, request, division, form):
+        from tournaments.playoff import PlayoffConfig
+
+        seeds = self._seeds(division, form)
+        config = PlayoffConfig(
+            qualification_round=form["qualification_round"],
+            qualifier_count=form["qualifier_count"],
+            timing=form["timing"],
+            stage_games=form["stage_games"],
+            seeds=tuple(s["player"] for s in seeds),
+        )
+        errors = validate_config(config) + schedule_conflicts(division, config)
+        if errors:
+            return errors
+        payload = {
+            "division": division.name,
+            "qualification_round": config.qualification_round,
+            "qualifier_count": config.qualifier_count,
+            "timing": config.timing,
+            "stage_games": config.stage_games,
+            "seeds": seeds,
+        }
+        command = update_playoff if playoff_for(division) else create_playoff
+        try:
+            command(division.tournament, request.user, payload)
+        except ValueError as exc:
+            return [str(exc)]
+        return []
+
+    def _context(self, division, form=None):
+        playoff = playoff_for(division)
+        if form is None:
+            if playoff is not None:
+                form = {
+                    "qualification_round": playoff.qualification_round,
+                    "qualifier_count": playoff.qualifier_count,
+                    "timing": playoff.timing,
+                    "stage_games": playoff.stage_games,
+                    "seed_names": [s["player"] for s in playoff.seeds],
+                    "errors": [],
+                }
+            else:
+                count = 4
+                form = {
+                    # Default to where a postscript playoff has to qualify:
+                    # the last configured round, played or not.
+                    "qualification_round": (
+                        max(selectable_qualification_rounds(division), default=1)
+                    ),
+                    "qualifier_count": count,
+                    "timing": str(Timing.POSTSCRIPT),
+                    "stage_games": default_stage_games(count),
+                    "seed_names": [],
+                    "errors": [],
+                }
+        count = form["qualifier_count"]
+        # Candidates for a manual override: everyone still standing, best first.
+        pd = PairingData.for_division(division)
+        candidates = [
+            p.name for p in standings_after_round(pd, form["qualification_round"])
+        ]
+        return {
+            "division": division,
+            "active_tab": "playoff",
+            "can_edit": True,
+            "form": form,
+            "playoff": playoff,
+            "has_results": self._has_results(division),
+            "seeds": self._seeds(division, form),
+            "candidates": candidates,
+            "qualifier_counts": QUALIFIER_COUNTS,
+            "timings": [
+                (str(Timing.POSTSCRIPT), "Postscript — the main tournament ends "
+                 "at the qualification round"),
+                (str(Timing.CONCURRENT), "Concurrent — everyone else keeps "
+                 "playing the configured schedule"),
+            ],
+            "series_rows": [
+                {
+                    "key": key,
+                    "label": SERIES_LABELS[key],
+                    "games": form["stage_games"].get(key, 0),
+                    "optional": key in placement_keys(count),
+                }
+                for key in series_keys(count)
+            ],
+            "errors": form.get("errors", []),
+            # Every configured round, not just the played ones — a postscript
+            # playoff qualifies on the last round of the schedule, which is
+            # normally still unplayed when the director sets the playoff up.
+            "rounds": selectable_qualification_rounds(division) or [1],
+        }
