@@ -353,6 +353,13 @@ class ResultsGrid(EditGrid):
             for r in rows
         ]
 
+    def from_portable(self, rows, division):
+        pks = _entrant_pk_by_name(division)
+        return [
+            {**r, "winner": pks.get(r["winner"]), "loser": pks.get(r["loser"])}
+            for r in rows
+        ]
+
     def serialize_row(self, slip):
         return slip.to_dict()
 
