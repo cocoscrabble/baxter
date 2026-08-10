@@ -144,6 +144,15 @@ pub struct PairingInput {
     /// older callers and corpus cases parsing.
     #[serde(default)]
     pub published_pairings: HashMap<i32, Vec<(String, String)>>,
+    /// Round number -> players sitting that round out entirely: paired into no
+    /// game and given no bye, but *not* withdrawn — they still appear in
+    /// standings and their played results still count. The host uses this to
+    /// reserve players a playoff bracket owns, so the ordinary field keeps
+    /// pairing around them; it is deliberately generic (a director excusing a
+    /// player for one round is the same shape). `#[serde(default)]` keeps older
+    /// callers and the frozen corpus cases parsing.
+    #[serde(default)]
+    pub inactive_players: HashMap<i32, Vec<String>>,
     /// Seed for the random strategies. Defaults to 0, so a run is fully
     /// reproducible; the caller supplies entropy if it wants variety.
     #[serde(default)]

@@ -55,6 +55,9 @@ EVENT_TYPES = frozenset(
         "pairing_seed_rerolled",
         "match_simulated",
         "round_simulated",
+        "playoff_created",
+        "playoff_updated",
+        "playoff_deleted",
         # A synthesized full-state event for tournaments predating the log.
         "state_snapshot",
     }
@@ -288,16 +291,45 @@ def division_state(division) -> dict:
     from tournaments.pairing.base import PairingData, standings_after_round
 
     pd = PairingData.for_division(division)
-    standings = [
-        [p.name, p.wins, p.losses, p.ties, p.spread]
-        for p in standings_after_round(pd, division.max_round(), include_dropped=True)
-    ]
-    return {
+    standings = standings_after_round(
+        pd, division.max_round(), include_dropped=True
+    )
+    state = {
         "entrants": entrants,
         "rounds": rounds,
         "results": results,
-        "standings": standings,
+        "standings": [
+            [p.name, p.wins, p.losses, p.ties, p.spread] for p in standings
+        ],
     }
+    # Playoff state joins the digest only when there is a playoff, so every
+    # digest recorded before playoffs existed still hashes to the same value.
+    from tournaments.playoff import build_bracket, final_placements, playoff_for
+
+    playoff = playoff_for(division)
+    if playoff is not None:
+        bracket = build_bracket(playoff.config(), pd.result_slips)
+        numbers = {e.player.name: e.number for e in division.entrants.select_related("player")}
+        state["playoff"] = {
+            "qualification_round": playoff.qualification_round,
+            "qualifier_count": playoff.qualifier_count,
+            "timing": playoff.timing,
+            "stage_games": dict(sorted(playoff.stage_games.items())),
+            "seeds": list(playoff.config().seeds),
+            "series": [
+                [
+                    s.key, s.position, s.high, s.low, s.max_games, s.start_round,
+                    s.status, s.winner, s.decided_by,
+                    [[g.number, g.round, g.status] for g in s.games],
+                ]
+                for s in bracket.series
+            ],
+            "placements": [
+                [p.place, p.name, p.source]
+                for p in final_placements(bracket, standings, numbers)
+            ],
+        }
+    return state
 
 
 def division_digest(division) -> str:
@@ -511,6 +543,9 @@ def describe_event(event) -> str:
         "rounds_published": lambda: f"Published rounds {p.get('rounds', '')} in {div}",
         "round_published": lambda: f"Published round {p.get('round', '')} in {div}",
         "round_unpublished": lambda: f"Unpublished round {p.get('round', '')} in {div}",
+        "playoff_created": lambda: f"Created a {p.get('qualifier_count', '')}-player playoff in {div}",
+        "playoff_updated": lambda: f"Reconfigured the playoff in {div}",
+        "playoff_deleted": lambda: f"Removed the playoff in {div}",
         "match_simulated": lambda: f"Simulated a match in {div} round {p.get('round', '')}",
         "round_simulated": lambda: f"Simulated round {p.get('round', '')} in {div}",
         "state_snapshot": lambda: f"Recorded a state snapshot for {div}",

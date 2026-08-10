@@ -74,6 +74,9 @@ def pairing_data_to_input(pd: PairingData) -> dict:
             str(k): [[a, b] for (a, b) in v]
             for k, v in pd.published_pairings.items()
         },
+        "inactive_players": {
+            str(k): list(v) for k, v in pd.inactive_players.items()
+        },
         "seed": pd.seed,
         "cop_config": _cop_config_to_input(pd.cop_config),
         # Omitted keys fall back to the engine's defaults, so a partial config

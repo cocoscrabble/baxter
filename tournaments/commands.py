@@ -25,6 +25,7 @@ from tournaments.models import (
     Tournament,
     default_cop_config,
 )
+from tournaments.playoff import refresh_after_results
 
 User = get_user_model()
 
@@ -276,9 +277,11 @@ def _write_result(division, pairing, payload, instance):
     else:
         slip = ResultSlip.objects.create(**fields)
     # Recompute round status inside the command so the recorded digest reflects
-    # it (a replay must see the same status).
+    # it (a replay must see the same status). Same for retiring the playoff games
+    # this result may just have made unnecessary.
     if pairing.round_pairings_id:
         pairing.round_pairings.update_status()
+    refresh_after_results(division)
     return slip
 
 
@@ -340,6 +343,89 @@ def save_cop_config(tournament, actor, payload):
     settings_obj.cop_config = payload["cop_config"]
     settings_obj.save(update_fields=["cop_config"])
     return EventResult(payload=payload, division=division, result=settings_obj)
+
+
+# ---------------------------------------------------------------------------
+# Playoffs
+# ---------------------------------------------------------------------------
+
+# The playoff's whole recorded intent. Everything else about a bracket — who
+# meets whom, series scores, which games are still needed, final placements — is
+# derived from this plus the division's results, so these three commands are the
+# only playoff events the log ever carries.
+
+
+def _playoff_payload(payload):
+    """Normalize a create/update payload into a PlayoffConfig, or raise."""
+    from tournaments.playoff import PlayoffConfig, validate_config
+
+    config = PlayoffConfig(
+        qualification_round=int(payload["qualification_round"]),
+        qualifier_count=int(payload["qualifier_count"]),
+        timing=payload["timing"],
+        stage_games={k: int(v) for k, v in payload["stage_games"].items()},
+        seeds=tuple(s["player"] for s in payload["seeds"]),
+    )
+    errors = validate_config(config)
+    if errors:
+        raise ValueError("; ".join(errors))
+    return config
+
+
+def _save_playoff(division, payload):
+    from tournaments.models import Playoff
+    from tournaments.playoff import schedule_conflicts
+
+    config = _playoff_payload(payload)
+    errors = schedule_conflicts(division, config)
+    if errors:
+        raise ValueError("; ".join(errors))
+    playoff, _ = Playoff.objects.update_or_create(
+        division=division,
+        defaults={
+            "qualification_round": int(payload["qualification_round"]),
+            "qualifier_count": int(payload["qualifier_count"]),
+            "timing": payload["timing"],
+            "stage_games": {k: int(v) for k, v in payload["stage_games"].items()},
+            "seeds": payload["seeds"],
+        },
+    )
+    return playoff
+
+
+@records_event("playoff_created")
+def create_playoff(tournament, actor, payload):
+    """payload: {division, qualification_round, qualifier_count, timing,
+    stage_games: {series key: games}, seeds: [{seed, player, wins, spread}]}.
+
+    ``seeds`` is the confirmed qualification snapshot, by player name — the
+    director may have overridden it, and freezing it here is what makes the
+    bracket reproducible when two qualifiers were exactly level."""
+    division = _division(tournament, payload["division"])
+    playoff = _save_playoff(division, payload)
+    return EventResult(payload=payload, division=division, result=playoff)
+
+
+@records_event("playoff_updated")
+def update_playoff(tournament, actor, payload):
+    """payload as create_playoff. Reconfigures a playoff that has not yet been
+    played; the caller checks that no playoff game has a result."""
+    division = _division(tournament, payload["division"])
+    playoff = _save_playoff(division, payload)
+    return EventResult(payload=payload, division=division, result=playoff)
+
+
+@records_event("playoff_deleted")
+def delete_playoff(tournament, actor, payload):
+    """payload: {division}. Removes the playoff and its series rows; the draft
+    playoff rounds regenerate away."""
+    from tournaments.models import Playoff
+
+    division = _division(tournament, payload["division"])
+    deleted, _ = Playoff.objects.filter(division=division).delete()
+    return EventResult(
+        payload=payload, division=division, result=deleted, record=bool(deleted)
+    )
 
 
 @records_event("entrants_bulk_imported")
@@ -497,6 +583,7 @@ def _apply_sim_result(division, round_num, r):
     )
     if pairing is not None and pairing.round_pairings_id:
         pairing.round_pairings.update_status()
+    refresh_after_results(division)
     return slip
 
 
@@ -515,6 +602,7 @@ def simulate_match_cmd(tournament, actor, payload):
     slip = simulate_match(division, payload["round"], first, second)
     if slip.pairing_id and slip.pairing.round_pairings_id:
         slip.pairing.round_pairings.update_status()
+    refresh_after_results(division)
     out = {**payload, "result": _sim_result_dict(slip)}
     return EventResult(payload=out, division=division, result=slip)
 
@@ -529,6 +617,13 @@ def simulate_round_cmd(tournament, actor, payload):
     if "results" in payload:  # replay: apply the recorded results
         for r in payload["results"]:
             _apply_sim_result(division, round_num, r)
+        # Mirror the live path even when there was nothing to apply: simulating
+        # an empty round still settles its status (a playoff window round whose
+        # series all clinched early is finished, not merely published).
+        rp = division.round_pairings_set.filter(round=round_num).first()
+        if rp:
+            rp.update_status()
+        refresh_after_results(division)
         return EventResult(payload=payload, division=division, result=None)
     before = set(
         division.result_slips.filter(round=round_num).values_list("pk", flat=True)

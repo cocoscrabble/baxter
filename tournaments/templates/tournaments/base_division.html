@@ -13,6 +13,7 @@
 <a href="{% url 'division_standings' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'standings' %} active{% endif %}">Standings</a>
 <a href="{% url 'division_pairings' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'pairings' %} active{% endif %}">Pairings</a>
 <a href="{% url 'division_all_results' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'results' %} active{% endif %}">Results</a>
+{% if division.playoff %}<a href="{% url 'division_playoff' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'playoff' %} active{% endif %}">Playoff</a>{% endif %}
 <a href="{% url 'resultslip_create' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'add_result' %} active{% endif %}">Add Result</a>
 {% if can_edit %}
 <span class="nav-tab-sep"></span>
@@ -29,6 +30,7 @@
         <a href="{% url 'division_entrants_edit' division.tournament.slug division.slug %}" class="nav-menu-item{% if active_tab == 'edit_entrants' %} active{% endif %}">Edit Entrants</a>
         <a href="{% url 'division_fixtures' division.tournament.slug division.slug %}" class="nav-menu-item{% if active_tab == 'fixtures' %} active{% endif %}">Fixtures</a>
         <a href="{% url 'division_board_tables' division.tournament.slug division.slug %}" class="nav-menu-item{% if active_tab == 'board_tables' %} active{% endif %}">Board Tables</a>
+        <a href="{% url 'division_playoff_setup' division.tournament.slug division.slug %}" class="nav-menu-item{% if active_tab == 'playoff' %} active{% endif %}">Playoff</a>
     </div>
 </details>
 <a href="{% url 'division_scorecards' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'scorecards' %} active{% endif %}">Scorecards</a>

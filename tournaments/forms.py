@@ -216,6 +216,16 @@ class ResultSlipForm(forms.Form):
             raise forms.ValidationError(
                 "Winner score must be greater than or equal to the opponent score."
             )
+        # A correction that would rewrite a playoff bracket under games already
+        # played is refused rather than applied silently.
+        if pairing and winner and winner_score is not None and loser_score is not None:
+            from tournaments.playoff import conflicts_for_single_result
+
+            conflicts = conflicts_for_single_result(
+                self._division, pairing, winner.player.name, winner_score, loser_score,
+            )
+            if conflicts:
+                raise forms.ValidationError(conflicts)
         return cleaned_data
 
     def save(self):

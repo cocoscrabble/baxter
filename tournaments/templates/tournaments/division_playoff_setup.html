@@ -1,0 +1,129 @@
+{% extends "tournaments/base_division.html" %}
+
+{% block title %}Playoff settings - {{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
+
+{% block content %}
+<h1>Playoff: {{ division.name }}</h1>
+
+{% if playoff %}
+<p class="settings-intro">
+  This division already has a playoff.
+  <a href="{% url 'division_playoff' division.tournament.slug division.slug %}">View the bracket</a>.
+  {% if has_results %}
+  Its games have started, so it can no longer be reconfigured.
+  {% endif %}
+</p>
+{% endif %}
+
+{% if errors %}
+<ul class="errorlist">
+  {% for error in errors %}<li>{{ error }}</li>{% endfor %}
+</ul>
+{% endif %}
+
+<form method="post">
+  {% csrf_token %}
+
+  <section class="settings-section">
+    <h2>Qualification</h2>
+    <p>
+      <label for="qualification_round">Qualify on the standings after round</label>
+      <select name="qualification_round" id="qualification_round"{% if has_results %} disabled{% endif %}>
+        {% for r in rounds %}
+        <option value="{{ r }}"{% if r == form.qualification_round %} selected{% endif %}>{{ r }}</option>
+        {% endfor %}
+      </select>
+    </p>
+    <p>
+      <label for="qualifier_count">Qualifiers</label>
+      <select name="qualifier_count" id="qualifier_count"{% if has_results %} disabled{% endif %}>
+        {% for count in qualifier_counts %}
+        <option value="{{ count }}"{% if count == form.qualifier_count %} selected{% endif %}>Top {{ count }}</option>
+        {% endfor %}
+      </select>
+    </p>
+    <p>
+      <label for="timing">Timing</label>
+      <select name="timing" id="timing"{% if has_results %} disabled{% endif %}>
+        {% for value, label in timings %}
+        <option value="{{ value }}"{% if value == form.timing %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </p>
+    {% if not has_results %}
+    <button type="submit" name="action" value="preview" class="btn-secondary">Preview</button>
+    {% endif %}
+  </section>
+
+  <section class="settings-section">
+    <h2>Series lengths</h2>
+    <p class="settings-intro">
+      Each series is an odd number of games; a series ends as soon as one player
+      has more than half of them, so its last games may never be played. Set an
+      optional series to 0 to leave it out. Note that a concurrent playoff has to play
+      every series, since we want every player in the room to have a game.
+    </p>
+    <table>
+      <thead>
+        <tr><th>Series</th><th class="num">Games</th></tr>
+      </thead>
+      <tbody>
+        {% for row in series_rows %}
+        <tr>
+          <td>{{ row.label }}{% if row.optional %} <small>(optional)</small>{% endif %}</td>
+          <td class="num">
+            <input type="number" name="games_{{ row.key }}" value="{{ row.games }}"
+                   min="0" step="1" style="width: 5em"
+                   aria-label="Games in the {{ row.label|lower }} series"
+                   {% if has_results %}disabled{% endif %}>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="settings-section">
+    <h2>Qualifiers</h2>
+    <p class="settings-intro">
+      Taken from the standings after round {{ form.qualification_round }}. Change
+      a row to override it — worth doing when two players are exactly level,
+      since the order confirmed here is the one the bracket keeps for good.
+    </p>
+    <table>
+      <thead>
+        <tr><th class="num">Seed</th><th>Player</th><th class="num">Record</th><th class="num">Spread</th></tr>
+      </thead>
+      <tbody>
+        {% for seed in seeds %}
+        <tr>
+          <td class="num">{{ seed.seed }}</td>
+          <td>
+            <select name="seed" aria-label="Seed {{ seed.seed }} player"{% if has_results %} disabled{% endif %}>
+              {% for candidate in candidates %}
+              <option value="{{ candidate }}"{% if candidate == seed.player %} selected{% endif %}>{{ candidate }}</option>
+              {% endfor %}
+            </select>
+          </td>
+          <td class="num">{{ seed.wins|floatformat:"-1" }}</td>
+          <td class="num">{{ seed.spread }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  {% if not has_results %}
+  <button type="submit" name="action" value="confirm">
+    {% if playoff %}Save playoff{% else %}Create playoff{% endif %}
+  </button>
+  {% endif %}
+</form>
+
+{% if playoff and not has_results %}
+<form method="post" class="playoff-delete">
+  {% csrf_token %}
+  <button type="submit" name="action" value="delete" class="btn-danger">Remove playoff</button>
+</form>
+{% endif %}
+{% endblock %}

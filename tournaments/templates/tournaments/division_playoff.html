@@ -1,0 +1,149 @@
+{% extends "tournaments/base_division.html" %}
+
+{% block title %}Playoff - {{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
+
+{% block content %}
+<h1>Playoff: {{ division.name }}</h1>
+
+{% if no_playoff %}
+  <p class="empty-state">This division has no playoff.</p>
+  {% if can_edit %}
+  <p><a href="{% url 'division_playoff_setup' division.tournament.slug division.slug %}">Set one up</a>.</p>
+  {% endif %}
+{% else %}
+
+<p class="settings-intro">
+  Top {{ playoff.qualifier_count }} after round {{ playoff.qualification_round }},
+  {% if playoff.timing == "postscript" %}
+    played after the main tournament ends.
+  {% else %}
+    played alongside the rest of the schedule.
+  {% endif %}
+  {% if can_edit %}
+  <a href="{% url 'division_playoff_setup' division.tournament.slug division.slug %}">Settings</a>
+  {% endif %}
+</p>
+
+<section class="playoff-bracket">
+  {% for window in windows %}
+  <div class="playoff-window">
+    <h2>Rounds {{ window.rounds|first }}–{{ window.rounds|last }}</h2>
+    {% for series in window.series %}
+    <article class="playoff-series playoff-series-{{ series.status }}">
+      <h3>{{ series.label }}</h3>
+      <p class="playoff-series-length">
+        {% if series.max_games == 1 %}Single game{% else %}Best of {{ series.max_games }}{% endif %}
+      </p>
+
+      {% if series.status == "pending" %}
+        <p class="empty-state">Waiting on an earlier series.</p>
+      {% else %}
+      <table class="playoff-score">
+        <tr{% if series.winner == series.high %} class="playoff-winner"{% endif %}>
+          <td>{{ series.high }}</td>
+          <td class="num">{{ series.high_score|floatformat:"-1" }}</td>
+        </tr>
+        <tr{% if series.winner == series.low %} class="playoff-winner"{% endif %}>
+          <td>{{ series.low }}</td>
+          <td class="num">{{ series.low_score|floatformat:"-1" }}</td>
+        </tr>
+      </table>
+
+      <p class="playoff-status">
+        {% if series.status == "clinched" %}
+          <span class="playoff-tag badge-finished">{{ series.winner }} wins</span>
+          {% if series.decided_by == "spread" %}
+            on series spread ({{ series.high_spread }} to {{ series.high }})
+          {% endif %}
+        {% elif series.status == "tied" %}
+          <span class="playoff-tag badge-error">Tied — needs a decider</span>
+        {% elif series.status == "in_progress" %}
+          <span class="playoff-tag badge-in-progress">In progress</span>
+        {% else %}
+          <span class="playoff-tag badge-published">Scheduled</span>
+        {% endif %}
+      </p>
+
+      <table class="playoff-games">
+        <thead>
+          <tr><th>Game</th><th class="num">Round</th><th class="num">Score</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          {% for game in series.games %}
+          <tr class="playoff-game-{{ game.status }}">
+            <td>{{ game.number }}</td>
+            <td class="num">{{ game.round }}</td>
+            <td class="num">
+              {% if game.played %}{{ game.high_score }} – {{ game.low_score }}{% endif %}
+            </td>
+            <td>
+              {% if game.status == "played" %}
+                {% if game.tied %}drawn{% else %}{{ game.winner }}{% endif %}
+              {% elif game.status == "scheduled" %}scheduled
+              {% elif game.status == "not_needed" %}not necessary
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</section>
+
+<section class="playoff-placements">
+  <h2>Final placements</h2>
+  <p class="settings-intro">
+    The top {{ playoff.qualifier_count }} places come from the bracket, not from
+    win-loss records: a runner-up can finish the playoff with a worse record than
+    the player who came third. Every playoff game still counts towards records
+    and ratings.
+  </p>
+  <table>
+    <thead>
+      <tr><th class="num">Place</th><th>Player</th><th>How</th></tr>
+    </thead>
+    <tbody>
+      {% for placement in placements %}
+      <tr class="{% if placement.source == 'series' %}playoff-placed{% elif not placement.name %}playoff-unresolved{% endif %}">
+        <td class="num">{{ placement.place }}</td>
+        <td>{% if placement.name %}{{ placement.name }}{% else %}<em>not yet decided</em>{% endif %}</td>
+        <td>
+          {% if placement.source == "series" %}bracket
+          {% elif placement.source == "seed" %}qualification order
+          {% elif placement.source == "standings" %}standings
+          {% else %}{{ placement.note }}{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="playoff-seeds">
+  <h2>Qualifiers</h2>
+  <p class="settings-intro">
+    The standings snapshot taken after round {{ playoff.qualification_round }},
+    as confirmed when the playoff was created.
+  </p>
+  <table>
+    <thead>
+      <tr><th class="num">Seed</th><th>Player</th><th class="num">Record</th><th class="num">Spread</th></tr>
+    </thead>
+    <tbody>
+      {% for seed in seeds %}
+      <tr>
+        <td class="num">{{ seed.seed }}</td>
+        <td>{{ seed.player }}</td>
+        <td class="num">{{ seed.wins|floatformat:"-1" }}</td>
+        <td class="num">{{ seed.spread }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+{% endblock %}

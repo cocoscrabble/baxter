@@ -58,6 +58,7 @@ COMMAND_BACKED = {
     "UnpublishRoundView",
     "SimulateMatchView",
     "SimulateRoundView",
+    "PlayoffSetupView",
 }
 
 # POST views that don't mutate logged tournament state.

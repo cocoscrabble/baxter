@@ -76,4 +76,8 @@ def simulate_round(division, round_num) -> int:
     rp_obj = division.round_pairings_set.filter(round=round_num).first()
     if rp_obj:
         rp_obj.update_status()
+    # Simulated results clinch series like real ones; retire what they retire.
+    from tournaments.playoff import refresh_after_results
+
+    refresh_after_results(division)
     return created

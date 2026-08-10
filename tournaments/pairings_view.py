@@ -19,6 +19,7 @@ from itertools import groupby
 from .models import Pairing, RoundPairings
 from .pairing.base import PairingData
 from .pairing.round_pairing import RP
+from .playoff import build_bracket, playoff_for, series_label
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,17 @@ class AnnotatedPairing:
     # Earlier rounds in which these two players already met (the repeat rounds).
     # Empty for a first meeting; populated only when the pair repeats.
     repeat_rounds: tuple[int, ...] = field(default_factory=tuple)
+    # "Semifinal 1, game 2" for a playoff game; empty for an ordinary pairing.
+    playoff_label: str = ""
+
+
+def _playoff_label(pairing) -> str:
+    """"Semifinal 1, game 2" for a playoff game, else empty."""
+    if pairing.series_id is None:
+        return ""
+    return series_label(
+        pairing.series.key, pairing.series.position, pairing.game_number
+    )
 
 
 class RoundTabStatus(Enum):
@@ -198,13 +210,66 @@ class PairingsPresenter:
     # --- Tab derivation ---
 
     @cached_property
+    def bracket(self):
+        """The division's derived bracket, or None."""
+        playoff = playoff_for(self.division)
+        if playoff is None:
+            return None
+        return build_bracket(playoff.config(), self.pd.result_slips)
+
+    @cached_property
+    def playoff_round_labels(self) -> dict[int, str]:
+        """``{round: label}`` for the rounds a bracket owns.
+
+        A postscript playoff's rounds are not in the configured schedule, so they
+        would otherwise have no tab at all. The label names the series playing
+        that round ("Semifinal, game 2"), or says the window is closed.
+        """
+        if self.bracket is None:
+            return {}
+        labels: dict[int, list[str]] = {r: [] for r in self.bracket.rounds}
+        for series in self.bracket.series:
+            for game in series.games:
+                if game.round in labels and game.status != "not_needed":
+                    labels[game.round].append(
+                        series_label(series.key, series.position, game.number)
+                    )
+        return {
+            r: ", ".join(names) if names else "Playoff (no games needed)"
+            for r, names in labels.items()
+        }
+
+    @cached_property
     def tabs(self):
-        if not self.pd.round_pairings:
-            return []
-        return [self._build_tab(rp) for rp in self.pd.round_pairings]
+        scheduled = {rp.round for rp in self.pd.round_pairings}
+        tabs = [self._build_tab(rp) for rp in self.pd.round_pairings]
+        # Rounds the bracket owns that the schedule doesn't cover (postscript).
+        for round_num, label in sorted(self.playoff_round_labels.items()):
+            if round_num not in scheduled:
+                tabs.append(self._build_playoff_tab(round_num, label))
+        tabs.sort(key=lambda t: t["round"])
+        return tabs
+
+    def _build_playoff_tab(self, round_num, label):
+        db_status = self.db_status_map.get(round_num)
+        status = {
+            RoundPairings.FINISHED: RoundTabStatus.FINISHED,
+            RoundPairings.IN_PROGRESS: RoundTabStatus.IN_PROGRESS,
+            RoundPairings.PUBLISHED: RoundTabStatus.PUBLISHED,
+        }.get(db_status, RoundTabStatus.PAIRABLE)
+        return {
+            "round": round_num,
+            "status": status.value,
+            "label": label,
+            "_enum": status,
+        }
 
     def _build_tab(self, rp):
         r = rp.round
+        if r in self.playoff_round_labels and self.bracket is not None:
+            if self.bracket.config.timing == "postscript":
+                # A postscript playoff owns the round outright.
+                return self._build_playoff_tab(r, self.playoff_round_labels[r])
         db_status = self.db_status_map.get(r)
         if db_status == RoundPairings.FINISHED:
             tab_status = RoundTabStatus.FINISHED
@@ -276,6 +341,7 @@ class PairingsPresenter:
                 result=result,
                 is_fixed=key in self.fixed_lookup,
                 repeat_rounds=repeat_rounds,
+                playoff_label=_playoff_label(p),
             ))
         return rows
 
@@ -296,11 +362,25 @@ class PairingsPresenter:
 
     @cached_property
     def available_rounds(self):
-        return [rp.round for rp in self.pd.round_pairings if self._can_pair(rp)]
+        rounds = [rp.round for rp in self.pd.round_pairings if self._can_pair(rp)]
+        # A postscript playoff's rounds are outside the configured schedule, so
+        # they'd otherwise never be offered for pairing (or auto-generated).
+        scheduled = {rp.round for rp in self.pd.round_pairings}
+        for round_num in self.playoff_round_labels:
+            if round_num in scheduled:
+                continue
+            if self.db_status_map.get(round_num) in (
+                RoundPairings.PUBLISHED,
+                RoundPairings.IN_PROGRESS,
+                RoundPairings.FINISHED,
+            ):
+                continue
+            rounds.append(round_num)
+        return sorted(rounds)
 
     @cached_property
     def waiting_message(self) -> str | None:
-        if not self.pd.round_pairings:
+        if not self.pd.round_pairings and not self.playoff_round_labels:
             return "No round pairings configured."
         for rp in self.pd.round_pairings:
             db_status = self.db_status_map.get(rp.round)
@@ -309,6 +389,10 @@ class PairingsPresenter:
             if rp.start_round and self.db_status_map.get(rp.start_round) != RoundPairings.FINISHED:
                 return f"Round {rp.round} is waiting for round {rp.start_round} results."
             return None
+        # The main schedule is done; a playoff may still have rounds to play.
+        for round_num in sorted(self.playoff_round_labels):
+            if self.db_status_map.get(round_num) != RoundPairings.FINISHED:
+                return None
         return "All rounds are finished."
 
     @cached_property
@@ -397,7 +481,9 @@ class PublishedPairingsPresenter:
                     result = f"{scores[p.first_id]} - {scores[p.second_id]}"
                 else:
                     result = ""
-                rows.append(AnnotatedPairing(pairing=p, result=result))
+                rows.append(AnnotatedPairing(
+                    pairing=p, result=result, playoff_label=_playoff_label(p),
+                ))
             annotated.append((round_num, rows))
         context["pairings"] = annotated
         # The round shown by default: the latest published round (tabs let the

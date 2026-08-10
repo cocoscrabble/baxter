@@ -1,4 +1,13 @@
 <div id="standings-content">
+{% if division.playoff %}
+{# With a playoff, these standings compare players who have played different
+   numbers of games, and they are not the finishing order — the bracket is. #}
+<p class="settings-intro">
+    Final placement comes from the
+    <a href="{% url 'division_playoff' division.tournament.slug division.slug %}">playoff bracket</a>,
+    not from this table.
+</p>
+{% endif %}
 {% if rounds %}
 <div class="round-tabs">
     {% for r in rounds %}
