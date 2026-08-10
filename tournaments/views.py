@@ -1906,6 +1906,18 @@ class DivisionEditResultsView(DivisionEditGridView):
     grid = ResultsGrid()
     active_tab = "edit_results"
 
+    def on_saved(self, division, rows):
+        # The grid takes the start from a column the director types, so it is the
+        # one path that can contradict a published board. Correct it *after* the
+        # save event, so the log holds what was entered and then what it was
+        # rewritten to, in that order — which is also the order a replay applies
+        # them in.
+        from tournaments.starts import correct_result_starts
+
+        super().on_saved(division, rows)
+        actor = self.request.user if self.request.user.is_authenticated else None
+        correct_result_starts(division.tournament, actor, {"division": division.name})
+
 
 def _read_request_data(request):
     """Parse request body as JSON (or datastar signals). Returns (data, error_response)."""

@@ -11,8 +11,9 @@ from tournaments.replay import events_from_tournament, replay
 from users.models import User
 
 
-@tag("slow")
-class ReplayTests(TestCase):
+class LoggedTournamentMixin:
+    """Builds a small tournament through the real views, so every step logs."""
+
     def setUp(self):
         self.owner = User.objects.create_user(username="owner", password="pw")
         self.players = [
@@ -30,7 +31,7 @@ class ReplayTests(TestCase):
             content_type="application/json",
         )
 
-    def _build_logged_tournament(self):
+    def _build_logged_tournament(self, players=None):
         """Drive a small tournament through the real views so every step logs."""
         self.client.post(
             reverse("tournament_create"),
@@ -50,7 +51,7 @@ class ReplayTests(TestCase):
             {
                 "rows": [
                     {"number": i + 1, "player": p.pk, "dropped": False}
-                    for i, p in enumerate(self.players)
+                    for i, p in enumerate(players or self.players)
                 ]
             },
         )
@@ -67,6 +68,9 @@ class ReplayTests(TestCase):
         )
         return tournament, division
 
+
+@tag("slow")
+class ReplayTests(LoggedTournamentMixin, TestCase):
     def test_replay_reproduces_digest_end_to_end(self):
         tournament, division = self._build_logged_tournament()
         recorded_digest = division_digest(division)
@@ -147,3 +151,124 @@ class ReplayTests(TestCase):
         ctx = replay(events, upto=created["seq"])
         replayed = ctx.tournament.divisions.get()
         self.assertEqual(replayed.entrants.count(), 0)
+
+
+@tag("slow")
+class PublishedStartCorrectionTests(LoggedTournamentMixin, TestCase):
+    """The published board owns the start. A result grid row that says otherwise
+    is rewritten to match, and the rewrite is itself a logged event."""
+
+    def _enter_result(self, division, pairing, winner, winner_started):
+        loser = pairing.second if winner == pairing.first else pairing.first
+        return self._post_json(
+            "division_edit_results",
+            division,
+            {
+                "rows": [
+                    {
+                        "round": pairing.round,
+                        "winner": winner.pk,
+                        "winner_score": 450,
+                        "loser": loser.pk,
+                        "loser_score": 380,
+                        "winner_started": winner_started,
+                    }
+                ]
+            },
+        )
+
+    def _event_types(self, tournament):
+        return [e.event_type for e in tournament.events.order_by("seq")]
+
+    def test_start_entered_against_the_board_is_rewritten(self):
+        tournament, division = self._build_logged_tournament()
+        pairing = division.pairings.filter(round=1).order_by("table").first()
+        # The board says `first` started; enter the result claiming they did not.
+        response = self._enter_result(division, pairing, pairing.first, False)
+        self.assertEqual(response.status_code, 200)
+
+        slip = division.result_slips.get()
+        self.assertTrue(slip.winner_started, "the published start should have won")
+
+    def test_the_rewrite_is_logged_after_the_save_that_caused_it(self):
+        tournament, division = self._build_logged_tournament()
+        pairing = division.pairings.filter(round=1).order_by("table").first()
+        self._enter_result(division, pairing, pairing.first, False)
+
+        self.assertEqual(
+            self._event_types(tournament)[-2:],
+            ["results_saved", "result_starts_corrected"],
+        )
+        correction = tournament.events.order_by("seq").last()
+        self.assertEqual(
+            correction.payload["corrections"],
+            [
+                {
+                    "round": 1,
+                    "winner": pairing.first.player.name,
+                    "loser": pairing.second.player.name,
+                    "winner_started": True,
+                }
+            ],
+        )
+        # The save event keeps what was actually entered, so the log shows the
+        # wrong start and then its correction rather than quietly rewriting
+        # history.
+        saved = tournament.events.filter(event_type="results_saved").last()
+        self.assertEqual(saved.payload["rows"][0]["winner_started"], False)
+
+    def test_a_start_that_matches_the_board_logs_no_correction(self):
+        tournament, division = self._build_logged_tournament()
+        pairing = division.pairings.filter(round=1).order_by("table").first()
+        self._enter_result(division, pairing, pairing.first, True)
+
+        self.assertNotIn("result_starts_corrected", self._event_types(tournament))
+        self.assertTrue(division.result_slips.get().winner_started)
+
+    def test_the_corrected_log_replays_to_the_same_state(self):
+        tournament, division = self._build_logged_tournament()
+        pairing = division.pairings.filter(round=1).order_by("table").first()
+        self._enter_result(division, pairing, pairing.first, False)
+        recorded = division_digest(division)
+
+        ctx = replay(events_from_tournament(tournament), verify=True)
+
+        self.assertEqual(division_digest(ctx.tournament.divisions.get()), recorded)
+
+    def test_a_bye_is_never_corrected(self):
+        # A bye row is stored real-player-first for display, which contradicts
+        # its slip by construction (the bye opponent is the notional starter).
+        # Comparing the two would "correct" every bye into charging its player.
+        from tournaments.starts import start_conflicts
+
+        eve = Player.objects.create(name="Eve", player_number="005", rating=1200)
+        tournament, division = self._build_logged_tournament(self.players + [eve])
+        bye = division.pairings.get(round=1, second__player__is_bye=True)
+        slip = division.result_slips.get(pairing=bye)
+        self.assertEqual(slip.winner, bye.first)
+        self.assertFalse(slip.winner_started)
+
+        self.assertEqual(start_conflicts(division), [])
+
+    def test_a_draft_round_is_not_authoritative(self):
+        # Round 2 was never published, so its pairing is not a promise to anyone
+        # and a result entered against it keeps the start it was given.
+        from tournaments.starts import start_conflicts
+        from tournaments.models import Pairing, ResultSlip, RoundPairings
+
+        tournament, division = self._build_logged_tournament()
+        rp = RoundPairings.objects.create(
+            division=division, round=2, status=RoundPairings.DRAFT
+        )
+        entrants = list(division.entrants.order_by("number")[:2])
+        pairing = Pairing.objects.create(
+            division=division, round=2, round_pairings=rp,
+            first=entrants[0], second=entrants[1], table=1,
+        )
+        ResultSlip.objects.create(
+            division=division, round=2, pairing=pairing,
+            winner=entrants[0], winner_score=450,
+            loser=entrants[1], loser_score=380, winner_started=False,
+        )
+
+        self.assertEqual(start_conflicts(division), [])

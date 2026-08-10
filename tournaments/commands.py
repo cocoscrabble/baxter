@@ -27,6 +27,11 @@ from tournaments.models import (
 )
 from tournaments.playoff import refresh_after_results
 
+# Imported for its @records_event side effect: the start-correction command lives
+# with the policy it enforces, but has to be registered before a replay can
+# dispatch it.
+from tournaments import starts  # noqa: F401
+
 User = get_user_model()
 
 

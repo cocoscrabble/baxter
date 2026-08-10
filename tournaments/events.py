@@ -43,6 +43,7 @@ EVENT_TYPES = frozenset(
         "results_saved",
         "result_added",
         "result_edited",
+        "result_starts_corrected",
         "fixed_pairings_saved",
         "fixed_tables_saved",
         "board_tables_saved",
@@ -534,6 +535,10 @@ def describe_event(event) -> str:
         "results_saved": lambda: f"Saved results for {div} ({rows()})",
         "result_added": lambda: f"Entered a result in {div} round {p.get('round', '')}",
         "result_edited": lambda: f"Edited a result in {div} round {p.get('round', '')}",
+        "result_starts_corrected": lambda: (
+            f"Corrected {len(p.get('corrections', []))} start(s) in {div} to match "
+            "the published pairings"
+        ),
         "fixed_pairings_saved": lambda: f"Saved fixed pairings for {div}",
         "fixed_tables_saved": lambda: f"Saved fixed tables for {div}",
         "board_tables_saved": lambda: f"Saved the board/table map for {div}",

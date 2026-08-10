@@ -10,7 +10,9 @@ use crate::model::{
 };
 use crate::rng::seeded;
 use crate::round_pairing::{normalize_round_robin_start_rounds, RoundPairing, RP};
-use crate::standings::{standings_after_round, Pairings, Player, Repeats, Starts, BYE_NAME};
+use crate::standings::{
+    standings_after_round, Pairing, Pairings, Player, Repeats, Starts, BYE_NAME,
+};
 use crate::strategies::{basic, cop, quads, roundrobin, swiss, Ctx};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -167,7 +169,7 @@ fn can_pair(rp: &RoundPairing, status: &HashMap<i32, RoundStatus>) -> bool {
     rp.start_round == 0 || status_of(status, rp.start_round) == RoundStatus::Finished
 }
 
-/// Pairings reconstructed from a finished round's result slips (starter first).
+/// Pairings reconstructed from a round's result slips (starter first).
 fn extract_pairings(slips: &[ResultSlipData], round: i32) -> Pairings {
     let mut p = Pairings::new();
     for r in slips {
@@ -176,6 +178,80 @@ fn extract_pairings(slips: &[ResultSlipData], round: i32) -> Pairings {
         }
     }
     p
+}
+
+/// Which record owns the start when a result slip and its published pairing
+/// disagree about who went first.
+///
+/// `true` — the published pairing wins. The players were handed a board with a
+/// starter named on it, and every later round's orientation is balanced against
+/// that assignment, so a slip entered the other way round is treated as a
+/// mis-keyed start rather than a re-decision. `false` would make the entered
+/// result authoritative instead. Flipping this alone changes only the ledger;
+/// the app-side rule that rewrites the stored slip lives in
+/// `tournaments/starts.py::PUBLISHED_PAIRING_OWNS_THE_START` and must agree.
+const PUBLISHED_ORIENTATION_WINS: bool = true;
+
+/// Unordered key for a pair of names.
+fn canon_pair(a: &str, b: &str) -> (String, String) {
+    if a <= b {
+        (a.to_string(), b.to_string())
+    } else {
+        (b.to_string(), a.to_string())
+    }
+}
+
+/// Everything already decided about a round, oriented starter-first: its result
+/// slips, plus the saved orientation of every published game not yet played.
+///
+/// A published (or in-progress) round's printed first/second assignment is
+/// authoritative from the moment it is published — waiting for results would let
+/// a regeneration re-decide orientations the players have already been handed.
+///
+/// Each game is counted exactly once. A slip and a saved pairing may describe the
+/// same game, in which case the slip says *who played whom* and the saved pairing
+/// says *who started* (see `PUBLISHED_ORIENTATION_WINS`). A saved pairing whose
+/// players turn up in some other game — a round edited after publishing — is
+/// stale and dropped: a player named on a slip for the round is "covered", and
+/// only the bye opponent is exempt, since one round can hold several byes.
+///
+/// Draft rounds contribute nothing: they carry no slips, and the caller leaves
+/// them out of `published`.
+fn replay_pairings(
+    round: i32,
+    slips: &[ResultSlipData],
+    published: &HashMap<i32, Vec<(String, String)>>,
+) -> Pairings {
+    let saved: HashMap<(String, String), (&String, &String)> = published
+        .get(&round)
+        .into_iter()
+        .flatten()
+        .map(|(a, b)| (canon_pair(a, b), (a, b)))
+        .collect();
+
+    let mut ret = Pairings::new();
+    let mut covered: HashSet<String> = HashSet::new();
+    for played in extract_pairings(slips, round).pairings {
+        let oriented = match saved.get(&canon_pair(&played.first.name, &played.second.name)) {
+            Some((first, second)) if PUBLISHED_ORIENTATION_WINS => {
+                Pairing::new(Player::new(*first), Player::new(*second))
+            }
+            _ => played,
+        };
+        for name in [&oriented.first.name, &oriented.second.name] {
+            if !name.eq_ignore_ascii_case(BYE_NAME) {
+                covered.insert(name.clone());
+            }
+        }
+        ret.pairings.push(oriented);
+    }
+    for (first, second) in published.get(&round).into_iter().flatten() {
+        if covered.contains(first) || covered.contains(second) {
+            continue;
+        }
+        ret.add(Player::new(first), Player::new(second));
+    }
+    ret
 }
 
 /// Pair a single round: inject a bye for an odd field, run the strategy on the
@@ -297,9 +373,14 @@ pub fn pair(input: &PairingInput) -> Vec<RoundResult> {
 
     let mut ret: Vec<RoundResult> = Vec::new();
     for rp in &rps {
-        if status_of(&status, rp.round) == RoundStatus::Finished {
-            // Replay a finished round into the repeat/starts history.
-            for p in extract_pairings(slips, rp.round).pairings {
+        // A round with any saved pairing or result is history, not a candidate
+        // for pairing: replay it into the repeat/starts ledger so its games and
+        // its first/second orientation carry into every later round. This covers
+        // a finished round, a partially played one, and a published round whose
+        // results are all still outstanding — all three are already printed.
+        let saved = replay_pairings(rp.round, slips, &input.published_pairings);
+        if !saved.is_empty() {
+            for p in saved.pairings {
                 repeats.add(&p);
                 starts.register(&p, rp.round);
             }
@@ -1806,5 +1887,203 @@ mod tests {
             assert!(p.first != "A" && p.second != "A");
             assert!(p.first != "B" && p.second != "B");
         }
+    }
+
+    // -- published pairings in the start ledger --------------------------
+    //
+    // A published round is already printed: its games and its first/second
+    // orientation are history from that moment, not from when its results land.
+
+    #[test]
+    fn a_published_round_with_no_results_is_replayed_not_repaired() {
+        // Round 1 was published with B first — the opposite of what the engine
+        // picks on its own — so round 2 must give the start back to A.
+        let inp = input(
+            r#"{
+                "players": [
+                    {"name": "A", "rating": 1900},
+                    {"name": "B", "rating": 1800}
+                ],
+                "round_pairings": [
+                    {"round": 1, "start_round": 0, "pairing": "KotH"},
+                    {"round": 2, "start_round": 0, "pairing": "KotH"}
+                ],
+                "published_pairings": {"1": [["B", "A"]]}
+            }"#,
+        );
+        let out = pair(&inp);
+        assert!(
+            out.iter().all(|r| r.round != 1),
+            "a published round must not be re-paired"
+        );
+        let r2 = out.iter().find(|r| r.round == 2).unwrap();
+        assert_eq!(r2.pairings[0].first, "A");
+        assert_eq!(r2.pairings[0].repeats, 2, "round 1's game must count");
+    }
+
+    #[test]
+    fn a_partial_round_contributes_each_saved_start_exactly_once() {
+        // Round 1 is published in full but only A-B has been played. A's start
+        // comes from the slip, C's from the saved pairing: one apiece. Round 2
+        // pins A against C, so the tie (rather than A leading 2-1) is the
+        // assertion that neither was counted twice.
+        let inp = input(
+            r#"{
+                "players": [
+                    {"name": "A", "rating": 1900},
+                    {"name": "B", "rating": 1800},
+                    {"name": "C", "rating": 1700},
+                    {"name": "D", "rating": 1600}
+                ],
+                "round_pairings": [
+                    {"round": 1, "start_round": 0, "pairing": "KotH"},
+                    {"round": 2, "start_round": 0, "pairing": "KotH"}
+                ],
+                "published_pairings": {"1": [["A", "B"], ["C", "D"]]},
+                "fixed_pairings": {"2": [["A", "C"]]},
+                "result_slips": [
+                    {"round": 1, "winner_name": "A", "loser_name": "B", "winner_score": 400, "loser_score": 300, "winner_started": true}
+                ]
+            }"#,
+        );
+        let out = pair(&inp);
+        let r2 = out.iter().find(|r| r.round == 2).unwrap();
+        let ac = r2
+            .pairings
+            .iter()
+            .find(|p| p.first == "A" || p.first == "C")
+            .unwrap();
+        assert_eq!(ac.first, "A", "A and C are level on starts");
+    }
+
+    #[test]
+    fn a_fully_finished_round_is_not_double_counted_with_its_pairings() {
+        // Every game has both a slip and a saved pairing. B and D each started
+        // once, so round 2's pin between them is a tie broken by order — the
+        // same answer a slips-only ledger gives.
+        let inp = input(
+            r#"{
+                "players": [
+                    {"name": "A", "rating": 1900},
+                    {"name": "B", "rating": 1800},
+                    {"name": "C", "rating": 1700},
+                    {"name": "D", "rating": 1600}
+                ],
+                "round_pairings": [
+                    {"round": 1, "start_round": 0, "pairing": "KotH"},
+                    {"round": 2, "start_round": 1, "pairing": "KotH"}
+                ],
+                "published_pairings": {"1": [["B", "A"], ["D", "C"]]},
+                "fixed_pairings": {"2": [["A", "B"]]},
+                "result_slips": [
+                    {"round": 1, "winner_name": "A", "loser_name": "B", "winner_score": 400, "loser_score": 300, "winner_started": false},
+                    {"round": 1, "winner_name": "C", "loser_name": "D", "winner_score": 400, "loser_score": 300, "winner_started": false}
+                ]
+            }"#,
+        );
+        let out = pair(&inp);
+        let r2 = out.iter().find(|r| r.round == 2).unwrap();
+        let ab = r2
+            .pairings
+            .iter()
+            .find(|p| p.first == "A" || p.first == "B")
+            .unwrap();
+        assert_eq!(ab.first, "A", "B started round 1 and A did not");
+        assert_eq!(ab.repeats, 2);
+    }
+
+    #[test]
+    fn a_published_bye_charges_nobody_a_start() {
+        // The bye opponent is the notional starter, so A sits round 1 out
+        // without being charged. Round 2 pins A against C, who also has no
+        // start: level, so A (named first) goes first.
+        let inp = input(
+            r#"{
+                "players": [
+                    {"name": "A", "rating": 1900},
+                    {"name": "B", "rating": 1800},
+                    {"name": "C", "rating": 1700}
+                ],
+                "round_pairings": [
+                    {"round": 1, "start_round": 0, "pairing": "KotH"},
+                    {"round": 2, "start_round": 0, "pairing": "KotH"}
+                ],
+                "published_pairings": {"1": [["Bye", "A"], ["B", "C"]]},
+                "fixed_pairings": {"2": [["A", "C"]]}
+            }"#,
+        );
+        let out = pair(&inp);
+        let r2 = out.iter().find(|r| r.round == 2).unwrap();
+        let ac = r2
+            .pairings
+            .iter()
+            .find(|p| p.first == "A" || p.first == "C")
+            .unwrap();
+        assert_eq!(ac.first, "A");
+    }
+
+    #[test]
+    fn a_result_entered_against_the_published_start_defers_to_the_board() {
+        // Round 1 was published with B first, but the result was keyed with A as
+        // the starter. The printed board owns the start, so B carries round 1's
+        // start and round 2 gives it to A. Were the slip to win instead, the
+        // orientation would be the other way round.
+        let inp = input(
+            r#"{
+                "players": [
+                    {"name": "A", "rating": 1900},
+                    {"name": "B", "rating": 1800}
+                ],
+                "round_pairings": [
+                    {"round": 1, "start_round": 0, "pairing": "KotH"},
+                    {"round": 2, "start_round": 1, "pairing": "KotH"}
+                ],
+                "published_pairings": {"1": [["B", "A"]]},
+                "result_slips": [
+                    {"round": 1, "winner_name": "A", "loser_name": "B", "winner_score": 400, "loser_score": 300, "winner_started": true}
+                ]
+            }"#,
+        );
+        let out = pair(&inp);
+        let r2 = out.iter().find(|r| r.round == 2).unwrap();
+        assert_eq!(r2.pairings[0].first, "A");
+    }
+
+    #[test]
+    fn a_published_round_edited_after_publishing_defers_to_its_results() {
+        // The saved pairing says A-B and C-D, but A and C actually played each
+        // other. The board only owns the *start*, never who played whom: the
+        // stale saved pairs are dropped rather than replayed, which would charge
+        // A (and C) a second start and count a game that never existed. B and D
+        // are still covered by their saved pairing.
+        let inp = input(
+            r#"{
+                "players": [
+                    {"name": "A", "rating": 1900},
+                    {"name": "B", "rating": 1800},
+                    {"name": "C", "rating": 1700},
+                    {"name": "D", "rating": 1600}
+                ],
+                "round_pairings": [
+                    {"round": 1, "start_round": 0, "pairing": "KotH"},
+                    {"round": 2, "start_round": 0, "pairing": "KotH"}
+                ],
+                "published_pairings": {"1": [["A", "B"], ["C", "D"]]},
+                "fixed_pairings": {"2": [["A", "D"]]},
+                "result_slips": [
+                    {"round": 1, "winner_name": "A", "loser_name": "C", "winner_score": 400, "loser_score": 300, "winner_started": true}
+                ]
+            }"#,
+        );
+        let out = pair(&inp);
+        let r2 = out.iter().find(|r| r.round == 2).unwrap();
+        let ad = r2
+            .pairings
+            .iter()
+            .find(|p| p.first == "A" || p.first == "D")
+            .unwrap();
+        // A started once (the slip); D never started, so D goes first.
+        assert_eq!(ad.first, "D");
+        assert_eq!(ad.repeats, 1, "A and D have not met");
     }
 }

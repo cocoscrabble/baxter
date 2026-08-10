@@ -88,11 +88,15 @@ class PairingData:
     # pairs that must be matched regardless of what the pairing strategy would choose.
     fixed_pairings: dict[int, list[tuple[str, str]]] = field(default_factory=dict)
 
-    # Already-published pairings of every non-draft round, keyed by round number.
-    # The round-robin solver pins these so an in-progress round's printed-but-
-    # unplayed games are honored (never recomputed or duplicated elsewhere). Draft
-    # rounds are absent — they are free to re-pair. Empty by default, so callers
-    # that build PairingData by hand (tests) need not supply it.
+    # Already-published pairings of every non-draft round, keyed by round number,
+    # each stored as (first, second) — the orientation the players were handed.
+    # The engine replays them into its repeat/start ledger, so a published round's
+    # games and first/second assignments survive a regeneration even before any
+    # result is entered; the round-robin solver additionally pins them, so an
+    # in-progress round's printed-but-unplayed games are never recomputed or
+    # duplicated elsewhere. Draft rounds are absent — they are free to re-pair.
+    # Empty by default, so callers that build PairingData by hand (tests) need
+    # not supply it.
     published_pairings: dict[int, list[tuple[str, str]]] = field(default_factory=dict)
 
     # Players sitting a round out entirely, keyed by round number: paired into no
@@ -141,10 +145,11 @@ class PairingData:
         fixed: dict[int, list[tuple[str, str]]] = defaultdict(list)
         for fp in division.fixed_pairings.select_related("entrant1__player", "entrant2__player").all():
             fixed[fp.round_number].append((fp.entrant1.player.name, fp.entrant2.player.name))
-        # Published pairings of non-draft rounds, so the round-robin solver can pin
-        # an in-progress round's remaining games. Draft rounds are excluded (free to
-        # re-pair); null-round_pairings rows are ignored. Imported locally to keep
-        # this module free of module-level Django model dependencies.
+        # Published pairings of non-draft rounds: the engine replays them into its
+        # start ledger and the round-robin solver pins them, so an in-progress
+        # round's printed-but-unplayed games are honored. Draft rounds are excluded
+        # (free to re-pair); null-round_pairings rows are ignored. Imported locally
+        # to keep this module free of module-level Django model dependencies.
         from tournaments.models import RoundPairings
 
         published: dict[int, list[tuple[str, str]]] = defaultdict(list)
@@ -156,7 +161,14 @@ class PairingData:
             ]
         ).select_related("first__player", "second__player")
         for p in published_qs:
-            published[p.round].append((p.first.player.name, p.second.player.name))
+            first, second = p.first.player, p.second.player
+            # A bye row is stored real-player-first for readability, the opposite
+            # of the ledger's convention that the bye opponent is the notional
+            # starter. Put it back, or replaying the round would charge the byed
+            # player a start they never took.
+            if second.is_bye:
+                first, second = second, first
+            published[p.round].append((first.name, second.name))
         # A division with no settings row yet has no configured pairings.
         # Malformed blobs are rejected at write time (_validate_blocks), so a
         # missing row is the only thing to tolerate here. Imported locally to
@@ -181,6 +193,7 @@ class PairingData:
             entrants=entrants,
             repeats=Repeats(),
             fixed_pairings=dict(fixed),
+            published_pairings=dict(published),
             round_pairings=rps,
             seed=seed,
             cop_config=cop_config,
