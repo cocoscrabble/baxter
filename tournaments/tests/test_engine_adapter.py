@@ -177,7 +177,21 @@ class CopConfigTests(TestCase):
                 "simulations": 200,
                 "always_wins_simulations": 100,
                 "disallow_repeat_byes": False,
+                # Off unless a division opts in; the engine reads the horizon
+                # from start_round by default.
+                "horizon_from_paired_round": False,
             },
+        )
+
+    def test_horizon_flag_passes_through_when_set(self):
+        # Not in DEFAULT_COP_CONFIG and not on the settings form, so a division
+        # only carries it if it was written into cop_config directly (as
+        # scripts/compare_swiss.py does to match a sheet). The adapter still has
+        # to forward it, or the engine silently counts rounds the other way.
+        pd = _cop_pd({**_COP_CONFIG, "horizon_from_paired_round": True})
+        self.assertIs(
+            pairing_data_to_input(pd)["cop_config"]["horizon_from_paired_round"],
+            True,
         )
 
     def test_empty_config_serializes_to_none(self):
