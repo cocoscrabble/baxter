@@ -23,15 +23,20 @@
     --color-deleted-bg: #fdecea;
 
     /* Round status colors */
-    --color-finished: #607d8b;
+    /* Status colours. Each is used as text on its own -light background
+       (badges, resting round tabs) and as a background under white text
+       (active round tab), so both directions have to clear WCAG AA 4.5:1.
+       These are the original hues scaled toward black by the least amount
+       that gets there — verified with Lighthouse, don't lighten them back. */
+    --color-finished: #56707d;
     --color-finished-light: #eceff1;
-    --color-in-progress: #e67e22;
+    --color-in-progress: #aa5d19;
     --color-in-progress-light: #fef5e7;
-    --color-pairable: #2980b9;
+    --color-pairable: #2574a8;
     --color-pairable-light: #ebf5fb;
-    --color-published: #1e9e57;
+    --color-published: #187e46;
     --color-published-light: #e6f6ee;
-    --color-future: #95a5a6;
+    --color-future: #657071;
     --color-future-light: #f2f3f4;
 
     /* Surfaces */

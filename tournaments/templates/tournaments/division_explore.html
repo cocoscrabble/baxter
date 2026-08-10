@@ -24,7 +24,7 @@ standings. Nothing is saved.</p>
             {% for b in based_on_choices %}<option value="{{ b }}"{% if b == based_on %} selected{% endif %}>{% if b == 0 %}seedings{% else %}round {{ b }}{% endif %}</option>{% endfor %}
         </select>
     </label>
-    <button type="button" class="btn-save"
+    <button type="button"
         data-on:click="@get('{% url 'division_explore' division.tournament.slug division.slug %}?round=' + $exRound + '&strategy=' + $exStrategy + '&based_on=' + $exBasedOn + '&seed=' + $exSeed)">Pair</button>
     <button type="button" class="btn-secondary"
         data-show="$exStrategy == 'Random' || $exStrategy == 'RandomNoRepeats' || $exStrategy == 'SwissPlusRandom'"
