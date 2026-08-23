@@ -1,9 +1,11 @@
 FROM python:3.14-slim
 
 # Install Node.js (tabulator-tables via django-node-assets), a C toolchain (to
-# link the Rust extension), and uv.
+# link the Rust extension), git (uv shells out to it to fetch the coco-ratings
+# git dependency -- python:3.14-slim ships without it, and `uv sync` fails with
+# "Git executable not found" if it is missing), and uv.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ca-certificates gnupg build-essential \
+    && apt-get install -y --no-install-recommends curl ca-certificates gnupg git build-essential \
     && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
@@ -21,6 +23,9 @@ WORKDIR /app
 # a path dependency, so its crate sources (and the core crate it depends on)
 # must be present for the build — copy them before the sync. They change less
 # often than app code, so this layer stays cached across app-only edits.
+#
+# coco-ratings is a *git* dependency (see pyproject.toml), so this step also
+# clones from GitHub at the commit uv.lock pins.
 COPY pyproject.toml uv.lock ./
 COPY scrabble-pairing/ ./scrabble-pairing/
 COPY scrabble-pairing-py/ ./scrabble-pairing-py/
