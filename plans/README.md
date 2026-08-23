@@ -47,3 +47,28 @@ Current plans:
   four phases): `whatif_import.py` + the `division_imported` command, the import
   view, and the Explore tab (`whatif.py`, `DivisionExploreView`) with a
   side-by-side actual-vs-what-if comparison.
+- `PLAN_COCO_PROGRAM.md` — **program-level**: how Baxter and the central
+  player/ratings DB (`../ratings`, the `cocodb` app) fit together. Holds the
+  governing principles (Baxter never needs the central DB while a tournament is
+  live; provisional players never enter it), the shared identity model
+  (canonical zero-padded CoCo numbers, `T-` placeholders that block the export),
+  the interchange contract (roster pull + native-file push), and live
+  non-binding rating projections using the ratings project's own calculator.
+  Read this before the two Baxter plans below; the ratings-side counterpart is
+  `../ratings/plans/baxter-integration.md`. **Not started.**
+- `PLAN_PLAYER_IDENTITY.md` — make `player_number` the key everywhere outside
+  the database, replacing the player's *name*: unique (case-insensitive)
+  numbers, the pairing/engine boundary and every event payload re-keyed,
+  schema-version 2 payloads with v1 upgraders, a digest backfill, duplicate
+  names finally made legal, and display disambiguation only where a name
+  actually clashes. The `scrabble-pairing` crate needs no changes — it already
+  treats `name` as an opaque key. **Not started**; 7 phases, 1–3 indivisible.
+  **Prerequisite for `PLAN_ENTRANTS.md`.**
+- `PLAN_ENTRANTS.md` — entrant management redesign (issue #47, folding in #6
+  and #42): a WESPA rating alongside the CoCo one with a cascade, the rating
+  *snapshotted* on the entrant so a mid-tournament sync can't reshuffle seeds,
+  tentative/paid/playing-up registration state, a dedicated registration page
+  beside the existing grid, an embeddable public entrants fragment for the CoCo
+  site, and a `PlayerSource` seam standing in for the not-yet-built playerdb and
+  the not-yet-known WESPA source. **Not started**; 5 phases plus an optional
+  sixth. Depends on `PLAN_PLAYER_IDENTITY.md`, which lands first.
