@@ -5,6 +5,7 @@ description = "Efficient scrabble tournament manager"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "coco-ratings",
     "dataclasses-json>=0.6.7",
     "datastar-py>=0.8.0",
     "django>=6.0.2",
@@ -23,6 +24,16 @@ dependencies = [
 # uv does not watch the crate source — after editing Rust, rebuild with
 # `uv sync --reinstall-package scrabble-pairing-py` (or `make rust-engine`).
 scrabble-pairing-py = { path = "scrabble-pairing-py" }
+
+# The CoCo rating engine (../ratings), shared so live in-tournament rating
+# projections use the *same* math as the official ratings rather than a second
+# implementation of it. Import only `coco_ratings.core`: it is dependency-free
+# by contract, enforced over there by tests/test_core_isolation.py.
+#
+# Tracks main; uv.lock pins the exact commit, so builds are reproducible and an
+# upgrade is a deliberate `uv lock --upgrade-package coco-ratings`. A path
+# dependency cannot work — the Docker build has no access to ../ratings.
+coco-ratings = { git = "https://github.com/cocoscrabble/ratings.git", branch = "main" }
 
 [dependency-groups]
 dev = [
