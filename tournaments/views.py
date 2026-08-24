@@ -1255,9 +1255,14 @@ class DivisionResultsExportView(LoginRequiredMixin, CanEditDivisionMixin, Detail
         rows = [
             ResultRow(
                 round=slip.round,
+                # The plain name, not the disambiguated label: this column is a
+                # join key for coco-ratings, and the number columns beside it are
+                # what resolve a shared name.
                 winner=slip.winner.name,
+                winner_number=slip.winner.key,
                 winner_score=slip.winner_score,
                 opponent=slip.loser.name,
+                opponent_number=slip.loser.key,
                 opponent_score=slip.loser_score,
                 submitted_on=slip.created_at,
             )
