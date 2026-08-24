@@ -42,10 +42,22 @@ class ExportPlayer:
 class ExportEntrant:
     number: int
     player_number: str
+    # The rating the tournament was actually seeded from, and where it came
+    # from. Carried because the player record has almost certainly drifted since
+    # — a WESPA refresh, a roster sync, a rating period — so re-deriving it from
+    # ``ExportPlayer.rating`` would answer a different question than "what was
+    # this division seeded on?" (plans/PLAN_ENTRANTS.md phase 6).
+    rating: int = 0
+    rating_source: str = ""
 
     @classmethod
     def from_db(cls, entrant) -> "ExportEntrant":
-        return cls(number=entrant.number, player_number=entrant.player.player_number)
+        return cls(
+            number=entrant.number,
+            player_number=entrant.player.player_number,
+            rating=entrant.rating,
+            rating_source=entrant.rating_source,
+        )
 
 
 @dataclass_json

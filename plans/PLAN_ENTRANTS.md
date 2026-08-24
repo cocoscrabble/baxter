@@ -524,13 +524,20 @@ Two things the tests pin that are easy to get wrong later:
 
 ---
 
-## Phase 6 (optional) — Export the snapshot
+## Phase 6 (optional) — Export the snapshot — **IMPLEMENTED**
 
 `ExportEntrant` (`tournament_export.py:41`) carries `rating` and
 `rating_source`, so the registry can see the rating the tournament was actually
 seeded from rather than re-deriving it from a since-drifted player record.
 Additive; no consumer exists yet, so this can be dropped or deferred without
 affecting anything else.
+
+### What landed
+
+Both fields, defaulted so an older consumer reading the bundle is unaffected.
+The tests make the distinction concrete: change the player's rating after entry
+and the bundle still reports the seed under `entrants`, while `players` reports
+today's — two different questions, answered separately.
 
 ---
 
