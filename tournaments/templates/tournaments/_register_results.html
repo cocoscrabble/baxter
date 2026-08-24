@@ -1,0 +1,36 @@
+{% comment %}
+Search results for the registration page. Its own fragment so the search can be
+re-run without disturbing the registration form beside it.
+
+Each row carries the player *number*, which is what the add form posts — a name
+would be ambiguous the moment two players share one.
+{% endcomment %}
+{% if search_query and not search_results %}
+  <p class="empty-state">No players match “{{ search_query }}” who are not already entered.</p>
+{% elif search_results %}
+  <table>
+    <thead>
+      <tr>
+        <th>Player</th>
+        <th class="num">Number</th>
+        <th class="num">CoCo</th>
+        <th class="num">WESPA</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for record in search_results %}
+      <tr>
+        <td>{{ record.name }}</td>
+        <td class="num">{{ record.player_number }}</td>
+        <td class="num">{% if record.rating %}{{ record.rating }}{% else %}—{% endif %}</td>
+        <td class="num">{% if record.wespa_rating is not None %}{{ record.wespa_rating }}{% else %}—{% endif %}</td>
+        <td>
+          <button type="submit" form="register-add-form" name="player"
+                  value="{{ record.player_number }}">Enter</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endif %}

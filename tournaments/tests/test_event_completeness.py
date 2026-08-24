@@ -43,6 +43,8 @@ COMMAND_BACKED = {
     "DivisionRoundPairingsEditView",
     "DivisionSettingsEditView",
     "DivisionEntrantsEditView",
+    "DivisionRegisterView",
+    "CreatePlayerView",
     "DivisionEditResultsView",
     "DivisionFixedPairingsEditView",
     "DivisionFixedTablesEditView",
@@ -66,7 +68,6 @@ EXEMPT = {
     "DivisionPairingMethodPreviewView",  # method compilation only, no write
     "DivisionRoundPairingsPreviewView",  # preview only, no write
     "EditPresenceView",                  # editing-presence heartbeat
-    "CreatePlayerView",                  # global player; roster events carry name+rating
     "PlayerImportView",                  # global registry import (out of scope)
     # Dev tool that builds a whole fake tournament directly; rebuilt on commands
     # in event-log Phase 5.

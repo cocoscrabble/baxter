@@ -10,6 +10,7 @@
 {% editgrid_presence grid %}
 
 <div class="table-toolbar">
+    <a href="{% url 'division_register' division.tournament.slug division.slug %}" class="btn-secondary">Register one</a>
     <button type="button" data-on:click="$showNewEntrant = !$showNewEntrant">Add Entrant</button>
     <button type="button" data-on:click="$showNewPlayer = !$showNewPlayer">Add New Player</button>
     <button data-eg="entrants-table" data-eg-action="undo" type="button" class="btn-secondary">Undo</button>
@@ -77,6 +78,10 @@
 <script>
 const entrantsExtra = {
     createPlayerUrl: "{% url 'create_player' %}",
+    // Which division asked. Players are global, but the creation event has to
+    // live in some tournament's log for a replay to rebuild them.
+    tournamentSlug: "{{ division.tournament.slug }}",
+    divisionSlug: "{{ division.slug }}",
     bulkImportUrl: "{% url 'bulk_import_entrants' division.tournament.slug division.slug %}",
 };
 </script>

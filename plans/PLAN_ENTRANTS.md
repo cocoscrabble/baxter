@@ -293,7 +293,7 @@ Two incidental fixes fell out:
 
 ---
 
-## Phase 3 — Editing surfaces
+## Phase 3 — Editing surfaces — **IMPLEMENTED**
 
 ### 3a. Registration page (primary add flow)
 
@@ -365,6 +365,38 @@ through the registration page, plus the paid→tentative default and its
 override; `test_events.py` asserts the three events' payloads;
 `test_event_completeness.py` passes with the updated sets; a grid save
 round-trips every new column.
+
+### What landed
+
+The registration page (`division_register`), the three commands, and the grid
+columns, with `tournaments/player_source.py` holding the phase 5 seam early
+because 3a needs it. Tests are in `test_registration.py` (26 of them, including
+a full replay of an add + guest + edit session). `CreatePlayerView` is now
+command-backed and off the exempt list.
+
+**Three bugs came out of driving it in a browser rather than only in tests.**
+
+- **The same rating box means two different things, and both had to be told
+  apart from "unchanged".** The edit form prefills the current rating and the
+  grid round-trips it, so treating a *present* value as a hand-edit converted
+  every entrant to ``manual`` on any save — silently making the whole division
+  immune to a later sync. Only a rating that actually *differs* is an override
+  now. The grid case is pinned by `RatingEditInvalidatesDraftsTests`, whose row
+  helper deliberately sends the rating exactly as the client does; without that
+  fidelity the test passed against the bug.
+
+- **The registration fieldset appears twice on one page**, so the guest copy
+  needs a form prefix. Without it both halves render identical element ids and
+  the guest form's labels quietly point at the add form's inputs — visible in
+  the accessibility tree as three unlabelled checkboxes.
+
+- The page rendered `messages` itself, duplicating what the base template
+  already shows.
+
+One deviation: `PlayerSource` (phase 5's seam) was built here rather than
+later, because 3a's search and guest creation are specified to go through it and
+writing direct queries first would only mean rewriting them. WESPA and the
+registry-backed implementation stay in phase 5.
 
 ---
 

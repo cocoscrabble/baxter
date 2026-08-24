@@ -41,6 +41,8 @@ EVENT_TYPES = frozenset(
         "entrants_bulk_imported",
         "player_created",
         "player_number_changed",
+        "entrant_added",
+        "entrant_updated",
         "results_saved",
         "result_added",
         "result_edited",
@@ -659,6 +661,13 @@ def describe_event(event) -> str:
         "playoff_deleted": lambda: f"Removed the playoff in {div}",
         "match_simulated": lambda: f"Simulated a match in {div} round {p.get('round', '')}",
         "round_simulated": lambda: f"Simulated round {p.get('round', '')} in {div}",
+        "player_created": lambda: (
+            f"Created player {p.get('name', '')} (#{p.get('player_number', '')})"
+        ),
+        "entrant_added": lambda: "Entered {} in {}".format(*who("player"), div),
+        "entrant_updated": lambda: "Updated {}'s registration in {}".format(
+            *who("player"), div
+        ),
         "player_number_changed": lambda: (
             f"Changed a player number from {p.get('old', '')} to {p.get('new', '')}"
         ),
