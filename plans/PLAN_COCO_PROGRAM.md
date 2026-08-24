@@ -281,10 +281,25 @@ W3  Baxter entrants          PLAN_ENTRANTS.md             ──┘        │
 W5  live ratings  (needs core extraction from W2 + seeds from W3) ───┘
 ```
 
-**Status:** W2's core extraction and W1 (all seven phases of
-`PLAN_PLAYER_IDENTITY.md`) are **implemented**. W3 (entrants) is unblocked and
-is the next thing to build; W2's remaining phases (number-keyed results, roster
-pull, assigning numbers) are independent of it.
+**Status:** W1 (`PLAN_PLAYER_IDENTITY.md`, seven phases), W2's core extraction,
+and W3 (`PLAN_ENTRANTS.md`, six phases) are all **implemented**.
+
+What remains is the half that crosses the wire, and it is all in the other
+repo's court or waiting on a protocol:
+
+- **W2's remaining phases** — number-keyed results, the roster-pull endpoint,
+  assigning numbers centrally — live in `../ratings/plans/baxter-integration.md`.
+  Baxter's side of the first is already done (the export carries numbers; both
+  CSV widths parse).
+- **W4 (sync)** needs the roster pull to exist. Baxter has the seam
+  (`player_source.PlayerSource`), the outbound bundle
+  (`tournament_export.py`), and the rename mechanism
+  (`commands.change_player_number`) — what is missing is the transport and
+  applying the returned id_map.
+- **W5 (live ratings)** now has everything it needs on this side: the shared
+  calculator, and entrants that pin `rating`/`deviation`/`career_games`/
+  `last_played` as the seed. The last three are zero/null until the pull fills
+  them, which the calculator reads as an unrated player.
 
 - **W1 and W2 are independent of each other** and can run in parallel — they
   converge on the same canonical number format, which is why decision 1 makes
