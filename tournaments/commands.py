@@ -690,6 +690,70 @@ def simulate_round_cmd(tournament, actor, payload):
     return EventResult(payload=out, division=division, result=None)
 
 
+# ---------------------------------------------------------------------------
+# Player identity
+# ---------------------------------------------------------------------------
+
+
+@records_event("player_number_changed")
+def change_player_number(tournament, actor, payload):
+    """payload: {old, new} — rewrite a player's number in place.
+
+    Identity is point-in-time (plans/PLAN_PLAYER_IDENTITY.md decision 2): what
+    matters is that it is consistent at any given moment, not that it is
+    immutable. The case this exists for is number resolution — a guest enters as
+    ``T-7``, a CoCo admin assigns them ``0412`` centrally, Baxter pulls it and
+    the director confirms — and the event is what keeps the append-only log
+    truthful across the rewrite, since every earlier payload names the old
+    number and every later one names the new.
+
+    Recorded against the tournament whose director resolved it. A player in two
+    tournaments gets one event in each log, and either log replays on its own to
+    a consistent state.
+
+    Applying the registry's whole id_map after an upload is *not* here — that
+    belongs with the upload transport. This is the log half, ready before it.
+    """
+    from tournaments.models import (
+        TEMP_NUMBER_PREFIX,
+        Player,
+        canonical_player_number,
+    )
+
+    old = canonical_player_number(payload["old"])
+    new = canonical_player_number(payload["new"])
+    if old == new:
+        return EventResult(payload=payload, tournament=tournament, record=False)
+
+    player = Player.objects.filter(player_number=old).first()
+    if player is None:
+        raise ValueError(f"No player with number {payload['old']!r}.")
+    holder = Player.objects.filter(player_number=new).exclude(pk=player.pk).first()
+    if holder is not None:
+        # Replaying a log that contains a rename into a database that already
+        # holds the renamed player lands here, because Player rows are global:
+        # the replay rebuilt the old number as a fresh row while the original
+        # already carries the new one. That is not a state a replay can
+        # reconcile — the two rows are different people as far as the database
+        # is concerned — so say so rather than merging them.
+        raise ValueError(
+            f"Player number {new!r} is already taken (by {holder.name!r}). "
+            f"A log containing a number change replays only into a database "
+            f"that does not already hold the new number."
+        )
+
+    player.player_number = new
+    # A number outside the local T- namespace is one the registry issued, so the
+    # player is no longer provisional.
+    player.is_provisional = new.startswith(TEMP_NUMBER_PREFIX)
+    player.save(update_fields=["player_number", "is_provisional"])
+    return EventResult(
+        payload={"old": old, "new": new},
+        tournament=tournament,
+        result=player,
+    )
+
+
 @records_event("fixed_pairings_removed")
 def remove_fixed_pairings_cmd(tournament, actor, payload):
     """payload: {division, kept: [[round, player1, player2], ...]} — the fixed
