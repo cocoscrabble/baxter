@@ -650,12 +650,12 @@ def division_standings(division, current_round):
     """
     pd = PairingData.for_division(division)
     standings = standings_after_round(pd, current_round, include_dropped=True)
-    entrants = list(division.entrants.all())
-    seed_by_name = {e.name: e.number for e in entrants}
-    dropped_names = {e.name for e in entrants if e.dropped}
+    entrants = list(division.entrants.select_related("player"))
+    seed_by_key = {e.key: e.number for e in entrants}
+    dropped_keys = {e.key for e in entrants if e.dropped}
     for p in standings:
-        p.seed = seed_by_name.get(p.name)
-        p.dropped = p.name in dropped_names
+        p.seed = seed_by_key.get(p.key)
+        p.dropped = p.key in dropped_keys
     return standings
 
 
@@ -2033,6 +2033,47 @@ class SimulateRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
 # ---------------------------------------------------------------------------
 
 
+def _series_row(series, names):
+    """One series flattened for the bracket template.
+
+    A ``Series`` carries participant *keys*; the template needs names to show.
+    The "who won" highlights are resolved here, on the keys, rather than left to
+    the template to rederive by comparing the rendered strings — two players in
+    one bracket may share a name, and that comparison would light up both rows.
+    """
+
+    def name(key):
+        return names.get(key, key) if key else key
+
+    return {
+        "label": series.label,
+        "status": series.status,
+        "max_games": series.max_games,
+        "high": name(series.high),
+        "low": name(series.low),
+        "high_score": series.high_score,
+        "low_score": series.low_score,
+        "high_spread": series.high_spread,
+        "high_won": series.winner is not None and series.winner == series.high,
+        "low_won": series.winner is not None and series.winner == series.low,
+        "winner": name(series.winner),
+        "decided_by": series.decided_by,
+        "games": [
+            {
+                "number": g.number,
+                "round": g.round,
+                "status": g.status,
+                "played": g.played,
+                "tied": g.tied,
+                "high_score": g.high_score,
+                "low_score": g.low_score,
+                "winner": name(g.winner),
+            }
+            for g in series.games
+        ],
+    }
+
+
 def _playoff_context(division, playoff):
     """Bracket, placements and headline state for a division's playoff pages."""
     pd = PairingData.for_division(division)
@@ -2041,9 +2082,10 @@ def _playoff_context(division, playoff):
         pd, division.max_round(), include_dropped=True
     )
     numbers = {
-        e.player.name: e.number
+        e.player.player_number: e.number
         for e in division.entrants.select_related("player")
     }
+    names = {p.key: p.name for p in standings}
     placements = final_placements(bracket, standings, numbers)
     # Group the series into their windows so the template can render the bracket
     # column by column, which is how a bracket is read.
@@ -2051,7 +2093,11 @@ def _playoff_context(division, playoff):
         {
             "index": window.index,
             "rounds": list(window.rounds),
-            "series": [s for s in bracket.series if s.window == window.index],
+            "series": [
+                _series_row(s, names)
+                for s in bracket.series
+                if s.window == window.index
+            ],
         }
         for window in bracket.windows
     ]
@@ -2174,13 +2220,16 @@ class PlayoffSetupView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixi
                     stage_games[key] = max(
                         stage_games.get(key, 0), default_stage_games(count)[key]
                     )
-        seed_names = data.getlist("seed")
+        # The override selects come back as player keys, not names — the
+        # option values are keys precisely so a shared name cannot pick the
+        # wrong person.
+        seed_keys = data.getlist("seed")
         return {
             "qualification_round": qualification_round,
             "qualifier_count": count,
             "timing": timing,
             "stage_games": stage_games,
-            "seed_names": [n for n in seed_names if n],
+            "seed_keys": [k for k in seed_keys if k],
             "errors": [],
         }
 
@@ -2190,18 +2239,26 @@ class PlayoffSetupView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixi
         auto = qualification_seeds(
             division, form["qualification_round"], form["qualifier_count"]
         )
-        names = form.get("seed_names") or []
-        if len(names) != form["qualifier_count"]:
+        keys = form.get("seed_keys") or []
+        if len(keys) != form["qualifier_count"]:
             return auto
-        by_name = {s["player"]: s for s in auto}
+        # An override may name anyone in the standings, not just the automatic
+        # top N, so fall back to the whole field for the name and record.
+        everyone = {
+            s["key"]: s
+            for s in qualification_seeds(
+                division, form["qualification_round"], count=None
+            )
+        }
         return [
             {
                 "seed": i + 1,
-                "player": name,
-                "wins": by_name.get(name, {}).get("wins", 0),
-                "spread": by_name.get(name, {}).get("spread", 0),
+                "key": key,
+                "player": everyone.get(key, {}).get("player", key),
+                "wins": everyone.get(key, {}).get("wins", 0),
+                "spread": everyone.get(key, {}).get("spread", 0),
             }
-            for i, name in enumerate(names)
+            for i, key in enumerate(keys)
         ]
 
     def _save(self, request, division, form):
@@ -2213,7 +2270,7 @@ class PlayoffSetupView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixi
             qualifier_count=form["qualifier_count"],
             timing=form["timing"],
             stage_games=form["stage_games"],
-            seeds=tuple(s["player"] for s in seeds),
+            seeds=tuple(s["key"] for s in seeds),
         )
         errors = validate_config(config) + schedule_conflicts(division, config)
         if errors:
@@ -2242,7 +2299,7 @@ class PlayoffSetupView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixi
                     "qualifier_count": playoff.qualifier_count,
                     "timing": playoff.timing,
                     "stage_games": playoff.stage_games,
-                    "seed_names": [s["player"] for s in playoff.seeds],
+                    "seed_keys": [s["key"] for s in playoff.seeds],
                     "errors": [],
                 }
             else:
@@ -2256,14 +2313,15 @@ class PlayoffSetupView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixi
                     "qualifier_count": count,
                     "timing": str(Timing.POSTSCRIPT),
                     "stage_games": default_stage_games(count),
-                    "seed_names": [],
+                    "seed_keys": [],
                     "errors": [],
                 }
         count = form["qualifier_count"]
         # Candidates for a manual override: everyone still standing, best first.
         pd = PairingData.for_division(division)
         candidates = [
-            p.name for p in standings_after_round(pd, form["qualification_round"])
+            {"key": p.key, "name": p.name}
+            for p in standings_after_round(pd, form["qualification_round"])
         ]
         return {
             "division": division,

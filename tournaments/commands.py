@@ -360,7 +360,30 @@ def save_cop_config(tournament, actor, payload):
 # only playoff events the log ever carries.
 
 
-def _playoff_payload(payload):
+def _seeds_with_keys(division, seeds):
+    """Seed entries guaranteed to carry a ``key``.
+
+    A payload written before the bracket keyed on player numbers has only
+    ``player``. Resolving it by name is exact for those payloads — the schema
+    they were written under enforced globally unique names — and is the one
+    place that assumption is relied on.
+    """
+    by_name = None
+    out = []
+    for seed in seeds:
+        if seed.get("key"):
+            out.append(seed)
+            continue
+        if by_name is None:
+            by_name = {
+                e.player.name: e.player.player_number
+                for e in division.entrants.select_related("player")
+            }
+        out.append({**seed, "key": by_name.get(seed["player"], seed["player"])})
+    return out
+
+
+def _playoff_payload(seeds, payload):
     """Normalize a create/update payload into a PlayoffConfig, or raise."""
     from tournaments.playoff import PlayoffConfig, validate_config
 
@@ -369,7 +392,7 @@ def _playoff_payload(payload):
         qualifier_count=int(payload["qualifier_count"]),
         timing=payload["timing"],
         stage_games={k: int(v) for k, v in payload["stage_games"].items()},
-        seeds=tuple(s["player"] for s in payload["seeds"]),
+        seeds=tuple(s["key"] for s in seeds),
     )
     errors = validate_config(config)
     if errors:
@@ -381,7 +404,8 @@ def _save_playoff(division, payload):
     from tournaments.models import Playoff
     from tournaments.playoff import schedule_conflicts
 
-    config = _playoff_payload(payload)
+    seeds = _seeds_with_keys(division, payload["seeds"])
+    config = _playoff_payload(seeds, payload)
     errors = schedule_conflicts(division, config)
     if errors:
         raise ValueError("; ".join(errors))
@@ -392,7 +416,7 @@ def _save_playoff(division, payload):
             "qualifier_count": int(payload["qualifier_count"]),
             "timing": payload["timing"],
             "stage_games": {k: int(v) for k, v in payload["stage_games"].items()},
-            "seeds": payload["seeds"],
+            "seeds": seeds,
         },
     )
     return playoff
@@ -401,11 +425,12 @@ def _save_playoff(division, payload):
 @records_event("playoff_created")
 def create_playoff(tournament, actor, payload):
     """payload: {division, qualification_round, qualifier_count, timing,
-    stage_games: {series key: games}, seeds: [{seed, player, wins, spread}]}.
+    stage_games: {series key: games}, seeds: [{seed, key, player, wins, spread}]}.
 
-    ``seeds`` is the confirmed qualification snapshot, by player name — the
-    director may have overridden it, and freezing it here is what makes the
-    bracket reproducible when two qualifiers were exactly level."""
+    ``seeds`` is the confirmed qualification snapshot — the director may have
+    overridden it, and freezing it here is what makes the bracket reproducible
+    when two qualifiers were exactly level. ``key`` is the identity the bracket
+    derives from; ``player`` rides along so the record stays readable."""
     division = _division(tournament, payload["division"])
     playoff = _save_playoff(division, payload)
     return EventResult(payload=payload, division=division, result=playoff)

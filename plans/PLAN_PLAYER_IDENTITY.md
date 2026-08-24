@@ -190,7 +190,7 @@ asserting the survivors keep their numbers and every replacement is a distinct
 
 ---
 
-## Phase 2 — The pairing layer keys on `player_number`
+## Phase 2 — The pairing layer keys on `player_number` — **IMPLEMENTED**
 
 ### 2a. Carry the key through the pairing DTOs
 
@@ -234,6 +234,45 @@ regression net). Add a division with two entrants sharing a name and assert the
 engine pairs them as distinct players, that repeats between each of them and a
 third player are tracked separately, and that their starts don't merge — the
 test that could not have passed before this plan.
+
+### What landed, and what the plan did not anticipate
+
+The DTOs, the boundary, `generate_pairings`, `playoff.py` and `whatif.py` went
+over as written. `SharedNameIdentityTests` and `ByeConstantCouplingTests`
+(`test_pairings.py`) are the verification; the whole Django suite and
+`cargo test` pass, the latter untouched, as decision 3 promised.
+
+Four things the plan had not accounted for:
+
+- **`starts.py`, `match_simulation.py` and `assign_tables.py` needed no change.**
+  They already work on entrant primary keys. Only `starts.py`'s
+  ``corrections`` payload names players, and that is a record rather than a
+  lookup — it moves in Phase 3 with the rest of the payloads.
+
+- **`Playoff.seeds` had to move too.** The frozen seed snapshot is what the
+  bracket derives participants from, so leaving it name-keyed while the
+  standings were number-keyed would have made every `seed_of` lookup miss.
+  Each entry now carries `key` *and* `player`: the key is the identity, the
+  name rides along so the snapshot stays readable and the qualifiers table
+  needs no lookup. Migration `0037` backfills `key` by name — exact for those
+  rows, since they were all written while names were unique. `_save_playoff`
+  does the same for a replayed v1 payload; Phase 3 can move that into
+  `SCHEMA_UPGRADES` where it belongs.
+
+- **Display had to be threaded, not just preserved.** Result slips carry keys
+  only, so a standings row built from results has no name to show. `Results`
+  now takes a key→name map from the entrants, and the standings `Player` keeps
+  both `key` and `name` (falling back to the key when it has none — visibly
+  wrong beats silently blank). The same applies to the bracket page: `Series`
+  holds keys, so `views._series_row` resolves the names *and* the
+  who-won highlights, because a template comparing rendered strings would light
+  up both rows when two bracket players share a name.
+
+- **The state digest changes shape here.** `division_digest` hashes series
+  participants and playoff seeds, which are now numbers. That is the change
+  Phase 3d already plans to backfill, so it is left to land there rather than
+  being papered over twice. The fuzzer's meta-invariant (replay reproduces the
+  digest) still holds, because both sides moved together.
 
 ---
 

@@ -33,12 +33,15 @@ BYE_SCORE = 50
 def create_entrants(n: int) -> list[EntrantData]:
     step = 50 if n <= 16 else 25
     return [
-        EntrantData(PlayerData(f"Player {i + 1}", 2300 - i * step)) for i in range(n)
+        # A synthetic player's identity *is* its label: this simulator never
+        # touches the database, so there is no player number to stand in for.
+        EntrantData(PlayerData(f"Player {i + 1}", f"Player {i + 1}", 2300 - i * step))
+        for i in range(n)
     ]
 
 
 def simulate_match(rng, ratings, pairing, round) -> ResultSlipData:
-    first, second = pairing.first.name, pairing.second.name
+    first, second = pairing.first.key, pairing.second.key
 
     # Bye handling
     if first.lower() == "bye":
@@ -107,7 +110,7 @@ def simulate(
     """
     rng = random.Random(seed)
     entrants = create_entrants(n_entrants)
-    ratings = {e.player.name: e.player.rating for e in entrants}
+    ratings = {e.player.key: e.player.rating for e in entrants}
     rps = [
         d if isinstance(d, RoundPairing) else RoundPairing.from_dict(d)
         for d in round_pairings
@@ -146,8 +149,8 @@ def check_starts_balancing(rounds: list[Round]) -> None:
 
     for round in rounds:
         for slip in round.results:
-            first = slip.first_name
-            second = slip.second_name
+            first = slip.first_key
+            second = slip.second_key
             assert starts.starts[first] <= starts.starts[second], (
                 f"Round {round.number}: {first} has {starts.starts[first]} starts "
                 f"but {second} has {starts.starts[second]} starts — "

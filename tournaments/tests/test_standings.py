@@ -26,10 +26,10 @@ class DroppedAndLateEntrantStandingsTests(TestCase):
 
     def test_dropped_excluded_from_pairing_but_kept_for_display(self):
         entrants = [
-            EntrantData(PlayerData("A", 1600)),
-            EntrantData(PlayerData("B", 1500)),
-            EntrantData(PlayerData("C", 1400), dropped=True),
-            EntrantData(PlayerData("D", 1300)),
+            EntrantData(PlayerData("A", "A", 1600)),
+            EntrantData(PlayerData("B", "B", 1500)),
+            EntrantData(PlayerData("C", "C", 1400), dropped=True),
+            EntrantData(PlayerData("D", "D", 1300)),
         ]
         slips = [
             ResultSlipData(1, "A", "C", 400, 300, True),
@@ -46,8 +46,8 @@ class DroppedAndLateEntrantStandingsTests(TestCase):
     def test_dropped_result_still_counts_for_opponent(self):
         # C withdrew, but the game C lost to A still gives A its win/spread.
         entrants = [
-            EntrantData(PlayerData("A", 1600)),
-            EntrantData(PlayerData("C", 1400), dropped=True),
+            EntrantData(PlayerData("A", "A", 1600)),
+            EntrantData(PlayerData("C", "C", 1400), dropped=True),
         ]
         slips = [ResultSlipData(1, "A", "C", 450, 300, True)]
         pd = self._pd(entrants, slips)
@@ -58,11 +58,11 @@ class DroppedAndLateEntrantStandingsTests(TestCase):
 
     def test_late_entrant_appended_at_bottom(self):
         entrants = [
-            EntrantData(PlayerData("A", 1600)),
-            EntrantData(PlayerData("B", 1500)),
-            EntrantData(PlayerData("C", 1400)),
-            EntrantData(PlayerData("D", 1300)),
-            EntrantData(PlayerData("E", 1200)),  # added after round 1, no results
+            EntrantData(PlayerData("A", "A", 1600)),
+            EntrantData(PlayerData("B", "B", 1500)),
+            EntrantData(PlayerData("C", "C", 1400)),
+            EntrantData(PlayerData("D", "D", 1300)),
+            EntrantData(PlayerData("E", "E", 1200)),  # added after round 1, no results
         ]
         slips = [
             ResultSlipData(1, "A", "C", 400, 300, True),
@@ -75,10 +75,10 @@ class DroppedAndLateEntrantStandingsTests(TestCase):
 
     def test_two_late_entrants_in_seed_order(self):
         entrants = [
-            EntrantData(PlayerData("A", 1600)),
-            EntrantData(PlayerData("B", 1500)),
-            EntrantData(PlayerData("E", 1200)),  # late, lower rated
-            EntrantData(PlayerData("F", 1250)),  # late, higher rated
+            EntrantData(PlayerData("A", "A", 1600)),
+            EntrantData(PlayerData("B", "B", 1500)),
+            EntrantData(PlayerData("E", "E", 1200)),  # late, lower rated
+            EntrantData(PlayerData("F", "F", 1250)),  # late, higher rated
         ]
         slips = [ResultSlipData(1, "A", "B", 400, 300, True)]
         pd = self._pd(entrants, slips)

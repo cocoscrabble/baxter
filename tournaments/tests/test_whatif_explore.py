@@ -43,8 +43,15 @@ class ExploreBase(TestCase):
         )
 
     def _pairs(self, target, based_on, strategy="KotH", seed=0):
+        # The engine returns player keys; resolve them back to names so the
+        # assertions below read as the pairings a director would see.
+        names = {
+            e.player.player_number: e.player.name
+            for e in self.division.entrants.select_related("player")
+        }
         return {
-            frozenset({p.first.name, p.second.name})
+            frozenset({names.get(p.first.key, p.first.key),
+                       names.get(p.second.key, p.second.key)})
             for p in explore_pairing(self.division, target, strategy, based_on, seed)
         }
 
@@ -112,8 +119,13 @@ class ExploreComparisonTests(ExploreBase):
     def test_mark_common_is_order_insensitive_and_partial(self):
         from tournaments.whatif import ExploreRow, mark_common
 
-        whatif = [ExploreRow(1, "A", "", "B", "", ()), ExploreRow(2, "C", "", "D", "", ())]
-        actual = [ExploreRow(1, "B", "", "A", "", ()), ExploreRow(2, "C", "", "E", "", ())]
+        def row(table, a, b):
+            # Same string for name and key: what matters here is that
+            # mark_common pairs on the keys.
+            return ExploreRow(table, a, "", b, "", (), a, b)
+
+        whatif = [row(1, "A", "B"), row(2, "C", "D")]
+        actual = [row(1, "B", "A"), row(2, "C", "E")]
         whatif, actual = mark_common(whatif, actual)
         self.assertEqual([r.common for r in whatif], [True, False])  # {A,B} shared
         self.assertEqual([r.common for r in actual], [True, False])

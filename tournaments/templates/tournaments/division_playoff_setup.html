@@ -101,7 +101,7 @@
           <td>
             <select name="seed" aria-label="Seed {{ seed.seed }} player"{% if has_results %} disabled{% endif %}>
               {% for candidate in candidates %}
-              <option value="{{ candidate }}"{% if candidate == seed.player %} selected{% endif %}>{{ candidate }}</option>
+              <option value="{{ candidate.key }}"{% if candidate.key == seed.key %} selected{% endif %}>{{ candidate.name }}</option>
               {% endfor %}
             </select>
           </td>

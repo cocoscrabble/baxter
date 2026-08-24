@@ -44,8 +44,8 @@ def config(count=4, qual=QUAL_ROUND, timing=Timing.POSTSCRIPT, games=3, **overri
 def slip(round, winner, loser, winner_score=420, loser_score=380):
     return ResultSlipData(
         round=round,
-        winner_name=winner,
-        loser_name=loser,
+        winner_key=winner,
+        loser_key=loser,
         winner_score=winner_score,
         loser_score=loser_score,
         winner_started=True,
@@ -339,8 +339,8 @@ class PlacementTests(SimpleTestCase):
         wins = {"P1": 0, "P2": 0, "P3": 0, "P4": 0}
         losses = dict(wins)
         for r in results:
-            wins[r.winner_name] += 1
-            losses[r.loser_name] += 1
+            wins[r.winner_key] += 1
+            losses[r.loser_key] += 1
         self.assertEqual((wins["P1"], losses["P1"]), (3, 3))
         self.assertEqual((wins["P3"], losses["P3"]), (3, 2))
 
@@ -492,7 +492,7 @@ class ConfigTests(SimpleTestCase):
 class ReservationTests(SimpleTestCase):
     def test_every_qualifier_is_reserved_for_every_playoff_round(self):
         bracket = build_bracket(config(count=8), [])
-        reserved = bracket.reserved_names_by_round()
+        reserved = bracket.reserved_keys_by_round()
         self.assertEqual(sorted(reserved), list(range(11, 20)))
         for names in reserved.values():
             self.assertEqual(set(names), {f"P{i}" for i in range(1, 9)})

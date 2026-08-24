@@ -310,7 +310,12 @@ def division_state(division) -> dict:
     playoff = playoff_for(division)
     if playoff is not None:
         bracket = build_bracket(playoff.config(), pd.result_slips)
-        numbers = {e.player.name: e.number for e in division.entrants.select_related("player")}
+        # Keyed on the player number: final_placements' tiebreak looks up by
+        # key, and a name-keyed map would silently miss every lookup.
+        numbers = {
+            e.player.player_number: e.number
+            for e in division.entrants.select_related("player")
+        }
         state["playoff"] = {
             "qualification_round": playoff.qualification_round,
             "qualifier_count": playoff.qualifier_count,

@@ -45,17 +45,27 @@ def _cop_config_to_input(c: dict | None) -> dict | None:
 
 def pairing_data_to_input(pd: PairingData) -> dict:
     """Serialize a ``PairingData`` into the Rust engine's JSON boundary shape
-    (``scrabble-pairing/src/model.rs``)."""
+    (``scrabble-pairing/src/model.rs``).
+
+    **This is the one place the two vocabularies meet.** Every ``name`` field
+    below is an *opaque key* to the engine — it is the player number, not the
+    player's name. The engine only ever compares these strings for equality (and
+    case-insensitively against ``BYE_NAME``), so it neither knows nor cares which
+    it is given; keeping the field spelled ``name`` is what lets the identity
+    change land without touching the crate or its frozen corpus
+    (plans/PLAN_PLAYER_IDENTITY.md, decision 3). Sending display names here
+    would be a correctness bug the moment two entrants share one.
+    """
     return {
         "players": [
-            {"name": e.player.name, "rating": e.player.rating, "dropped": e.dropped}
+            {"name": e.player.key, "rating": e.player.rating, "dropped": e.dropped}
             for e in pd.entrants
         ],
         "result_slips": [
             {
                 "round": s.round,
-                "winner_name": s.winner_name,
-                "loser_name": s.loser_name,
+                "winner_name": s.winner_key,
+                "loser_name": s.loser_key,
                 "winner_score": s.winner_score,
                 "loser_score": s.loser_score,
                 "winner_started": s.winner_started,
@@ -103,6 +113,8 @@ def _rounds_to_display(rounds: list) -> list[tuple[int, list[DisplayPairing]]]:
         (
             r["round"],
             [
+                # The engine echoes back the keys it was given; display names
+                # are attached by the caller, which has the entrants to hand.
                 DisplayPairing(Player(p["first"]), Player(p["second"]), p["repeats"])
                 for p in r["pairings"]
             ],

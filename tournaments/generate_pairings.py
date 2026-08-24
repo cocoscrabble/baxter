@@ -10,7 +10,7 @@ from django.db.models import Q
 from .assign_tables import assign_tables, parse_board_table_map
 from .events import as_derived, derived_writes
 from .models import (
-    BYE_PLAYER_NAME,
+    BYE_PLAYER_NUMBER,
     DivisionSettings,
     Pairing,
     Playoff,
@@ -36,8 +36,10 @@ BYE_WINNER_SCORE = 50
 BYE_LOSER_SCORE = 0
 
 
-def _is_bye_name(name):
-    return name.lower() == BYE_PLAYER_NAME.lower()
+def _is_bye_key(key):
+    """The engine identifies the bye by the key it was handed, which is now the
+    bye player's reserved *number* rather than its name."""
+    return key.casefold() == BYE_PLAYER_NUMBER.casefold()
 
 
 def materialize_byes(division, round_num):
@@ -198,7 +200,7 @@ def _playoff_history(pd):
     repeats = EngineRepeats()
     for slip in sorted(pd.result_slips, key=lambda s: s.round):
         pairing = EnginePairing(
-            EnginePlayer(slip.first_name), EnginePlayer(slip.second_name)
+            EnginePlayer(slip.first_key), EnginePlayer(slip.second_key)
         )
         starts.register(pairing, slip.round)
         repeats.add(pairing)
@@ -206,7 +208,7 @@ def _playoff_history(pd):
 
 
 def _add_missing_playoff_games(
-    division, rp_obj, games, entrant_by_name, series_rows, starts, repeats
+    division, rp_obj, games, entrant_by_key, series_rows, starts, repeats
 ):
     """Create any scheduled playoff game a published round is missing.
 
@@ -226,15 +228,15 @@ def _add_missing_playoff_games(
         series_row = series_rows.get((series.key, series.position))
         if series_row is None or (series_row.pk, game.number) in existing:
             continue
-        first_entrant = entrant_by_name.get(series.high)
-        second_entrant = entrant_by_name.get(series.low)
+        first_entrant = entrant_by_key.get(series.high)
+        second_entrant = entrant_by_key.get(series.low)
         if not first_entrant or not second_entrant:
             continue
         oriented = starts.add(
             EnginePairing(EnginePlayer(series.high), EnginePlayer(series.low)),
             rp_obj.round,
         )
-        if oriented.first.name != series.high:
+        if oriented.first.key != series.high:
             first_entrant, second_entrant = second_entrant, first_entrant
         next_table += 1
         Pairing.objects.create(
@@ -275,7 +277,7 @@ def regenerate_pairings(division):
         bracket = build_bracket(playoff_config, pd.result_slips)
         series_rows = sync_series(playoff, bracket)
         # Reserved players sit out ordinary pairing for the whole playoff.
-        pd.inactive_players = bracket.reserved_names_by_round()
+        pd.inactive_players = bracket.reserved_keys_by_round()
     if not pd.round_pairings and bracket is None:
         division.round_pairings_set.filter(status=RoundPairings.DRAFT).delete()
         division.pairings.filter(round_pairings__isnull=True).delete()
@@ -288,21 +290,21 @@ def regenerate_pairings(division):
         # holds playoff games and nothing else.
         for round_num in bracket.rounds:
             engine_rounds.pop(round_num, None)
-    entrant_by_name = {
-        e.player.name: e
+    entrant_by_key = {
+        e.player.player_number: e
         for e in division.entrants.select_related("player")
     }
     # Lazily resolve the bye opponent (created on first odd round) and map its
-    # engine name to the division's bye entrant.
+    # engine key to the division's bye entrant.
     bye_entrant = None
 
-    def resolve_entrant(name):
+    def resolve_entrant(key):
         nonlocal bye_entrant
-        if _is_bye_name(name):
+        if _is_bye_key(key):
             if bye_entrant is None:
                 bye_entrant = division.bye_entrant()
             return bye_entrant
-        return entrant_by_name.get(name)
+        return entrant_by_key.get(key)
     start_round_by_round = {rp.round: rp.start_round for rp in pd.round_pairings}
     fixed_table_lookup = {
         (ft.entrant_id, ft.round_number): ft.table_label
@@ -330,7 +332,7 @@ def regenerate_pairings(division):
 
     # Seeding order, used as a fallback rank for entrants the round's standings
     # don't cover (see below).
-    seed_rank = {p.name: i + 1 for i, p in enumerate(standings_after_round(pd, 0))}
+    seed_rank = {p.key: i + 1 for i, p in enumerate(standings_after_round(pd, 0))}
     # Playoff games are oriented (and their repeats counted) here rather than by
     # the engine, from the same history the engine would have used.
     starts, repeats = _playoff_history(pd)
@@ -373,19 +375,19 @@ def regenerate_pairings(division):
             ):
                 _add_missing_playoff_games(
                     division, rp_obj, playoff_games[round_num],
-                    entrant_by_name, series_rows, starts, repeats,
+                    entrant_by_key, series_rows, starts, repeats,
                 )
             continue
 
         start_round = start_round_by_round.get(round_num, 0)
         standings = standings_after_round(pd, start_round)
-        rank = {p.name: i + 1 for i, p in enumerate(standings)}
+        rank = {p.key: i + 1 for i, p in enumerate(standings)}
         # A full round-robin schedule is generated up front, so later rounds
         # have no standings yet (no results played). Fall back to seeding order
         # for any entrant the standings don't cover, keeping board ordering and
         # fixed-table resolution well defined.
-        for name, seed in seed_rank.items():
-            rank.setdefault(name, len(standings) + seed)
+        for key, seed in seed_rank.items():
+            rank.setdefault(key, len(standings) + seed)
 
         # Resolve entrants and effective fixed table for each pairing. Each entry
         # carries a sort key: playoff games take the top boards, best seed first,
@@ -394,14 +396,14 @@ def regenerate_pairings(division):
         resolved = []
         bye_pairings = []
         for p in engine_rounds.get(round_num, []):
-            first_entrant = resolve_entrant(p.first.name)
-            second_entrant = resolve_entrant(p.second.name)
+            first_entrant = resolve_entrant(p.first.key)
+            second_entrant = resolve_entrant(p.second.key)
             if not first_entrant or not second_entrant:
                 continue
-            if _is_bye_name(p.first.name) or _is_bye_name(p.second.name):
+            if _is_bye_key(p.first.key) or _is_bye_key(p.second.key):
                 bye_pairings.append((p, first_entrant, second_entrant))
                 continue
-            ranks = (rank[p.first.name], rank[p.second.name])
+            ranks = (rank[p.first.key], rank[p.second.key])
             effective = effective_fixed_table(
                 first_entrant, second_entrant, round_num, ranks
             )
@@ -412,12 +414,12 @@ def regenerate_pairings(division):
 
         for series, game in playoff_games.get(round_num, []):
             # A series only schedules games once both participants are known,
-            # but be defensive: an entrant renamed out from under the snapshot
+            # but be defensive: an entrant withdrawn out from under the snapshot
             # should skip its game, not crash the whole regeneration.
             if series.high is None or series.low is None:
                 continue
-            first_entrant = entrant_by_name.get(series.high)
-            second_entrant = entrant_by_name.get(series.low)
+            first_entrant = entrant_by_key.get(series.high)
+            second_entrant = entrant_by_key.get(series.low)
             if not first_entrant or not second_entrant:
                 continue
             # Who goes first: Baxter's ordinary starts rule, so a series
@@ -428,7 +430,7 @@ def regenerate_pairings(division):
                 ),
                 round_num,
             )
-            if oriented.first.name != series.high:
+            if oriented.first.key != series.high:
                 first_entrant, second_entrant = second_entrant, first_entrant
             reps = repeats.add(oriented)
             seeds = [
@@ -477,7 +479,7 @@ def regenerate_pairings(division):
         # is published (see materialize_byes). Show the real player first for
         # readability — orientation is display-only, the result encodes the win.
         for p, first_entrant, second_entrant in bye_pairings:
-            if _is_bye_name(p.first.name):
+            if _is_bye_key(p.first.key):
                 first_entrant, second_entrant = second_entrant, first_entrant
             Pairing.objects.create(
                 division=division,

@@ -139,6 +139,13 @@ class PlayoffRoundsTestCase(TestCase):
             for p in self.pairings_in(round_num)
         }
 
+    def keys_in(self, round_num):
+        """``names_in`` by player number — what a bracket's participants are."""
+        return {
+            frozenset({p.first.key, p.second.key})
+            for p in self.pairings_in(round_num)
+        }
+
     def record(self, round_num, winner, loser, winner_score=450, loser_score=400):
         """Publish the round if needed, then record a result against its pairing.
 
@@ -220,6 +227,8 @@ class GenerationTests(PlayoffRoundsTestCase):
         semi = PlayoffSeries.objects.get(key=SEMIFINAL, position=0)
         self.assertEqual(semi.high.player.name, "P1")
         self.assertEqual(semi.low.player.name, "P4")
+        # The bracket resolved them by number, not by name.
+        self.assertEqual(semi.high.key, self.entrants["P1"].key)
         self.assertEqual(semi.max_games, 3)
         game1 = self.division.pairings.get(round=4, series=semi)
         self.assertEqual(game1.game_number, 1)
@@ -333,8 +342,12 @@ class SeriesLifecycleTests(PlayoffRoundsTestCase):
             self.record(round_num, "P3", "P4")
         bracket = playoff_for(self.division).bracket()
         self.assertTrue(bracket.complete)
-        self.assertEqual(bracket.get(CHAMPIONSHIP).winner, "P2")
-        self.assertEqual(bracket.get(THIRD_PLACE).winner, "P3")
+        self.assertEqual(
+            bracket.get(CHAMPIONSHIP).winner, self.entrants["P2"].key
+        )
+        self.assertEqual(
+            bracket.get(THIRD_PLACE).winner, self.entrants["P3"].key
+        )
 
 
 class CorrectionGuardTests(PlayoffRoundsTestCase):
@@ -354,7 +367,7 @@ class CorrectionGuardTests(PlayoffRoundsTestCase):
         # Reversing this game leaves the semifinal level, so P1 is no longer in
         # the championship — but the championship already has a game recorded.
         conflicts = conflicts_for_single_result(
-            self.division, pairing, "P4", 450, 400
+            self.division, pairing, self.entrants["P4"].key, 450, 400
         )
         self.assertTrue(conflicts)
         self.assertIn("already been played", conflicts[0])
@@ -367,7 +380,10 @@ class CorrectionGuardTests(PlayoffRoundsTestCase):
         )
         # Same winner, corrected score: nothing downstream changes.
         self.assertEqual(
-            conflicts_for_single_result(self.division, pairing, "P1", 500, 300), []
+            conflicts_for_single_result(
+                self.division, pairing, self.entrants["P1"].key, 500, 300
+            ),
+            [],
         )
 
 
@@ -413,7 +429,7 @@ class ConcurrentTests(PlayoffRoundsTestCase):
 
     def test_a_concurrent_round_holds_both_kinds_of_game(self):
         self.make_concurrent()
-        pairs = self.names_in(4)
+        pairs = self.keys_in(4)
         seeds = self.qualifiers
         # Two semifinals, seeded 1–4 and 2–3…
         self.assertIn(frozenset({seeds[0], seeds[3]}), pairs)
@@ -596,6 +612,27 @@ class PlayoffViewTests(PlayoffRoundsTestCase):
         # bye or a zero score.
         self.assertContains(response, "not necessary")
         self.assertNotContains(response, "Bye")
+
+    def test_the_bracket_shows_names_and_highlights_on_identity(self):
+        """The bracket renders player names, but decides who won on their keys.
+
+        Two people in one bracket may share a name; comparing the rendered
+        strings would light up both of their rows as the winner.
+        """
+        from tournaments.views import _series_row
+
+        self.make_playoff()
+        for round_num in (4, 5):
+            self.record(round_num, "P1", "P4")
+            self.record(round_num, "P2", "P3")
+        bracket = playoff_for(self.division).bracket()
+        semi = bracket.get(SEMIFINAL, 0)
+        # Both participants answer to the same name; only one of them won.
+        row = _series_row(semi, dict.fromkeys(semi.participants, "John Smith"))
+        self.assertEqual(row["high"], "John Smith")
+        self.assertEqual(row["low"], "John Smith")
+        self.assertTrue(row["high_won"])
+        self.assertFalse(row["low_won"])
 
     def test_the_setup_page_previews_the_qualifiers(self):
         response = self.client.get(self.url("division_playoff_setup"))

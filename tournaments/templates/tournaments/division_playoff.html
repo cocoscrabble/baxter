@@ -39,11 +39,11 @@
         <p class="empty-state">Waiting on an earlier series.</p>
       {% else %}
       <table class="playoff-score">
-        <tr{% if series.winner == series.high %} class="playoff-winner"{% endif %}>
+        <tr{% if series.high_won %} class="playoff-winner"{% endif %}>
           <td>{{ series.high }}</td>
           <td class="num">{{ series.high_score|floatformat:"-1" }}</td>
         </tr>
-        <tr{% if series.winner == series.low %} class="playoff-winner"{% endif %}>
+        <tr{% if series.low_won %} class="playoff-winner"{% endif %}>
           <td>{{ series.low }}</td>
           <td class="num">{{ series.low_score|floatformat:"-1" }}</td>
         </tr>
