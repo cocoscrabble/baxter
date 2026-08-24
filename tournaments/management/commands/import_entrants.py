@@ -68,11 +68,7 @@ class Command(BaseCommand):
 
         # Create entrants with sequential numbers
         for number, (player, rating) in enumerate(players_with_ratings, start=1):
-            Entrant.objects.create(
-                division=division,
-                player=player,
-                number=number,
-            )
+            Entrant.enter(division, player, number)
             self.stdout.write(f"  {number}. {player.name} ({rating})")
 
         self.stdout.write(

@@ -374,3 +374,103 @@ class SharedNameTests(TestCase):
         player, error = Player.create("Ann", rating="not a number")
         self.assertIsNone(error)
         self.assertEqual(player.rating, 0)
+
+
+class EffectiveRatingTests(TestCase):
+    """The rating cascade: CoCo, else WESPA, else nothing (decision 2).
+
+    ``Player.rating == 0`` is the sole test for "no CoCo rating", which is why
+    a WESPA rating of 0 is still distinguishable from having none at all.
+    """
+
+    def _player(self, rating, wespa):
+        return Player(name="P", player_number="0001", rating=rating,
+                      wespa_rating=wespa)
+
+    def test_coco_wins_when_both_are_present(self):
+        self.assertEqual(
+            self._player(1600, 1400).effective_rating, (1600, Entrant.COCO)
+        )
+
+    def test_coco_alone(self):
+        self.assertEqual(
+            self._player(1600, None).effective_rating, (1600, Entrant.COCO)
+        )
+
+    def test_wespa_alone(self):
+        self.assertEqual(
+            self._player(0, 1400).effective_rating, (1400, Entrant.WESPA)
+        )
+
+    def test_neither(self):
+        self.assertEqual(
+            self._player(0, None).effective_rating, (0, Entrant.NONE)
+        )
+
+    def test_a_wespa_rating_of_zero_is_still_a_rating(self):
+        """Distinct from having none: NULL means unknown, 0 means zero."""
+        self.assertEqual(
+            self._player(0, 0).effective_rating, (0, Entrant.WESPA)
+        )
+
+
+class EntrantEnterTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        setUpTournament(cls)
+        cls.division.entrants.all().delete()
+
+    def _player(self, rating=0, wespa=None, number="0500"):
+        return Player.objects.create(
+            name="Snap", player_number=number, rating=rating, wespa_rating=wespa
+        )
+
+    def test_snapshots_the_coco_rating(self):
+        entrant = Entrant.enter(self.division, self._player(rating=1600), 1)
+        self.assertEqual((entrant.rating, entrant.rating_source), (1600, "coco"))
+
+    def test_snapshots_the_wespa_rating_when_there_is_no_coco_one(self):
+        entrant = Entrant.enter(self.division, self._player(wespa=1400), 1)
+        self.assertEqual((entrant.rating, entrant.rating_source), (1400, "wespa"))
+
+    def test_snapshots_nothing_when_the_player_has_neither(self):
+        entrant = Entrant.enter(self.division, self._player(), 1)
+        self.assertEqual((entrant.rating, entrant.rating_source), (0, "none"))
+
+    def test_an_explicit_rating_is_manual(self):
+        entrant = Entrant.enter(
+            self.division, self._player(rating=1600), 1, rating=1234
+        )
+        self.assertEqual((entrant.rating, entrant.rating_source), (1234, "manual"))
+
+    def test_an_explicit_rating_of_zero_is_still_manual(self):
+        """0 is a rating a director may deliberately assign, not a missing one."""
+        entrant = Entrant.enter(
+            self.division, self._player(rating=1600), 1, rating=0
+        )
+        self.assertEqual((entrant.rating, entrant.rating_source), (0, "manual"))
+
+    def test_registration_flags_pass_through(self):
+        entrant = Entrant.enter(
+            self.division, self._player(rating=1500), 1,
+            tentative=True, paid=True, playing_up=True, payment_note="cash",
+        )
+        self.assertTrue(entrant.tentative)
+        self.assertTrue(entrant.paid)
+        self.assertTrue(entrant.playing_up)
+        self.assertEqual(entrant.payment_note, "cash")
+
+    def test_the_snapshot_does_not_follow_the_player(self):
+        """The whole point of pinning: a rating change under a running
+        tournament must not reshuffle anyone."""
+        player = self._player(rating=1600)
+        entrant = Entrant.enter(self.division, player, 1)
+        player.rating = 1900
+        player.save(update_fields=["rating"])
+        entrant.refresh_from_db()
+        self.assertEqual(entrant.rating, 1600)
+
+    def test_the_bye_entrant_is_still_creatable(self):
+        bye = self.division.bye_entrant()
+        self.assertTrue(bye.player.is_bye)
+        self.assertEqual((bye.rating, bye.rating_source), (0, "none"))

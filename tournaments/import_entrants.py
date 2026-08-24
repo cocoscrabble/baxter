@@ -179,7 +179,8 @@ def import_entrants(division, text):
         max_num=models.Max("number")
     )["max_num"] or 0
     for j, player in enumerate(players_to_add, start=max_number + 1):
-        Entrant.objects.create(division=division, player=player, number=j)
+        # enter(), not create(): the entrant pins the rating it is seeded from.
+        Entrant.enter(division, player, j)
 
     result.added = len(players_to_add)
     return result, []

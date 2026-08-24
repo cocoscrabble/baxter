@@ -262,17 +262,17 @@ def _replay_snapshot(ctx, payload):
                     e.get("name", e["player"]),
                     e.get("rating", 0),
                 )
-                ent_by_key[e["player"]] = Entrant.objects.create(
-                    division=division, player=player, number=e["number"],
+                ent_by_key[e["player"]] = Entrant.enter(
+                    division, player, e["number"],
+                    rating=e.get("rating"),
                     dropped=e.get("dropped", False),
                 )
 
             def resolve(key):
                 if key.casefold() == BYE_PLAYER_NUMBER.casefold():
                     return division.bye_entrant()
-                return ent_by_key.get(key) or Entrant.objects.create(
-                    division=division, player=resolve_player(key),
-                    number=1000 + len(ent_by_key),
+                return ent_by_key.get(key) or Entrant.enter(
+                    division, resolve_player(key), 1000 + len(ent_by_key),
                 )
 
             pairing_by_key = {}

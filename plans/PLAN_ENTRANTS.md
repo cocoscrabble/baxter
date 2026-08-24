@@ -110,7 +110,7 @@ default, so a later session should not relitigate them without asking.
 
 ---
 
-## Phase 1 — Model, migration, and the rating cascade
+## Phase 1 — Model, migration, and the rating cascade — **IMPLEMENTED**
 
 ### 1a. Fields
 
@@ -180,6 +180,38 @@ source correctly; an explicit rating yields `manual`; the bye entrant is still
 creatable. Run the migration against a copy of `db.sqlite3` and confirm entrant
 count and ratings are unchanged. Remember the Postgres/SQLite gotcha — no new
 indexes here, so this should be clean, but check `sqlmigrate` output.
+
+### What landed
+
+Fields, cascade, `Entrant.enter`, and migrations `0039` (schema) + `0040`
+(backfill). Every entrant-creation site goes through `enter`; the edit grid,
+which builds instances rather than calling `create`, pins the snapshot in
+`prepare` instead — deriving it from the player, never from the client, and
+leaving an existing entrant's pinned rating alone so a hand-edit survives a
+grid save.
+
+**The dev-database run earned its place in this plan.** It caught a bug the
+unit tests could not: the phase 3 digest backfill (then migration `0038`)
+replays through the *live* models, so adding entrant fields after it made every
+replay die on `no such column: tournaments_player.wespa_rating` and silently
+skip every tournament, leaving the digests at v1 forever. Its own comment had
+predicted exactly this — "safe here only because ... it runs last".
+
+Fixed three ways, since nothing was deployed yet:
+
+1. The backfill is renumbered `0041`, after the entrant schema.
+2. `digest_backfill.schema_mismatch()` compares the live models against the
+   database's columns, and the migration now *refuses* on a mismatch rather
+   than skipping — a backfill that quietly does nothing is worse than one that
+   stops the deploy and says what to run.
+3. `manage.py backfill_event_digests` exists for that case, and is safe to
+   re-run.
+
+Verified on a copy of the real dev database: 102 entrants unchanged, every
+rating pinned to its player's (99 `coco`, 3 `none`), all new fields at
+defaults; and the digest backfill rewrote 4 tournaments and correctly refused
+the one whose log was already divergent. The whole chain also applies on
+Postgres 18.2, with `sqlmigrate` showing plain `ADD COLUMN`s and no indexes.
 
 ---
 
