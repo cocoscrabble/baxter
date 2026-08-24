@@ -521,16 +521,15 @@ def import_division(tournament, actor, payload):
         exists = Player.objects.filter(name__iexact=e["player"]).exists()
         player = resolve_player(None, e["player"], e.get("rating", 0))
         (matched if exists else created).append(player.name)
-        ent_by_name[e["player"]] = Entrant.objects.create(
-            division=division, player=player, number=e["number"]
+        ent_by_name[e["player"]] = Entrant.enter(
+            division, player, e["number"]
         )
 
     def entrant(name):
         ent = ent_by_name.get(name)
         if ent is None:  # a result names a non-entrant — add them at the bottom
-            ent = Entrant.objects.create(
-                division=division, player=resolve_player(None, name),
-                number=1000 + len(ent_by_name),
+            ent = Entrant.enter(
+                division, resolve_player(None, name), 1000 + len(ent_by_name)
             )
             ent_by_name[name] = ent
         return ent

@@ -21,7 +21,35 @@ The replay runs inside a savepoint that is always rolled back, so the
 reconstructed tournament never survives; only the digests it produced do.
 """
 
-from django.db import transaction
+from django.db import connection, transaction
+
+
+def schema_mismatch() -> str | None:
+    """Why the live models cannot be used against this database, or None.
+
+    The backfill replays through the real command layer, so it needs the live
+    models — which only match the database once every migration has been
+    applied. Run inside a migration that is *not* last, every replay dies on a
+    missing column and every tournament is silently skipped. Checking up front
+    turns that into a refusal with something actionable in it.
+    """
+    from django.apps import apps
+
+    tables = set(connection.introspection.table_names())
+    for model in apps.get_app_config("tournaments").get_models():
+        table = model._meta.db_table
+        if table not in tables:
+            return f"table {table!r} does not exist yet"
+        columns = {
+            c.name
+            for c in connection.introspection.get_table_description(
+                connection.cursor(), table
+            )
+        }
+        for field in model._meta.concrete_fields:
+            if field.column not in columns:
+                return f"{table}.{field.column} does not exist yet"
+    return None
 
 
 class _Rollback(Exception):

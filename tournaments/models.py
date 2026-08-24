@@ -384,7 +384,15 @@ class Player(models.Model):
     # ("0233"). Wider than the 4 that form needs, because Baxter also stores
     # "T-" placeholders for players the central database has not numbered yet.
     player_number = models.CharField(max_length=16)
+    # The CoCo rating, and what the central roster pull writes. 0 means "no CoCo
+    # rating" — the sole test for it (see plans/PLAN_ENTRANTS.md decision 2).
+    # Deliberately not renamed to coco_rating: every existing payload key,
+    # export field, grid DTO and replay path uses this name.
     rating = models.IntegerField()
+    # The WESPA rating, which is nobody else's business: it never syncs to the
+    # central database and is only consulted when there is no CoCo rating.
+    # NULL means "not known", which is distinct from a rating of 0.
+    wespa_rating = models.IntegerField(null=True, blank=True)
     # True for players created locally that the registry has not yet seen; their
     # player_number is a temporary T- value the registry replaces on upload.
     is_provisional = models.BooleanField(default=False)
@@ -443,6 +451,20 @@ class Player(models.Model):
         )
         return player
 
+    @property
+    def effective_rating(self):
+        """``(rating, source)`` — CoCo, else WESPA, else 0.
+
+        The one place this cascade lives; nothing else may re-derive it. An
+        entrant snapshots the result at entry (``Entrant.enter``) so a later
+        drift in either rating cannot reshuffle a running tournament.
+        """
+        if self.rating:
+            return self.rating, Entrant.COCO
+        if self.wespa_rating is not None:
+            return self.wespa_rating, Entrant.WESPA
+        return 0, Entrant.NONE
+
     @classmethod
     def same_named(cls, name):
         """Existing players with this name, case-insensitively.
@@ -495,7 +517,18 @@ class RealEntrantManager(models.Manager):
 
 
 class Entrant(models.Model):
-    """A player entered in a division."""
+    """A player entered in a division, with their registration state."""
+
+    # Where the pinned rating came from. NONE is "no rating at all", which is
+    # not the same as a rating that happens to be 0 — a rated player can be on
+    # zero, an unrated one has nothing.
+    COCO, WESPA, MANUAL, NONE = "coco", "wespa", "manual", "none"
+    RATING_SOURCES = [
+        (COCO, "CoCo"),
+        (WESPA, "WESPA"),
+        (MANUAL, "Manual"),
+        (NONE, "None"),
+    ]
 
     division = models.ForeignKey(
         Division,
@@ -513,6 +546,38 @@ class Entrant(models.Model):
     # repeats, and spread. Finished rounds are never re-paired, so a boolean is
     # enough — we never need to know *when* they withdrew.
     dropped = models.BooleanField(default=False)
+
+    # -- the pinned rating (decision 3) ------------------------------------
+    #
+    # Snapshotted at entry, never re-derived. Seeding, display and replay read
+    # this, so Player.rating and Player.wespa_rating are free to drift under a
+    # running tournament without reshuffling anyone's pairings — which is also
+    # what lets a global rating refresh stay an unlogged action.
+    rating = models.IntegerField(default=0)
+    rating_source = models.CharField(
+        max_length=8, choices=RATING_SOURCES, default=NONE
+    )
+    # The rest of the rating seed, frozen with the rating. The live rating
+    # projection needs all four: the calculator damps by career games, and
+    # deviation grows with time since last_played. Zero/null until the central
+    # roster pull exists, which the calculator reads as an unrated player.
+    deviation = models.FloatField(default=0.0)
+    career_games = models.IntegerField(default=0)
+    last_played = models.DateField(null=True, blank=True)
+
+    # -- registration state -------------------------------------------------
+    #
+    # tentative: entered but not confirmed (issue #42). Its own field rather
+    # than a derivation of `paid`, because an organizer may confirm an unpaid
+    # entrant or hold a paid one.
+    tentative = models.BooleanField(default=False)
+    paid = models.BooleanField(default=False)
+    # Editor-only, never rendered publicly. Free text on purpose: no amounts, no
+    # methods, no fee schedule (decision 6).
+    payment_note = models.TextField(blank=True, default="")
+    # Playing above their rating band — a judgement call an organizer ticks, not
+    # something derived from a band on the division (decision 7).
+    playing_up = models.BooleanField(default=False)
 
     objects = RealEntrantManager()
     all_objects = models.Manager()
@@ -533,6 +598,29 @@ class Entrant(models.Model):
     def key(self):
         """The entrant's identity for the pairing layer — never the name."""
         return self.player.player_number
+
+    @classmethod
+    def enter(cls, division, player, number, *, rating=None, **registration):
+        """Enter ``player`` in ``division``, pinning their rating.
+
+        The rating is snapshotted from ``Player.effective_rating`` unless one is
+        passed explicitly, which marks it ``manual`` and immune to any later
+        sync. This is deliberately *not* done in ``save()``: that would fire on
+        every unrelated write and silently re-pin a rating a director had fixed
+        by hand.
+        """
+        if rating is None:
+            rating, source = player.effective_rating
+        else:
+            source = cls.MANUAL
+        return cls.objects.create(
+            division=division,
+            player=player,
+            number=number,
+            rating=rating,
+            rating_source=source,
+            **registration,
+        )
 
     @property
     def display_name(self):

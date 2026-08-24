@@ -132,6 +132,38 @@ class DigestBackfillTests(TestCase):
         self.assertEqual(len(lines), 1)
         self.assertIn("Champs", lines[0])
 
+    def test_the_schema_guard_passes_on_a_migrated_database(self):
+        from tournaments.digest_backfill import schema_mismatch
+
+        self.assertIsNone(schema_mismatch())
+
+    def test_the_schema_guard_names_a_missing_column(self):
+        """What the migration checks before it replays anything.
+
+        An earlier draft of the backfill ran as migration 0038, and adding the
+        entrant fields after it made every replay die on a missing column —
+        silently leaving every digest at v1. The guard turns that into a
+        refusal that says what is wrong.
+        """
+        from django.db import connection
+
+        from tournaments.digest_backfill import schema_mismatch
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "ALTER TABLE tournaments_entrant DROP COLUMN payment_note"
+            )
+        try:
+            self.assertEqual(
+                schema_mismatch(), "tournaments_entrant.payment_note does not exist yet"
+            )
+        finally:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "ALTER TABLE tournaments_entrant "
+                    "ADD COLUMN payment_note text NOT NULL DEFAULT ''"
+                )
+
     def test_a_tournament_with_no_digests_is_left_alone(self):
         self.tournament.events.update(digest="")
         self.assertEqual(backfill_tournament(self.tournament), (0, None))

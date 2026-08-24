@@ -59,10 +59,10 @@ def create_fake_tournament(user, num_players, num_rounds, name=None):
     # so fake tournaments only draw from the real roster.
     eligible = list(Player.objects.filter(is_provisional=False))
     players = random.sample(eligible, num_players)
-    Entrant.objects.bulk_create(
-        Entrant(division=division, player=player, number=i)
-        for i, player in enumerate(players, start=1)
-    )
+    for i, player in enumerate(players, start=1):
+        # One at a time rather than bulk_create, so each entrant pins the rating
+        # it was seeded from (bulk_create would bypass Entrant.enter).
+        Entrant.enter(division, player, i)
 
     blocks = [{"pairing": str(RP.KotH), "rounds": num_rounds, "pair_from": 1}]
     DivisionSettings.objects.create(

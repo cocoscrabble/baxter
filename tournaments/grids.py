@@ -195,6 +195,40 @@ class EntrantsGrid(EditGrid):
     # it now keys on the player number, so the collision is merely a display
     # problem — which is what the disambiguation rule handles.
 
+    def prepare(self, division, validated):
+        prepared, errors = super().prepare(division, validated)
+        if not errors:
+            self._pin_ratings(division, prepared)
+        return prepared, errors
+
+    def _pin_ratings(self, division, prepared):
+        """Give each row the rating snapshot it should carry.
+
+        An existing entrant keeps whatever is already pinned — including a
+        rating a director fixed by hand — because reconciliation only writes
+        ``update_fields``, and re-deriving here would undo that edit. A row for
+        a player not yet in the division is new, so it snapshots the cascade
+        (plans/PLAN_ENTRANTS.md decision 3).
+
+        The client never supplies the snapshot; it is derived here from the
+        player, which is the only source that can be trusted.
+        """
+        pinned = {
+            e.player_id: (e.rating, e.rating_source)
+            for e in division.entrants.all()
+        }
+        new_ids = [
+            row.player_id for row in prepared if row.player_id not in pinned
+        ]
+        players = Player.objects.in_bulk(new_ids) if new_ids else {}
+        for row in prepared:
+            if row.player_id in pinned:
+                row.rating, row.rating_source = pinned[row.player_id]
+                continue
+            player = players.get(row.player_id)
+            if player is not None:
+                row.rating, row.rating_source = player.effective_rating
+
     def _roster_signature(self, division):
         # (player, dropped) per real entrant — what the pairing engine keys off.
         # A pure renumber doesn't change it (numbers don't affect pairing).
