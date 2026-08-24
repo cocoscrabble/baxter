@@ -88,10 +88,38 @@ them without asking.
 
 ## Phase 1 — `player_number` becomes a real identity
 
-### 1a. Constraint
+*Landed 2026-08-23. `canonical_player_number` is imported from
+`coco_ratings.identity`; migration `0036_player_number_identity` widens the
+column, canonicalizes, repairs, then adds the constraint. Verified against a
+throwaway **Postgres 18.2** (not just SQLite) with a fixture containing a
+bare/padded pair, a blank, an exact duplicate and two casings of the reserved
+number. One consequence found and fixed: `player_sync.import_players` matched
+raw numbers and wrote via `bulk_create`, so a bare `7` in a registry upload
+would have inserted a second row beside a stored `0007` instead of updating it.*
+
+
+### 1a. Canonical form and constraint
+
+A CoCo number's canonical form is **zero-padded to four digits** (`0233`) — the
+central database's form. Baxter normalizes with the *same function*, imported
+rather than copied:
+
+```python
+from coco_ratings.identity import canonical_player_number
+```
+
+That function is dependency-free and lives in the shipped `coco-ratings`
+package for this purpose (see `../ratings/plans/baxter-integration.md`). Two
+implementations would eventually disagree about whether `233` and `0233` are one
+person, which is the exact failure this plan exists to prevent. Non-numeric
+values pass through untouched, so `T-7` and `BYE` survive canonicalization.
 
 ```python
 player_number = models.CharField(max_length=16)   # was 8
+
+def save(self, *args, **kwargs):
+    self.player_number = canonical_player_number(self.player_number)
+    ...
 
 class Meta:
     constraints = [
@@ -101,12 +129,19 @@ class Meta:
     ]
 ```
 
-- **Case-insensitive**, so `co1234` and `CO1234` cannot both exist. Bye
-  detection is already case-insensitive on both sides of the boundary; identity
-  must match that or the two disagree.
-- **Widened to 16.** The current 8 fits today's data (max length in the dev DB
-  is 4) but leaves almost no room; widening is free now and a migration on a
-  live table later.
+- **Normalize on write**, in `save()`, exactly as the central database does.
+  One un-normalized write is enough to split a person in two, and
+  `Player.objects.create`, the admin and the shell all go through `save()`
+  (`bulk_create` does not — the migration in 1c is the one place that must
+  canonicalize by hand).
+- **Uniqueness is on the canonical form.** Canonicalization already collapses
+  `233`/`0233`/`00233`; the `Lower()` index then covers the non-numeric keys,
+  where case is the only thing that could differ (`bye` vs `BYE`). Bye detection
+  is case-insensitive on both sides of the engine boundary, so identity must
+  match that or the two disagree.
+- **Widened to 16.** A canonical number is 4 characters and the central column
+  is `max_length=4`, but Baxter also stores `T-` placeholders, so it needs the
+  room. The current 8 would fit today's data and leaves almost none.
 - ⚠ **This is a functional unique index.** Per the known SQLite-vs-Postgres
   gotcha, run `manage.py sqlmigrate` and check the generated Postgres DDL
   before deploying — do not trust a clean local SQLite run.
@@ -121,22 +156,37 @@ registry import and the admin JSON upload can.
 ### 1c. Auto-repairing migration
 
 The dev DB is clean (240 players, no blanks, no duplicates), but prod is
-unknown. The data migration repairs rather than refuses:
+unknown. The data migration repairs rather than refuses, in this order:
 
-- blank/null `player_number` → a fresh `T-` number
-- each collision group → the lowest-pk row keeps the number, the rest get fresh
-  `T-` numbers
-- anything colliding with the reserved `BYE` → a fresh `T-` number
-- prints a full report of every row it changed, so the deploy log is the record
+1. **Canonicalize every existing number first.** This step is not optional and
+   its position is not arbitrary: today's rows predate normalization, so `233`
+   and `0233` may both be present as *the same person*. De-duplicating before
+   canonicalizing would see two distinct strings, keep one and mint a `T-`
+   number for the other — turning one person into two, permanently, which is
+   the precise failure the canonical form exists to prevent. Canonicalize, then
+   collisions are visible as collisions.
+2. blank/null `player_number` → a fresh `T-` number
+3. each collision group → the lowest-pk row keeps the number, the rest get
+   fresh `T-` numbers
+4. anything colliding with the reserved `BYE` → a fresh `T-` number
+5. prints a full report of every row it changed, so the deploy log is the record
+
+Note step 1 means the migration cannot rely on `Player.save()` — historical
+models in a migration don't carry it, and it uses `bulk_update` anyway. Call
+`canonical_player_number` directly.
 
 Mint the replacements by scanning existing `T-` numbers once, not per row — the
 whole repair must be a single pass and must be idempotent if re-run.
 
 **Verification:** `test_models.py` — creating a duplicate number raises;
-creating one differing only in case raises; the reserved number is rejected.
-Migration tests over a fixture containing blanks, a three-way collision, and a
-case-only collision, asserting the survivors keep their numbers and every
-replacement is a distinct `T-` number.
+creating one differing only in case raises; a bare number and its padded form
+resolve to one row rather than two; the reserved number is rejected; `T-` and
+`BYE` survive `save()` unchanged. A conformance test over the same case table as
+`../ratings/tests/test_identity.py`, so a divergence between the two repos fails
+here too. Migration tests over a fixture containing blanks, a three-way
+collision, a case-only collision, **and a bare/padded pair that is one person**,
+asserting the survivors keep their numbers and every replacement is a distinct
+`T-` number.
 
 ---
 
@@ -321,9 +371,12 @@ header match. It must accept **both** the legacy 6-column and the new 8-column
 form — historical CSVs exist and the what-if importer is the thing that reads
 them — preferring the number columns when present.
 
-⚠ coco-ratings consumes this file. Confirm the wider format with whoever
-maintains it before shipping; the reader change is backward-compatible either
-way, so Phase 6 can land after the rest if that conversation takes time.
+The coco-ratings side of this is planned in
+`../ratings/plans/baxter-integration.md` Phase 2. The columns are **additive**:
+the name-keyed six-column form stays valid input there, because it is still
+produced by a Google Form export that cannot carry numbers (players type their
+own names into it). So Phase 6 breaks nothing, needs no coordination window, and
+can land whenever.
 
 **Verification:** `test_results_export.py` — the new columns carry numbers and
 disambiguated names. `test_whatif_import.py` — both header widths parse, and the
@@ -338,7 +391,10 @@ Ships the mechanism that keeps decision 2 honest, ahead of the registry upload
 that will need it:
 
 - A `player_number_changed` command + event, payload `{old, new}`, added to the
-  catalog (`events.py:40`) with an activity-page description (`:533`).
+  catalog (`events.py:40`) with an activity-page description (`:533`). This is
+  no longer speculative: it is the mechanism behind number resolution in
+  `PLAN_COCO_PROGRAM.md` — a guest enters as `T-7`, an admin assigns `0412`
+  centrally, Baxter pulls and the director confirms the resolution.
 - `ReplayContext` (`replay.py:51`) keeps a live rename map; every player lookup
   during replay resolves through it, so an event recorded at seq 12 under
   `T-7` still resolves after seq 40 renamed it to `CO1234`.
