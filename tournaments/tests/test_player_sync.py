@@ -10,6 +10,7 @@ from users.models import User
 
 
 def make_player(number, name, rating=1000):
+    """Create a player. Note the stored number comes back canonical (7 -> 0007)."""
     return Player.objects.create(player_number=number, name=name, rating=rating)
 
 
@@ -22,7 +23,7 @@ class ImportPlayersTests(TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(result, {"total": 2, "added": 2, "updated": 0, "unchanged": 0})
         self.assertEqual(Player.objects.count(), 2)
-        self.assertEqual(Player.objects.get(player_number="1").name, "Alice")
+        self.assertEqual(Player.objects.get(player_number="0001").name, "Alice")
 
     def test_updates_existing_by_player_number(self):
         make_player("7", "Old Name", 1000)
@@ -32,7 +33,7 @@ class ImportPlayersTests(TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(result["updated"], 1)
         self.assertEqual(result["added"], 0)
-        player = Player.objects.get(player_number="7")
+        player = Player.objects.get(player_number="0007")
         self.assertEqual(player.name, "New Name")
         self.assertEqual(player.rating, 1800)
 
@@ -46,12 +47,37 @@ class ImportPlayersTests(TestCase):
     def test_never_deletes_players_absent_from_upload(self):
         make_player("99", "Keeper", 1000)
         import_players([{"player_number": "1", "name": "Alice", "rating": 1500}])
-        self.assertTrue(Player.objects.filter(player_number="99").exists())
+        self.assertTrue(Player.objects.filter(player_number="0099").exists())
 
     def test_preserves_primary_keys_of_existing_players(self):
         existing = make_player("5", "Dave", 1000)
         import_players([{"player_number": "5", "name": "Dave Updated", "rating": 1300}])
-        self.assertEqual(Player.objects.get(player_number="5").pk, existing.pk)
+        self.assertEqual(Player.objects.get(player_number="0005").pk, existing.pk)
+
+    def test_bare_upload_updates_a_padded_row(self):
+        """A bare number in the upload is the same person as the padded row.
+
+        The registry writes numbers bare (7) and Baxter stores them canonical
+        (0007). Matching raw strings would miss the existing row and insert a
+        second copy of the same person -- silently, and permanently.
+        """
+        existing = make_player("7", "Old Name", 1000)
+        self.assertEqual(existing.player_number, "0007")
+        result, errors = import_players([
+            {"player_number": "7", "name": "New Name", "rating": 1800},
+        ])
+        self.assertEqual(errors, [])
+        self.assertEqual(result, {"total": 1, "added": 0, "updated": 1, "unchanged": 0})
+        self.assertEqual(Player.objects.count(), 1)
+        existing.refresh_from_db()
+        self.assertEqual(existing.name, "New Name")
+
+    def test_over_padded_upload_is_the_same_person(self):
+        existing = make_player("7", "Old Name", 1000)
+        import_players([{"player_number": "00007", "name": "New Name", "rating": 1800}])
+        self.assertEqual(Player.objects.count(), 1)
+        existing.refresh_from_db()
+        self.assertEqual(existing.name, "New Name")
 
     def test_deduplicates_within_upload_last_wins(self):
         result, _ = import_players([
@@ -59,7 +85,7 @@ class ImportPlayersTests(TestCase):
             {"player_number": "1", "name": "Second", "rating": 2000},
         ])
         self.assertEqual(result["added"], 1)
-        self.assertEqual(Player.objects.get(player_number="1").name, "Second")
+        self.assertEqual(Player.objects.get(player_number="0001").name, "Second")
 
     def test_accepts_json_string_and_bytes(self):
         payload = [{"player_number": "1", "name": "Alice", "rating": 1500}]
@@ -154,8 +180,8 @@ class PlayerImportViewUploadTests(TestCase):
             {"player_number": "10", "name": "Brand New", "rating": 1400},
         ])
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(Player.objects.get(player_number="9").name, "Existing Renamed")
-        self.assertTrue(Player.objects.filter(player_number="10").exists())
+        self.assertEqual(Player.objects.get(player_number="0009").name, "Existing Renamed")
+        self.assertTrue(Player.objects.filter(player_number="0010").exists())
 
     def test_missing_file_is_reported(self):
         response = self.client.post(self.url, {}, follow=True)

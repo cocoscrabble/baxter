@@ -1,9 +1,21 @@
 from datetime import date
 
+from coco_ratings.identity import canonical_player_number
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.test import TestCase
 
-from tournaments.models import Division, DivisionSettings, Entrant, Player, ResultSlip, Tournament, next_temp_player_number
+from tournaments.models import (
+    BYE_PLAYER_NUMBER,
+    Division,
+    DivisionSettings,
+    Entrant,
+    Player,
+    ResultSlip,
+    Tournament,
+    is_reserved_player_number,
+    next_temp_player_number,
+)
 from users.models import User
 
 
@@ -226,3 +238,103 @@ class SlugTests(TestCase):
         d.save(update_fields=["name"])
         d.refresh_from_db()
         self.assertEqual(d.slug, "closed")
+
+
+class PlayerNumberIdentityTests(TestCase):
+    """player_number is the identity, and it has exactly one spelling.
+
+    See plans/PLAN_PLAYER_IDENTITY.md phase 1. The canonical form is shared with
+    the central player database via coco_ratings.identity, so the two systems
+    cannot disagree about whether 233 and 0233 are one person.
+    """
+
+    def test_save_canonicalizes_the_number(self):
+        player = Player.objects.create(name="Bare", player_number="233", rating=1500)
+        player.refresh_from_db()
+        self.assertEqual(player.player_number, "0233")
+
+    def test_save_collapses_over_padding(self):
+        player = Player.objects.create(name="Padded", player_number="00233", rating=1500)
+        player.refresh_from_db()
+        self.assertEqual(player.player_number, "0233")
+
+    def test_local_and_reserved_numbers_survive_canonicalization(self):
+        # T- placeholders and the bye's number are not CoCo numbers; rewriting
+        # them would break the bye and the export gate.
+        temp = Player.objects.create(name="Temp", player_number="T-7", rating=0)
+        self.assertEqual(temp.player_number, "T-7")
+        self.assertEqual(Player.get_bye().player_number, BYE_PLAYER_NUMBER)
+
+    def test_duplicate_number_is_rejected(self):
+        Player.objects.create(name="First", player_number="0500", rating=1500)
+        with self.assertRaises(IntegrityError):
+            Player.objects.create(name="Second", player_number="0500", rating=1500)
+
+    def test_case_variant_is_rejected(self):
+        Player.objects.create(name="First", player_number="T-9", rating=1500)
+        with self.assertRaises(IntegrityError):
+            Player.objects.create(name="Second", player_number="t-9", rating=1500)
+
+    def test_bare_and_padded_are_one_identity(self):
+        # The point of the whole exercise: these are the same person, and the
+        # database must refuse to hold them as two.
+        Player.objects.create(name="Padded", player_number="0233", rating=1500)
+        with self.assertRaises(IntegrityError):
+            Player.objects.create(name="Bare", player_number="233", rating=1500)
+
+    def test_reserved_number_rejected_for_a_real_player(self):
+        player = Player(name="Impostor", player_number=BYE_PLAYER_NUMBER, rating=1500)
+        with self.assertRaises(ValidationError):
+            player.full_clean()
+
+    def test_reserved_number_rejected_in_any_casing(self):
+        player = Player(name="Impostor", player_number="bye", rating=1500)
+        with self.assertRaises(ValidationError):
+            player.full_clean()
+
+    def test_the_bye_may_hold_the_reserved_number(self):
+        bye = Player.get_bye()
+        bye.full_clean()  # must not raise
+
+    def test_reserved_helper_matches_the_rust_bye_check(self):
+        # scrabble-pairing/src/standings.rs compares the engine key to "Bye"
+        # with eq_ignore_ascii_case, so the reservation must be case-insensitive
+        # in exactly the same way.
+        for value in ("BYE", "bye", "Bye", " bye "):
+            self.assertTrue(is_reserved_player_number(value), value)
+        for value in ("0233", "T-7", "", None, "BYES"):
+            self.assertFalse(is_reserved_player_number(value), value)
+
+
+class CanonicalNumberConformanceTests(TestCase):
+    """The shared contract with the central player database.
+
+    This table is duplicated in ../ratings/tests/test_identity.py on purpose: if
+    the two projects ever disagree about the canonical form, one person becomes
+    two on both sides at once. A divergence should fail here as well as there.
+    """
+
+    CASES = [
+        ("233", "0233"),
+        ("1", "0001"),
+        ("0233", "0233"),
+        ("00233", "0233"),
+        (233, "0233"),
+        ("  233 ", "0233"),
+        ("12345", "12345"),   # wider than four digits is never truncated
+        ("T-7", "T-7"),
+        ("T-123", "T-123"),
+        ("BYE", "BYE"),
+        ("", ""),
+    ]
+
+    def test_canonical_form(self):
+        for value, expected in self.CASES:
+            with self.subTest(value=value):
+                self.assertEqual(canonical_player_number(value), expected)
+
+    def test_is_idempotent(self):
+        for value, _ in self.CASES:
+            with self.subTest(value=value):
+                once = canonical_player_number(value)
+                self.assertEqual(canonical_player_number(once), once)

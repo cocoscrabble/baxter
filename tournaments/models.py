@@ -1,7 +1,10 @@
 import secrets
 
+from coco_ratings.identity import canonical_player_number
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models.functions import Lower
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
@@ -323,8 +326,10 @@ class DivisionSettings(models.Model):
 
 # Reserved namespace for player numbers minted locally in Baxter for players
 # that are not yet known to the registry. The hyphen guarantees these never
-# collide with canonical registry numbers (optional alpha prefix + digits), and
-# the registry replaces them with real numbers when the tournament is uploaded.
+# collide with canonical registry numbers, and it makes them non-numeric, so
+# canonical_player_number leaves them alone. The registry never receives them:
+# a tournament export blocks until an admin has assigned real numbers centrally
+# and Baxter has pulled them (see plans/PLAN_COCO_PROGRAM.md).
 TEMP_NUMBER_PREFIX = "T-"
 
 
@@ -347,15 +352,38 @@ def next_temp_player_number():
 
 # The singleton bye player's name and reserved number. The engine recognises a
 # bye by name (Player.is_bye → name == "bye"), so this name must stay "Bye".
+#
+# BYE_PLAYER_NUMBER is reserved: once player_number is the engine key
+# (plans/PLAN_PLAYER_IDENTITY.md), a real player holding "BYE" would be paired
+# as the bye. It is non-numeric, so canonicalization leaves it untouched.
 BYE_PLAYER_NAME = "Bye"
 BYE_PLAYER_NUMBER = "BYE"
 
 
+def is_reserved_player_number(number):
+    """True for the bye's reserved number, in any casing.
+
+    Bye detection is case-insensitive on both sides of the engine boundary
+    (``scrabble-pairing/src/standings.rs`` compares with
+    ``eq_ignore_ascii_case``), so the reservation has to be too.
+    """
+    return str(number or "").strip().casefold() == BYE_PLAYER_NUMBER.casefold()
+
+
 class Player(models.Model):
-    """A tournament player."""
+    """A tournament player.
+
+    ``player_number`` is the identity — not ``name``. Names are not unique in
+    the real world, and everything outside the database (the pairing engine,
+    event payloads, the digest, the interchange with the central player
+    database) keys on the number. See plans/PLAN_PLAYER_IDENTITY.md.
+    """
 
     name = models.CharField(max_length=200)
-    player_number = models.CharField(max_length=8)
+    # Canonical form is the central database's: zero-padded to four digits
+    # ("0233"). Wider than the 4 that form needs, because Baxter also stores
+    # "T-" placeholders for players the central database has not numbered yet.
+    player_number = models.CharField(max_length=16)
     rating = models.IntegerField()
     # True for players created locally that the registry has not yet seen; their
     # player_number is a temporary T- value the registry replaces on upload.
@@ -366,9 +394,40 @@ class Player(models.Model):
 
     class Meta:
         ordering = ["name"]
+        constraints = [
+            # Uniqueness is on the *canonical* form. canonical_player_number
+            # already collapses 233/0233/00233 onto one key, so what is left for
+            # the index to catch is case: the non-numeric keys ("T-7", "BYE")
+            # pass through canonicalization untouched, and bye detection is
+            # case-insensitive on both sides of the engine boundary.
+            models.UniqueConstraint(
+                Lower("player_number"), name="unique_player_number_ci"
+            )
+        ]
 
     def __str__(self):
         return self.name
+
+    def clean(self):
+        super().clean()
+        if is_reserved_player_number(self.player_number) and not self.is_bye:
+            raise ValidationError(
+                {"player_number": f"'{BYE_PLAYER_NUMBER}' is reserved for the bye."}
+            )
+
+    def save(self, *args, **kwargs):
+        """Normalize the number on the way in, so the stored key is canonical by
+        construction.
+
+        This mirrors the central database, which funnels every write through the
+        same function. One un-normalized write is enough to split a person into
+        two identities, and ``objects.create``, the admin and the shell all come
+        through here. ``bulk_create``/``bulk_update`` bypass ``save`` as they
+        always do — the migration that backfills canonical numbers calls
+        ``canonical_player_number`` directly for that reason.
+        """
+        self.player_number = canonical_player_number(self.player_number)
+        super().save(*args, **kwargs)
 
     @classmethod
     def get_bye(cls):
