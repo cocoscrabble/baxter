@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Import WESPA Ratings - Baxter{% endblock %}
+
+{% block page_class %}page--narrow{% endblock %}
+
+{% block content %}
+<h1>Import WESPA ratings</h1>
+
+<p>Upload a CSV of WESPA ratings to refresh the roster. A WESPA rating is only
+used for a player who has no CoCo rating, and it is never sent to the central
+database — it is Baxter's own copy of somebody else's number.</p>
+
+<p>This does not disturb any tournament in progress: entrants pin the rating they
+were seeded from when they enter, so a refresh cannot reshuffle pairings.</p>
+
+<p>The roster currently holds {{ player_count }} player{{ player_count|pluralize }},
+{{ wespa_count }} with a WESPA rating.</p>
+
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <p><input type="file" name="wespa_file" accept=".csv,.txt,text/csv" required></p>
+    <button type="submit">Upload and refresh</button>
+</form>
+
+<h2>File format</h2>
+<p>Two columns, <code>name, rating</code>, or three,
+<code>player number, name, rating</code>. A heading row is optional.</p>
+<pre>0233,Dave Wiegand,1842
+0517,Alec Sjoholm,1795</pre>
+
+<p><a href="{% url 'player_import' %}">Importing the CoCo roster</a> is a
+separate thing — that upload sets names and CoCo ratings.</p>
+
+<p>A player number matches exactly. A bare name matches only if exactly one
+player has it — a name shared by several players updates none of them and is
+reported, because the file cannot say which one it means.</p>
+{% endblock %}

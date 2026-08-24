@@ -69,6 +69,9 @@ EXEMPT = {
     "DivisionRoundPairingsPreviewView",  # preview only, no write
     "EditPresenceView",                  # editing-presence heartbeat
     "PlayerImportView",                  # global registry import (out of scope)
+    # Global rating refresh. Unlogged on purpose: entrants pin their rating when
+    # they enter, so this mutates no replayable tournament state.
+    "WespaImportView",
     # Dev tool that builds a whole fake tournament directly; rebuilt on commands
     # in event-log Phase 5.
     "FakeTournamentCreateView",

@@ -459,7 +459,7 @@ the division was seeded from. A phase 2 miss.
 
 ---
 
-## Phase 5 — The external-source seam
+## Phase 5 — The external-source seam — **IMPLEMENTED**
 
 One interface, one local implementation, no network code:
 
@@ -497,6 +497,30 @@ class PlayerSource:
 **Verification:** `test_player_sync.py` gains WESPA upsert cases (new rating,
 updated rating, unmatched name is a no-op); a fake `PlayerSource` drives the
 registration page's search in `test_views.py`.
+
+### What landed
+
+`player_source.py` (the interface + `LocalPlayerSource`) went in with phase 3,
+since the registration page needs it. This phase adds `wespa_ratings.py` and the
+admin-only upload page, plus the seam tests: a fake `PlayerSource` drives the
+search, the add flow and guest minting, proving no view reaches around it.
+
+The fetcher stays a documented absence, as decided. Where WESPA ratings come
+from is not settled — bulk file, per-player lookup, some URL, some format — so
+the module takes rows that are already parsed and the CSV upload is the concrete
+way in. Inventing a protocol would only have to be undone.
+
+Two things the tests pin that are easy to get wrong later:
+
+- **An ambiguous name updates nobody.** WESPA cannot say which "John Smith" it
+  means, and a wrong rating is worse than a missing one. The rows are listed by
+  name rather than counted, because "3 names were ambiguous" is not something
+  anyone can act on.
+
+- **A refresh cannot move a pinned entrant rating** — which is exactly why this
+  can stay an unlogged global action. There is a test that enters someone,
+  refreshes the roster underneath them, and asserts their snapshot did not
+  budge.
 
 ---
 
