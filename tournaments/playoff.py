@@ -267,7 +267,7 @@ class PlayoffConfig:
     # series key -> maximum games. A placement key that is missing or 0 means
     # that series is not played.
     stage_games: dict[str, int]
-    # Confirmed qualifiers, best seed first.
+    # Confirmed qualifiers, best seed first, as player *keys* (numbers).
     seeds: tuple[str, ...]
 
     @classmethod
@@ -278,13 +278,13 @@ class PlayoffConfig:
             qualifier_count=playoff.qualifier_count,
             timing=playoff.timing,
             stage_games=dict(playoff.stage_games or {}),
-            seeds=tuple(s["player"] for s in playoff.seeds or []),
+            seeds=tuple(s["key"] for s in playoff.seeds or []),
         )
 
-    def seed_of(self, name: str) -> int | None:
+    def seed_of(self, key: str) -> int | None:
         """1-based qualification seed, or None for a non-participant."""
         try:
-            return self.seeds.index(name) + 1
+            return self.seeds.index(key) + 1
         except ValueError:
             return None
 
@@ -390,6 +390,7 @@ class Game:
     status: str
     high_score: int | None = None
     low_score: int | None = None
+    # The winner's key, or None for a draw or an unplayed game.
     winner: str | None = None
 
     @property
@@ -411,7 +412,9 @@ class Series:
     start_round: int
     window: int
     places: tuple[int, int] | None
-    # Participant names, better qualification seed first. None until known.
+    # Participant keys, better qualification seed first. None until known.
+    # Keys, not names: two entrants may share a name (see
+    # plans/PLAN_PLAYER_IDENTITY.md), and a bracket must never confuse them.
     high: str | None
     low: str | None
     games: tuple[Game, ...]
@@ -451,8 +454,8 @@ class Series:
     def played_games(self) -> tuple[Game, ...]:
         return tuple(g for g in self.games if g.played)
 
-    def score_for(self, name: str) -> float:
-        return self.high_score if name == self.high else self.low_score
+    def score_for(self, key: str) -> float:
+        return self.high_score if key == self.high else self.low_score
 
 
 @dataclass(frozen=True)
@@ -510,15 +513,15 @@ class Bracket:
                 out.setdefault(g.round, []).append((s, g))
         return out
 
-    def reserved_names_by_round(self) -> dict[int, list[str]]:
-        """``{round: [names]}`` of players held out of ordinary pairing.
+    def reserved_keys_by_round(self) -> dict[int, list[str]]:
+        """``{round: [keys]}`` of players held out of ordinary pairing.
 
         A player pulled into the bracket never returns to the ordinary pairing
         pool (see the plan's decisions), so every qualifier is reserved for every
         playoff round, whether or not they have a game that round.
         """
-        names = list(self.config.seeds)
-        return {r: list(names) for r in self.rounds}
+        keys = list(self.config.seeds)
+        return {r: list(keys) for r in self.rounds}
 
 
 # ---------------------------------------------------------------------------
@@ -531,7 +534,7 @@ def _result_index(slips) -> dict:
     than once, but always in different rounds, so this stays unique."""
     index = {}
     for slip in slips:
-        key = (slip.round, frozenset({slip.winner_name, slip.loser_name}))
+        key = (slip.round, frozenset({slip.winner_key, slip.loser_key}))
         index[key] = slip
     return index
 
@@ -561,13 +564,13 @@ def _order_by_seed(config: PlayoffConfig, a: str | None, b: str | None):
 
 def _game_scores(slip, high: str) -> tuple[int, int, str | None]:
     """(high_score, low_score, winner or None for a draw) for one played game."""
-    if slip.winner_name == high:
+    if slip.winner_key == high:
         high_score, low_score = slip.winner_score, slip.loser_score
     else:
         high_score, low_score = slip.loser_score, slip.winner_score
     if high_score == low_score:
         return high_score, low_score, None
-    return high_score, low_score, high if high_score > low_score else slip.winner_name
+    return high_score, low_score, high if high_score > low_score else slip.winner_key
 
 
 def _series_state(
@@ -711,8 +714,8 @@ def _series_state(
 
 def build_bracket(config: PlayoffConfig, slips) -> Bracket:
     """Derive the whole bracket from the configuration and the division's
-    results. ``slips`` is any iterable of objects with ``round``, ``winner_name``,
-    ``loser_name``, ``winner_score`` and ``loser_score`` — both ``ResultSlipData``
+    results. ``slips`` is any iterable of objects with ``round``, ``winner_key``,
+    ``loser_key``, ``winner_score`` and ``loser_score`` — both ``ResultSlipData``
     and the ``ResultSlip`` model qualify."""
     template = BRACKETS[config.qualifier_count]
     enabled = enabled_keys(config)
@@ -748,7 +751,9 @@ def build_bracket(config: PlayoffConfig, slips) -> Bracket:
 @dataclass(frozen=True)
 class Placement:
     place: int
-    # None when the place is not yet decided.
+    # The placed player's key, and their name for display. Both are None when
+    # the place is not yet decided.
+    key: str | None
     name: str | None
     # "series" (won on the bracket), "seed" (eliminated at the same stage as
     # others and separated by qualification order), "standings" (main field),
@@ -758,14 +763,14 @@ class Placement:
 
     @property
     def resolved(self) -> bool:
-        return self.name is not None
+        return self.key is not None
 
 
 def final_placements(bracket: Bracket, standings, numbers) -> list[Placement]:
     """The division's finishing order: bracket first, then the main field.
 
     ``standings`` is the ordinary standings after the division's last round
-    (``standings_after_round``); ``numbers`` maps player name -> entrant number.
+    (``standings_after_round``); ``numbers`` maps player key -> entrant number.
 
     Ordinary standings sort on wins then spread and stop there, so an exact tie
     falls back to result-slip iteration order. The main-field tail therefore
@@ -775,9 +780,15 @@ def final_placements(bracket: Bracket, standings, numbers) -> list[Placement]:
     for existing tournaments.
     """
     config = bracket.config
+    # Bracket participants are drawn from the standings, so the standings carry
+    # every display name a placement needs.
+    display = {p.key: p.name for p in standings}
     placements: dict[int, Placement] = {}
     owned: set[int] = set()
-    placed_names: set[str] = set()
+    placed: set[str] = set()
+
+    def placement(place, key, source, note=""):
+        return Placement(place, key, display.get(key, key), source, note)
 
     for series in bracket.series:
         if not series.places:
@@ -785,9 +796,9 @@ def final_placements(bracket: Bracket, standings, numbers) -> list[Placement]:
         win_place, lose_place = series.places
         owned.update(series.places)
         if series.decided:
-            placements[win_place] = Placement(win_place, series.winner, "series")
-            placements[lose_place] = Placement(lose_place, series.loser, "series")
-            placed_names.update(series.participants)
+            placements[win_place] = placement(win_place, series.winner, "series")
+            placements[lose_place] = placement(lose_place, series.loser, "series")
+            placed.update(series.participants)
         else:
             # Never seed-order an undecided series: that would present an
             # unfinished bracket as a finished one.
@@ -798,43 +809,43 @@ def final_placements(bracket: Bracket, standings, numbers) -> list[Placement]:
             )
             for place in series.places:
                 placements[place] = Placement(
-                    place, None, "unresolved", f"{series.label}: {note}"
+                    place, None, None, "unresolved", f"{series.label}: {note}"
                 )
 
     # Bracket players no placement series covers (a postscript playoff that
     # switched some off): eliminated later ranks higher, then qualification seed.
     last_window = {}
     for series in bracket.series:
-        for name in series.participants:
-            last_window[name] = max(last_window.get(name, -1), series.window)
+        for key in series.participants:
+            last_window[key] = max(last_window.get(key, -1), series.window)
     leftover = [
-        name
-        for name in config.seeds
-        if name not in placed_names
+        key
+        for key in config.seeds
+        if key not in placed
         and not any(
-            name in s.participants and s.places and not s.decided
+            key in s.participants and s.places and not s.decided
             for s in bracket.series
         )
     ]
-    leftover.sort(key=lambda n: (-last_window.get(n, -1), config.seed_of(n)))
+    leftover.sort(key=lambda k: (-last_window.get(k, -1), config.seed_of(k)))
     free_places = [p for p in range(1, config.qualifier_count + 1) if p not in owned]
-    for place, name in zip(free_places, leftover):
-        placements[place] = Placement(
-            place, name, "seed", "eliminated; placed by qualification order"
+    for place, key in zip(free_places, leftover):
+        placements[place] = placement(
+            place, key, "seed", "eliminated; placed by qualification order"
         )
-        placed_names.add(name)
+        placed.add(key)
 
     ordered = [
-        placements.get(p, Placement(p, None, "unresolved"))
+        placements.get(p, Placement(p, None, None, "unresolved"))
         for p in range(1, config.qualifier_count + 1)
     ]
 
     # The main field, by wins then spread then entrant number.
     seeds = set(config.seeds)
-    tail = [p for p in standings if p.name not in seeds]
-    tail.sort(key=lambda p: (-p.score, -p.spread, numbers.get(p.name, 0)))
+    tail = [p for p in standings if p.key not in seeds]
+    tail.sort(key=lambda p: (-p.score, -p.spread, numbers.get(p.key, 0)))
     for offset, player in enumerate(tail, start=config.qualifier_count + 1):
-        ordered.append(Placement(offset, player.name, "standings"))
+        ordered.append(Placement(offset, player.key, player.name, "standings"))
     return ordered
 
 
@@ -858,7 +869,8 @@ def playoff_for(division):
 
 def qualification_seeds(division, round_num, count):
     """The top ``count`` entrants in ``division`` after ``round_num``, as the
-    seed snapshot a playoff records.
+    seed snapshot a playoff records. ``count=None`` returns the whole field,
+    which is what an override needs to look a player up by key.
 
     This is what the setup page previews and what the director may override
     before confirming. Withdrawn entrants are not offered: a dropped player
@@ -871,11 +883,15 @@ def qualification_seeds(division, round_num, count):
     return [
         {
             "seed": i + 1,
+            # ``key`` is the identity the bracket derives from; ``player`` is
+            # kept alongside it so the recorded snapshot stays readable and the
+            # qualifiers table has a name to show without a lookup.
+            "key": p.key,
             "player": p.name,
             "wins": p.score,
             "spread": p.spread,
         }
-        for i, p in enumerate(standings[:count])
+        for i, p in enumerate(standings if count is None else standings[:count])
     ]
 
 
@@ -982,7 +998,8 @@ def sync_series(playoff, bracket):
     from tournaments.models import PlayoffSeries
 
     entrants = {
-        e.player.name: e for e in playoff.division.entrants.select_related("player")
+        e.player.player_number: e
+        for e in playoff.division.entrants.select_related("player")
     }
     rows = {}
     for series in bracket.series:
@@ -1103,10 +1120,13 @@ def conflicts_for_results(config: PlayoffConfig, slips) -> list[str]:
     for slip in slips:
         if slip.round not in rounds:
             continue
-        key = (slip.round, frozenset({slip.winner_name, slip.loser_name}))
+        key = (slip.round, frozenset({slip.winner_key, slip.loser_key}))
         if key not in expected:
+            # Keys, not names, in the message: this is a director-facing error
+            # about two specific people, and ``slips`` is duck-typed, so a name
+            # is not guaranteed to be there to show.
             conflicts.append(
-                f"Round {slip.round}: {slip.winner_name} vs {slip.loser_name} "
+                f"Round {slip.round}: {slip.winner_key} vs {slip.loser_key} "
                 f"is not a game this bracket plays. Changing an earlier result "
                 f"would rewrite the bracket under games that have already been "
                 f"played — delete those results first if that is intended."
@@ -1115,7 +1135,7 @@ def conflicts_for_results(config: PlayoffConfig, slips) -> list[str]:
 
 
 def conflicts_for_single_result(
-    division, pairing, winner_name, winner_score, loser_score
+    division, pairing, winner_key, winner_score, loser_score
 ):
     """``conflicts_for_results`` for one about-to-be-saved result.
 
@@ -1127,21 +1147,21 @@ def conflicts_for_single_result(
     playoff = playoff_for(division)
     if playoff is None:
         return []
-    names = {pairing.first.player.name, pairing.second.player.name}
+    keys = {pairing.first.key, pairing.second.key}
     slips = [
         ResultSlipData.from_db(r)
         for r in division.result_slips.select_related("winner__player", "loser__player")
         if not (
             r.round == pairing.round
-            and {r.winner.player.name, r.loser.player.name} == names
+            and {r.winner_key, r.loser_key} == keys
         )
     ]
-    loser_name = next(iter(names - {winner_name}), winner_name)
+    loser_key = next(iter(keys - {winner_key}), winner_key)
     slips.append(
         ResultSlipData(
             round=pairing.round,
-            winner_name=winner_name,
-            loser_name=loser_name,
+            winner_key=winner_key,
+            loser_key=loser_key,
             winner_score=winner_score,
             loser_score=loser_score,
             winner_started=True,

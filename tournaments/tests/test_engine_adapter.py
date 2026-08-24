@@ -22,10 +22,10 @@ def _swiss_pd():
     return PairingData(
         result_slips=[],
         entrants=[
-            EntrantData(PlayerData("A", 1600)),
-            EntrantData(PlayerData("B", 1500)),
-            EntrantData(PlayerData("C", 1400)),
-            EntrantData(PlayerData("D", 1300), dropped=True),
+            EntrantData(PlayerData("A", "A", 1600)),
+            EntrantData(PlayerData("B", "B", 1500)),
+            EntrantData(PlayerData("C", "C", 1400)),
+            EntrantData(PlayerData("D", "D", 1300), dropped=True),
         ],
         repeats=Repeats(),
         round_pairings=[RoundPairing(1, 0, RP.Swiss)],
@@ -118,7 +118,7 @@ class EnginePathTests(TestCase):
         pairing_data = PairingData(
             result_slips=completed_round_robin,
             entrants=[
-                EntrantData(PlayerData(name, 1600 - 10 * index))
+                EntrantData(PlayerData(name, name, 1600 - 10 * index))
                 for index, name in enumerate(names)
             ],
             repeats=Repeats(),
@@ -143,7 +143,7 @@ def _cop_pd(cop_config):
             ResultSlipData(1, "C", "D", 450, 400, True),
             ResultSlipData(1, "E", "F", 450, 400, True),
         ],
-        entrants=[EntrantData(PlayerData(n, 1600 - 10 * i)) for i, n in enumerate(names)],
+        entrants=[EntrantData(PlayerData(n, n, 1600 - 10 * i)) for i, n in enumerate(names)],
         repeats=Repeats(),
         round_pairings=[RoundPairing(1, 0, RP.Swiss), RoundPairing(2, 1, RP.COP)],
         seed=7,

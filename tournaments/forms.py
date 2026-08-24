@@ -222,7 +222,7 @@ class ResultSlipForm(forms.Form):
             from tournaments.playoff import conflicts_for_single_result
 
             conflicts = conflicts_for_single_result(
-                self._division, pairing, winner.player.name, winner_score, loser_score,
+                self._division, pairing, winner.key, winner_score, loser_score,
             )
             if conflicts:
                 raise forms.ValidationError(conflicts)

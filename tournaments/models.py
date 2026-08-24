@@ -516,6 +516,11 @@ class Entrant(models.Model):
     def name(self):
         return self.player.name
 
+    @property
+    def key(self):
+        """The entrant's identity for the pairing layer — never the name."""
+        return self.player.player_number
+
 
 class ResultSlip(models.Model):
     """A game result slip."""
@@ -558,6 +563,14 @@ class ResultSlip(models.Model):
     @property
     def loser_name(self):
         return self.loser.player.name
+
+    @property
+    def winner_key(self):
+        return self.winner.player.player_number
+
+    @property
+    def loser_key(self):
+        return self.loser.player.player_number
 
     def to_dict(self):
         return {
@@ -777,10 +790,13 @@ class Playoff(models.Model):
     # that is missing or 0 means that series is not played.
     stage_games = models.JSONField(default=dict)
     # The confirmed qualifiers, best seed first, as recorded at creation:
-    # [{"seed": 1, "player": "…", "wins": 5.0, "spread": 412}, …]. Keyed by
-    # player *name* so it replays into a fresh database, and frozen here so an
-    # exact tie in the qualification standings is resolved once, by the
-    # director, rather than re-derived from an unstable sort.
+    # [{"seed": 1, "key": "0233", "player": "…", "wins": 5.0, "spread": 412}, …].
+    # ``key`` is the player number — the identity the bracket derives from —
+    # and ``player`` is carried alongside it so the snapshot stays readable and
+    # the qualifiers table needs no lookup. Both are portable (no pks), so this
+    # replays into a fresh database. Frozen here so an exact tie in the
+    # qualification standings is resolved once, by the director, rather than
+    # re-derived from an unstable sort.
     seeds = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True)
 

@@ -5,6 +5,7 @@ from django.test import TestCase
 from django.db import IntegrityError
 
 from tournaments.models import (
+    BYE_PLAYER_NUMBER,
     Division,
     DivisionSettings,
     Entrant,
@@ -161,14 +162,14 @@ class PairingDBTestBase(TestCase):
 
 
 
-# ── standings_after_round with excluded_names ────────────────────────────────
+# ── standings_after_round with excluded_keys ────────────────────────────────
 
 
 def _make_pd(names, result_slips=None, fixed_pairings=None):
     """Build a PairingData from a list of player names (first = highest rated)."""
     n = len(names)
     entrants = [
-        EntrantData(PlayerData(name=name, rating=(n - i) * 100))
+        EntrantData(PlayerData(key=name, name=name, rating=(n - i) * 100))
         for i, name in enumerate(names)
     ]
     return PairingData(
@@ -180,11 +181,11 @@ def _make_pd(names, result_slips=None, fixed_pairings=None):
 
 
 class StandingsExclusionTests(TestCase):
-    """standings_after_round filters pd.excluded_names from its output."""
+    """standings_after_round filters pd.excluded_keys from its output."""
 
     def test_filters_excluded_from_seedings(self):
         pd = _make_pd(["Alice", "Bob", "Carol", "Dave"])
-        pd.excluded_names = {"Alice", "Dave"}
+        pd.excluded_keys = {"Alice", "Dave"}
         names = [p.name for p in standings_after_round(pd, 0)]
         self.assertNotIn("Alice", names)
         self.assertNotIn("Dave", names)
@@ -197,14 +198,14 @@ class StandingsExclusionTests(TestCase):
             ResultSlipData(1, "Carol", "Dave", 420, 360, True),
         ]
         pd = _make_pd(["Alice", "Bob", "Carol", "Dave"], result_slips=slips)
-        pd.excluded_names = {"Alice", "Carol"}
+        pd.excluded_keys = {"Alice", "Carol"}
         names = [p.name for p in standings_after_round(pd, 1)]
         self.assertNotIn("Alice", names)
         self.assertNotIn("Carol", names)
         self.assertIn("Bob", names)
         self.assertIn("Dave", names)
 
-    def test_empty_excluded_names_returns_all(self):
+    def test_empty_excluded_keys_returns_all(self):
         pd = _make_pd(["Alice", "Bob", "Carol", "Dave"])
         self.assertEqual(len(standings_after_round(pd, 0)), 4)
 
@@ -923,9 +924,13 @@ class PublishedStartLedgerTests(PairingDBTestBase):
         self._regenerate()
         self._publish(1)
         pd = PairingData.for_division(self.division)
+        # Published pairings reach the engine as player numbers.
         self.assertEqual(
             pd.published_pairings,
-            {1: [("Alice", "Bob"), ("Carol", "Dave")]},
+            {1: [
+                (self._entrant("Alice").key, self._entrant("Bob").key),
+                (self._entrant("Carol").key, self._entrant("Dave").key),
+            ]},
         )
 
     def test_draft_rounds_are_not_in_published_pairings(self):
@@ -1004,7 +1009,8 @@ class PublishedStartLedgerTests(PairingDBTestBase):
             {("Alice", "Bob"), ("Carol", "Dave"), ("Eve", "Bye")},
         )
         self.assertIn(
-            ("Bye", "Eve"), PairingData.for_division(self.division).published_pairings[1]
+            (BYE_PLAYER_NUMBER, self._entrant("Eve").key),
+            PairingData.for_division(self.division).published_pairings[1],
         )
 
         self._regenerate()
@@ -1161,3 +1167,132 @@ class SwissContendersLifecycleTests(PairingDBTestBase):
 
         self.assertEqual(settings.round_pairings[10]["pairing"], "COP")
         self.assertEqual(self.division.pairings.filter(round=11).count(), 9)
+
+
+class SharedNameIdentityTests(TestCase):
+    """Two entrants with the same name are two people.
+
+    This is the case the whole identity change exists for: before the pairing
+    layer keyed on ``player_number``, every one of these assertions collapsed
+    the two John Smiths into a single engine player.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.owner = User.objects.create_user(username="td2", password="testpass123")
+        cls.tournament = Tournament.objects.create(
+            name="Clash", location="Toronto",
+            start_date=date(2026, 5, 1), owner=cls.owner,
+        )
+        cls.division = Division.objects.create(
+            name="Open", tournament=cls.tournament
+        )
+        # Two John Smiths and a third player they both keep meeting.
+        cls.entrants = {}
+        for number, (label, name, rating) in enumerate(
+            [
+                ("john_a", "John Smith", 1800),
+                ("john_b", "John Smith", 1600),
+                ("mary", "Mary Jones", 1500),
+                ("sam", "Sam Patel", 1400),
+            ],
+            start=1,
+        ):
+            player = DBPlayer.objects.create(
+                name=name, player_number=str(number).zfill(4), rating=rating
+            )
+            cls.entrants[label] = Entrant.objects.create(
+                division=cls.division, player=player, number=number
+            )
+
+    def _slip(self, round, winner, loser, w_score=450, l_score=400):
+        return ResultSlip.objects.create(
+            division=self.division, round=round,
+            winner=self.entrants[winner], winner_score=w_score,
+            loser=self.entrants[loser], loser_score=l_score,
+            winner_started=True,
+        )
+
+    def test_the_two_johns_are_separate_players_in_the_standings(self):
+        self._slip(1, "john_a", "mary")
+        self._slip(1, "sam", "john_b")
+        standings = standings_after_round(PairingData.for_division(self.division), 1)
+        johns = [p for p in standings if p.name == "John Smith"]
+        self.assertEqual(len(johns), 2)
+        self.assertEqual(
+            {p.key for p in johns},
+            {self.entrants["john_a"].key, self.entrants["john_b"].key},
+        )
+        # One won and one lost — a merged pair would show 1-1.
+        self.assertEqual({(p.wins, p.losses) for p in johns}, {(1, 0), (0, 1)})
+
+    def test_repeats_between_each_john_and_mary_are_tracked_separately(self):
+        self._slip(1, "john_a", "mary")
+        self._slip(2, "mary", "john_b")
+        pd = PairingData.for_division(self.division)
+        repeats = Repeats()
+        for slip in pd.result_slips:
+            repeats.add(
+                Pairing(Player(slip.winner_key), Player(slip.loser_key))
+            )
+        mary = self.entrants["mary"].key
+        self.assertEqual(
+            repeats.get(Pairing(Player(self.entrants["john_a"].key), Player(mary))), 1
+        )
+        self.assertEqual(
+            repeats.get(Pairing(Player(self.entrants["john_b"].key), Player(mary))), 1
+        )
+
+    def test_the_two_johns_starts_do_not_merge(self):
+        starts = Starts()
+        john_a = Player(self.entrants["john_a"].key)
+        john_b = Player(self.entrants["john_b"].key)
+        mary = Player(self.entrants["mary"].key)
+        starts.register(Pairing(john_a, mary), 1)
+        starts.register(Pairing(john_b, mary), 2)
+        # Each John started once; a name-keyed ledger would credit "John Smith"
+        # with two and start balancing the wrong person.
+        self.assertEqual(starts.starts[john_a.key], 1)
+        self.assertEqual(starts.starts[john_b.key], 1)
+
+    def test_the_engine_is_handed_two_distinct_players(self):
+        from tournaments.pairing.engine import pairing_data_to_input
+
+        payload = pairing_data_to_input(PairingData.for_division(self.division))
+        names = [p["name"] for p in payload["players"]]
+        self.assertEqual(len(set(names)), 4)
+        self.assertIn(self.entrants["john_a"].key, names)
+        self.assertIn(self.entrants["john_b"].key, names)
+
+    def test_a_full_round_pairs_all_four(self):
+        from tournaments.generate_pairings import regenerate_pairings
+
+        DivisionSettings.objects.create(
+            division=self.division,
+            round_pairings=[{"round": 1, "start_round": 0, "pairing": "KotH"}],
+        )
+        regenerate_pairings(self.division)
+        pairings = list(self.division.pairings.filter(round=1))
+        self.assertEqual(len(pairings), 2)
+        paired = {e.pk for p in pairings for e in (p.first, p.second)}
+        self.assertEqual(paired, {e.pk for e in self.entrants.values()})
+
+
+class ByeConstantCouplingTests(TestCase):
+    """The bye's number must keep matching what the Rust engine looks for.
+
+    ``scrabble-pairing/src/standings.rs`` recognises a bye by comparing the key
+    it was handed against ``BYE_NAME`` with ``eq_ignore_ascii_case``. Since the
+    key is now the player *number*, that compare only keeps working while
+    ``BYE_PLAYER_NUMBER`` casefolds to the same string. Nothing else would catch
+    a change to either side: byes would simply stop being byes.
+    """
+
+    def test_bye_player_number_matches_the_engine_constant(self):
+        self.assertEqual(BYE_PLAYER_NUMBER.casefold(), "bye")
+
+    def test_the_standings_player_recognises_the_bye_by_number(self):
+        self.assertTrue(Player(BYE_PLAYER_NUMBER).is_bye)
+        self.assertTrue(Player(BYE_PLAYER_NUMBER.lower()).is_bye)
+        # The bye's *name* is not what makes it a bye any more.
+        self.assertFalse(Player("0007", "Bye").is_bye)
