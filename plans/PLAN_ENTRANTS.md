@@ -215,7 +215,7 @@ Postgres 18.2, with `sqlmigrate` showing plain `ADD COLUMN`s and no indexes.
 
 ---
 
-## Phase 2 — Pairing and replay read the snapshot
+## Phase 2 — Pairing and replay read the snapshot — **IMPLEMENTED**
 
 ### 2a. Seeding
 
@@ -251,6 +251,45 @@ sources and registration flags; `test_fuzz.py` passes with the new mutations;
 `test_engine_adapter.py` asserts the snapshot (not the live player rating)
 reaches the engine — mutate `Player.rating` after entry and assert pairings are
 unchanged.
+
+### What landed, and what the fuzzer found
+
+`PlayerData.from_db` became `from_entrant`, so everything downstream of it —
+seeding, the engine boundary, simulation, the entrants page's seed order — reads
+the pinned rating without knowing it changed. The DTO, portable payload, digest
+and snapshot carry the new fields, and the fuzzer flips the flags and hand-edits
+ratings.
+
+**Teaching the fuzzer those mutations immediately found a real bug, and fixing
+the fuzzer found two more.**
+
+- **Stale drafts survived a rating edit.** `EntrantsGrid._roster_signature` was
+  `(player_id, dropped)` — commented as "what the pairing engine keys off",
+  which stopped being true the moment the entrant pinned its rating and this
+  grid could edit it. A director who corrected a rating and then published got
+  a round paired off the *old* one, silently; the fuzzer surfaced it as a bye
+  handed to the wrong player. The rating is now part of the signature, pinned by
+  `RatingEditInvalidatesDraftsTests`.
+
+- **The v1 digest must stay a three-element entrant tuple.** Extending it for
+  both versions made every pre-existing tournament fail the backfill's
+  verification pass and be skipped — caught by re-running the migration against
+  the real dev database, not by any test.
+
+- **The log has to record what was *persisted*.** `on_saved` is handed the
+  client's rows, which cannot contain a server-derived snapshot, so
+  `to_portable` reads the entrants back from the database. And replay restores
+  the recorded `rating_source` verbatim rather than re-deriving it — a recorded
+  `(0, "none")` must not come back as the `manual` that carrying a rating
+  otherwise implies.
+
+Two incidental fixes fell out:
+
+- `_random_outcome` divided by zero for two unrated entrants — a state that is
+  now perfectly ordinary (`rating_source = none` pins 0). It is a coin flip.
+- The fuzzer had been posting playoff seeds by *name* since the identity plan
+  moved that form to keys, so its playoff coverage had quietly become a no-op.
+  It posts keys now.
 
 ---
 

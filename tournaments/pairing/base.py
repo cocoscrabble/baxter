@@ -32,12 +32,18 @@ class PlayerData:
     # a name, so nothing may key on it. See plans/PLAN_PLAYER_IDENTITY.md.
     key: str
     name: str
+    # The *pinned* rating, from the entrant, not the live one on the player.
+    # Seeding reads this so a rating that drifts mid-tournament — a WESPA pull,
+    # a roster sync — cannot reshuffle rounds that are already being played
+    # (plans/PLAN_ENTRANTS.md decision 3).
     rating: int
 
     @classmethod
-    def from_db(cls, player) -> "PlayerData":
+    def from_entrant(cls, entrant) -> "PlayerData":
         return cls(
-            key=player.player_number, name=player.name, rating=player.rating
+            key=entrant.player.player_number,
+            name=entrant.player.name,
+            rating=entrant.rating,
         )
 
 
@@ -147,7 +153,7 @@ class PairingData:
         # e.player / slip.winner.player.name is a separate query — an N+1 that
         # dominated for_division for finished divisions (hundreds of slips).
         entrants = [
-            EntrantData(PlayerData.from_db(e.player), dropped=e.dropped)
+            EntrantData(PlayerData.from_entrant(e), dropped=e.dropped)
             for e in division.entrants.select_related("player")
         ]
         slips = [

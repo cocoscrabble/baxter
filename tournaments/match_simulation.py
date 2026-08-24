@@ -12,17 +12,23 @@ from .models import ResultSlip
 def _random_outcome(r1: int, r2: int) -> tuple[bool, int, int]:
     """Roll a rating-weighted match outcome.
 
-    Returns (first_wins, winner_score, loser_score).
+    Returns (first_wins, winner_score, loser_score). Two entrants with no rating
+    between them is a real state — an unrated pair has ``rating_source = none``
+    and pins 0 — so that case is an even coin flip rather than a division by
+    zero.
     """
-    first_wins = random.random() < r1 / (r1 + r2)
+    total = r1 + r2
+    first_wins = random.random() < (r1 / total if total else 0.5)
     loser_score = random.randint(200, 450)
     winner_score = random.randint(loser_score, 600)
     return first_wins, winner_score, loser_score
 
 
 def _build_slip(division, round_num, first_entrant, second_entrant, pairing_obj) -> ResultSlip:
+    # The pinned ratings, like every other consumer of a rating in a running
+    # tournament (plans/PLAN_ENTRANTS.md decision 3).
     first_wins, winner_score, loser_score = _random_outcome(
-        first_entrant.player.rating, second_entrant.player.rating
+        first_entrant.rating, second_entrant.rating
     )
     if first_wins:
         winner, loser = first_entrant, second_entrant

@@ -2663,7 +2663,7 @@ class DivisionEntrantsViewTests(TestCase):
         # A higher-rated player with a larger entrant number still sorts first;
         # the list is ordered by rating (seed order), not entrant number.
         top = Player.objects.create(name="Zoe Ace", player_number="099", rating=1700)
-        Entrant.objects.create(division=self.division, player=top, number=3)
+        Entrant.enter(self.division, top, 3)
         response = self.client.get(self.url)
         names = [e.player.name for e in response.context["entrants"]]
         self.assertEqual(names, ["Zoe Ace", "Alice", "Bob"])

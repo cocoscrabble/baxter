@@ -69,6 +69,20 @@ class EntrantDTO(DataClassJsonMixin):
     number: int
     player: int
     dropped: bool = False
+    # Registration state. All optional with defaults, so a payload written
+    # before these columns existed still parses.
+    #
+    # ``rating`` is None when the row did not carry one, which means "derive the
+    # snapshot from the player". A row that *does* carry one is a director
+    # setting it by hand, which makes it manual.
+    rating: int | None = None
+    # Set only by a portable payload being replayed, which is restoring a
+    # recorded snapshot rather than deciding one — so it is honoured verbatim,
+    # source and all. A browser never sends this.
+    rating_source: str = ""
+    tentative: bool = False
+    paid: bool = False
+    playing_up: bool = False
 
     @classmethod
     def from_json(cls, row: dict) -> "EntrantDTO | None":
@@ -81,11 +95,17 @@ class EntrantDTO(DataClassJsonMixin):
         """
         if row.get("number") is None or row.get("player") is None:
             return None
+        raw_rating = row.get("rating")
         try:
             return cls(
                 number=int(row["number"]),
                 player=int(row["player"]),
                 dropped=bool(row.get("dropped", False)),
+                rating=None if raw_rating in (None, "") else int(raw_rating),
+                rating_source=str(row.get("rating_source") or ""),
+                tentative=bool(row.get("tentative", False)),
+                paid=bool(row.get("paid", False)),
+                playing_up=bool(row.get("playing_up", False)),
             )
         except (ValueError, TypeError):
             return None
@@ -102,11 +122,18 @@ class EntrantDTO(DataClassJsonMixin):
         return errors
 
     def to_db_kwargs(self) -> dict:
-        """Return kwargs for Entrant.objects.create()."""
+        """Return kwargs for Entrant.objects.create().
+
+        ``rating`` is left out: the grid pins it server-side in ``prepare``,
+        which is the only place that may decide it.
+        """
         return {
             "number": self.number,
             "player_id": self.player,
             "dropped": self.dropped,
+            "tentative": self.tentative,
+            "paid": self.paid,
+            "playing_up": self.playing_up,
         }
 
 

@@ -49,7 +49,12 @@ class Fuzzer:
                 name=(
                     f"Twin_{self.seed}" if i % 3 == 0 else f"P{i:02d}_{self.seed}"
                 ),
-                player_number=f"{self.seed}{i:03d}",
+                # A namespace that cannot collide with anything real. Registry
+                # numbers are canonicalized to four digits, so the old
+                # f"{seed}{i:03d}" scheme started colliding with live players
+                # ("0001") the moment canonicalization landed — and this command
+                # runs against a real database.
+                player_number=f"FUZZ-{self.seed}-{i:03d}",
                 rating=2000 - 10 * i,
             )
             for i in range(self.n_players)
@@ -90,6 +95,34 @@ class Fuzzer:
             {"number": i + 1, "player": p.pk, "dropped": False}
             for i, p in enumerate(chosen)
         ]
+        self._post_json("division_entrants_edit", {"rows": rows})
+
+    def op_edit_registration(self):
+        """Flip registration flags, and sometimes hand-edit a pinned rating.
+
+        Both are part of the state digest, so this is what makes the replay
+        meta-invariant actually cover them — a hand-edited rating in particular,
+        since it is the one that has to survive as ``manual`` rather than being
+        re-derived from the player on the way back.
+        """
+        entrants = list(
+            self.division.entrants.select_related("player").order_by("number")
+        )
+        if not entrants:
+            return
+        rows = []
+        for e in entrants:
+            row = {
+                "number": e.number,
+                "player": e.player_id,
+                "dropped": e.dropped,
+                "tentative": self.rng.random() < 0.3,
+                "paid": self.rng.random() < 0.5,
+                "playing_up": self.rng.random() < 0.2,
+            }
+            if self.rng.random() < 0.25:
+                row["rating"] = self.rng.randint(500, 2200)
+            rows.append(row)
         self._post_json("division_entrants_edit", {"rows": rows})
 
     def op_save_settings(self):
@@ -181,7 +214,10 @@ class Fuzzer:
                 "qualifier_count": 2,
                 "timing": "postscript",
                 f"games_{CHAMPIONSHIP}": self.rng.choice([1, 3]),
-                "seed": [s["player"] for s in seeds],
+                # Keys, not names — the setup form's options are keyed on the
+                # player number, and posting names silently produces a bracket
+                # whose participants match no entrant.
+                "seed": [s["key"] for s in seeds],
             },
         )
 
@@ -192,6 +228,7 @@ class Fuzzer:
         (op_publish, 3),
         (op_simulate_round, 3),
         (op_drop_entrant, 1),
+        (op_edit_registration, 2),
         (op_create_playoff, 2),
     ]
 

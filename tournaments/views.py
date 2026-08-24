@@ -648,11 +648,12 @@ class DivisionEntrantsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Seed order: highest-rated player first (ties broken by entrant number).
+        # Seed order: highest-rated first, by the *pinned* rating — the one the
+        # division was actually seeded from — with ties broken by entrant number.
         entrants = list(
             self.object.entrants
             .select_related("player")
-            .order_by("-player__rating", "number")
+            .order_by("-rating", "number")
         )
         label_entrants(division_labels(self.object), entrants)
         context["entrants"] = entrants

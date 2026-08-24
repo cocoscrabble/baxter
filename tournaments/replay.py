@@ -261,11 +261,22 @@ def _replay_snapshot(ctx, payload):
                     e["player"] if v2 else None,
                     e.get("name", e["player"]),
                     e.get("rating", 0),
+                    e.get("wespa_rating"),
                 )
                 ent_by_key[e["player"]] = Entrant.enter(
                     division, player, e["number"],
-                    rating=e.get("rating"),
+                    # The pinned snapshot, not the player's live rating —
+                    # restored verbatim, source included, because replay is
+                    # reproducing a recorded state rather than deciding one. A
+                    # v1 snapshot has neither key and falls back to the cascade,
+                    # which is what it was recorded under.
+                    rating=e.get("entrant_rating"),
+                    rating_source=e.get("rating_source") or None,
                     dropped=e.get("dropped", False),
+                    tentative=e.get("tentative", False),
+                    paid=e.get("paid", False),
+                    playing_up=e.get("playing_up", False),
+                    payment_note=e.get("payment_note", ""),
                 )
 
             def resolve(key):

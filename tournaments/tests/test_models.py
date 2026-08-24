@@ -33,12 +33,10 @@ def setUpTournament(target):
     target.division = Division.objects.create(name="Open", tournament=target.tournament)
     target.player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
     target.player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
-    target.entrant1 = Entrant.objects.create(
-        division=target.division, player=target.player1, number=1
-    )
-    target.entrant2 = Entrant.objects.create(
-        division=target.division, player=target.player2, number=2
-    )
+    # enter(), not create(): entrants pin the rating they are seeded from, and
+    # a fixture that skips that produces entrants rated 0.
+    target.entrant1 = Entrant.enter(target.division, target.player1, 1)
+    target.entrant2 = Entrant.enter(target.division, target.player2, 2)
 
 
 class TournamentModelTests(TestCase):
@@ -474,3 +472,19 @@ class EntrantEnterTests(TestCase):
         bye = self.division.bye_entrant()
         self.assertTrue(bye.player.is_bye)
         self.assertEqual((bye.rating, bye.rating_source), (0, "none"))
+
+
+class UnratedSimulationTests(TestCase):
+    """Two unrated entrants are a real pairing, not a division by zero."""
+
+    def test_an_unrated_pair_simulates_as_a_coin_flip(self):
+        from tournaments.match_simulation import _random_outcome
+
+        outcomes = {_random_outcome(0, 0)[0] for _ in range(200)}
+        self.assertEqual(outcomes, {True, False})
+
+    def test_a_rated_player_still_beats_an_unrated_one_more_often(self):
+        from tournaments.match_simulation import _random_outcome
+
+        wins = sum(_random_outcome(2000, 0)[0] for _ in range(200))
+        self.assertEqual(wins, 200)

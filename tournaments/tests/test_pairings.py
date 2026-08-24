@@ -1,6 +1,8 @@
+import json
 from datetime import date
 
 from django.test import TestCase
+from django.urls import reverse
 
 from django.db import IntegrityError
 
@@ -1296,3 +1298,92 @@ class ByeConstantCouplingTests(TestCase):
         self.assertTrue(Player(BYE_PLAYER_NUMBER.lower()).is_bye)
         # The bye's *name* is not what makes it a bye any more.
         self.assertFalse(Player("0007", "Bye").is_bye)
+
+
+class RatingEditInvalidatesDraftsTests(PairingDBTestBase):
+    """Editing a pinned rating makes the draft pairings stale.
+
+    The entrant pins its rating, and the grid can edit it, so a rating change is
+    a change to what the pairing engine sees. Before this was recognised, a
+    director who corrected a rating and then published got a round paired off
+    the *old* one — with no indication. The fuzzer found it as a bye handed to
+    the wrong player.
+    """
+
+    def _schedule(self):
+        DivisionSettings.objects.update_or_create(
+            division=self.division,
+            defaults={
+                "round_pairings": [
+                    {"round": 1, "start_round": 0, "pairing": "KotH"}
+                ]
+            },
+        )
+
+    def _rows(self, overrides=None):
+        overrides = overrides or {}
+        rows = []
+        for e in self.division.entrants.select_related("player").order_by("number"):
+            row = {"number": e.number, "player": e.player_id, "dropped": e.dropped}
+            row.update(overrides.get(e.player_id, {}))
+            rows.append(row)
+        return rows
+
+    def _save(self, rows):
+        return self.client.post(
+            reverse("division_entrants_edit", kwargs=self.division.slug_kwargs()),
+            json.dumps({"rows": rows}),
+            content_type="application/json",
+        )
+
+    def setUp(self):
+        self.client.login(username="owner", password="testpass123")
+        self._schedule()
+
+    def test_editing_a_rating_drops_the_stale_draft(self):
+        from tournaments.generate_pairings import regenerate_pairings
+
+        regenerate_pairings(self.division)
+        self.assertTrue(self.division.pairings.filter(round=1).exists())
+
+        # Bottom-seed the top player; the draft that exists no longer reflects
+        # the field it would now be paired from.
+        top = self.entrants[0]
+        response = self._save(self._rows({top.player_id: {"rating": 100}}))
+        self.assertEqual(response.status_code, 200, response.content)
+
+        top.refresh_from_db()
+        self.assertEqual((top.rating, top.rating_source), (100, "manual"))
+        self.assertFalse(
+            self.division.round_pairings_set.filter(
+                status=RoundPairings.DRAFT
+            ).exists(),
+            "the draft should have been dropped as stale",
+        )
+
+    def test_a_save_that_changes_no_rating_keeps_the_draft(self):
+        from tournaments.generate_pairings import regenerate_pairings
+
+        regenerate_pairings(self.division)
+        drafts = set(
+            self.division.round_pairings_set.filter(
+                status=RoundPairings.DRAFT
+            ).values_list("pk", flat=True)
+        )
+        self.assertTrue(drafts)
+
+        # A pure flag edit does not affect pairing, so the draft still stands.
+        target = self.entrants[1]
+        response = self._save(self._rows({target.player_id: {"paid": True}}))
+        self.assertEqual(response.status_code, 200, response.content)
+
+        target.refresh_from_db()
+        self.assertTrue(target.paid)
+        self.assertEqual(
+            set(
+                self.division.round_pairings_set.filter(
+                    status=RoundPairings.DRAFT
+                ).values_list("pk", flat=True)
+            ),
+            drafts,
+        )
