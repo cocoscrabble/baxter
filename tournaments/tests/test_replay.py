@@ -2,6 +2,7 @@
 
 import json
 
+from django.db import models
 from django.test import TestCase, tag
 from django.urls import reverse
 
@@ -426,3 +427,162 @@ class V1PayloadUpgradeTests(TestCase):
             {"division": "D", "kept": [[3, "Abe", "Zoe"]]}, 1
         )
         self.assertEqual(upgraded["kept"], [[3, "0001", "0002"]])
+
+
+@tag("slow")
+class PlayerNumberChangeTests(LoggedTournamentMixin, TestCase):
+    """A number rewritten mid-tournament still replays to one person.
+
+    This is the mechanism behind registry number resolution: a guest enters as
+    ``T-7``, an admin assigns them a real number centrally, and the log has to
+    stay truthful across the rewrite — every event before it names the old
+    number and every event after it names the new one.
+    """
+
+    def _rename(self, tournament, old, new):
+        from tournaments.commands import change_player_number
+
+        return change_player_number(
+            tournament, self.owner, {"old": old, "new": new}
+        )
+
+    def _record(self, division, pairing):
+        """Enter one result through the command, as the single-result form does.
+
+        Not the results grid: that posts the division's whole result set, so it
+        would replace the first game rather than add the second.
+        """
+        from tournaments.commands import add_result
+
+        return add_result(division.tournament, self.owner, {
+            "division": division.name,
+            "round": pairing.round,
+            "first_player": pairing.first.key,
+            "second_player": pairing.second.key,
+            "winner_player": pairing.first.key,
+            "winner_score": 450,
+            "loser_score": 380,
+        })
+
+    def test_results_either_side_of_a_rename_belong_to_one_player(self):
+        from tournaments.models import Player
+
+        guest = Player.objects.create(
+            name="Guest Gwen", player_number="T-7", rating=1450,
+            is_provisional=True,
+        )
+        tournament, division = self._build_logged_tournament(
+            players=[*self.players[:3], guest]
+        )
+
+        # A result under the old number. Round 1 is played out, because round 2
+        # only pairs once the round it pairs from is finished.
+        first_round = list(division.pairings.filter(round=1).order_by("table"))
+        self.assertTrue(
+            any(guest.pk in (p.first.player_id, p.second.player_id)
+                for p in first_round),
+            "the guest should have a round-1 game",
+        )
+        for pairing in first_round:
+            self._record(division, pairing)
+
+        # The registry assigns a real number.
+        self._rename(tournament, "T-7", "0412")
+        guest.refresh_from_db()
+        self.assertEqual(guest.player_number, "0412")
+        self.assertFalse(guest.is_provisional)
+
+        # …and a result under the new one. Published through the view, so the
+        # round-2 draft is regenerated off round 1's result exactly as it would
+        # be in use, and the publish is logged.
+        self.client.get(
+            reverse("division_pair_rounds", kwargs=division.slug_kwargs())
+        )
+        self.client.post(
+            reverse("publish_round", kwargs=division.slug_kwargs()), {"round": 2}
+        )
+        second_round = division.pairings.filter(round=2).order_by("table")
+        self.assertTrue(second_round.exists(), "round 2 was not paired")
+        pairing2 = next(
+            p for p in second_round
+            if guest.pk in (p.first.player_id, p.second.player_id)
+        )
+        self._record(division, pairing2)
+
+        recorded = division_digest(division)
+        games_played = division.result_slips.filter(
+            models.Q(winner__player=guest) | models.Q(loser__player=guest)
+        ).count()
+        self.assertEqual(games_played, 2, "one game either side of the rename")
+
+        from tournaments.events import export_jsonl
+        from tournaments.replay import parse_jsonl
+
+        exported = export_jsonl(tournament)
+        self.assertIn("player_number_changed", exported)
+
+        # Replay into a *fresh* database — the real use, and the only one that
+        # can work: Player rows are global, so a database that still holds the
+        # renamed player has no room for the replay to rebuild them.
+        tournament.delete()
+        Player.objects.all().delete()
+
+        _header, events = parse_jsonl(exported)
+        ctx = replay(events, verify=True)
+        replayed = ctx.tournament.divisions.get()
+        self.assertEqual(division_digest(replayed), recorded)
+
+        # One player, both games, under the number they ended up with.
+        gwen = replayed.entrants.get(player__name="Guest Gwen")
+        self.assertEqual(gwen.key, "0412")
+        self.assertEqual(gwen.wins.count() + gwen.losses.count(), 2)
+        self.assertEqual(Player.objects.filter(name="Guest Gwen").count(), 1)
+
+    def test_a_rename_will_not_replay_over_the_player_it_renamed(self):
+        """Stated plainly, because the error is otherwise baffling.
+
+        Players are global. Replaying a log into the database it came from
+        rebuilds the *old* number as a new row, and then the rename has nowhere
+        to go — the original already holds the new number, and they are two
+        different people as far as the database is concerned.
+        """
+        from tournaments.models import Player
+
+        guest = Player.objects.create(
+            name="Guest Gwen", player_number="T-7", rating=1450,
+            is_provisional=True,
+        )
+        tournament, _ = self._build_logged_tournament(
+            players=[*self.players[:3], guest]
+        )
+        self._rename(tournament, "T-7", "0412")
+
+        with self.assertRaisesRegex(ValueError, "already taken"):
+            replay(events_from_tournament(tournament))
+
+    def test_a_rename_to_the_same_number_records_nothing(self):
+        from tournaments.models import Player
+
+        Player.objects.create(name="Same", player_number="0500", rating=1400)
+        tournament, _ = self._build_logged_tournament()
+        before = tournament.events.count()
+        # Canonicalization means "500" and "0500" are the same number.
+        self._rename(tournament, "500", "0500")
+        self.assertEqual(tournament.events.count(), before)
+
+    def test_renaming_onto_a_taken_number_is_refused(self):
+        from tournaments.models import Player
+
+        Player.objects.create(name="A", player_number="0500", rating=1400)
+        Player.objects.create(name="B", player_number="0600", rating=1300)
+        tournament, _ = self._build_logged_tournament()
+        with self.assertRaisesRegex(ValueError, "already taken"):
+            self._rename(tournament, "0500", "0600")
+        self.assertEqual(
+            Player.objects.get(name="A").player_number, "0500"
+        )
+
+    def test_renaming_an_unknown_number_is_refused(self):
+        tournament, _ = self._build_logged_tournament()
+        with self.assertRaisesRegex(ValueError, "No player with number"):
+            self._rename(tournament, "9999", "0001")

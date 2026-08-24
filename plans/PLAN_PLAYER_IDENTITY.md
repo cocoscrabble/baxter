@@ -549,7 +549,7 @@ are the join key, and the numbers beside them are what resolve a shared name.
 
 ---
 
-## Phase 7 — `player_number_changed`
+## Phase 7 — `player_number_changed` — **IMPLEMENTED**
 
 Ships the mechanism that keeps decision 2 honest, ahead of the registry upload
 that will need it:
@@ -569,6 +569,34 @@ that will need it:
 **Verification:** `test_replay.py` — a log that enters a player as `T-7`,
 records results, renames to `CO1234`, then records more results replays to a
 single player with the full result set and a matching digest.
+
+### What landed
+
+`change_player_number` (`commands.py`), the event type, and the activity-page
+description. The verification scenario passes: a guest plays round 1 as `T-7`,
+is renamed to `0412`, plays round 2, and the exported log replays to one player
+with both games and digests verified at every step.
+
+**The `ReplayContext` rename map was not built, because it cannot do the job.**
+Two findings:
+
+- A *forward* replay needs no map. Events are applied in order, so an event
+  recorded before the rename runs while the database still holds the old number,
+  and one recorded after runs while it holds the new one. The lookups resolve
+  naturally.
+
+- What the map was reaching for is a different problem, and an unsolvable one:
+  `Player` rows are **global**, not per-tournament. Replaying a log into the
+  database it came from rebuilds the old number as a fresh row, and the rename
+  then has nowhere to go — the original already holds the new number, and the
+  two rows are different people as far as the database is concerned. No map
+  fixes that, because the pre-rename digests describe a state that database no
+  longer has. The command says so in its error, and
+  `test_a_rename_will_not_replay_over_the_player_it_renamed` pins it.
+
+So the verification test replays from a JSONL export into a cleared database —
+which is what `replay_tournament` actually does, and the only condition under
+which a rename can be reproduced.
 
 ---
 
