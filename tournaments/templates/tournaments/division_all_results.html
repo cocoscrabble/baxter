@@ -24,9 +24,9 @@
         {% for slip in result_slips %}
         <tr>
             <td class="num">{{ slip.round }}</td>
-            <td>{{ slip.winner.player.name }}</td>
+            <td>{{ slip.winner.display_name }}</td>
             <td class="num">{{ slip.winner_score }}-{{ slip.loser_score }}</td>
-            <td>{{ slip.loser.player.name }}</td>
+            <td>{{ slip.loser.display_name }}</td>
             <td>{% if slip.winner_started %}Winner{% else %}Opponent{% endif %}</td>
         </tr>
         {% endfor %}

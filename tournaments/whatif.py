@@ -82,11 +82,14 @@ def _meeting_rounds(pd, upto):
     return {pair: tuple(sorted(rounds)) for pair, rounds in meetings.items()}
 
 
-def _standings_info(pd, upto):
+def _standings_info(division, pd, upto):
     """``(rank, record, name)`` as of round ``upto`` (seedings at 0), each keyed
     on the player key: board rank, "W-L (±spread)" for the record column, and the
-    display name."""
+    display name — disambiguated, since the two sides are compared by eye."""
+    from tournaments.display import label_standings
+
     standings = standings_after_round(pd, upto)
+    label_standings(division, standings)
     rank = {p.key: i for i, p in enumerate(standings)}
     record = {p.key: f"{p.record} ({p.spread:+d})" for p in standings}
     names = {p.key: p.name for p in standings}
@@ -128,7 +131,7 @@ def decorate(division, target_round, based_on, pairings, pd=None):
     standings rank (byes last), each player's record+spread as of ``based_on``,
     and the repeat rounds through it."""
     pd = pd or PairingData.for_division(division)
-    rank, record, names = _standings_info(pd, based_on)
+    rank, record, names = _standings_info(division, pd, based_on)
     meetings = _meeting_rounds(pd, based_on)
 
     real, byes = [], []
@@ -151,7 +154,7 @@ def actual_rows(division, target_round, pd=None):
     slips = [s for s in pd.result_slips if s.round == target_round]
     if not slips:
         return None
-    rank, record, names = _standings_info(pd, target_round - 1)
+    rank, record, names = _standings_info(division, pd, target_round - 1)
     meetings = _meeting_rounds(pd, target_round - 1)
 
     real, byes = [], []

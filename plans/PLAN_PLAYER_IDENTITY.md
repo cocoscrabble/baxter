@@ -431,7 +431,7 @@ Two details worth keeping in mind:
 
 ---
 
-## Phase 5 — Display disambiguation
+## Phase 5 — Display disambiguation — **IMPLEMENTED**
 
 One helper, used everywhere, so the rule lives once:
 
@@ -453,6 +453,34 @@ def display_names(players) -> dict[key, str]:
 adding a same-named entrant makes *both* render with numbers, and no one else
 changes. Grid lookups disambiguate on the global roster even when the division
 has no clash.
+
+### What landed
+
+`tournaments/display.py` holds the rule: `display_names` (the primitive),
+`division_labels` + `label_entrants` (stamp `Entrant.display_name` on the
+instances a template will render), and `label_standings` (rewrite the standings
+row's `name`, since that type already carries `key` and `name` separately).
+Tests are in `test_display.py`; the pages were also read in a browser with two
+*Ann Lee*s entered in one division.
+
+Applied to: the entrants page, results, standings, pairings (both presenters),
+the round tab, the played-result page, the fixed-pairing pickers, the entrant
+picker, the explore comparison, the playoff bracket and its setup page, and the
+scorecard docx (both the player's own name and their opponents').
+
+Two things to know:
+
+- **The ratings CSV was left alone**, against what this section said. That file
+  is byte-compatible with the format the separate results program produces, and
+  coco-ratings joins it on the name column; appending `(0233)` there would break
+  that join for every tournament with a clash, to no reader's benefit. Phase 6's
+  explicit number columns are the right fix, and they land next.
+
+- **`Name (NUMBER)` sits awkwardly next to the standings' seed marker**, which
+  renders as `Ann Lee (T-8001) (#1)` — two parentheticals in a row. Each is
+  labelled differently (`#` marks the seed) and it only appears in the rare
+  clash case, so it is left as decision 7 specifies rather than redesigned
+  unilaterally.
 
 ---
 

@@ -21,6 +21,7 @@ from django.views.generic import (
 )
 
 from .datastar_utils import fragment_response, is_datastar
+from .display import division_labels, label_entrants, label_standings
 from datastar_py.django import read_signals
 from .forms import (
     CopConfigForm,
@@ -600,11 +601,19 @@ class DivisionDetailView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
         max_round = division.max_round()
         context["max_round"] = max_round
         if max_round:
-            context["latest_results"] = (
+            slips = list(
                 division.result_slips
                 .filter(round=max_round)
+                .select_related("winner__player", "loser__player")
                 .order_by("-created_at")
             )
+            labels = division_labels(division)
+            label_entrants(
+                labels,
+                (s.winner for s in slips),
+                (s.loser for s in slips),
+            )
+            context["latest_results"] = slips
         else:
             context["latest_results"] = division.result_slips.none()
         return context
@@ -618,11 +627,16 @@ class DivisionAllResultsView(DivisionNavMixin, VisibleDivisionMixin, DetailView)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["result_slips"] = (
+        slips = list(
             self.object.result_slips
             .select_related("winner__player", "loser__player")
             .order_by("-created_at")
         )
+        labels = division_labels(self.object)
+        label_entrants(
+            labels, (s.winner for s in slips), (s.loser for s in slips)
+        )
+        context["result_slips"] = slips
         return context
 
 
@@ -635,9 +649,13 @@ class DivisionEntrantsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         # Seed order: highest-rated player first (ties broken by entrant number).
-        context["entrants"] = self.object.entrants.order_by(
-            "-player__rating", "number"
+        entrants = list(
+            self.object.entrants
+            .select_related("player")
+            .order_by("-player__rating", "number")
         )
+        label_entrants(division_labels(self.object), entrants)
+        context["entrants"] = entrants
         return context
 
 
@@ -656,6 +674,7 @@ def division_standings(division, current_round):
     for p in standings:
         p.seed = seed_by_key.get(p.key)
         p.dropped = p.key in dropped_keys
+    label_standings(division, standings)
     return standings
 
 
@@ -877,9 +896,13 @@ class RemoveFixedPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
 
 
 def _entrants_for_editing(division):
-    return list(
+    entrants = list(
         division.entrants.select_related("player").order_by("player__name")
     )
+    # The fixed-pairing pickers list these by name, so same-named entrants must
+    # be told apart before the director picks one of them.
+    label_entrants(division_labels(division), entrants)
+    return entrants
 
 
 def _editor_pairings_context(division, presenter):
@@ -1120,11 +1143,17 @@ class DivisionScorecardsDownloadView(LoginRequiredMixin, CanEditDivisionMixin, D
         # The director opts in to prefilling submitted results per download.
         include_results = bool(self.request.GET.get("include_results"))
         results = self._results_by_entrant(division) if include_results else {}
+        # A scorecard names its player and their opponents, so a shared name
+        # has to be disambiguated or two people get each other's card.
+        card_entrants = list(
+            division.entrants.filter(dropped=False).select_related("player")
+        )
+        label_entrants(division_labels(division), card_entrants)
         specs = [
             ScorecardSpec(
                 tournament_name=tournament.name,
                 tournament_date=tournament.start_date.strftime("%B %-d, %Y"),
-                player_name=entrant.name,
+                player_name=entrant.display_name,
                 rounds=rounds,
                 opponents=opponents.get(entrant.pk, {}),
                 starts=starts.get(entrant.pk, {}),
@@ -1132,7 +1161,7 @@ class DivisionScorecardsDownloadView(LoginRequiredMixin, CanEditDivisionMixin, D
                 qr_url=qr_url,
             )
             # Withdrawn players don't play further rounds, so they get no card.
-            for entrant in division.entrants.filter(dropped=False)
+            for entrant in card_entrants
         ]
 
         response = HttpResponse(
@@ -1146,8 +1175,13 @@ class DivisionScorecardsDownloadView(LoginRequiredMixin, CanEditDivisionMixin, D
     def _prefills_by_entrant(division):
         """Map each entrant id to its {round: opponent name} and
         {round: "1st"/"2nd"} prefills, drawn from the division's pairings."""
-        pairings = division.pairings.select_related(
-            "first__player", "second__player"
+        pairings = list(
+            division.pairings.select_related("first__player", "second__player")
+        )
+        label_entrants(
+            division_labels(division),
+            (p.first for p in pairings),
+            (p.second for p in pairings),
         )
         opponents = defaultdict(dict)
         starts = defaultdict(dict)
@@ -1155,13 +1189,13 @@ class DivisionScorecardsDownloadView(LoginRequiredMixin, CanEditDivisionMixin, D
             # A bye: record "Bye" as the real player's opponent, with no start,
             # and nothing for the bye entrant itself (it has no scorecard).
             if p.first.player.is_bye:
-                opponents[p.second_id][p.round] = p.first.name
+                opponents[p.second_id][p.round] = p.first.display_name
                 continue
             if p.second.player.is_bye:
-                opponents[p.first_id][p.round] = p.second.name
+                opponents[p.first_id][p.round] = p.second.display_name
                 continue
-            opponents[p.first_id][p.round] = p.second.name
-            opponents[p.second_id][p.round] = p.first.name
+            opponents[p.first_id][p.round] = p.second.display_name
+            opponents[p.second_id][p.round] = p.first.display_name
             starts[p.first_id][p.round] = "1st"
             starts[p.second_id][p.round] = "2nd"
         return opponents, starts
@@ -2112,6 +2146,9 @@ def _playoff_context(division, playoff):
         e.player.player_number: e.number
         for e in division.entrants.select_related("player")
     }
+    # Disambiguate first: the bracket, the placements and the qualifiers table
+    # all take their names from these rows.
+    label_standings(division, standings)
     names = {p.key: p.name for p in standings}
     placements = final_placements(bracket, standings, numbers)
     # Group the series into their windows so the template can render the bracket
@@ -2136,7 +2173,12 @@ def _playoff_context(division, playoff):
         "placements": placements,
         "bracket_placements": placements[: playoff.qualifier_count],
         "field_placements": placements[playoff.qualifier_count :],
-        "seeds": playoff.seeds,
+        # The recorded snapshot's stored name may predate a later clash, so show
+        # the same label the rest of the page uses.
+        "seeds": [
+            {**seed, "player": names.get(seed.get("key"), seed.get("player"))}
+            for seed in playoff.seeds
+        ],
     }
 
 
@@ -2346,10 +2388,9 @@ class PlayoffSetupView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixi
         count = form["qualifier_count"]
         # Candidates for a manual override: everyone still standing, best first.
         pd = PairingData.for_division(division)
-        candidates = [
-            {"key": p.key, "name": p.name}
-            for p in standings_after_round(pd, form["qualification_round"])
-        ]
+        field = standings_after_round(pd, form["qualification_round"])
+        label_standings(division, field)
+        candidates = [{"key": p.key, "name": p.name} for p in field]
         return {
             "division": division,
             "active_tab": "playoff",

@@ -2,6 +2,7 @@
 
 from editgrid.grids import Column, EditGrid, JsonBlobGrid
 
+from .display import display_names, division_labels, label_entrants
 from .dto import EntrantDTO, FixedPairingDTO, FixedTableDTO, ResultSlipDTO
 from .models import (
     DivisionSettings,
@@ -15,8 +16,16 @@ from .models import (
 
 
 def _entrant_values(division):
-    entrants = division.entrants.select_related("player").order_by("player__name")
-    return [{"id": e.pk, "label": e.player.name} for e in entrants]
+    """Entrant picker options, disambiguated within the division.
+
+    A picker that offers the same label twice is unusable, so a shared name
+    carries its player number here (tournaments/display.py).
+    """
+    entrants = list(
+        division.entrants.select_related("player").order_by("player__name")
+    )
+    label_entrants(division_labels(division), entrants)
+    return [{"id": e.pk, "label": e.display_name} for e in entrants]
 
 
 def _entrant_key_map(division):
@@ -151,9 +160,15 @@ class EntrantsGrid(EditGrid):
     def lookups(self, division):
         # The synthetic Bye player is never a real entrant, so keep it out of the
         # add-entrant picker (and out of the valid-id set below).
+        #
+        # Scope here is the *whole roster*, not the division: this picker offers
+        # every player, so a name has to be judged ambiguous against all of them
+        # — including two people who have never yet met in one division.
+        players = list(Player.objects.filter(is_bye=False))
+        labels = display_names(players)
         return {"players": [
-            {"id": p.pk, "label": p.name, "rating": p.rating}
-            for p in Player.objects.filter(is_bye=False)
+            {"id": p.pk, "label": labels[p.player_number], "rating": p.rating}
+            for p in players
         ]}
 
     def validate_args(self, division):

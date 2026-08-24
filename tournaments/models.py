@@ -534,6 +534,22 @@ class Entrant(models.Model):
         """The entrant's identity for the pairing layer — never the name."""
         return self.player.player_number
 
+    @property
+    def display_name(self):
+        """The name as it should be shown, disambiguated if it has to be.
+
+        Falls back to the bare name. ``tournaments.display.label_entrants``
+        sets it per instance where a scope is known, so a template gets the
+        disambiguated label there and the plain name everywhere else. The value
+        is kept under a private key because a property is a data descriptor and
+        would otherwise win over anything put in ``__dict__``.
+        """
+        return self.__dict__.get("_display_name") or self.player.name
+
+    @display_name.setter
+    def display_name(self, value):
+        self.__dict__["_display_name"] = value
+
 
 class ResultSlip(models.Model):
     """A game result slip."""
