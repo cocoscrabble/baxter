@@ -5,9 +5,12 @@ Two input shapes are accepted, sniffed by content:
 - a **JSON bundle** as emitted by ``tournament_export.py`` (players with
   ratings, entrants, results with ``winner_started``); may hold several
   divisions.
-- the **coco-ratings CSV** produced by ``results_export.py``
-  (``Submitted On, Round, Winner, Winners Score, Opponent, Opponents Score``) —
-  names and scores only.
+- the **coco-ratings CSV** produced by ``results_export.py``. Two widths are
+  accepted: the current eight-column form, which carries a player number beside
+  each name, and the legacy six-column form, which does not. Both still exist —
+  the six-column form is what a Google Form export produces, since players type
+  their own names into it — so the reader dispatches on the header rather than
+  requiring one shape.
 
 Both are reduced to the same *portable division* dict — name-keyed, pk-free —
 which the ``division_imported`` command turns into a sandbox division. Parsing
@@ -28,7 +31,10 @@ Portable division shape::
 import csv
 import io
 
-from tournaments.results_export import HEADERS as CSV_HEADERS
+from tournaments.results_export import (
+    HEADERS as CSV_HEADERS,
+    LEGACY_HEADERS as CSV_LEGACY_HEADERS,
+)
 
 
 class ImportParseError(Exception):
@@ -99,20 +105,33 @@ def _parse_csv(text: str) -> dict:
     rows = [row for row in reader if any(cell.strip() for cell in row)]
     if not rows:
         raise ImportParseError("The CSV is empty.")
-    header = [cell.strip().lower() for cell in rows[0][: len(CSV_HEADERS)]]
-    if header != [h.lower() for h in CSV_HEADERS]:
+    # Dispatch on the header: the numbered form and the legacy one differ only
+    # by the two Number columns, so the width identifies the shape.
+    expected = None
+    for candidate in (CSV_HEADERS, CSV_LEGACY_HEADERS):
+        header = [cell.strip().lower() for cell in rows[0][: len(candidate)]]
+        if header == [h.lower() for h in candidate]:
+            expected = candidate
+            break
+    if expected is None:
         raise ImportParseError(
             "Unexpected CSV header — expected the coco-ratings columns: "
             + ", ".join(CSV_HEADERS)
+            + " (or the older form without the Number columns)"
         )
+    numbered = expected is CSV_HEADERS
 
     results = []
     names: dict[str, str] = {}  # lowercase -> first-seen display name
+    numbers: dict[str, str] = {}  # lowercase name -> player number
     for i, row in enumerate(rows[1:], start=2):
         cells = [cell.strip() for cell in row]
-        if len(cells) < len(CSV_HEADERS):
-            raise ImportParseError(f"Row {i}: expected {len(CSV_HEADERS)} columns.")
+        if len(cells) < len(expected):
+            raise ImportParseError(f"Row {i}: expected {len(expected)} columns.")
         _submitted, round_s, winner, wscore_s, opponent, oscore_s = cells[:6]
+        # The number columns are appended, so the first six are identical in
+        # both forms — see the ordering note in results_export.
+        wnumber, onumber = (cells[6], cells[7]) if numbered else ("", "")
         if not winner or not opponent:
             raise ImportParseError(f"Row {i}: winner and opponent names are required.")
         try:
@@ -121,8 +140,10 @@ def _parse_csv(text: str) -> dict:
             raise ImportParseError(
                 f"Row {i}: round and scores must be whole numbers."
             ) from None
-        for name in (winner, opponent):
+        for name, number in ((winner, wnumber), (opponent, onumber)):
             names.setdefault(name.lower(), name)
+            if number:
+                numbers.setdefault(name.lower(), number)
         results.append({
             "round": round_num,
             # Canonicalize to the first-seen casing so result names match entrant
@@ -140,13 +161,22 @@ def _parse_csv(text: str) -> dict:
 
     # Ratings come from the Player roster (unknown names seed at 0); entrant
     # numbers are assigned by rating, descending, then name for a stable order.
+    #
+    # A player number resolves exactly, which is the whole point of the extra
+    # columns: a name shared by two players picks whichever the ORM returns
+    # first, and no reader can tell that happened.
     display_names = list(names.values())
+
+    def roster_player(name):
+        number = numbers.get(name.lower())
+        if number:
+            player = Player.objects.filter(player_number=number).first()
+            if player is not None:
+                return player
+        return Player.objects.filter(name__iexact=name).first()
+
     ratings = {
-        name: (
-            p.rating
-            if (p := Player.objects.filter(name__iexact=name).first())
-            else 0
-        )
+        name: (p.rating if (p := roster_player(name)) else 0)
         for name in display_names
     }
     ordered = sorted(display_names, key=lambda n: (-ratings[n], n.lower()))

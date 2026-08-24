@@ -101,6 +101,76 @@ class ParseCsvTests(TestCase):
             parse_import(bad)
 
 
+class NumberedCsvTests(TestCase):
+    """The eight-column form, and why it exists.
+
+    The legacy six-column form is still produced by a Google Form export, so
+    both widths have to parse. The numbers only matter where a name does not
+    resolve on its own — which is exactly what the last test here shows.
+    """
+
+    NUMBERED = (
+        "Submitted On,Round,Winner,Winners Score,Opponent,Opponents Score,"
+        "Winner Number,Opponent Number\n"
+        ",1,Alice,420,Bob,388,0001,0002\n"
+    )
+
+    def setUp(self):
+        self.alice = Player.objects.create(
+            name="Alice", player_number="1", rating=1600
+        )
+        self.bob = Player.objects.create(
+            name="Bob", player_number="2", rating=1500
+        )
+
+    def test_the_numbered_form_parses(self):
+        _, divisions = parse_import(self.NUMBERED)
+        div = divisions[0]
+        self.assertEqual(
+            [(e["player"], e["rating"]) for e in div["entrants"]],
+            [("Alice", 1600), ("Bob", 1500)],
+        )
+        self.assertEqual(div["results"][0]["winner"], "Alice")
+
+    def test_the_legacy_form_still_parses(self):
+        legacy = (
+            "Submitted On,Round,Winner,Winners Score,Opponent,Opponents Score\n"
+            ",1,Alice,420,Bob,388\n"
+        )
+        _, divisions = parse_import(legacy)
+        self.assertEqual(
+            [e["player"] for e in divisions[0]["entrants"]], ["Alice", "Bob"]
+        )
+
+    def test_a_number_picks_the_right_one_of_two_same_named_players(self):
+        """The six-column form cannot express this, which is why the columns
+        were added: by name alone, the lower-rated Alice is unreachable."""
+        other_alice = Player.objects.create(
+            name="Alice", player_number="0900", rating=1200
+        )
+        numbered = (
+            "Submitted On,Round,Winner,Winners Score,Opponent,Opponents Score,"
+            "Winner Number,Opponent Number\n"
+            f",1,Alice,420,Bob,388,{other_alice.player_number},"
+            f"{self.bob.player_number}\n"
+        )
+        _, divisions = parse_import(numbered)
+        ratings = {e["player"]: e["rating"] for e in divisions[0]["entrants"]}
+        self.assertEqual(ratings["Alice"], 1200)
+
+        # The same file without numbers resolves to whichever Alice comes first,
+        # and cannot say which was meant.
+        legacy = (
+            "Submitted On,Round,Winner,Winners Score,Opponent,Opponents Score\n"
+            ",1,Alice,420,Bob,388\n"
+        )
+        _, legacy_divisions = parse_import(legacy)
+        legacy_ratings = {
+            e["player"]: e["rating"] for e in legacy_divisions[0]["entrants"]
+        }
+        self.assertNotEqual(legacy_ratings["Alice"], 1200)
+
+
 class ImportDivisionCommandTests(TestCase):
     def setUp(self):
         self.owner = User.objects.create_user(username="owner", password="pw")

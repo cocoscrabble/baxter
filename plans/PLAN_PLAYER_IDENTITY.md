@@ -484,9 +484,18 @@ Two things to know:
 
 ---
 
-## Phase 6 — Ratings CSV carries numbers
+## Phase 6 — Ratings CSV carries numbers — **IMPLEMENTED**
 
-`results_export.HEADERS` (`:25`) gains winner/opponent number columns:
+`results_export.HEADERS` (`:25`) gains winner/opponent number columns.
+
+> **The column order below is wrong and was not used.** Interleaving the
+> number columns breaks the ratings reader — see "What landed". The shipped
+> order appends them:
+>
+> ```
+> Submitted On, Round, Winner, Winners Score, Opponent, Opponents Score,
+> Winner Number, Opponent Number
+> ```
 
 ```
 Submitted On, Round, Winner, Winner Number, Winners Score,
@@ -509,6 +518,34 @@ can land whenever.
 disambiguated names. `test_whatif_import.py` — both header widths parse, and the
 8-column form resolves duplicate-named players correctly where the 6-column form
 cannot.
+
+### What landed
+
+Both readers accept either width, and the importer prefers the number when a row
+carries one — `test_whatif_import` shows the eight-column form reaching a
+lower-rated second *Alice* that the six-column form cannot address at all.
+
+**The column order in this section was wrong.** `coco_ratings.io.ResultCSVReader`
+unpacks positionally:
+
+```python
+_time, round, winner, win_score, opp, opp_score, *rest = row
+```
+
+so a column inserted before `Opponents Score` shifts every later field —
+`win_score` reads a player number, `opp` reads a score. Fed the interleaved
+layout, the real reader fails with *"Score field contained a non-digit: Bob"*;
+with numeric-looking names it could have corrupted a rating run instead. The
+trailing `*rest` is what makes *appending* safe, so the numbers go at the end.
+`test_results_export.RatingsReaderCompatibilityTests` pins this against the
+actual reader — a Baxter export parses to the right records, and the interleaved
+layout raises.
+
+That also makes this section's "breaks nothing, needs no coordination window"
+claim true, which it was not as originally written.
+
+The name columns are deliberately **not** disambiguated (the phase 5 note): they
+are the join key, and the numbers beside them are what resolve a shared name.
 
 ---
 
