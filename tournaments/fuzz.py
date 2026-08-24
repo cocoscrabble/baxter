@@ -40,9 +40,15 @@ class Fuzzer:
             username=f"fuzz_owner_{self.seed}", password="pw"
         )
         self.client.force_login(self.owner)
+        # Deliberately colliding names: every third player answers to the same
+        # one. Distinct names would let a name-keyed regression pass the
+        # meta-invariant unnoticed, which is precisely the failure this fuzzer
+        # is now meant to catch (plans/PLAN_PLAYER_IDENTITY.md).
         self.players = [
             Player.objects.create(
-                name=f"P{i:02d}_{self.seed}",
+                name=(
+                    f"Twin_{self.seed}" if i % 3 == 0 else f"P{i:02d}_{self.seed}"
+                ),
                 player_number=f"{self.seed}{i:03d}",
                 rating=2000 - 10 * i,
             )

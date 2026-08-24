@@ -51,7 +51,7 @@
                     {% if entry.result %}
                         {{ entry.result }}
                     {% elif division.is_test %}
-                        <button type="button" class="btn-sim" data-on:click="@post('{% url 'simulate_match' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {round: {{ selected_round }}, first: '{{ entry.pairing.first.name }}', second: '{{ entry.pairing.second.name }}'}})">simulate</button>
+                        <button type="button" class="btn-sim" data-on:click="@post('{% url 'simulate_match' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {round: {{ selected_round }}, first: '{{ entry.pairing.first.key }}', second: '{{ entry.pairing.second.key }}'}})">simulate</button>
                     {% endif %}
                 </td>
             </tr>
@@ -126,7 +126,7 @@
                     {% if entry.result %}
                         {{ entry.result }}
                     {% elif division.is_test and selected_status == 'published' %}
-                        <button type="button" class="btn-sim" data-on:click="@post('{% url 'simulate_match' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {round: {{ selected_round }}, first: '{{ entry.pairing.first.name }}', second: '{{ entry.pairing.second.name }}'}})">simulate</button>
+                        <button type="button" class="btn-sim" data-on:click="@post('{% url 'simulate_match' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {round: {{ selected_round }}, first: '{{ entry.pairing.first.key }}', second: '{{ entry.pairing.second.key }}'}})">simulate</button>
                     {% endif %}
                 </td>
             </tr>

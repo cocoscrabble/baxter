@@ -198,22 +198,28 @@ def unpublish_round(tournament, actor, payload):
 
 
 # ---------------------------------------------------------------------------
-# Fixed pairings (thin adapters; pk args translated to/from player names)
+# Fixed pairings (thin adapters; pk args translated to/from player numbers)
 # ---------------------------------------------------------------------------
 
 
-def _entrant(division, name):
-    return division.entrants.get(player__name=name)
+def _entrant(division, key):
+    """The entrant a payload's player *number* refers to.
+
+    Payloads are pk-free so they replay into a fresh database, but they are not
+    name-keyed: two entrants may share a name, and a payload that named one of
+    them would be ambiguous forever after. See plans/PLAN_PLAYER_IDENTITY.md.
+    """
+    return division.entrants.get(player__player_number=key)
 
 
 @records_event("fixed_pairing_added")
 def add_fixed_pairing_cmd(tournament, actor, payload):
-    """payload: {division, round, name1, name2}."""
+    """payload: {division, round, player1, player2} — players by number."""
     from tournaments.fixed_pairings import add_fixed_pairing
 
     division = _division(tournament, payload["division"])
-    e1 = _entrant(division, payload["name1"])
-    e2 = _entrant(division, payload["name2"])
+    e1 = _entrant(division, payload["player1"])
+    e2 = _entrant(division, payload["player2"])
     ok, error = add_fixed_pairing(division, payload["round"], e1.pk, e2.pk)
     return EventResult(
         payload=payload, division=division, result=(ok, error), record=ok
@@ -222,13 +228,13 @@ def add_fixed_pairing_cmd(tournament, actor, payload):
 
 @records_event("fixed_pairing_removed")
 def remove_fixed_pairing_cmd(tournament, actor, payload):
-    """payload: {division, round, name1, name2}."""
+    """payload: {division, round, player1, player2} — players by number."""
     from tournaments.fixed_pairings import remove_fixed_pairing
     from tournaments.models import FixedPairing
 
     division = _division(tournament, payload["division"])
-    e1 = _entrant(division, payload["name1"])
-    e2 = _entrant(division, payload["name2"])
+    e1 = _entrant(division, payload["player1"])
+    e2 = _entrant(division, payload["player2"])
     fp = FixedPairing.objects.filter(
         division=division, round_number=payload["round"]
     ).filter(
@@ -247,12 +253,12 @@ def remove_fixed_pairing_cmd(tournament, actor, payload):
 # ---------------------------------------------------------------------------
 
 
-def _find_pairing(division, round_number, first_name, second_name):
-    names = {first_name, second_name}
+def _find_pairing(division, round_number, first_key, second_key):
+    keys = {first_key, second_key}
     for p in division.pairings.filter(round=round_number).select_related(
         "first__player", "second__player"
     ):
-        if {p.first.player.name, p.second.player.name} == names:
+        if {p.first.key, p.second.key} == keys:
             return p
     return None
 
@@ -260,7 +266,7 @@ def _find_pairing(division, round_number, first_name, second_name):
 def _write_result(division, pairing, payload, instance):
     winner = (
         pairing.first
-        if pairing.first.player.name == payload["winner_name"]
+        if pairing.first.key == payload["winner_player"]
         else pairing.second
     )
     loser = pairing.second if winner.pk == pairing.first_id else pairing.first
@@ -292,11 +298,11 @@ def _write_result(division, pairing, payload, instance):
 
 @records_event("result_added")
 def add_result(tournament, actor, payload):
-    """payload: {division, round, first_name, second_name, winner_name,
-    winner_score, loser_score}. Records a new game result."""
+    """payload: {division, round, first_player, second_player, winner_player,
+    winner_score, loser_score} — players by number. Records a new game result."""
     division = _division(tournament, payload["division"])
     pairing = _find_pairing(
-        division, payload["round"], payload["first_name"], payload["second_name"]
+        division, payload["round"], payload["first_player"], payload["second_player"]
     )
     slip = _write_result(division, pairing, payload, instance=None)
     return EventResult(payload=payload, division=division, result=slip)
@@ -307,7 +313,7 @@ def edit_result(tournament, actor, payload):
     """payload as add_result. Updates the pairing's existing slip in place."""
     division = _division(tournament, payload["division"])
     pairing = _find_pairing(
-        division, payload["round"], payload["first_name"], payload["second_name"]
+        division, payload["round"], payload["first_player"], payload["second_player"]
     )
     instance = getattr(pairing, "result", None)
     slip = _write_result(division, pairing, payload, instance=instance)
@@ -460,8 +466,14 @@ def delete_playoff(tournament, actor, payload):
 
 @records_event("entrants_bulk_imported")
 def bulk_import_entrants(tournament, actor, payload):
-    """payload: {division, csv} — the raw CSV text. New players are created by
-    name; a replay resolves/creates them the same way."""
+    """payload: {division, csv} — the raw CSV text, verbatim.
+
+    Deliberately *not* number-keyed: the payload is the document the director
+    pasted, and re-keying it would mean inventing numbers for rows that have
+    none. New players are created by name and a replay resolves/creates them the
+    same way, which is exactly reproducible because the CSV is byte-identical.
+    Ambiguity in that CSV is the importer's problem to report, not the log's to
+    hide (see phase 4)."""
     from tournaments.import_entrants import import_entrants
 
     division = _division(tournament, payload["division"])
@@ -482,7 +494,13 @@ def import_division(tournament, actor, payload):
     inferred for any entrant idle in a played round), and a nominal Swiss
     schedule with every round FINISHED. The division is ``is_test`` — hidden from
     non-editors and excluded from registry export. Bye inference lives here (not
-    in the parser) so a replay reproduces it. Returns an import summary."""
+    in the parser) so a replay reproduces it. Returns an import summary.
+
+    Name-keyed, like ``entrants_bulk_imported`` and for the same reason: the
+    payload *is* the historical document, and those documents identify people by
+    name because that is all they have. ``resolve_player`` mints a ``T-`` number
+    for anyone new, so the sandbox division ends up number-keyed like any other
+    — but the log records what was imported, not a re-keyed rewrite of it."""
     from collections import defaultdict
 
     from tournaments.generate_pairings import BYE_LOSER_SCORE, BYE_WINNER_SCORE
@@ -501,7 +519,7 @@ def import_division(tournament, actor, payload):
     created, matched = [], []
     for e in payload["entrants"]:
         exists = Player.objects.filter(name__iexact=e["player"]).exists()
-        player = resolve_player(e["player"], e.get("rating", 0))
+        player = resolve_player(None, e["player"], e.get("rating", 0))
         (matched if exists else created).append(player.name)
         ent_by_name[e["player"]] = Entrant.objects.create(
             division=division, player=player, number=e["number"]
@@ -511,7 +529,7 @@ def import_division(tournament, actor, payload):
         ent = ent_by_name.get(name)
         if ent is None:  # a result names a non-entrant — add them at the bottom
             ent = Entrant.objects.create(
-                division=division, player=resolve_player(name),
+                division=division, player=resolve_player(None, name),
                 number=1000 + len(ent_by_name),
             )
             ent_by_name[name] = ent
@@ -589,10 +607,10 @@ def import_division(tournament, actor, payload):
 
 def _sim_result_dict(slip):
     return {
-        "first_name": slip.pairing.first.player.name,
-        "second_name": slip.pairing.second.player.name,
-        "winner_name": slip.winner.player.name,
-        "loser_name": slip.loser.player.name,
+        "first_player": slip.pairing.first.key,
+        "second_player": slip.pairing.second.key,
+        "winner_player": slip.winner.key,
+        "loser_player": slip.loser.key,
         "winner_score": slip.winner_score,
         "loser_score": slip.loser_score,
         "winner_started": slip.winner_started,
@@ -600,14 +618,16 @@ def _sim_result_dict(slip):
 
 
 def _apply_sim_result(division, round_num, r):
-    pairing = _find_pairing(division, round_num, r["first_name"], r["second_name"])
+    pairing = _find_pairing(
+        division, round_num, r["first_player"], r["second_player"]
+    )
     slip = ResultSlip.objects.create(
         division=division,
         round=round_num,
         pairing=pairing,
-        winner=_entrant(division, r["winner_name"]),
+        winner=_entrant(division, r["winner_player"]),
         winner_score=r["winner_score"],
-        loser=_entrant(division, r["loser_name"]),
+        loser=_entrant(division, r["loser_player"]),
         loser_score=r["loser_score"],
         winner_started=r["winner_started"],
     )
@@ -619,16 +639,17 @@ def _apply_sim_result(division, round_num, r):
 
 @records_event("match_simulated")
 def simulate_match_cmd(tournament, actor, payload):
-    """payload: {division, round, first_name, second_name}. The generated scores
-    are recorded (the RNG is unseeded, so a replay applies them, not re-rolls)."""
+    """payload: {division, round, first_player, second_player} — players by
+    number. The generated scores are recorded (the RNG is unseeded, so a replay
+    applies them, not re-rolls)."""
     from tournaments.match_simulation import simulate_match
 
     division = _division(tournament, payload["division"])
     if "result" in payload:  # replay: apply the recorded result
         slip = _apply_sim_result(division, payload["round"], payload["result"])
         return EventResult(payload=payload, division=division, result=slip)
-    first = _entrant(division, payload["first_name"])
-    second = _entrant(division, payload["second_name"])
+    first = _entrant(division, payload["first_player"])
+    second = _entrant(division, payload["second_player"])
     slip = simulate_match(division, payload["round"], first, second)
     if slip.pairing_id and slip.pairing.round_pairings_id:
         slip.pairing.round_pairings.update_status()
@@ -671,8 +692,8 @@ def simulate_round_cmd(tournament, actor, payload):
 
 @records_event("fixed_pairings_removed")
 def remove_fixed_pairings_cmd(tournament, actor, payload):
-    """payload: {division, kept: [[round, name1, name2], ...]} — the fixed
-    pairings to keep; all others are removed."""
+    """payload: {division, kept: [[round, player1, player2], ...]} — the fixed
+    pairings to keep, by player number; all others are removed."""
     from tournaments.fixed_pairings import remove_fixed_pairings
     from tournaments.models import FixedPairing
 
@@ -682,8 +703,8 @@ def remove_fixed_pairings_cmd(tournament, actor, payload):
     for fp in division.fixed_pairings.select_related(
         "entrant1__player", "entrant2__player"
     ):
-        n1, n2 = sorted([fp.entrant1.player.name, fp.entrant2.player.name])
-        if (fp.round_number, n1, n2) in kept:
+        k1, k2 = sorted([fp.entrant1.key, fp.entrant2.key])
+        if (fp.round_number, k1, k2) in kept:
             keep_ids.append(fp.pk)
     error = remove_fixed_pairings(division, keep_ids)
     return EventResult(

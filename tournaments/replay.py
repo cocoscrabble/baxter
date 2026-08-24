@@ -43,9 +43,125 @@ GRID_BY_EVENT = {
 # they act on exists (reproducing the lazy Pair-Rounds render the director did).
 NEEDS_REGEN = {"round_published", "rounds_published"}
 
+# ---------------------------------------------------------------------------
+# Schema upgrades
+# ---------------------------------------------------------------------------
+
+# v1 payloads identified players by name; v2 identifies them by player number
+# (plans/PLAN_PLAYER_IDENTITY.md). Upgrading is *safe* only because v1 Baxter
+# enforced globally unique player names, so a v1 name resolves to exactly one
+# player — an assumption that stops holding the moment phase 4 lands, which is
+# why the upgrade happens on read and the log is backfilled rather than
+# reinterpreted every time.
+#
+# Two v1 shapes need no upgrader at all, because their player references are
+# internal to the payload rather than pointers into the database: a
+# ``state_snapshot`` and an ``entrants_saved`` row carry whatever token they
+# carry, and the readers below only require those tokens to match each other.
+
+
+def _number_for(name):
+    """The player number of the (unique, under v1) player called ``name``.
+
+    Resolved against the database as it stands at this point in the replay,
+    which is where the earlier events have already put the roster. An unknown
+    name is left alone: the command that consumes it will fail loudly rather
+    than silently act on the wrong person.
+    """
+    from tournaments.models import Player
+
+    player = Player.objects.filter(name__iexact=name).first()
+    return player.player_number if player else name
+
+
+def _rename(payload, mapping):
+    """Rename payload keys, resolving each renamed value from a name to a number."""
+    out = dict(payload)
+    for old, new in mapping.items():
+        if old in out:
+            out[new] = _number_for(out.pop(old))
+    return out
+
+
+_RESULT_FIELDS = {
+    "first_name": "first_player",
+    "second_name": "second_player",
+    "winner_name": "winner_player",
+    "loser_name": "loser_player",
+}
+_PAIR_FIELDS = {"name1": "player1", "name2": "player2"}
+
+
+def _upgrade_pair(payload, from_version):
+    return payload if from_version >= 2 else _rename(payload, _PAIR_FIELDS)
+
+
+def _upgrade_result(payload, from_version):
+    return payload if from_version >= 2 else _rename(payload, _RESULT_FIELDS)
+
+
+def _upgrade_kept_pairings(payload, from_version):
+    """``kept`` holds [round, name1, name2] triples, sorted by name.
+
+    Re-sorting after the rename matters: the consumer compares against a tuple
+    sorted by *number*, and name order and number order are unrelated.
+    """
+    if from_version >= 2:
+        return payload
+    kept = [
+        [round_number, *sorted([_number_for(a), _number_for(b)])]
+        for round_number, a, b in payload.get("kept", [])
+    ]
+    return {**payload, "kept": kept}
+
+
+def _upgrade_simulated_match(payload, from_version):
+    if from_version >= 2:
+        return payload
+    out = _rename(payload, _RESULT_FIELDS)
+    if "result" in out:
+        out["result"] = _rename(out["result"], _RESULT_FIELDS)
+    return out
+
+
+def _upgrade_simulated_round(payload, from_version):
+    if from_version >= 2:
+        return payload
+    return {
+        **payload,
+        "results": [_rename(r, _RESULT_FIELDS) for r in payload.get("results", [])],
+    }
+
+
+def _upgrade_rows(*fields):
+    """An upgrader for a grid-save payload whose ``rows`` name players."""
+
+    def upgrade(payload, from_version):
+        if from_version >= 2:
+            return payload
+        rows = [
+            {**r, **{f: _number_for(r[f]) for f in fields if r.get(f) is not None}}
+            for r in payload.get("rows", [])
+        ]
+        return {**payload, "rows": rows}
+
+    return upgrade
+
+
 # Schema-version upgrade hooks: event_type -> function(payload, from_version) ->
-# payload. Empty to start; add small upgraders when an event schema changes.
-SCHEMA_UPGRADES: dict = {}
+# payload.
+SCHEMA_UPGRADES: dict = {
+    "fixed_pairing_added": _upgrade_pair,
+    "fixed_pairing_removed": _upgrade_pair,
+    "fixed_pairings_removed": _upgrade_kept_pairings,
+    "result_added": _upgrade_result,
+    "result_edited": _upgrade_result,
+    "match_simulated": _upgrade_simulated_match,
+    "round_simulated": _upgrade_simulated_round,
+    "results_saved": _upgrade_rows("winner", "loser"),
+    "fixed_pairings_saved": _upgrade_rows("entrant1", "entrant2"),
+    "fixed_tables_saved": _upgrade_rows("entrant"),
+}
 
 
 class ReplayContext:
@@ -97,6 +213,7 @@ def _replay_snapshot(ctx, payload):
 
     from tournaments.grids import resolve_player
     from tournaments.models import (
+        BYE_PLAYER_NUMBER,
         Division,
         DivisionSettings,
         Entrant,
@@ -133,20 +250,29 @@ def _replay_snapshot(ctx, payload):
             settings_obj.cop_config = d.get("cop_config", {})
             settings_obj.save()
 
-            ent_by_name = {}
+            # A v1 snapshot's "player" is a name and there is no "name" key;
+            # a v2 snapshot's is a number. Either way the payload's references
+            # to it — pairings, results — use the same token, so the map below
+            # is keyed on whatever that token is and nothing else has to care.
+            ent_by_key = {}
             for e in d["entrants"]:
-                player = resolve_player(e["player"], e.get("rating", 0))
-                ent_by_name[e["player"]] = Entrant.objects.create(
+                v2 = "name" in e
+                player = resolve_player(
+                    e["player"] if v2 else None,
+                    e.get("name", e["player"]),
+                    e.get("rating", 0),
+                )
+                ent_by_key[e["player"]] = Entrant.objects.create(
                     division=division, player=player, number=e["number"],
                     dropped=e.get("dropped", False),
                 )
 
-            def resolve(name):
-                if name.lower() == "bye":
+            def resolve(key):
+                if key.casefold() == BYE_PLAYER_NUMBER.casefold():
                     return division.bye_entrant()
-                return ent_by_name.get(name) or Entrant.objects.create(
-                    division=division, player=resolve_player(name),
-                    number=1000 + len(ent_by_name),
+                return ent_by_key.get(key) or Entrant.objects.create(
+                    division=division, player=resolve_player(key),
+                    number=1000 + len(ent_by_key),
                 )
 
             pairing_by_key = {}

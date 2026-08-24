@@ -80,15 +80,25 @@ class DivisionDigestTests(TestCase):
         e.save(update_fields=["dropped"])
         self.assertNotEqual(before, division_digest(d1))
 
-    def test_state_is_pk_free_and_name_keyed(self):
+    def test_state_is_pk_free_and_keyed_on_the_player_number(self):
         d1 = Division.objects.create(name="A", tournament=self.tournament)
         self._build_state(d1)
         state = division_state(d1)
+        alice, bob = self.player1.player_number, self.player2.player_number
+        self.assertEqual(state["entrants"], [[1, alice, False], [2, bob, False]])
+        self.assertEqual(len(state["results"]), 1)
+        self.assertEqual(state["results"][0][1], alice)  # winner by number
+
+    def test_version_1_state_is_still_reproducible(self):
+        """The backfill migration needs the old vocabulary to verify against."""
+        d1 = Division.objects.create(name="A", tournament=self.tournament)
+        self._build_state(d1)
+        state = division_state(d1, version=1)
         self.assertEqual(
             state["entrants"], [[1, "Alice", False], [2, "Bob", False]]
         )
-        self.assertEqual(len(state["results"]), 1)
-        self.assertEqual(state["results"][0][1], "Alice")  # winner by name
+        self.assertEqual(state["results"][0][1], "Alice")
+        self.assertNotEqual(division_digest(d1), division_digest(d1, version=1))
 
 
 class RecordEventTests(TestCase):
@@ -242,6 +252,45 @@ class GridEventTests(TestCase):
         self.assertEqual(event.event_type, "entrants_saved")
         self.assertEqual(event.division, self.division)
         self.assertEqual(event.actor, self.owner)
-        # Players are recorded by name, not pk.
+        # Players are recorded by number, not pk — and the name rides along so
+        # a replay into a fresh database can create them.
         players = {row["player"] for row in event.payload["rows"]}
-        self.assertEqual(players, {"Alice", "Bob"})
+        self.assertEqual(
+            players, {self.player1.player_number, self.player2.player_number}
+        )
+        self.assertEqual(
+            {row["name"] for row in event.payload["rows"]}, {"Alice", "Bob"}
+        )
+
+
+class ActivityDescriptionTests(TestCase):
+    """The activity feed reads in names, whichever vocabulary the payload uses."""
+
+    def setUp(self):
+        setUpTournament(self)
+
+    def _describe(self, payload):
+        from tournaments.events import describe_event
+
+        event = record_event(self.tournament, "fixed_pairing_added", payload)
+        return describe_event(event)
+
+    def test_a_v2_payload_resolves_numbers_to_names(self):
+        text = self._describe(
+            {
+                "division": "D",
+                "round": 3,
+                "player1": self.player1.player_number,
+                "player2": self.player2.player_number,
+            }
+        )
+        self.assertIn(self.player1.name, text)
+        self.assertIn(self.player2.name, text)
+        self.assertNotIn(self.player1.player_number, text)
+
+    def test_a_v1_payload_still_reads_correctly(self):
+        text = self._describe(
+            {"division": "D", "round": 3, "name1": "Alice", "name2": "Bob"}
+        )
+        self.assertIn("Alice", text)
+        self.assertIn("Bob", text)
