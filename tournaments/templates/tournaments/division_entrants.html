@@ -9,26 +9,13 @@
 </div>
 
 {% if entrants %}
-<div class="table-scroll table-narrow">
-<table>
-    <thead>
-        <tr>
-            <th class="num">#</th>
-            <th>Player</th>
-            <th class="num">Rating</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for entrant in entrants %}
-        <tr{% if entrant.dropped %} class="row-dropped"{% endif %}>
-            <td class="num">{{ entrant.number }}</td>
-            <td>{{ entrant.display_name }}{% if entrant.dropped %} <span class="tag tag-dropped">withdrew</span>{% endif %}</td>
-            <td class="num">{{ entrant.player.rating }}</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
-</div>
+{% include "tournaments/_entrants_table.html" %}
+{% if can_edit %}
+<p class="settings-intro">
+    Payment is shown to editors only — it never appears on the public list or in
+    the <a href="{% url 'division_entrants_embed' division.tournament.slug division.slug %}">embeddable version</a>.
+</p>
+{% endif %}
 {% else %}
 {% include "tournaments/_empty_state.html" with message="No entrants yet." %}
 {% endif %}

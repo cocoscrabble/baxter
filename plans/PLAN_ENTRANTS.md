@@ -400,7 +400,7 @@ registry-backed implementation stay in phase 5.
 
 ---
 
-## Phase 4 — Public display and the embeddable fragment
+## Phase 4 — Public display and the embeddable fragment — **IMPLEMENTED**
 
 ### 4a. Display conventions
 
@@ -432,6 +432,30 @@ asterisk and the accessible text; a confirmed entrant carries neither; a
 WESPA-sourced rating is italicised; `paid`/`payment_note` are absent for an
 anonymous request to both the page and the fragment; the fragment's response
 has no `X-Frame-Options: SAMEORIGIN`.
+
+### What landed
+
+`_entrants_table.html` holds the conventions once and both surfaces include it,
+so the page and the fragment cannot drift. Tests are in `test_registration.py`;
+the fragment was also loaded in a browser and reads correctly with no chrome.
+
+Three decisions worth recording:
+
+- **The legend only explains markers that are on the page.** A table with no
+  tentative entrant should not tell the reader what an asterisk would have
+  meant. The view computes the three flags; the template renders what is true.
+
+- **Payment is absent from the fragment even for a signed-in editor.** An
+  embedded page has no business varying by viewer, so ``can_edit`` is forced
+  False there rather than merely being unset.
+
+- **The fragment inlines its own styles.** The embedding site has no reason to
+  carry Baxter's stylesheet, and a fragment that only renders correctly when
+  someone else's CSS happens to be present is not really embeddable.
+
+Also fixed in passing: the entrant list had still been showing
+``entrant.player.rating`` — the live rating — rather than the pinned snapshot
+the division was seeded from. A phase 2 miss.
 
 ---
 

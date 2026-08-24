@@ -319,3 +319,113 @@ class RegistrationEventTests(RegistrationTestCase):
         self.assertEqual(
             division_digest(ctx.tournament.divisions.get()), recorded
         )
+
+
+class EntrantDisplayTests(RegistrationTestCase):
+    """The public entrant list's display conventions (phase 4a).
+
+    A rating from WESPA is italic, a tentative entrant is marked ``*`` and one
+    playing up ``^`` — and none of that may be the *only* way to tell, so each
+    marked row carries a textual equivalent too (#42).
+    """
+
+    def _url(self):
+        return reverse("division_entrants", kwargs=self.division.slug_kwargs())
+
+    def test_a_plain_entrant_carries_no_markers_and_no_legend(self):
+        Entrant.enter(self.division, self.ann, 1)
+        response = self.client.get(self._url())
+        self.assertContains(response, "Ann Lee")
+        self.assertNotContains(response, "entrant-legend")
+        self.assertNotContains(response, "rating-wespa")
+
+    def test_a_wespa_rating_is_italic_and_says_so(self):
+        Entrant.enter(self.division, self.bea, 1)
+        response = self.client.get(self._url())
+        self.assertContains(response, "rating-wespa")
+        self.assertContains(response, "(WESPA rating)")
+        self.assertContains(response, "WESPA rating</dd>")
+
+    def test_an_unrated_entrant_shows_zero(self):
+        Entrant.enter(self.division, self.unrated, 1)
+        response = self.client.get(self._url())
+        self.assertContains(response, "Cy Ray")
+        self.assertNotContains(response, "rating-wespa")
+
+    def test_tentative_is_marked_and_also_spelled_out(self):
+        Entrant.enter(self.division, self.ann, 1, tentative=True)
+        response = self.client.get(self._url())
+        body = response.content.decode()
+        self.assertIn("Ann Lee*", body)
+        self.assertIn("(tentative)", body)
+        self.assertIn("Tentative</dd>", body)
+
+    def test_playing_up_is_marked_and_also_spelled_out(self):
+        Entrant.enter(self.division, self.ann, 1, playing_up=True)
+        body = self.client.get(self._url()).content.decode()
+        self.assertIn("Ann Lee^", body)
+        self.assertIn("(playing up)", body)
+        self.assertIn("Playing up</dd>", body)
+
+    def test_the_legend_only_explains_markers_that_are_present(self):
+        Entrant.enter(self.division, self.ann, 1, tentative=True)
+        body = self.client.get(self._url()).content.decode()
+        self.assertIn("Tentative</dd>", body)
+        self.assertNotIn("Playing up</dd>", body)
+
+    def test_payment_is_shown_to_an_editor(self):
+        Entrant.enter(self.division, self.ann, 1, paid=True, payment_note="cash")
+        response = self.client.get(self._url())
+        self.assertContains(response, "cash")
+
+    def test_payment_is_absent_for_everyone_else(self):
+        Entrant.enter(self.division, self.ann, 1, paid=True, payment_note="cash")
+        self.client.logout()
+        response = self.client.get(self._url())
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "cash")
+        self.assertNotContains(response, "Unpaid")
+
+
+class EntrantsEmbedTests(RegistrationTestCase):
+    """The chrome-free fragment the CoCo site iframes (phase 4b)."""
+
+    def _url(self):
+        return reverse(
+            "division_entrants_embed", kwargs=self.division.slug_kwargs()
+        )
+
+    def test_it_renders_the_same_conventions_without_chrome(self):
+        Entrant.enter(self.division, self.bea, 1, tentative=True)
+        self.client.logout()
+        response = self.client.get(self._url())
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode()
+        self.assertIn("Bea Fox*", body)
+        self.assertIn("rating-wespa", body)
+        # No site chrome: no nav, no page title bar.
+        self.assertNotIn("<nav", body)
+        self.assertNotIn("COCO logo", body)
+
+    def test_it_may_be_framed(self):
+        """Without this the embedding page renders a blank box and a console
+        error, which is a miserable thing to debug from the far end."""
+        response = self.client.get(self._url())
+        self.assertNotIn("X-Frame-Options", response.headers)
+
+    def test_payment_is_absent_even_for_an_editor(self):
+        """An embedded page has no business varying by viewer."""
+        Entrant.enter(self.division, self.ann, 1, paid=True, payment_note="cash")
+        response = self.client.get(self._url())  # still logged in as the owner
+        self.assertNotContains(response, "cash")
+        self.assertNotContains(response, "Unpaid")
+
+    def test_a_test_division_is_still_hidden(self):
+        self.division.is_test = True
+        self.division.save(update_fields=["is_test"])
+        self.client.logout()
+        self.assertEqual(self.client.get(self._url()).status_code, 404)
+
+    def test_an_empty_division_says_so(self):
+        response = self.client.get(self._url())
+        self.assertContains(response, "No entrants yet")
