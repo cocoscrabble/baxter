@@ -106,6 +106,25 @@ class EntrantsGrid(EditGrid):
     columns = [
         Column("number", "#", kind="display", width=60, auto_increment=True),
         Column("player", "Player", kind="choice", lookup="players", autocomplete=True),
+        # Editing this makes the snapshot manual, server-side in prepare(); the
+        # source column beside it is read-only so the two cannot disagree.
+        Column("rating", "Rating", kind="number", min=0, width=100),
+        Column("source", "Source", kind="display", width=90),
+        Column(
+            "tentative", "Tent.", kind="choice",
+            values={False: "", True: "Tentative"}, value_type="bool",
+            new_row=False, width=110,
+        ),
+        Column(
+            "paid", "Paid", kind="choice",
+            values={False: "", True: "Paid"}, value_type="bool",
+            new_row=False, width=90,
+        ),
+        Column(
+            "playing_up", "Up", kind="choice",
+            values={False: "", True: "Playing up"}, value_type="bool",
+            new_row=False, width=110,
+        ),
         Column(
             "dropped", "Dropped", kind="choice",
             values={False: "", True: "Dropped"}, value_type="bool",
@@ -194,6 +213,9 @@ class EntrantsGrid(EditGrid):
             "player": entrant.player_id,
             "dropped": entrant.dropped,
             "rating": entrant.rating,
+            # ``source`` is the display column; ``rating_source`` is the value
+            # the portable payload carries. Same thing, two audiences.
+            "source": entrant.get_rating_source_display(),
             "rating_source": entrant.rating_source,
             "tentative": entrant.tentative,
             "paid": entrant.paid,
@@ -210,7 +232,16 @@ class EntrantsGrid(EditGrid):
         players = list(Player.objects.filter(is_bye=False))
         labels = display_names(players)
         return {"players": [
-            {"id": p.pk, "label": labels[p.player_number], "rating": p.rating}
+            {
+                "id": p.pk,
+                "label": labels[p.player_number],
+                # Both ratings and the cascade's answer, so a row added in the
+                # grid can prefill its snapshot client-side. prepare() re-derives
+                # it server-side regardless — the client is never trusted for it.
+                "rating": p.rating,
+                "wespa_rating": p.wespa_rating,
+                "effective_rating": p.effective_rating[0],
+            }
             for p in players
         ]}
 
@@ -250,41 +281,46 @@ class EntrantsGrid(EditGrid):
         return prepared, errors
 
     def _pin_ratings(self, division, prepared):
-        """Decide each row's rating snapshot. Three cases, in order.
+        """Decide each row's rating snapshot.
 
-        1. **The row carries a ``rating_source``.** Only a portable payload
-           being replayed does that, and it is restoring a recorded snapshot
-           rather than deciding one, so it is honoured verbatim. Without this a
-           replayed ``(0, "none")`` entrant would come back ``manual``, because
-           carrying a rating is otherwise what ``manual`` means.
-        2. **The row carries a rating and no source.** A director typed it, so
-           it is ``manual`` — immune to any later sync (decision 3).
-        3. **Neither.** Derive from the player for a new entrant; keep what is
-           already pinned for an existing one, since re-deriving would silently
-           undo a hand-edit.
+        A ``rating_source`` on the row means a portable payload is being
+        replayed: it is restoring a recorded snapshot rather than deciding one,
+        so it is honoured verbatim. Without that, a replayed ``(0, "none")``
+        entrant would come back ``manual``, because carrying a rating is
+        otherwise what ``manual`` means.
+
+        Otherwise, for an **existing** entrant only a rating that actually
+        *differs* is a hand-edit. The grid round-trips every row's current
+        rating, so treating a value's mere presence as an override would flip
+        every entrant to ``manual`` on any save — silently making the whole
+        division immune to a later sync.
+
+        For a **new** entrant, any rating supplied is a deliberate override and
+        anything else snapshots the cascade. The client is never trusted for the
+        derivation itself.
         """
         pinned = {
             e.player_id: (e.rating, e.rating_source)
             for e in division.entrants.all()
         }
-        undecided = [
-            row for row in prepared
-            if not row.rating_source and row.rating is None
-            and row.player_id not in pinned
+        new_ids = [
+            row.player_id for row in prepared
+            if not row.rating_source and row.player_id not in pinned
         ]
-        players = (
-            Player.objects.in_bulk([row.player_id for row in undecided])
-            if undecided else {}
-        )
+        players = Player.objects.in_bulk(new_ids) if new_ids else {}
         for row in prepared:
             if row.rating_source:
                 row.rating = row.rating or 0
                 continue
+            if row.player_id in pinned:
+                current, source = pinned[row.player_id]
+                if row.rating is None or row.rating == current:
+                    row.rating, row.rating_source = current, source
+                else:
+                    row.rating_source = Entrant.MANUAL
+                continue
             if row.rating is not None:
                 row.rating_source = Entrant.MANUAL
-                continue
-            if row.player_id in pinned:
-                row.rating, row.rating_source = pinned[row.player_id]
                 continue
             player = players.get(row.player_id)
             if player is not None:

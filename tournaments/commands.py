@@ -690,6 +690,125 @@ def simulate_round_cmd(tournament, actor, payload):
 
 
 # ---------------------------------------------------------------------------
+# Players and entrants
+# ---------------------------------------------------------------------------
+
+
+@records_event("player_created")
+def create_player(tournament, actor, payload):
+    """payload: {player_number, name, rating, wespa_rating}.
+
+    Players are global, but a creation still belongs in *some* log — the one
+    whose director created them — so a replay into a fresh database recreates
+    them with their full field set rather than leaning on ``resolve_player``'s
+    fallback, which can only invent a name and a CoCo rating.
+
+    Replays as "create this player if no player with that number exists", so
+    replaying two logs that both name the same player is a no-op the second time.
+    """
+    from tournaments.models import (
+        TEMP_NUMBER_PREFIX,
+        Player,
+        canonical_player_number,
+    )
+
+    number = canonical_player_number(payload["player_number"])
+    existing = Player.objects.filter(player_number=number).first()
+    if existing is not None:
+        return EventResult(
+            payload=payload, tournament=tournament, result=existing, record=False
+        )
+    player = Player.objects.create(
+        name=payload["name"],
+        player_number=number,
+        rating=int(payload.get("rating") or 0),
+        wespa_rating=payload.get("wespa_rating"),
+        is_provisional=number.startswith(TEMP_NUMBER_PREFIX),
+    )
+    return EventResult(
+        payload={**payload, "player_number": number},
+        tournament=tournament,
+        result=player,
+    )
+
+
+# The registration fields an entrant_added / entrant_updated payload may carry.
+# ``rating`` is deliberately alongside ``rating_source``: an update that changes
+# the rating without saying where it came from would be ambiguous.
+_REGISTRATION_FIELDS = (
+    "number", "rating", "rating_source", "tentative", "paid",
+    "payment_note", "playing_up", "dropped",
+)
+
+
+@records_event("entrant_added")
+def add_entrant(tournament, actor, payload):
+    """payload: {division, player, number, + registration fields}.
+
+    ``player`` is a player *number* (per PLAN_PLAYER_IDENTITY.md), never a name.
+    A payload with no ``rating`` snapshots the cascade, which is what the
+    registration page sends when the director does not override it.
+    """
+    from tournaments.models import Entrant, Player, canonical_player_number
+
+    division = _division(tournament, payload["division"])
+    number = canonical_player_number(payload["player"])
+    player = Player.objects.filter(player_number=number).first()
+    if player is None:
+        raise ValueError(f"No player with number {payload['player']!r}.")
+    if division.entrants.filter(player=player).exists():
+        raise ValueError(f"{player.name} is already entered in {division.name}.")
+
+    fields = {
+        k: payload[k] for k in _REGISTRATION_FIELDS
+        if k in payload and k not in ("number", "rating")
+    }
+    entrant = Entrant.enter(
+        division, player, int(payload["number"]),
+        rating=payload.get("rating"),
+        rating_source=payload.get("rating_source"),
+        **fields,
+    )
+    return EventResult(payload=payload, division=division, result=entrant)
+
+
+@records_event("entrant_updated")
+def update_entrant(tournament, actor, payload):
+    """payload: {division, player, + whichever registration fields changed}.
+
+    Only the keys present are written, so a payload records an edit rather than
+    a whole row — which keeps the log readable and means two directors editing
+    different fields do not clobber each other on replay.
+    """
+    from tournaments.models import Entrant, canonical_player_number
+
+    division = _division(tournament, payload["division"])
+    number = canonical_player_number(payload["player"])
+    entrant = (
+        Entrant.all_objects.filter(
+            division=division, player__player_number=number
+        ).first()
+    )
+    if entrant is None:
+        raise ValueError(
+            f"No entrant with player number {payload['player']!r} in "
+            f"{division.name}."
+        )
+
+    changed = [k for k in _REGISTRATION_FIELDS if k in payload]
+    if not changed:
+        return EventResult(payload=payload, division=division, record=False)
+    for field in changed:
+        setattr(entrant, field, payload[field])
+    # A rating typed by a director is manual unless the payload says otherwise.
+    if "rating" in payload and "rating_source" not in payload:
+        entrant.rating_source = Entrant.MANUAL
+        changed.append("rating_source")
+    entrant.save(update_fields=changed)
+    return EventResult(payload=payload, division=division, result=entrant)
+
+
+# ---------------------------------------------------------------------------
 # Player identity
 # ---------------------------------------------------------------------------
 

@@ -4,10 +4,21 @@ import { lookupMap, nextRid } from "/static/editgrid/js/table_helpers.js";
 const gridId = "entrants-table";
 const cfg = window.editgrids[gridId];
 
-// Player id -> rating, so the table can be kept sorted by rating client-side.
-// Newly created players (below) extend this map.
+// Player id -> the rating a new entrant would pin (CoCo, else WESPA, else 0),
+// so the table can be kept sorted client-side and a new row can prefill its
+// snapshot. Newly created players (below) extend this map. The server re-derives
+// the snapshot in prepare() regardless — this is for display and ordering only.
 const playerRating = {};
-(cfg.lookups.players || []).forEach(p => { playerRating[p.id] = p.rating ?? 0; });
+(cfg.lookups.players || []).forEach(p => {
+    playerRating[p.id] = p.effective_rating ?? p.rating ?? 0;
+});
+
+// An existing entrant sorts on its own pinned rating, which may have been
+// hand-edited away from the player's; a brand-new row has none yet, so it falls
+// back to what it is about to pin.
+function rowRating(row) {
+    return row.rating ?? playerRating[row.player] ?? 0;
+}
 
 // Number only the surviving rows, so seeds stay sequential once rows marked for
 // deletion are dropped on save.
@@ -19,7 +30,7 @@ function renumber() {
     });
 }
 
-const byRatingDesc = (a, b) => (playerRating[b.player] ?? 0) - (playerRating[a.player] ?? 0);
+const byRatingDesc = (a, b) => rowRating(b) - rowRating(a);
 
 // Establish the invariant up front: the table opens in rating order (highest
 // first) with sequential seeds. Sorting the loaded rows here (before the grid
@@ -41,8 +52,10 @@ const saveBtn = document.querySelector(`[data-eg="${gridId}"][data-eg-action="sa
 function insertByRating(playerId) {
     const rating = playerRating[playerId] ?? 0;
     const target = table.getRows().find(
-        row => !row.getData()._deleted && (playerRating[row.getData().player] ?? 0) < rating
+        row => !row.getData()._deleted && rowRating(row.getData()) < rating
     );
+    // No `rating` on the new row: leaving it unset is what tells the server to
+    // snapshot the cascade rather than treat it as a hand-typed override.
     const data = { player: playerId, _rid: nextRid() };
     const added = target ? table.addRow(data, true, target) : table.addRow(data, false);
     return added.then(() => saveBtn.click());
@@ -153,6 +166,8 @@ function createPlayer(confirm) {
             name: name,
             rating: parseInt(ratingInput.value) || 0,
             confirm: !!confirm,
+            tournament_slug: entrantsExtra.tournamentSlug,
+            division_slug: entrantsExtra.divisionSlug,
         }),
     })
     .then(resp => resp.json().then(body => ({ ok: resp.ok, body })))

@@ -140,7 +140,9 @@ class PairingDBTestBase(TestCase):
             p = DBPlayer.objects.create(
                 name=name, player_number=str(i).zfill(3), rating=rating
             )
-            e = Entrant.objects.create(division=cls.division, player=p, number=i)
+            # enter(), not create(): entrants pin the rating they are seeded
+            # from, and a fixture that skips that leaves everyone on 0.
+            e = Entrant.enter(cls.division, p, i)
             cls.players.append(p)
             cls.entrants.append(e)
 
@@ -1321,10 +1323,24 @@ class RatingEditInvalidatesDraftsTests(PairingDBTestBase):
         )
 
     def _rows(self, overrides=None):
+        """Rows shaped as the real grid sends them.
+
+        The rating is included on every row because the client round-trips what
+        it was given — which is exactly why an unchanged one must not read as a
+        hand-edit.
+        """
         overrides = overrides or {}
         rows = []
         for e in self.division.entrants.select_related("player").order_by("number"):
-            row = {"number": e.number, "player": e.player_id, "dropped": e.dropped}
+            row = {
+                "number": e.number,
+                "player": e.player_id,
+                "dropped": e.dropped,
+                "rating": e.rating,
+                "tentative": e.tentative,
+                "paid": e.paid,
+                "playing_up": e.playing_up,
+            }
             row.update(overrides.get(e.player_id, {}))
             rows.append(row)
         return rows
@@ -1360,6 +1376,34 @@ class RatingEditInvalidatesDraftsTests(PairingDBTestBase):
             ).exists(),
             "the draft should have been dropped as stale",
         )
+
+    def test_an_unchanged_rating_keeps_its_source(self):
+        """The grid round-trips every row's rating, so a save that changes
+        nothing must not flip the whole division to ``manual`` — which would
+        make every entrant immune to a later sync."""
+        before = {
+            e.pk: (e.rating, e.rating_source)
+            for e in self.division.entrants.all()
+        }
+        self.assertEqual(
+            {src for _, src in before.values()}, {"coco"},
+            "fixture precondition: everyone is cascaded from their CoCo rating",
+        )
+        response = self._save(self._rows())
+        self.assertEqual(response.status_code, 200, response.content)
+        after = {
+            e.pk: (e.rating, e.rating_source)
+            for e in self.division.entrants.all()
+        }
+        self.assertEqual(after, before)
+
+    def test_only_the_changed_row_becomes_manual(self):
+        target = self.entrants[1]
+        self._save(self._rows({target.player_id: {"rating": 1234}}))
+        target.refresh_from_db()
+        self.assertEqual((target.rating, target.rating_source), (1234, "manual"))
+        for other in self.division.entrants.exclude(pk=target.pk):
+            self.assertEqual(other.rating_source, "coco")
 
     def test_a_save_that_changes_no_rating_keeps_the_draft(self):
         from tournaments.generate_pairings import regenerate_pairings

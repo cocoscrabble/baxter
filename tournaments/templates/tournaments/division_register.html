@@ -1,0 +1,106 @@
+{% extends "tournaments/base_division.html" %}
+
+{% block title %}Register - {{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
+
+{% block content %}
+<h1>Register: {{ division.name }}</h1>
+
+<p class="settings-intro">
+  Add entrants one at a time, or
+  <a href="{% url 'division_entrants_edit' division.tournament.slug division.slug %}">edit them all in the grid</a>.
+  Payment details are shown to editors only and never appear on the public list.
+</p>
+
+{% comment %}
+One registration fieldset, included by each of the three forms below. The rating
+box is deliberately blank by default: blank means "use the player's own rating",
+a typed value means the director is overriding it.
+{% endcomment %}
+
+<section class="settings-section">
+  <h2>{% if editing %}Edit {{ editing.display_name }}{% else %}Add an existing player{% endif %}</h2>
+
+  {% if not editing %}
+  <form method="get" action="{% url 'division_register' division.tournament.slug division.slug %}">
+    <label>Search:
+      <input type="search" name="q" value="{{ search_query }}" autocomplete="off">
+    </label>
+    <button type="submit">Search</button>
+  </form>
+  {% include "tournaments/_register_results.html" %}
+  {% endif %}
+
+  <form method="post" id="register-add-form"
+        action="{% url 'division_register' division.tournament.slug division.slug %}">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="{% if editing %}update{% else %}add{% endif %}">
+    {% if editing %}<input type="hidden" name="entrant" value="{{ editing.pk }}">{% endif %}
+    {{ registration_form.as_p }}
+    {% if editing %}
+    <button type="submit">Save</button>
+    <a href="{% url 'division_register' division.tournament.slug division.slug %}">Cancel</a>
+    {% endif %}
+  </form>
+</section>
+
+{% if not editing %}
+<section class="settings-section">
+  <h2>Create a guest</h2>
+  <p class="settings-intro">
+    A guest is just a player with no CoCo number and no CoCo rating — they get a
+    temporary number until the registry assigns them a real one.
+  </p>
+  <form method="post"
+        action="{% url 'division_register' division.tournament.slug division.slug %}">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="guest">
+    {{ guest_form.as_p }}
+    {{ guest_registration_form.as_p }}
+    <button type="submit">Create &amp; enter</button>
+  </form>
+</section>
+{% endif %}
+
+<section class="settings-section">
+  <h2>Entered ({{ entrants|length }})</h2>
+  {% if not entrants %}
+  <p class="empty-state">Nobody is entered yet.</p>
+  {% else %}
+  <table>
+    <thead>
+      <tr>
+        <th class="num">#</th>
+        <th>Player</th>
+        <th class="num">Rating</th>
+        <th>Source</th>
+        <th>Status</th>
+        <th>Payment</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for entrant in entrants %}
+      <tr>
+        <td class="num">{{ entrant.number }}</td>
+        <td>{{ entrant.display_name }}</td>
+        <td class="num">{{ entrant.rating }}</td>
+        <td>{{ entrant.get_rating_source_display }}</td>
+        <td>
+          {% if entrant.tentative %}<span class="tag">tentative</span>{% endif %}
+          {% if entrant.playing_up %}<span class="tag">playing up</span>{% endif %}
+          {% if entrant.dropped %}<span class="tag tag-dropped">withdrew</span>{% endif %}
+        </td>
+        <td>
+          {% if entrant.paid %}Paid{% else %}Unpaid{% endif %}
+          {% if entrant.payment_note %}<br><small>{{ entrant.payment_note }}</small>{% endif %}
+        </td>
+        <td>
+          <a href="{% url 'division_register' division.tournament.slug division.slug %}?entrant={{ entrant.pk }}">Edit</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+{% endblock %}

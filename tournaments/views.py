@@ -22,10 +22,13 @@ from django.views.generic import (
 
 from .datastar_utils import fragment_response, is_datastar
 from .display import division_labels, label_entrants, label_standings
+from .player_source import get_player_source
 from datastar_py.django import read_signals
 from .forms import (
     CopConfigForm,
     FakeTournamentForm,
+    GuestForm,
+    RegistrationForm,
     ResultSlipForm,
     TournamentForm,
     WhatIfImportForm,
@@ -38,10 +41,13 @@ from .fixed_pairings import (
 )
 from .match_simulation import simulate_match, simulate_round
 from .commands import (
+    add_entrant,
     add_fixed_pairing_cmd,
     add_result,
     bulk_import_entrants,
     create_division,
+    create_player,
+    update_entrant,
     create_playoff,
     create_tournament,
     edit_result,
@@ -1506,6 +1512,245 @@ class DivisionEntrantsEditView(DivisionEditGridView):
     active_tab = "edit_entrants"
 
 
+class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    """Register entrants one at a time — the primary *add* flow.
+
+    The edit grid stays the bulk surface (seat numbers, dropped, quick flag
+    edits); this page is where a director adds someone, creates a guest, or
+    confirms/fixes one entrant without touching a spreadsheet.
+
+    Three actions, all POSTing here:
+
+    - ``add`` — an existing player, chosen by number.
+    - ``guest`` — a name and a rating, which mints a provisional player and
+      enters them in one step (decision 4).
+    - ``update`` — the same registration fields over an entrant that exists.
+
+    Player lookup goes through ``player_source`` so the same page works against
+    the central roster later without any change here (decision 11).
+    """
+
+    template_name = "tournaments/division_register.html"
+    GUEST_PREFIX = "guest"
+
+    def get(self, request, *args, **kwargs):
+        division = self.get_division()
+        overrides = {}
+        if request.GET.get("entrant"):
+            entrant = division.entrants.filter(
+                pk=request.GET["entrant"]
+            ).select_related("player").first()
+            if entrant is None:
+                messages.error(request, "That entrant is not in this division.")
+                return self._redirect(division)
+            overrides["editing"] = entrant
+            overrides["registration_form"] = RegistrationForm(
+                initial={
+                    "number": entrant.number,
+                    "rating": entrant.rating,
+                    "tentative": entrant.tentative,
+                    "paid": entrant.paid,
+                    "playing_up": entrant.playing_up,
+                    "payment_note": entrant.payment_note,
+                }
+            )
+        elif "q" in request.GET:
+            query, results = self._search(request, division)
+            overrides["search_query"] = query
+            overrides["search_results"] = results
+        return render(
+            request, self.template_name, self._context(division, **overrides)
+        )
+
+    def post(self, request, *args, **kwargs):
+        division = self.get_division()
+        action = request.POST.get("action")
+        handler = {
+            "add": self._add,
+            "guest": self._guest,
+            "update": self._update,
+        }.get(action)
+        if handler is None:
+            messages.error(request, "Unknown action.")
+            return redirect("division_register", **division.slug_kwargs())
+        return handler(request, division)
+
+    # -- context -----------------------------------------------------------
+
+    def _next_number(self, division):
+        return (
+            division.entrants.aggregate(m=models.Max("number"))["m"] or 0
+        ) + 1
+
+    def _context(self, division, **overrides):
+        entrants = list(
+            division.entrants.select_related("player").order_by("number")
+        )
+        label_entrants(division_labels(division), entrants)
+        context = {
+            "division": division,
+            "tournament": division.tournament,
+            "entrants": entrants,
+            "can_edit": True,
+            "active_tab": "entrants",
+            "registration_form": RegistrationForm(
+                initial={"number": self._next_number(division)}
+            ),
+            # The same fieldset appears twice on this page, so the guest copy is
+            # prefixed. Without it both render identical element ids and the
+            # guest form's labels silently point at the add form's inputs.
+            "guest_registration_form": RegistrationForm(
+                prefix=self.GUEST_PREFIX,
+                initial={"number": self._next_number(division)},
+            ),
+            "guest_form": GuestForm(prefix=self.GUEST_PREFIX),
+            "search_query": "",
+            "search_results": [],
+            "editing": None,
+        }
+        context.update(overrides)
+        return context
+
+    def _search(self, request, division):
+        query = request.GET.get("q", "")
+        found = get_player_source().search(query)
+        entered = set(division.entrants.values_list("player__player_number", flat=True))
+        return query, [r for r in found if r.player_number not in entered]
+
+    # -- actions -----------------------------------------------------------
+
+    def _redirect(self, division):
+        return redirect("division_register", **division.slug_kwargs())
+
+    def _add(self, request, division):
+        form = RegistrationForm(request.POST)
+        record = get_player_source().fetch(request.POST.get("player", ""))
+        if record is None:
+            messages.error(request, "Pick a player first.")
+            return render(request, self.template_name, self._context(division))
+        if not form.is_valid():
+            return render(
+                request, self.template_name,
+                self._context(division, registration_form=form),
+            )
+        payload = {
+            "division": division.name,
+            "player": record.player_number,
+            **form.registration(),
+        }
+        try:
+            add_entrant(division.tournament, request.user, payload)
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return render(
+                request, self.template_name,
+                self._context(division, registration_form=form),
+            )
+        messages.success(request, f"Entered {record.name}.")
+        return self._redirect(division)
+
+    def _guest(self, request, division):
+        form = RegistrationForm(request.POST, prefix=self.GUEST_PREFIX)
+        guest = GuestForm(request.POST, prefix=self.GUEST_PREFIX)
+        if not (form.is_valid() and guest.is_valid()):
+            return render(
+                request, self.template_name,
+                self._context(
+                    division, guest_registration_form=form, guest_form=guest
+                ),
+            )
+        source = get_player_source()
+        number = source.mint_number(guest.cleaned_data["name"])
+        create_player(
+            division.tournament, request.user,
+            {
+                "player_number": number,
+                "name": guest.cleaned_data["name"],
+                # No CoCo rating by definition — that is what makes them a guest.
+                "rating": 0,
+                "wespa_rating": guest.cleaned_data["wespa_rating"],
+            },
+        )
+        try:
+            add_entrant(
+                division.tournament, request.user,
+                {
+                    "division": division.name,
+                    "player": number,
+                    **form.registration(),
+                },
+            )
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return render(
+                request, self.template_name,
+                self._context(
+                    division, guest_registration_form=form, guest_form=guest
+                ),
+            )
+        messages.success(request, f"Entered {guest.cleaned_data['name']}.")
+        return self._redirect(division)
+
+    def _update(self, request, division):
+        entrant = division.entrants.filter(
+            pk=request.POST.get("entrant")
+        ).select_related("player").first()
+        if entrant is None:
+            messages.error(request, "That entrant is no longer in this division.")
+            return self._redirect(division)
+        form = RegistrationForm(request.POST)
+        if not form.is_valid():
+            return render(
+                request, self.template_name,
+                self._context(division, registration_form=form, editing=entrant),
+            )
+        registration = form.registration()
+        # The form prefills the current rating, so a director who opens this
+        # page and saves without touching it must not thereby convert a `coco`
+        # snapshot into a `manual` one. Only an actual change is an override.
+        if registration.get("rating") == entrant.rating:
+            registration.pop("rating")
+        try:
+            update_entrant(
+                division.tournament, request.user,
+                {
+                    "division": division.name,
+                    "player": entrant.key,
+                    **registration,
+                },
+            )
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return self._redirect(division)
+        messages.success(request, f"Updated {entrant.player.name}.")
+        return self._redirect(division)
+
+
+class DivisionRegisterSearchView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    """The registration page's player search, as an HTML fragment.
+
+    Its own endpoint so the search can be re-run without re-posting the
+    registration form, and so swapping in a registry-backed source later touches
+    nothing else.
+    """
+
+    def get(self, request, *args, **kwargs):
+        division = self.get_division()
+        query = request.GET.get("q", "")
+        entered = set(
+            division.entrants.values_list("player__player_number", flat=True)
+        )
+        results = [
+            r for r in get_player_source().search(query)
+            if r.player_number not in entered
+        ]
+        return render(
+            request,
+            "tournaments/_register_results.html",
+            {"division": division, "search_query": query, "search_results": results},
+        )
+
+
 class CreatePlayerView(LoginRequiredMixin, View):
     """AJAX endpoint to create a new Player and return its data.
 
@@ -1542,7 +1787,7 @@ class CreatePlayerView(LoginRequiredMixin, View):
                     status=409,
                 )
 
-        player, error = Player.create(name=name, rating=data.get("rating", 0))
+        player, error = self._create(request, name, data)
         if error:
             return JsonResponse({"error": error}, status=400)
         return JsonResponse({
@@ -1552,6 +1797,50 @@ class CreatePlayerView(LoginRequiredMixin, View):
             "rating": player.rating,
             "player_number": player.player_number,
         })
+
+    def _create(self, request, name, data):
+        """Create the player through the ``player_created`` command.
+
+        Players are global, so there is no single tournament they belong to —
+        but a creation still has to be *somewhere* in the log or a replay into a
+        fresh database cannot rebuild them with their real number and ratings.
+        This endpoint is reached from a division's entrants grid, so the event
+        goes in that tournament's log; if the caller does not say which, the
+        player is created directly and the roster events still carry enough to
+        reconstruct them.
+        """
+        from tournaments.models import next_temp_player_number
+
+        name = (name or "").strip()
+        if not name:
+            return None, "Name is required."
+        try:
+            rating = int(data.get("rating") or 0)
+        except (ValueError, TypeError):
+            rating = 0
+
+        division = self._division_from(data)
+        number = next_temp_player_number()
+        payload = {
+            "player_number": number,
+            "name": name,
+            "rating": rating,
+            "wespa_rating": data.get("wespa_rating"),
+        }
+        if division is None:
+            return Player.create(name=name, rating=rating)
+        actor = request.user if request.user.is_authenticated else None
+        return create_player(division.tournament, actor, payload), None
+
+    @staticmethod
+    def _division_from(data):
+        """The division whose grid asked for this player, if it said."""
+        slugs = (data.get("tournament_slug"), data.get("division_slug"))
+        if not all(slugs):
+            return None
+        return Division.objects.filter(
+            tournament__slug=slugs[0], slug=slugs[1]
+        ).first()
 
 
 class PlayerImportView(LoginRequiredMixin, IsAdminMixin, View):

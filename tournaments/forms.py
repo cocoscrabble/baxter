@@ -387,3 +387,66 @@ class RoundPairingForm(forms.Form):
 
 
 RoundPairingFormSet = formset_factory(RoundPairingForm, extra=0)
+
+
+class RegistrationForm(forms.Form):
+    """One entrant's registration state: the shared half of every flow on the
+    registration page (add an existing player, create a guest, edit an entrant).
+
+    The rating field is left blank to mean "snapshot the cascade". A value
+    typed here is a deliberate override and becomes ``manual``, so blank and 0
+    are meaningfully different and the field must not coerce one to the other.
+    """
+
+    number = forms.IntegerField(
+        min_value=1, label="Seat number",
+        help_text="Board/seat order. Defaults to the next free number.",
+    )
+    rating = forms.IntegerField(
+        required=False, min_value=0, label="Rating",
+        help_text="Leave blank to use the player's own rating.",
+    )
+    tentative = forms.BooleanField(required=False, label="Tentative")
+    paid = forms.BooleanField(required=False, label="Paid")
+    playing_up = forms.BooleanField(required=False, label="Playing up")
+    payment_note = forms.CharField(
+        required=False, label="Payment note",
+        widget=forms.Textarea(attrs={"rows": 2}),
+    )
+
+    def clean(self):
+        cleaned = super().clean()
+        # Marking someone paid confirms them by default; an organizer who means
+        # to hold a paid entrant re-ticks the box, and that override survives
+        # because it is applied here rather than as a model side effect
+        # (plans/PLAN_ENTRANTS.md decision 5).
+        if cleaned.get("paid") and not self.data.get(self.add_prefix("tentative")):
+            cleaned["tentative"] = False
+        return cleaned
+
+    def registration(self) -> dict:
+        """The payload fields this form contributes, rating included only when
+        the director actually supplied one."""
+        data = {
+            "number": self.cleaned_data["number"],
+            "tentative": self.cleaned_data["tentative"],
+            "paid": self.cleaned_data["paid"],
+            "playing_up": self.cleaned_data["playing_up"],
+            "payment_note": self.cleaned_data["payment_note"],
+        }
+        if self.cleaned_data.get("rating") is not None:
+            data["rating"] = self.cleaned_data["rating"]
+        return data
+
+
+class GuestForm(forms.Form):
+    """The extra fields for creating a guest: a name, and whatever rating they
+    have. A guest is not a new kind of player — just one with no CoCo number and
+    no CoCo rating (decision 4) — so this mints a ``T-`` number and nothing else
+    about them is special."""
+
+    name = forms.CharField(max_length=200, label="Name")
+    wespa_rating = forms.IntegerField(
+        required=False, min_value=0, label="WESPA rating",
+        help_text="Used as their rating when they have no CoCo one.",
+    )
