@@ -429,3 +429,129 @@ class EntrantsEmbedTests(RegistrationTestCase):
     def test_an_empty_division_says_so(self):
         response = self.client.get(self._url())
         self.assertContains(response, "No entrants yet")
+
+
+class PlayerSourceSeamTests(RegistrationTestCase):
+    """The registration page goes through the seam, not the Player table.
+
+    That is the whole point of decision 11: swapping in a registry-backed source
+    later must change no view code. A fake source proves the page never reaches
+    around it.
+    """
+
+    def _fake_source(self, records):
+        from tournaments.player_source import PlayerSource
+
+        class FakeSource(PlayerSource):
+            def __init__(self):
+                self.searched = []
+
+            def search(self, query):
+                self.searched.append(query)
+                return list(records)
+
+            def fetch(self, player_number):
+                return next(
+                    (r for r in records if r.player_number == player_number), None
+                )
+
+            def mint_number(self, name):
+                return "X-1"
+
+        return FakeSource()
+
+    def test_the_search_comes_from_the_source(self):
+        from unittest.mock import patch
+
+        from tournaments.player_source import PlayerRecord
+
+        fake = self._fake_source([
+            PlayerRecord(player_number="9900", name="Remote Rita", rating=1710)
+        ])
+        with patch("tournaments.views.get_player_source", return_value=fake):
+            response = self.client.get(self.url(), {"q": "rita"})
+
+        self.assertEqual(fake.searched, ["rita"])
+        self.assertContains(response, "Remote Rita")
+        # The local roster is not consulted, so a local-only player is absent.
+        self.assertNotContains(response, "Ann Lee")
+
+    def test_entering_a_player_the_source_returned(self):
+        from unittest.mock import patch
+
+        from tournaments.player_source import PlayerRecord
+
+        # The player has to exist locally to be entered; the source decides
+        # *which* one, the database still holds them.
+        fake = self._fake_source([
+            PlayerRecord(player_number="0001", name="Ann Lee", rating=1600)
+        ])
+        with patch("tournaments.views.get_player_source", return_value=fake):
+            self._post(action="add", player="0001", number=1, payment_note="")
+
+        self.assertEqual(self.division.entrants.get().player, self.ann)
+
+    def test_the_guest_number_comes_from_the_source(self):
+        from unittest.mock import patch
+
+        fake = self._fake_source([])
+        with patch("tournaments.views.get_player_source", return_value=fake):
+            self._guest_post(name="Sourced Sam", number=1, payment_note="")
+
+        player = Player.objects.get(name="Sourced Sam")
+        self.assertEqual(
+            player.player_number, "X-1",
+            "the source mints the number, not next_temp_player_number",
+        )
+
+
+class WespaImportViewTests(TestCase):
+    """The admin-only upload page (phase 5)."""
+
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            username="admin", password="pw", role="admin", is_staff=True
+        )
+        self.director = User.objects.create_user(
+            username="td2", password="pw", role="director"
+        )
+        self.bea = Player.objects.create(
+            name="Bea Fox", player_number="0002", rating=0
+        )
+        self.url = reverse("wespa_import")
+
+    def _upload(self, text):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        return self.client.post(
+            self.url,
+            {"wespa_file": SimpleUploadedFile("w.csv", text.encode(), "text/csv")},
+            follow=True,
+        )
+
+    def test_an_admin_can_refresh(self):
+        self.client.force_login(self.admin)
+        response = self._upload("Bea Fox,1450\n")
+        self.assertEqual(response.status_code, 200)
+        self.bea.refresh_from_db()
+        self.assertEqual(self.bea.wespa_rating, 1450)
+
+    def test_a_director_cannot(self):
+        self.client.force_login(self.director)
+        self._upload("Bea Fox,1450\n")
+        self.bea.refresh_from_db()
+        self.assertIsNone(self.bea.wespa_rating)
+
+    def test_an_ambiguous_name_is_warned_about_by_name(self):
+        Player.objects.create(name="Twin", player_number="0010", rating=0)
+        Player.objects.create(name="Twin", player_number="0011", rating=0)
+        self.client.force_login(self.admin)
+        response = self._upload("Twin,1450\n")
+        self.assertContains(response, "more than one player has that name")
+
+    def test_a_malformed_file_changes_nothing(self):
+        self.client.force_login(self.admin)
+        response = self._upload("Bea Fox,not-a-number\n")
+        self.bea.refresh_from_db()
+        self.assertIsNone(self.bea.wespa_rating)
+        self.assertContains(response, "invalid rating")

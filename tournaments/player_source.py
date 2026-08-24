@@ -44,7 +44,14 @@ class PlayerSource:
 
     def mint_number(self, name) -> str | None:
         """A number for a player this source has never seen, or None to keep
-        whatever local placeholder the caller would otherwise mint."""
+        whatever local placeholder the caller would otherwise mint.
+
+        A registry-backed source will one day return a real CoCo number here.
+        Until then the reconciliation already described in
+        ``tournament_export.py`` — a ``T-`` number and ``is_provisional``,
+        replaced when the registry assigns a real one — is where minted numbers
+        land, and ``commands.change_player_number`` is what records the swap.
+        """
         raise NotImplementedError
 
 

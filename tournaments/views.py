@@ -99,6 +99,7 @@ from .pairing.methods import (
     pairing_method_schedule,
 )
 from .player_sync import import_players
+from .wespa_ratings import parse_wespa_csv, refresh_wespa_ratings
 from users.models import User
 from .generate_pairings import publish_rounds, regenerate_pairings, unpublish_rounds
 from .pairing.base import PairingData, PairingError, standings_after_round
@@ -1925,6 +1926,60 @@ class PlayerImportView(LoginRequiredMixin, IsAdminMixin, View):
                 f"{result['updated']} updated, {result['unchanged']} unchanged."
             )
         return redirect("player_import")
+
+
+class WespaImportView(LoginRequiredMixin, IsAdminMixin, View):
+    """Admin-only page to refresh WESPA ratings from a CSV upload.
+
+    Global and unlogged, like ``PlayerImportView``, and for a reason worth
+    stating: entrants pin their rating when they enter (PLAN_ENTRANTS decision
+    3), so refreshing the roster mutates no replayable tournament state and
+    cannot reshuffle a division that is already under way.
+    """
+
+    template_name = "tournaments/wespa_import.html"
+
+    def _context(self):
+        return {
+            "player_count": Player.objects.filter(is_bye=False).count(),
+            "wespa_count": Player.objects.filter(
+                is_bye=False, wespa_rating__isnull=False
+            ).count(),
+        }
+
+    def get(self, request):
+        return render(request, self.template_name, self._context())
+
+    def post(self, request):
+        uploaded = request.FILES.get("wespa_file")
+        if not uploaded:
+            messages.error(request, "No file uploaded.")
+            return redirect("wespa_import")
+
+        rows, errors = parse_wespa_csv(uploaded.read().decode("utf-8-sig"))
+        if errors:
+            for error in errors[:25]:
+                messages.error(request, error)
+            if len(errors) > 25:
+                messages.error(request, f"... and {len(errors) - 25} more.")
+            return redirect("wespa_import")
+
+        result = refresh_wespa_ratings(rows)
+        messages.success(
+            request,
+            f"{result.total} row(s): {len(result.updated)} updated, "
+            f"{len(result.unchanged)} unchanged.",
+        )
+        # Unresolved rows are warnings, not failures — the rest applied. They are
+        # listed rather than counted, because "3 names were ambiguous" is not
+        # something anyone can act on.
+        for name in result.ambiguous[:25]:
+            messages.warning(
+                request, f"{name} — more than one player has that name; skipped."
+            )
+        for name in result.unmatched[:25]:
+            messages.warning(request, f"{name} — no such player; skipped.")
+        return redirect("wespa_import")
 
 
 class BulkImportEntrantsView(LoginRequiredMixin, CanEditDivisionMixin, View):

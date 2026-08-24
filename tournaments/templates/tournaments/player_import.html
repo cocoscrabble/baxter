@@ -23,4 +23,9 @@ added, and nothing is ever deleted.</p>
 <p>On the machine with the players you want to push, run:</p>
 <pre>uv run manage.py export_players -o players.json</pre>
 <p>then upload <code>players.json</code> here.</p>
+
+<h2>WESPA ratings</h2>
+<p>WESPA ratings are separate — they are only used for players with no CoCo
+rating and never sync to the central database.
+<a href="{% url 'wespa_import' %}">Import them here</a>.</p>
 {% endblock %}

@@ -5,6 +5,7 @@ from .views import (
     BulkImportEntrantsView,
     CreatePlayerView,
     PlayerImportView,
+    WespaImportView,
     DivisionAllResultsView,
     DivisionCreateView,
     DivisionDeleteView,
@@ -73,6 +74,7 @@ urlpatterns = [
     path("what-if/import/", WhatIfImportView.as_view(), name="whatif_import"),
     path("create-player/", CreatePlayerView.as_view(), name="create_player"),
     path("players/import/", PlayerImportView.as_view(), name="player_import"),
+    path("players/wespa/", WespaImportView.as_view(), name="wespa_import"),
 
     path("<slug:tournament_slug>/", TournamentDetailView.as_view(), name="tournament_detail"),
     path("<slug:tournament_slug>/edit/", TournamentUpdateView.as_view(), name="tournament_edit"),
