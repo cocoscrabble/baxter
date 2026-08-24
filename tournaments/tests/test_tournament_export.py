@@ -24,8 +24,8 @@ class TournamentExportTests(TestCase):
         cls.bob = Player.objects.create(
             player_number="T-1", name="Bob", rating=0, is_provisional=True
         )
-        cls.e_alice = Entrant.objects.create(division=cls.division, player=cls.alice, number=1)
-        cls.e_bob = Entrant.objects.create(division=cls.division, player=cls.bob, number=2)
+        cls.e_alice = Entrant.enter(cls.division, cls.alice, 1)
+        cls.e_bob = Entrant.enter(cls.division, cls.bob, 2)
 
         ResultSlip.objects.create(
             division=cls.division,
@@ -94,3 +94,53 @@ class TournamentExportTests(TestCase):
         self.assertIsInstance(export, ExportTournament)
         self.assertEqual(len(export.divisions), 1)
         self.assertEqual(len(export.players), 2)
+
+
+class ExportedRatingSnapshotTests(TestCase):
+    """The bundle carries the rating the division was *seeded* from.
+
+    The player record has almost certainly drifted by the time a tournament is
+    exported — a WESPA refresh, a roster sync, a new rating period — so
+    re-deriving the seed from the player would answer a different question.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        owner = User.objects.create_user(username="owner-snap", password="pw")
+        cls.tournament = Tournament.objects.create(
+            name="Snapshot Open", location="X",
+            start_date=date(2026, 6, 4), owner=owner,
+        )
+        cls.division = Division.objects.create(
+            name="A", tournament=cls.tournament
+        )
+        cls.player = Player.objects.create(
+            player_number="A200", name="Drifty", rating=1500
+        )
+        cls.entrant = Entrant.enter(cls.division, cls.player, 1)
+
+    def _entrant(self):
+        data = json.loads(export_tournament(self.tournament))
+        return data["divisions"][0]["entrants"][0]
+
+    def test_the_seeded_rating_and_its_source_are_exported(self):
+        row = self._entrant()
+        self.assertEqual(row["rating"], 1500)
+        self.assertEqual(row["rating_source"], "coco")
+
+    def test_it_does_not_follow_the_player_afterwards(self):
+        self.player.rating = 1900
+        self.player.save(update_fields=["rating"])
+        row = self._entrant()
+        self.assertEqual(row["rating"], 1500, "the seed, not today's rating")
+        # The player block still reports the current one — a different question,
+        # answered separately.
+        data = json.loads(export_tournament(self.tournament))
+        self.assertEqual(data["players"][0]["rating"], 1900)
+
+    def test_a_hand_set_rating_is_marked_manual(self):
+        entrant = self.division.entrants.get()
+        entrant.rating, entrant.rating_source = 1234, "manual"
+        entrant.save(update_fields=["rating", "rating_source"])
+        row = self._entrant()
+        self.assertEqual((row["rating"], row["rating_source"]), (1234, "manual"))
