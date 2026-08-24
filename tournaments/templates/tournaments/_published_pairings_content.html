@@ -34,8 +34,8 @@
         {% for entry in round_pairings %}
         <tr>
             <td>{{ entry.pairing.table_label|default:entry.pairing.table }}</td>
-            <td>{{ entry.pairing.first.name }} (#{{ entry.pairing.first.number }})</td>
-            <td>{{ entry.pairing.second.name }} (#{{ entry.pairing.second.number }})</td>
+            <td>{{ entry.pairing.first.display_name }} (#{{ entry.pairing.first.number }})</td>
+            <td>{{ entry.pairing.second.display_name }} (#{{ entry.pairing.second.number }})</td>
             {% if entry.result %}
             <td class="num">{{ entry.result }}</td>
             {% else %}

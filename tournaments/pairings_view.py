@@ -16,6 +16,7 @@ from enum import Enum
 from functools import cached_property
 from itertools import groupby
 
+from .display import division_labels, label_entrants
 from .models import Pairing, RoundPairings
 from .pairing.base import PairingData
 from .pairing.round_pairing import RP
@@ -157,11 +158,19 @@ class PairingsPresenter:
 
     @cached_property
     def db_pairings(self):
-        return list(
+        pairings = list(
             self.division.pairings
             .select_related("first", "first__player", "second", "second__player")
             .order_by("round", "table")
         )
+        # A board has to name two distinguishable people, so entrants who share
+        # a name get their number appended here (tournaments/display.py).
+        label_entrants(
+            division_labels(self.division),
+            (p.first for p in pairings),
+            (p.second for p in pairings),
+        )
+        return pairings
 
     @cached_property
     def pair_meeting_rounds(self) -> dict[frozenset, list[int]]:
@@ -458,6 +467,11 @@ class PublishedPairingsPresenter:
             .filter(round__in=published_rounds)
             .select_related("first", "first__player", "second", "second__player")
             .order_by("round", "table")
+        )
+        label_entrants(
+            division_labels(self.division),
+            (p.first for p in db_pairings),
+            (p.second for p in db_pairings),
         )
         if not db_pairings:
             context["pairings_message"] = "No pairings published yet."

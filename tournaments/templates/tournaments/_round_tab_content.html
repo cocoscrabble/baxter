@@ -43,9 +43,9 @@
             {% for entry in round_pairings %}
             <tr>
                 <td class="num-left">{{ entry.pairing.table_label|default:entry.pairing.table }}</td>
-                <td>{{ entry.pairing.first.name }}{% if entry.playoff_label %} <span class="playoff-tag badge-published">{{ entry.playoff_label }}</span>{% endif %}</td>
+                <td>{{ entry.pairing.first.display_name }}{% if entry.playoff_label %} <span class="playoff-tag badge-published">{{ entry.playoff_label }}</span>{% endif %}</td>
                 <td>{% if entry.is_fixed %}&#x1F512;{% endif %}</td>
-                <td>{{ entry.pairing.second.name }}</td>
+                <td>{{ entry.pairing.second.display_name }}</td>
                 <td class="num">{% if entry.repeat_rounds %}{{ entry.repeat_rounds|length }}<span class="repeat-rounds">rd. {{ entry.repeat_rounds|join:", " }}</span>{% endif %}</td>
                 <td class="num">
                     {% if entry.result %}
@@ -76,7 +76,7 @@
         <ul class="fixed-pairings-list">
             {% for fp in fixed_pairings_for_round %}
             <li>
-                <span>{{ fp.entrant1.name }} vs. {{ fp.entrant2.name }}</span>
+                <span>{{ fp.entrant1.display_name }} vs. {{ fp.entrant2.display_name }}</span>
                 <button type="button" class="fixed-pairing-remove" title="Remove fixed pairing"
                     data-on:click="@post('{% url 'remove_fixed_pairing' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {fp_id: {{ fp.id }}, round: {{ selected_round }}}})">&#x2715;</button>
             </li>
@@ -88,12 +88,12 @@
         <div class="fixed-pairing-add">
             <select data-bind="fixedFirst">
                 <option value="">— player —</option>
-                {% for e in entrants %}<option value="{{ e.pk }}">{{ e.name }}</option>{% endfor %}
+                {% for e in entrants %}<option value="{{ e.pk }}">{{ e.display_name }}</option>{% endfor %}
             </select>
             <span>vs.</span>
             <select data-bind="fixedSecond">
                 <option value="">— player —</option>
-                {% for e in entrants %}<option value="{{ e.pk }}">{{ e.name }}</option>{% endfor %}
+                {% for e in entrants %}<option value="{{ e.pk }}">{{ e.display_name }}</option>{% endfor %}
             </select>
             <button type="button"
                 data-attr-disabled="$fixedFirst === '' || $fixedSecond === '' || $fixedFirst === $fixedSecond"
@@ -118,9 +118,9 @@
             {% for entry in round_pairings %}
             <tr>
                 <td class="num-left">{{ entry.pairing.table_label|default:entry.pairing.table }}</td>
-                <td>{{ entry.pairing.first.name }}{% if entry.playoff_label %} <span class="playoff-tag badge-published">{{ entry.playoff_label }}</span>{% endif %}</td>
+                <td>{{ entry.pairing.first.display_name }}{% if entry.playoff_label %} <span class="playoff-tag badge-published">{{ entry.playoff_label }}</span>{% endif %}</td>
                 <td>{% if entry.is_fixed %}&#x1F512;{% endif %}</td>
-                <td>{{ entry.pairing.second.name }}</td>
+                <td>{{ entry.pairing.second.display_name }}</td>
                 <td class="num">{% if entry.repeat_rounds %}{{ entry.repeat_rounds|length }}<span class="repeat-rounds">rd. {{ entry.repeat_rounds|join:", " }}</span>{% endif %}</td>
                 <td>
                     {% if entry.result %}
