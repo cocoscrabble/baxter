@@ -272,3 +272,157 @@ class PublishedStartCorrectionTests(LoggedTournamentMixin, TestCase):
         )
 
         self.assertEqual(start_conflicts(division), [])
+
+
+@tag("slow")
+class V1PayloadUpgradeTests(TestCase):
+    """A log written before player numbers were the identity still replays.
+
+    The fixture is written out by hand rather than downgraded from a fresh
+    export: a downgrade helper would be the inverse of the upgraders under test,
+    so a matching mistake in both would cancel out and the test would pass while
+    proving nothing.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(username="owner", password="pw")
+
+    V1_EVENTS = [
+        {
+            "seq": 1,
+            "actor": "owner",
+            "division": None,
+            "event_type": "tournament_created",
+            "schema_version": 1,
+            "payload": {
+                "name": "Legacy Open",
+                "location": "Reno",
+                "start_date": "2026-03-15",
+                "editors": [],
+                "default_division": {"name": "Division 1", "pairing_seed": 7},
+            },
+        },
+        {
+            "seq": 2,
+            "actor": "owner",
+            "division": "Division 1",
+            "event_type": "entrants_saved",
+            "schema_version": 1,
+            # A v1 entrant row names the player and carries no number at all.
+            "payload": {
+                "division": "Division 1",
+                "rows": [
+                    {"number": 1, "player": "Alice", "rating": 1600, "dropped": False},
+                    {"number": 2, "player": "Bob", "rating": 1500, "dropped": False},
+                    {"number": 3, "player": "Cara", "rating": 1400, "dropped": False},
+                    {"number": 4, "player": "Dan", "rating": 1300, "dropped": False},
+                ],
+            },
+        },
+        {
+            "seq": 3,
+            "actor": "owner",
+            "division": "Division 1",
+            "event_type": "division_settings_saved",
+            "schema_version": 1,
+            "payload": {
+                "division": "Division 1",
+                "blocks": [{"pairing": "KotH", "rounds": 2, "pair_from": 1}],
+            },
+        },
+        {
+            "seq": 4,
+            "actor": "owner",
+            "division": "Division 1",
+            "event_type": "round_published",
+            "schema_version": 1,
+            "payload": {"division": "Division 1", "round": 1},
+        },
+        {
+            "seq": 5,
+            "actor": "owner",
+            "division": "Division 1",
+            "event_type": "result_added",
+            "schema_version": 1,
+            # v1 spelling: first_name / second_name / winner_name.
+            "payload": {
+                "division": "Division 1",
+                "round": 1,
+                "first_name": "Alice",
+                "second_name": "Bob",
+                "winner_name": "Alice",
+                "winner_score": 450,
+                "loser_score": 380,
+            },
+        },
+        {
+            "seq": 6,
+            "actor": "owner",
+            "division": "Division 1",
+            "event_type": "fixed_pairing_added",
+            "schema_version": 1,
+            # v1 spelling: name1 / name2.
+            "payload": {
+                "division": "Division 1",
+                "round": 2,
+                "name1": "Alice",
+                "name2": "Dan",
+            },
+        },
+    ]
+
+    def test_a_v1_log_replays_through_the_upgraders(self):
+        ctx = replay([dict(e) for e in self.V1_EVENTS])
+        division = ctx.tournament.divisions.get()
+
+        # The roster came back, with locally-minted numbers (v1 logs carry none).
+        self.assertEqual(division.entrants.count(), 4)
+        names = set(division.entrants.values_list("player__name", flat=True))
+        self.assertEqual(names, {"Alice", "Bob", "Cara", "Dan"})
+        for entrant in division.entrants.select_related("player"):
+            self.assertTrue(entrant.key.startswith("T-"), entrant.key)
+
+        # The v1 result found its pairing by name and was written against the
+        # right two people.
+        slip = division.result_slips.get()
+        self.assertEqual(slip.round, 1)
+        self.assertEqual(slip.winner.player.name, "Alice")
+        self.assertEqual(slip.loser.player.name, "Bob")
+        self.assertEqual((slip.winner_score, slip.loser_score), (450, 380))
+
+        # …and so did the v1 fixed pairing.
+        fp = division.fixed_pairings.get()
+        self.assertEqual(fp.round_number, 2)
+        self.assertEqual(
+            {fp.entrant1.player.name, fp.entrant2.player.name}, {"Alice", "Dan"}
+        )
+
+    def test_a_v1_result_is_not_applied_by_name(self):
+        """The upgrade resolves to a number; the command never sees the name."""
+        from tournaments.replay import SCHEMA_UPGRADES
+
+        replay([dict(e) for e in self.V1_EVENTS[:4]])
+        upgraded = SCHEMA_UPGRADES["result_added"](self.V1_EVENTS[4]["payload"], 1)
+        self.assertNotIn("winner_name", upgraded)
+        alice = Player.objects.get(name="Alice")
+        self.assertEqual(upgraded["winner_player"], alice.player_number)
+        self.assertEqual(upgraded["first_player"], alice.player_number)
+
+    def test_a_v2_payload_passes_through_untouched(self):
+        from tournaments.replay import SCHEMA_UPGRADES
+
+        payload = {"division": "D", "round": 1, "first_player": "0001"}
+        self.assertIs(SCHEMA_UPGRADES["result_added"](payload, 2), payload)
+
+    def test_kept_fixed_pairings_are_resorted_after_the_rename(self):
+        """Name order and number order are unrelated, and the consumer sorts."""
+        from tournaments.replay import SCHEMA_UPGRADES
+
+        # Zoe gets the lower number, so the pair sorts the other way once
+        # rekeyed — the case a rename alone would get wrong.
+        Player.objects.create(name="Zoe", player_number="0001", rating=1500)
+        Player.objects.create(name="Abe", player_number="0002", rating=1400)
+        upgraded = SCHEMA_UPGRADES["fixed_pairings_removed"](
+            {"division": "D", "kept": [[3, "Abe", "Zoe"]]}, 1
+        )
+        self.assertEqual(upgraded["kept"], [[3, "0001", "0002"]])

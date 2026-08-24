@@ -19,44 +19,58 @@ def _entrant_values(division):
     return [{"id": e.pk, "label": e.player.name} for e in entrants]
 
 
-def _entrant_name_map(division):
-    """{entrant pk -> player name} for portable-payload conversion."""
-    return {
-        e.pk: e.player.name
-        for e in division.entrants.select_related("player")
-    }
-
-
 def _entrant_key_map(division):
-    """{entrant pk -> player key} — what the pairing layer identifies people by."""
+    """{entrant pk -> player number} for portable-payload conversion.
+
+    Portable payloads identify a player by number, not name: they are replayed
+    into a fresh database, where two entrants may legitimately share a name and
+    a name-keyed row would resolve to whichever of them was found first.
+    """
     return {
         e.pk: e.player.player_number
         for e in division.entrants.select_related("player")
     }
 
 
-def _entrant_pk_by_name(division):
-    """{player name -> entrant pk} — the inverse, for replay (from_portable)."""
+def _entrant_pk_by_key(division):
+    """{player number -> entrant pk} — the inverse, for replay (from_portable)."""
     return {
-        e.player.name: e.pk
+        e.player.player_number: e.pk
         for e in division.entrants.select_related("player")
     }
 
 
-def resolve_player(name, rating=0):
-    """A Player matching ``name`` (case-insensitive), created with ``rating`` if
-    none exists. Used by replay to rebuild a roster in a fresh database."""
-    from .models import next_temp_player_number
+def resolve_player(key, name=None, rating=0):
+    """The Player with ``key`` (a player number), created if absent.
 
-    player = Player.objects.filter(name__iexact=name).first()
-    if player is None:
-        player = Player.objects.create(
-            name=name,
-            player_number=next_temp_player_number(),
-            rating=rating,
-            is_provisional=True,
-        )
-    return player
+    Used by replay to rebuild a roster in a fresh database. The number is the
+    identity, so a replayed player keeps the number the log recorded — including
+    a ``T-`` number, which is portable precisely because it was minted locally.
+    ``name`` and ``rating`` are creation data, never lookup keys.
+
+    ``key=None`` falls back to matching on name, for the two name-keyed payloads
+    that carry no numbers at all (``entrants_bulk_imported`` and
+    ``division_imported``, whose payloads are the historical documents
+    themselves). That path mints a fresh ``T-`` number for anyone new.
+    """
+    from .models import canonical_player_number, next_temp_player_number
+
+    if key:
+        player = Player.objects.filter(
+            player_number=canonical_player_number(key)
+        ).first()
+        if player is not None:
+            return player
+    elif name is not None:
+        player = Player.objects.filter(name__iexact=name).first()
+        if player is not None:
+            return player
+    return Player.objects.create(
+        name=name or key,
+        player_number=key or next_temp_player_number(),
+        rating=rating,
+        is_provisional=not key or str(key).startswith("T-"),
+    )
 
 
 class EntrantsGrid(EditGrid):
@@ -90,18 +104,20 @@ class EntrantsGrid(EditGrid):
         return division.entrants.select_related("player").order_by("number")
 
     def to_portable(self, rows, division):
-        # Carry name + rating so a replay into a fresh DB can create a missing
-        # player with the right rating (pairing seeds off rating).
+        # ``player`` is the number — the identity. Name and rating ride along so
+        # a replay into a fresh DB can create a missing player correctly
+        # (pairing seeds off rating).
         players = {
-            p.pk: (p.name, p.rating) for p in Player.objects.all()
+            p.pk: (p.player_number, p.name, p.rating) for p in Player.objects.all()
         }
         portable = []
         for r in rows:
-            name, rating = players.get(r["player"], (None, 0))
+            key, name, rating = players.get(r["player"], (None, None, 0))
             portable.append(
                 {
                     "number": r["number"],
-                    "player": name,
+                    "player": key,
+                    "name": name,
                     "rating": rating,
                     "dropped": r.get("dropped", False),
                 }
@@ -109,10 +125,17 @@ class EntrantsGrid(EditGrid):
         return portable
 
     def from_portable(self, rows, division):
+        # A v1 row's "player" is a name and carries no "name" key; a v2 row's is
+        # a number. No schema upgrader is registered for this event because the
+        # row is self-describing: the distinction is visible right here.
         return [
             {
                 "number": r["number"],
-                "player": resolve_player(r["player"], r.get("rating", 0)).pk,
+                "player": resolve_player(
+                    r["player"] if "name" in r else None,
+                    r.get("name", r["player"]),
+                    r.get("rating", 0),
+                ).pk,
                 "dropped": r.get("dropped", False),
             }
             for r in rows
@@ -217,18 +240,18 @@ class FixedPairingsGrid(EditGrid):
     ]
 
     def to_portable(self, rows, division):
-        names = _entrant_name_map(division)
+        keys = _entrant_key_map(division)
         return [
             {
                 "round_number": r["round_number"],
-                "entrant1": names.get(r["entrant1"]),
-                "entrant2": names.get(r["entrant2"]),
+                "entrant1": keys.get(r["entrant1"]),
+                "entrant2": keys.get(r["entrant2"]),
             }
             for r in rows
         ]
 
     def from_portable(self, rows, division):
-        pks = _entrant_pk_by_name(division)
+        pks = _entrant_pk_by_key(division)
         return [
             {
                 "round_number": r["round_number"],
@@ -269,18 +292,18 @@ class FixedTablesGrid(EditGrid):
     ]
 
     def to_portable(self, rows, division):
-        names = _entrant_name_map(division)
+        keys = _entrant_key_map(division)
         return [
             {
                 "round_number": r["round_number"],
-                "entrant": names.get(r["entrant"]),
+                "entrant": keys.get(r["entrant"]),
                 "table_label": r["table_label"],
             }
             for r in rows
         ]
 
     def from_portable(self, rows, division):
-        pks = _entrant_pk_by_name(division)
+        pks = _entrant_pk_by_key(division)
         return [
             {
                 "round_number": r["round_number"],
@@ -348,13 +371,13 @@ class ResultsGrid(EditGrid):
         return division.result_slips.select_related("winner", "loser").order_by("round", "pk")
 
     def to_portable(self, rows, division):
-        names = _entrant_name_map(division)
+        keys = _entrant_key_map(division)
         return [
             {
                 "round": r["round"],
-                "winner": names.get(r["winner"]),
+                "winner": keys.get(r["winner"]),
                 "winner_score": r["winner_score"],
-                "loser": names.get(r["loser"]),
+                "loser": keys.get(r["loser"]),
                 "loser_score": r["loser_score"],
                 "winner_started": r["winner_started"],
             }
@@ -362,7 +385,7 @@ class ResultsGrid(EditGrid):
         ]
 
     def from_portable(self, rows, division):
-        pks = _entrant_pk_by_name(division)
+        pks = _entrant_pk_by_key(division)
         return [
             {**r, "winner": pks.get(r["winner"]), "loser": pks.get(r["loser"])}
             for r in rows

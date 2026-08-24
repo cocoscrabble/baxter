@@ -2476,7 +2476,11 @@ class SimulateMatchViewTests(TestCase):
         self.client.login(username="owner", password="testpass123")
         response = self.client.post(
             self.url,
-            json.dumps({"round": 1, "first": "Alice", "second": "Bob"}),
+            json.dumps({
+                "round": 1,
+                "first": self.test_entrant1.key,
+                "second": self.test_entrant2.key,
+            }),
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 200)
@@ -2492,7 +2496,11 @@ class SimulateMatchViewTests(TestCase):
         self.client.login(username="owner", password="testpass123")
         response = self.client.post(
             self.url,
-            json.dumps({"round": 1, "first": "Alice", "second": "Bob"}),
+            json.dumps({
+                "round": 1,
+                "first": self.test_entrant1.key,
+                "second": self.test_entrant2.key,
+            }),
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 409)
@@ -2507,7 +2515,11 @@ class SimulateMatchViewTests(TestCase):
         self.client.login(username="owner", password="testpass123")
         response = self.client.post(
             self.url,
-            json.dumps({"round": 1, "first": "Alice", "second": "Bob"}),
+            json.dumps({
+                "round": 1,
+                "first": self.test_entrant1.key,
+                "second": self.test_entrant2.key,
+            }),
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 409)
@@ -2518,7 +2530,11 @@ class SimulateMatchViewTests(TestCase):
         url = reverse("simulate_match", kwargs=self.division.slug_kwargs())
         response = self.client.post(
             url,
-            json.dumps({"round": 1, "first": "Alice", "second": "Bob"}),
+            json.dumps({
+                "round": 1,
+                "first": self.test_entrant1.key,
+                "second": self.test_entrant2.key,
+            }),
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 403)
@@ -2528,7 +2544,11 @@ class SimulateMatchViewTests(TestCase):
         self.client.login(username="other", password="testpass123")
         response = self.client.post(
             self.url,
-            json.dumps({"round": 1, "first": "Alice", "second": "Bob"}),
+            json.dumps({
+                "round": 1,
+                "first": self.test_entrant1.key,
+                "second": self.test_entrant2.key,
+            }),
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 403)

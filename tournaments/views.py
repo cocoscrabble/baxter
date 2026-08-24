@@ -820,7 +820,7 @@ class AddFixedPairingView(LoginRequiredMixin, CanEditDivisionMixin, View):
                 division.tournament, request.user,
                 {
                     "division": division.name, "round": round_number,
-                    "name1": e1.player.name, "name2": e2.player.name,
+                    "player1": e1.key, "player2": e2.key,
                 },
             )
         return _pairings_body_response(request, division, select_round=round_number, error=error)
@@ -849,8 +849,8 @@ class RemoveFixedPairingView(LoginRequiredMixin, CanEditDivisionMixin, View):
                 division.tournament, request.user,
                 {
                     "division": division.name, "round": fp.round_number,
-                    "name1": fp.entrant1.player.name,
-                    "name2": fp.entrant2.player.name,
+                    "player1": fp.entrant1.key,
+                    "player2": fp.entrant2.key,
                 },
             )
         return _pairings_body_response(request, division, select_round=round_number, error=error)
@@ -865,8 +865,8 @@ class RemoveFixedPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
             "entrant1__player", "entrant2__player"
         ):
             if str(fp.pk) in keep_ids:
-                n1, n2 = sorted([fp.entrant1.player.name, fp.entrant2.player.name])
-                kept.append([fp.round_number, n1, n2])
+                k1, k2 = sorted([fp.entrant1.key, fp.entrant2.key])
+                kept.append([fp.round_number, k1, k2])
         error = remove_fixed_pairings_cmd(
             division.tournament, request.user,
             {"division": division.name, "kept": kept},
@@ -1871,9 +1871,9 @@ class ResultSlipCreateView(DivisionURLMixin, View):
             payload = {
                 "division": division.name,
                 "round": pairing.round,
-                "first_name": pairing.first.player.name,
-                "second_name": pairing.second.player.name,
-                "winner_name": winner.player.name,
+                "first_player": pairing.first.key,
+                "second_player": pairing.second.key,
+                "winner_player": winner.key,
                 "winner_score": form.cleaned_data["winner_score"],
                 "loser_score": form.cleaned_data["loser_score"],
             }
@@ -1972,9 +1972,11 @@ class SimulateMatchView(LoginRequiredMixin, CanEditDivisionMixin, View):
             return error
 
         round_num = data.get("round")
-        first_name = data.get("first")
-        second_name = data.get("second")
-        if not all([round_num, first_name, second_name]):
+        # The client posts player numbers; the field names stay "first"/"second"
+        # because they are positions on a board, not names.
+        first_key = data.get("first")
+        second_key = data.get("second")
+        if not all([round_num, first_key, second_key]):
             return JsonResponse({"error": "Missing required fields."}, status=400)
 
         error = _require_published_round(division, round_num)
@@ -1982,18 +1984,18 @@ class SimulateMatchView(LoginRequiredMixin, CanEditDivisionMixin, View):
             return error
 
         entrants = {
-            e.player.name: e
+            e.key: e
             for e in division.entrants.select_related("player")
         }
-        first_entrant = entrants.get(first_name)
-        second_entrant = entrants.get(second_name)
+        first_entrant = entrants.get(first_key)
+        second_entrant = entrants.get(second_key)
         if not first_entrant or not second_entrant:
             return JsonResponse({"error": "Entrant not found."}, status=400)
 
         simulate_match_cmd(
             division.tournament, request.user,
             {"division": division.name, "round": round_num,
-             "first_name": first_name, "second_name": second_name},
+             "first_player": first_key, "second_player": second_key},
         )
         return _simulation_response(request, division)
 

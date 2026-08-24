@@ -127,6 +127,11 @@ def as_derived(func):
 # Recording
 # ---------------------------------------------------------------------------
 
+# The payload schema version stamped on new events. v1 payloads identified
+# players by name; v2 identifies them by player number
+# (plans/PLAN_PLAYER_IDENTITY.md). replay.SCHEMA_UPGRADES upgrades v1 on read.
+PAYLOAD_VERSION = 2
+
 
 def record_event(
     tournament,
@@ -137,6 +142,7 @@ def record_event(
     actor_session="",
     division=None,
     digest="",
+    schema_version=PAYLOAD_VERSION,
 ):
     """Append one event to ``tournament``'s log, allocating the next ``seq``.
 
@@ -164,6 +170,7 @@ def record_event(
             seq=last + 1,
             event_type=event_type,
             payload=payload,
+            schema_version=schema_version,
             actor=actor,
             actor_session=actor_session,
             division=division,
@@ -246,15 +253,40 @@ def records_event(event_type):
 # ---------------------------------------------------------------------------
 
 
-def division_state(division) -> dict:
+# The digest's schema version. v1 identified players by name; v2 identifies
+# them by player number (plans/PLAN_PLAYER_IDENTITY.md). Stored digests were
+# backfilled to v2 by migration 0038.
+DIGEST_VERSION = 2
+
+
+def division_state(division, version: int = DIGEST_VERSION) -> dict:
     """Canonical, pk-free, timestamp-free snapshot of a division's state.
 
-    Everything is keyed by natural identifiers (player names, round numbers) and
-    sorted, so two databases holding the same logical state — with different
-    pks — produce identical output. This is what replay compares.
+    Everything is keyed by natural identifiers (the player number, round
+    numbers) and sorted, so two databases holding the same logical state — with
+    different pks — produce identical output. This is what replay compares.
+
+    ``version=1`` reproduces the *pre-identity* digest, which identified players
+    by name. It exists for one caller: the migration that backfills stored
+    digests, which has to prove each tournament still replays to the digest
+    already recorded for it before it may rewrite an append-only log, and can
+    only do that in the old vocabulary. Nothing else may pass it.
+
+    The two versions share one body rather than being two frozen copies. A
+    frozen copy could not have worked: ``standings_after_round``,
+    ``final_placements`` and ``PlayoffConfig.seeds`` all moved to keys in
+    phase 2, so v1 output has to be *reconstructed* from today's machinery
+    rather than merely preserved. Branching in the four places the vocabularies
+    differ keeps that difference visible and reviewable, where two near-identical
+    90-line functions would invite exactly the silent drift the freeze was meant
+    to prevent.
     """
+
+    def ident(player):
+        return player.name if version == 1 else player.player_number
+
     entrants = sorted(
-        [e.number, e.player.name, e.dropped]
+        [e.number, ident(e.player), e.dropped]
         for e in division.entrants.select_related("player")
     )
     # Draft rounds are transient — they're lazily regenerated (deterministically)
@@ -269,7 +301,7 @@ def division_state(division) -> dict:
     ):
         pairings = sorted(
             [
-                sorted([p.first.player.name, p.second.player.name]),
+                sorted([ident(p.first.player), ident(p.second.player)]),
                 p.table,
                 p.table_label,
             ]
@@ -279,8 +311,8 @@ def division_state(division) -> dict:
     results = sorted(
         [
             r.round,
-            r.winner.player.name,
-            r.loser.player.name,
+            ident(r.winner.player),
+            ident(r.loser.player),
             r.winner_score,
             r.loser_score,
             r.winner_started,
@@ -300,7 +332,8 @@ def division_state(division) -> dict:
         "rounds": rounds,
         "results": results,
         "standings": [
-            [p.name, p.wins, p.losses, p.ties, p.spread] for p in standings
+            [p.name if version == 1 else p.key, p.wins, p.losses, p.ties, p.spread]
+            for p in standings
         ],
     }
     # Playoff state joins the digest only when there is a playoff, so every
@@ -316,31 +349,44 @@ def division_state(division) -> dict:
             e.player.player_number: e.number
             for e in division.entrants.select_related("player")
         }
+        # The bracket speaks in keys. Under v1 it spoke in names, so put them
+        # back for the backfill's verification pass.
+        if version == 1:
+            names = {p.key: p.name for p in standings}
+
+            def who(key):
+                return names.get(key, key) if key else key
+        else:
+            def who(key):
+                return key
+
         state["playoff"] = {
             "qualification_round": playoff.qualification_round,
             "qualifier_count": playoff.qualifier_count,
             "timing": playoff.timing,
             "stage_games": dict(sorted(playoff.stage_games.items())),
-            "seeds": list(playoff.config().seeds),
+            "seeds": [who(k) for k in playoff.config().seeds],
             "series": [
                 [
-                    s.key, s.position, s.high, s.low, s.max_games, s.start_round,
-                    s.status, s.winner, s.decided_by,
+                    s.key, s.position, who(s.high), who(s.low), s.max_games,
+                    s.start_round, s.status, who(s.winner), s.decided_by,
                     [[g.number, g.round, g.status] for g in s.games],
                 ]
                 for s in bracket.series
             ],
             "placements": [
-                [p.place, p.name, p.source]
+                [p.place, p.name if version == 1 else p.key, p.source]
                 for p in final_placements(bracket, standings, numbers)
             ],
         }
     return state
 
 
-def division_digest(division) -> str:
+def division_digest(division, version: int = DIGEST_VERSION) -> str:
     """sha256 of a division's canonical state — stable across pk renumbering."""
-    blob = json.dumps(division_state(division), sort_keys=True, separators=(",", ":"))
+    blob = json.dumps(
+        division_state(division, version), sort_keys=True, separators=(",", ":")
+    )
     return hashlib.sha256(blob.encode()).hexdigest()
 
 
@@ -379,7 +425,9 @@ def export_jsonl(tournament) -> str:
             {
                 "kind": "header",
                 "tournament": tournament.name,
-                "schema_version": 1,
+                # The version new events are written at. Individual events carry
+                # their own, which may be older.
+                "schema_version": PAYLOAD_VERSION,
                 "git_rev": git_rev,
                 "exported_at": _now_iso(),
             }
@@ -429,7 +477,10 @@ def build_snapshot(tournament) -> dict:
         entrants = [
             {
                 "number": e.number,
-                "player": e.player.name,
+                # ``player`` is the number — the identity. The name rides along
+                # so a replay into a fresh database can create the player.
+                "player": e.player.player_number,
+                "name": e.player.name,
                 "rating": e.player.rating,
                 "dropped": e.dropped,
             }
@@ -454,8 +505,8 @@ def build_snapshot(tournament) -> dict:
                     "status": rp.status,
                     "pairings": [
                         {
-                            "first": p.first.player.name,
-                            "second": p.second.player.name,
+                            "first": p.first.key,
+                            "second": p.second.key,
                             "table": p.table,
                             "table_label": p.table_label,
                         }
@@ -468,8 +519,8 @@ def build_snapshot(tournament) -> dict:
         results = [
             {
                 "round": r.round,
-                "winner": r.winner.player.name,
-                "loser": r.loser.player.name,
+                "winner": r.winner.key,
+                "loser": r.loser.key,
                 "winner_score": r.winner_score,
                 "loser_score": r.loser_score,
                 "winner_started": r.winner_started,
@@ -524,6 +575,23 @@ def describe_event(event) -> str:
         n = len(p.get("rows", [])) if n is None else n
         return f"{n} row{'s' if n != 1 else ''}"
 
+    def who(*fields):
+        """Names for the players a payload's ``fields`` refer to.
+
+        Payloads identify people by number; an activity feed has to show names.
+        Anything that does not resolve is shown as-is — which for a v1 payload
+        is already the name, so old log lines still read correctly.
+        """
+        from tournaments.models import Player
+
+        values = [p.get(f) or "" for f in fields]
+        found = dict(
+            Player.objects.filter(
+                player_number__in=[v for v in values if v]
+            ).values_list("player_number", "name")
+        )
+        return [found.get(v, v) for v in values]
+
     templates = {
         "tournament_created": lambda: f"Created tournament “{p.get('name', '')}”",
         "tournament_updated": lambda: "Updated tournament details",
@@ -547,7 +615,14 @@ def describe_event(event) -> str:
         "fixed_pairings_saved": lambda: f"Saved fixed pairings for {div}",
         "fixed_tables_saved": lambda: f"Saved fixed tables for {div}",
         "board_tables_saved": lambda: f"Saved the board/table map for {div}",
-        "fixed_pairing_added": lambda: f"Fixed {p.get('name1', '')} vs {p.get('name2', '')} in {div} round {p.get('round', '')}",
+        # v1 payloads spelled these name1/name2; who() shows either verbatim
+        # when it cannot resolve them, so both forms read the same.
+        "fixed_pairing_added": lambda: "Fixed {} vs {} in {} round {}".format(
+            *who("player1" if "player1" in p else "name1",
+                 "player2" if "player2" in p else "name2"),
+            div,
+            p.get("round", ""),
+        ),
         "fixed_pairing_removed": lambda: f"Removed a fixed pairing in {div} round {p.get('round', '')}",
         "fixed_pairings_removed": lambda: f"Removed fixed pairings in {div}",
         "rounds_published": lambda: f"Published rounds {p.get('rounds', '')} in {div}",

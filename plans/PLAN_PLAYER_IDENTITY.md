@@ -276,7 +276,7 @@ Four things the plan had not accounted for:
 
 ---
 
-## Phase 3 — Event log v2
+## Phase 3 — Event log v2 — **IMPLEMENTED**
 
 ### 3a. Payloads
 
@@ -341,6 +341,45 @@ the upgraders; a v2 log round-trips; a division with duplicate names replays to
 an identical digest. `test_events.py` — payloads carry numbers, events are
 stamped v2. `test_fuzz.py` passes with colliding names. Backfill tests: a clean
 tournament is rewritten, a deliberately-corrupted one is skipped and reported.
+
+### What landed, and where it departed from the plan
+
+The payload rename, the version stamp, the upgraders, the versioned digest, the
+backfill (migration `0038`, logic in `tournaments/digest_backfill.py`) and the
+colliding-name fuzzer are all in. Fifteen fuzz seeds pass, and the whole chain
+`0036`–`0038` was run on Postgres against a database whose digests had been
+walked back to v1 first.
+
+Four deliberate departures:
+
+- **`division_state` is one function with a `version` argument, not a frozen
+  `_division_digest_v1` beside it.** The freeze could not have worked:
+  `standings_after_round`, `final_placements` and `PlayoffConfig.seeds` all
+  moved to keys in phase 2, so v1 output has to be *reconstructed* from today's
+  machinery rather than preserved. Branching in the four places the vocabularies
+  differ keeps that visible; two near-identical 90-line functions would invite
+  exactly the drift the freeze was meant to prevent.
+
+- **Two v1 shapes need no upgrader**, because their player references point
+  *within the payload* rather than into the database: a `state_snapshot` and an
+  `entrants_saved` row. Their readers only require the tokens to match each
+  other, so each reader distinguishes v1 from v2 by whether the row carries a
+  separate `name` — self-describing, and visible at the point of use.
+
+- **`entrants_bulk_imported` and `division_imported` stay name-keyed.** Their
+  payload *is* the external document (a pasted CSV, a historical results
+  bundle), which identifies people by name because that is all it has.
+  Re-keying would mean inventing numbers for rows that have none; ambiguity
+  there is the importer's to report (phase 4), not the log's to hide.
+
+- **Payloads are not rewritten by the backfill, only digests.** A payload is
+  recorded intent and stays at the version it was written; `schema_version` plus
+  the upgraders are exactly the mechanism for that. A digest is a derived value,
+  which is why it may be recomputed — and the migration still has to prove each
+  tournament reproduces its stored *v1* digests before it is allowed to.
+
+`Playoff.seeds` (listed under 3c) had already moved in phase 2, since the
+bracket could not have derived participants without it.
 
 ---
 
