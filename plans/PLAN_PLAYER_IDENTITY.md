@@ -383,7 +383,7 @@ bracket could not have derived participants without it.
 
 ---
 
-## Phase 4 — Names become non-unique
+## Phase 4 — Names become non-unique — **IMPLEMENTED**
 
 - Delete `EntrantsGrid._duplicate_name_errors` (`grids.py:153`) and its call in
   `prepare` (`:147`). The guard exists solely because the engine keyed on name;
@@ -407,6 +407,27 @@ bracket could not have derived participants without it.
 distinct numbers. `test_views.py` — the create flow returns candidates without
 `confirm` and creates with it. `test_import_entrants.py` — the three CSV shapes,
 plus the ambiguous-name abort listing both candidates.
+
+### What landed
+
+All four items, as written, plus the client half the plan did not spell out:
+`edit_entrants.js` shows the candidates the 409 returns, each with their player
+number and rating, and offers either "add this existing person" or "add as a
+different person" (which resends with `confirm`). Driven end to end in a browser:
+creating a second *Duplicate Dave* is refused, then confirmed, then both are
+entered in one division and the grid saves.
+
+Two details worth keeping in mind:
+
+- **The CSV's duplicate check moved from the name to the identity.** Two rows
+  with the same name and *different* numbers are two people and now import fine;
+  two rows with the same number, or two bare rows with the same name, are still
+  rejected — the latter because both would resolve to whoever holds it.
+
+- **That browser run also showed why phase 5 is not optional.** The saved grid
+  renders two identical `Duplicate Dave` rows with nothing to tell them apart,
+  and the "Add Entrant" picker has the same problem. Phase 4 made the state
+  legal; only the disambiguation rule makes it legible.
 
 ---
 

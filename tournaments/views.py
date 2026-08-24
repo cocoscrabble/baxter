@@ -1467,7 +1467,13 @@ class DivisionEntrantsEditView(DivisionEditGridView):
 
 
 class CreatePlayerView(LoginRequiredMixin, View):
-    """AJAX endpoint to create a new Player and return its data."""
+    """AJAX endpoint to create a new Player and return its data.
+
+    Two players may share a name — the number is the identity — but a repeated
+    name is usually a typo, so an unconfirmed request that matches existing
+    players returns them (409) instead of creating a twin. The client shows who
+    they are and resends with ``confirm`` if the director really means it.
+    """
 
     def post(self, request):
         try:
@@ -1475,9 +1481,28 @@ class CreatePlayerView(LoginRequiredMixin, View):
         except json.JSONDecodeError:
             return JsonResponse({"error": "Invalid JSON."}, status=400)
 
-        player, error = Player.create_unique(
-            name=data.get("name"), rating=data.get("rating", 0)
-        )
+        name = data.get("name")
+        if not data.get("confirm"):
+            existing = Player.same_named(name)
+            if existing.exists():
+                return JsonResponse(
+                    {
+                        "duplicate_name": True,
+                        "name": (name or "").strip(),
+                        "candidates": [
+                            {
+                                "id": p.pk,
+                                "label": p.name,
+                                "player_number": p.player_number,
+                                "rating": p.rating,
+                            }
+                            for p in existing
+                        ],
+                    },
+                    status=409,
+                )
+
+        player, error = Player.create(name=name, rating=data.get("rating", 0))
         if error:
             return JsonResponse({"error": error}, status=400)
         return JsonResponse({

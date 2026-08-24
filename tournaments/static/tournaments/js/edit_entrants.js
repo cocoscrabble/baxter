@@ -84,7 +84,39 @@ document.getElementById("add-entrant-btn").addEventListener("click", function() 
 
 // -- Create New Player (form toggle handled by datastar data-show) --
 
-document.getElementById("create-player-btn").addEventListener("click", function() {
+const duplicatePanel = document.getElementById("duplicate-name-panel");
+const duplicatePrompt = document.getElementById("duplicate-name-prompt");
+const duplicateList = document.getElementById("duplicate-name-list");
+
+function hideDuplicatePanel() {
+    duplicatePanel.classList.add("hidden");
+    duplicateList.innerHTML = "";
+}
+
+// A name that already exists is far more often a typo than two real people, so
+// the server refuses an unconfirmed create and hands back who it found. Show
+// them with their player numbers: the number is what tells them apart.
+function showDuplicatePanel(body, addExisting, createAnyway) {
+    duplicatePrompt.textContent =
+        body.candidates.length === 1
+            ? `A player named “${body.name}” already exists. Did you mean them?`
+            : `${body.candidates.length} players are already named “${body.name}”. Did you mean one of them?`;
+    duplicateList.innerHTML = "";
+    for (const candidate of body.candidates) {
+        const li = document.createElement("li");
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = `Add ${candidate.label} (#${candidate.player_number}, ${candidate.rating})`;
+        btn.addEventListener("click", () => addExisting(candidate));
+        li.appendChild(btn);
+        duplicateList.appendChild(li);
+    }
+    duplicatePanel.classList.remove("hidden");
+    document.getElementById("create-anyway-btn").onclick = createAnyway;
+    document.getElementById("duplicate-cancel-btn").onclick = hideDuplicatePanel;
+}
+
+function createPlayer(confirm) {
     const nameInput = document.querySelector("[data-bind='newPlayerName']");
     const ratingInput = document.querySelector("[data-bind='newPlayerRating']");
     const statusEl = document.getElementById("new-player-status");
@@ -97,6 +129,20 @@ document.getElementById("create-player-btn").addEventListener("click", function(
 
     statusEl.textContent = "Creating...";
 
+    function addToGrid(id, label, rating) {
+        lookupMap(gridId, "player")[id] = label;
+        playerRating[id] = rating ?? 0;
+        refreshEntrantOptions();
+        insertByRating(id);
+        nameInput.value = "";
+        ratingInput.value = "0";
+        statusEl.textContent = "";
+        hideDuplicatePanel();
+        nameInput.dispatchEvent(new Event("input"));
+        ratingInput.dispatchEvent(new Event("input"));
+        document.querySelector("[data-on\\:click='$showNewPlayer = false']").click();
+    }
+
     fetch(entrantsExtra.createPlayerUrl, {
         method: "POST",
         headers: {
@@ -106,21 +152,20 @@ document.getElementById("create-player-btn").addEventListener("click", function(
         body: JSON.stringify({
             name: name,
             rating: parseInt(ratingInput.value) || 0,
+            confirm: !!confirm,
         }),
     })
     .then(resp => resp.json().then(body => ({ ok: resp.ok, body })))
     .then(({ ok, body }) => {
         if (ok && body.ok) {
-            lookupMap(gridId, "player")[body.id] = body.label;
-            playerRating[body.id] = body.rating ?? 0;
-            refreshEntrantOptions();
-            insertByRating(body.id);
-            nameInput.value = "";
-            ratingInput.value = "0";
+            addToGrid(body.id, body.label, body.rating);
+        } else if (body.duplicate_name) {
             statusEl.textContent = "";
-            nameInput.dispatchEvent(new Event("input"));
-            ratingInput.dispatchEvent(new Event("input"));
-            document.querySelector("[data-on\\:click='$showNewPlayer = false']").click();
+            showDuplicatePanel(
+                body,
+                candidate => addToGrid(candidate.id, candidate.label, candidate.rating),
+                () => createPlayer(true),
+            );
         } else {
             statusEl.textContent = body.error || "Error creating player.";
         }
@@ -128,6 +173,10 @@ document.getElementById("create-player-btn").addEventListener("click", function(
     .catch(() => {
         statusEl.textContent = "Network error.";
     });
+}
+
+document.getElementById("create-player-btn").addEventListener("click", () => {
+    createPlayer(false);
 });
 
 // -- Bulk Import --

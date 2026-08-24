@@ -11,27 +11,45 @@ class ParseCsvTests(TestCase):
     def test_one_column_format(self):
         parsed, errors = parse_csv("Alice\nBob\n")
         self.assertEqual(errors, [])
-        self.assertEqual(parsed, [("Alice", 0), ("Bob", 0)])
+        self.assertEqual(parsed, [("", "Alice", 0), ("", "Bob", 0)])
 
     def test_two_column_format(self):
         parsed, errors = parse_csv("Alice,1600\nBob,1500\n")
         self.assertEqual(errors, [])
-        self.assertEqual(parsed, [("Alice", 1600), ("Bob", 1500)])
+        self.assertEqual(parsed, [("", "Alice", 1600), ("", "Bob", 1500)])
 
     def test_empty_rating_defaults_to_zero(self):
         parsed, errors = parse_csv("Alice,\n")
         self.assertEqual(errors, [])
-        self.assertEqual(parsed, [("Alice", 0)])
+        self.assertEqual(parsed, [("", "Alice", 0)])
 
     def test_empty_file(self):
         parsed, errors = parse_csv("")
         self.assertEqual(parsed, [])
         self.assertIn("File is empty.", errors)
 
+    def test_three_column_format_carries_the_number(self):
+        parsed, errors = parse_csv("0233,Alice,1600\n7,Bob,1500\n")
+        self.assertEqual(errors, [])
+        # The number is canonicalized on the way in, as everywhere else.
+        self.assertEqual(
+            parsed, [("0233", "Alice", 1600), ("0007", "Bob", 1500)]
+        )
+
     def test_wrong_column_count(self):
-        parsed, errors = parse_csv("a,b,c\n")
+        parsed, errors = parse_csv("a,b,c,d\n")
         self.assertEqual(parsed, [])
-        self.assertTrue(any("expected 1 or 2 columns" in e for e in errors))
+        self.assertTrue(any("expected 1, 2 or 3 columns" in e for e in errors))
+
+    def test_the_same_name_twice_with_different_numbers_is_two_people(self):
+        parsed, errors = parse_csv("0001,John Smith,1600\n0002,John Smith,1500\n")
+        self.assertEqual(errors, [])
+        self.assertEqual(len(parsed), 2)
+
+    def test_the_same_number_twice_is_rejected(self):
+        parsed, errors = parse_csv("0001,John Smith,1600\n1,Johnny Smith,1500\n")
+        self.assertEqual(len(parsed), 1)
+        self.assertTrue(any("duplicate player number" in e for e in errors))
 
     def test_missing_name(self):
         parsed, errors = parse_csv(",1600\n")
@@ -63,9 +81,52 @@ class ResolvePlayersTests(TestCase):
     def setUpTestData(cls):
         cls.alice = Player.objects.create(name="Alice", player_number="001", rating=1600)
 
+    def test_resolves_by_number_not_name(self):
+        """A row carrying a number picks that person, whatever the name says."""
+        players, result, errors = resolve_players(
+            [(self.alice.player_number, "Whoever", 1200)], existing_entrant_keys=set()
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(players[0].pk, self.alice.pk)
+        self.assertEqual(players[0].name, "Alice")
+
+    def test_an_unknown_number_is_an_error(self):
+        players, result, errors = resolve_players(
+            [("9999", "Nobody", 1200)], existing_entrant_keys=set()
+        )
+        self.assertEqual(players, [])
+        self.assertTrue(any("no player with number '9999'" in e for e in errors))
+
+    def test_an_ambiguous_bare_name_aborts_and_lists_the_candidates(self):
+        other = Player.objects.create(
+            name="Alice", player_number="0500", rating=1400
+        )
+        players, result, errors = resolve_players(
+            [("", "Alice", 1600)], existing_entrant_keys=set()
+        )
+        self.assertEqual(players, [])
+        self.assertEqual(len(errors), 1)
+        self.assertIn("matches 2 players", errors[0])
+        self.assertIn(f"#{self.alice.player_number}", errors[0])
+        self.assertIn(f"#{other.player_number}", errors[0])
+
+    def test_two_same_named_players_import_when_numbered(self):
+        other = Player.objects.create(
+            name="Alice", player_number="0500", rating=1400
+        )
+        players, result, errors = resolve_players(
+            [
+                (self.alice.player_number, "Alice", 0),
+                (other.player_number, "Alice", 0),
+            ],
+            existing_entrant_keys=set(),
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual([p.pk for p in players], [self.alice.pk, other.pk])
+
     def test_matches_existing_by_name(self):
         players, result, errors = resolve_players(
-            [("Alice", 1600)], existing_entrant_names=set()
+            [("", "Alice", 1600)], existing_entrant_keys=set()
         )
         self.assertEqual(errors, [])
         self.assertEqual(len(players), 1)
@@ -74,7 +135,7 @@ class ResolvePlayersTests(TestCase):
 
     def test_skips_existing_entrant(self):
         players, result, errors = resolve_players(
-            [("Alice", 1600)], existing_entrant_names={"alice"}
+            [("", "Alice", 1600)], existing_entrant_keys={"0001"}
         )
         self.assertEqual(errors, [])
         self.assertEqual(len(players), 0)
@@ -82,7 +143,7 @@ class ResolvePlayersTests(TestCase):
 
     def test_creates_new_player(self):
         players, result, errors = resolve_players(
-            [("Charlie", 1400)], existing_entrant_names=set()
+            [("", "Charlie", 1400)], existing_entrant_keys=set()
         )
         self.assertEqual(errors, [])
         self.assertEqual(len(players), 1)
@@ -93,7 +154,7 @@ class ResolvePlayersTests(TestCase):
     def test_existing_player_rating_preserved(self):
         """CSV rating is ignored for existing players."""
         players, result, errors = resolve_players(
-            [("Alice", 9999)], existing_entrant_names=set()
+            [("", "Alice", 9999)], existing_entrant_keys=set()
         )
         self.assertEqual(errors, [])
         self.assertEqual(players[0].rating, 1600)  # original, not 9999

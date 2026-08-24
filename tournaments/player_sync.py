@@ -13,6 +13,10 @@ players by PK on the remote stay intact.
 Numbers are matched in their **canonical** form (``coco_ratings.identity``), so
 a bare ``7`` in the upload updates a stored ``0007`` rather than inserting a
 second row for the same person.
+
+Names are carried but never matched on, which is what lets two people share one:
+an upload of two different ``John Smith`` rows with different numbers upserts two
+players, as it should.
 """
 
 import json
