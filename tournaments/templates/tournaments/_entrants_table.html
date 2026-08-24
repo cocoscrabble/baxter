@@ -1,0 +1,59 @@
+{% comment %}
+The entrant list, shared by the division page and the embeddable fragment so the
+two can never drift (plans/PLAN_ENTRANTS.md phase 4).
+
+Display conventions, per the owner's requirements:
+
+  * a WESPA-sourced rating is italic
+  * an entrant with no rating at all shows 0
+  * `*` marks a tentative entrant, `^` one who is playing up
+
+The punctuation is not the whole story: #42 asks that status never depend on it,
+so every marked row also carries a visually-hidden textual equivalent, and the
+legend below spells the markers out.
+
+Payment is editor-only and never rendered otherwise — not "hidden by CSS",
+simply absent from the response.
+{% endcomment %}
+<div class="table-scroll table-narrow">
+<table>
+    <thead>
+        <tr>
+            <th class="num">#</th>
+            <th>Player</th>
+            <th class="num">Rating</th>
+            {% if can_edit %}<th>Payment</th>{% endif %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for entrant in entrants %}
+        <tr{% if entrant.dropped %} class="row-dropped"{% endif %}>
+            <td class="num">{{ entrant.number }}</td>
+            <td>
+                {{ entrant.display_name }}{% if entrant.tentative %}*{% endif %}{% if entrant.playing_up %}^{% endif %}
+                {% if entrant.tentative %}<span class="visually-hidden">(tentative)</span>{% endif %}
+                {% if entrant.playing_up %}<span class="visually-hidden">(playing up)</span>{% endif %}
+                {% if entrant.dropped %} <span class="tag tag-dropped">withdrew</span>{% endif %}
+            </td>
+            <td class="num{% if entrant.rating_source == 'wespa' %} rating-wespa{% endif %}">
+                {{ entrant.rating }}{% if entrant.rating_source == 'wespa' %}<span class="visually-hidden"> (WESPA rating)</span>{% endif %}
+            </td>
+            {% if can_edit %}
+            <td>
+                {% if entrant.paid %}Paid{% else %}Unpaid{% endif %}
+                {% if entrant.payment_note %}<br><small>{{ entrant.payment_note }}</small>{% endif %}
+            </td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+
+{% if has_markers %}
+<dl class="entrant-legend">
+    {% if has_tentative %}<dt>*</dt><dd>Tentative</dd>{% endif %}
+    {% if has_playing_up %}<dt>^</dt><dd>Playing up</dd>{% endif %}
+    {% if has_wespa %}<dt><span class="rating-wespa">italic</span></dt><dd>WESPA rating</dd>{% endif %}
+</dl>
+{% endif %}

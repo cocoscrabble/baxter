@@ -11,7 +11,9 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse, reverse_lazy
 from django.utils.text import slugify
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.clickjacking import xframe_options_exempt
 from django.views.generic import (
     CreateView,
     DeleteView,
@@ -73,6 +75,7 @@ from .grids import BoardTableMapGrid, EntrantsGrid, FixedPairingsGrid, FixedTabl
 from .models import (
     EDIT_SCOPES,
     Division,
+    Entrant,
     DivisionSettings,
     DivisionSlugAlias,
     Pairing,
@@ -646,6 +649,28 @@ class DivisionAllResultsView(DivisionNavMixin, VisibleDivisionMixin, DetailView)
         return context
 
 
+def entrants_for_display(division):
+    """The division's entrants in seed order, with their display names and the
+    flags the legend keys off.
+
+    Seed order is by the *pinned* rating — the one the division was actually
+    seeded from — with ties broken by entrant number.
+
+    The legend only lists markers that are actually on the page: a table with no
+    tentative entrants should not explain what an asterisk would have meant.
+    """
+    entrants = list(
+        division.entrants.select_related("player").order_by("-rating", "number")
+    )
+    label_entrants(division_labels(division), entrants)
+    flags = {
+        "has_tentative": any(e.tentative for e in entrants),
+        "has_playing_up": any(e.playing_up for e in entrants),
+        "has_wespa": any(e.rating_source == Entrant.WESPA for e in entrants),
+    }
+    return entrants, {**flags, "has_markers": any(flags.values())}
+
+
 class DivisionEntrantsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
     model = Division
     template_name = "tournaments/division_entrants.html"
@@ -654,15 +679,38 @@ class DivisionEntrantsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Seed order: highest-rated first, by the *pinned* rating — the one the
-        # division was actually seeded from — with ties broken by entrant number.
-        entrants = list(
-            self.object.entrants
-            .select_related("player")
-            .order_by("-rating", "number")
-        )
-        label_entrants(division_labels(self.object), entrants)
+        entrants, flags = entrants_for_display(self.object)
         context["entrants"] = entrants
+        context.update(flags)
+        return context
+
+
+@method_decorator(xframe_options_exempt, name="dispatch")
+class DivisionEntrantsEmbedView(VisibleDivisionMixin, DetailView):
+    """The entrant list as a chrome-free fragment, for the CoCo site to iframe.
+
+    ``xframe_options_exempt`` is not optional: Django's XFrameOptionsMiddleware
+    defaults to SAMEORIGIN, so without it the embedding page renders a blank
+    box with a console error and no other clue what went wrong.
+
+    Editor-only fields are absent regardless of who is logged in — ``can_edit``
+    is never put in this context, so the payment column is not rendered even for
+    an organizer who happens to be signed in. An embedded page has no business
+    varying by viewer.
+
+    ``VisibleDivisionMixin`` still applies, so a test division stays a 404.
+    """
+
+    model = Division
+    template_name = "tournaments/division_entrants_embed.html"
+    context_object_name = "division"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        entrants, flags = entrants_for_display(self.object)
+        context["entrants"] = entrants
+        context.update(flags)
+        context["can_edit"] = False
         return context
 
 
