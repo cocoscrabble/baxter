@@ -25,12 +25,8 @@ class DivisionDigestTests(TestCase):
 
     def _build_state(self, division):
         """A small finished round: two entrants, one pairing, one result."""
-        e1 = Entrant.objects.create(
-            division=division, player=self.player1, number=1
-        )
-        e2 = Entrant.objects.create(
-            division=division, player=self.player2, number=2
-        )
+        e1 = Entrant.enter(division, self.player1, 1)
+        e2 = Entrant.enter(division, self.player2, 2)
         rp = RoundPairings.objects.create(
             division=division, round=1, status=RoundPairings.FINISHED
         )
@@ -85,7 +81,14 @@ class DivisionDigestTests(TestCase):
         self._build_state(d1)
         state = division_state(d1)
         alice, bob = self.player1.player_number, self.player2.player_number
-        self.assertEqual(state["entrants"], [[1, alice, False], [2, bob, False]])
+        # number, key, dropped, then the pinned rating and registration state.
+        self.assertEqual(
+            state["entrants"],
+            [
+                [1, alice, False, self.player1.rating, "coco", False, False, False],
+                [2, bob, False, self.player2.rating, "coco", False, False, False],
+            ],
+        )
         self.assertEqual(len(state["results"]), 1)
         self.assertEqual(state["results"][0][1], alice)  # winner by number
 
@@ -94,6 +97,9 @@ class DivisionDigestTests(TestCase):
         d1 = Division.objects.create(name="A", tournament=self.tournament)
         self._build_state(d1)
         state = division_state(d1, version=1)
+        # Exactly three elements — not the v2 tuple truncated. The backfill
+        # verifies against digests recorded before the registration columns
+        # existed, so anything extra here makes every one of them fail.
         self.assertEqual(
             state["entrants"], [[1, "Alice", False], [2, "Bob", False]]
         )

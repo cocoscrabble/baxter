@@ -49,7 +49,7 @@ def _entrant_pk_by_key(division):
     }
 
 
-def resolve_player(key, name=None, rating=0):
+def resolve_player(key, name=None, rating=0, wespa_rating=None):
     """The Player with ``key`` (a player number), created if absent.
 
     Used by replay to rebuild a roster in a fresh database. The number is the
@@ -78,6 +78,7 @@ def resolve_player(key, name=None, rating=0):
         name=name or key,
         player_number=key or next_temp_player_number(),
         rating=rating,
+        wespa_rating=wespa_rating,
         is_provisional=not key or str(key).startswith("T-"),
     )
 
@@ -97,7 +98,10 @@ class EntrantsGrid(EditGrid):
     # results, which would otherwise cascade away on a wipe) and only apply
     # number changes, adds, and guarded removals.
     key_fields = ("player_id",)
-    update_fields = ("number", "dropped")
+    update_fields = (
+        "number", "dropped", "rating", "rating_source",
+        "tentative", "paid", "playing_up",
+    )
     unique_within_parent = ("number",)  # (division, number) is unique
     columns = [
         Column("number", "#", kind="display", width=60, auto_increment=True),
@@ -113,25 +117,51 @@ class EntrantsGrid(EditGrid):
         return division.entrants.select_related("player").order_by("number")
 
     def to_portable(self, rows, division):
-        # ``player`` is the number — the identity. Name and rating ride along so
-        # a replay into a fresh DB can create a missing player correctly
-        # (pairing seeds off rating).
+        """The pk-free payload for the log.
+
+        ``player`` is the number — the identity. Name and both player ratings
+        ride along so a replay into a fresh DB can create a missing player
+        correctly (pairing seeds off rating).
+
+        The pinned snapshot is read back from the **database**, not from
+        ``rows``: it is derived server-side in ``prepare``, so the client's rows
+        do not contain it. ``on_saved`` runs after ``persist``, so what is in the
+        database is exactly what was written — which is what the log should say.
+        """
         players = {
-            p.pk: (p.player_number, p.name, p.rating) for p in Player.objects.all()
+            p.pk: (p.player_number, p.name, p.rating, p.wespa_rating)
+            for p in Player.objects.all()
+        }
+        persisted = {
+            e.player_id: e for e in division.entrants.select_related("player")
         }
         portable = []
         for r in rows:
-            key, name, rating = players.get(r["player"], (None, None, 0))
+            key, name, rating, wespa = players.get(
+                r["player"], (None, None, 0, None)
+            )
+            entrant = persisted.get(r["player"])
             portable.append(
                 {
                     "number": r["number"],
                     "player": key,
                     "name": name,
+                    # The player's live CoCo rating, kept under this key exactly
+                    # as it always was so older logs replay unchanged. It is
+                    # creation data for a player a replay has to invent, not the
+                    # entrant's pinned rating — that is "entrant_rating".
                     "rating": rating,
+                    "wespa_rating": wespa,
+                    "entrant_rating": entrant.rating if entrant else 0,
+                    "rating_source": entrant.rating_source if entrant else "",
                     "dropped": r.get("dropped", False),
+                    "tentative": r.get("tentative", False),
+                    "paid": r.get("paid", False),
+                    "playing_up": r.get("playing_up", False),
                 }
             )
         return portable
+
 
     def from_portable(self, rows, division):
         # A v1 row's "player" is a name and carries no "name" key; a v2 row's is
@@ -144,8 +174,16 @@ class EntrantsGrid(EditGrid):
                     r["player"] if "name" in r else None,
                     r.get("name", r["player"]),
                     r.get("rating", 0),
+                    r.get("wespa_rating"),
                 ).pk,
                 "dropped": r.get("dropped", False),
+                # A payload written before these columns existed has none of
+                # them, and replays to the same defaults it was recorded with.
+                "rating": r.get("entrant_rating"),
+                "rating_source": r.get("rating_source", ""),
+                "tentative": r.get("tentative", False),
+                "paid": r.get("paid", False),
+                "playing_up": r.get("playing_up", False),
             }
             for r in rows
         ]
@@ -155,6 +193,11 @@ class EntrantsGrid(EditGrid):
             "number": entrant.number,
             "player": entrant.player_id,
             "dropped": entrant.dropped,
+            "rating": entrant.rating,
+            "rating_source": entrant.rating_source,
+            "tentative": entrant.tentative,
+            "paid": entrant.paid,
+            "playing_up": entrant.playing_up,
         }
 
     def lookups(self, division):
@@ -196,32 +239,50 @@ class EntrantsGrid(EditGrid):
     # problem — which is what the disambiguation rule handles.
 
     def prepare(self, division, validated):
+        # The DTO's rating fields never reach to_db_kwargs; _pin_ratings is the
+        # only thing that may set them, so carry them across by hand first.
         prepared, errors = super().prepare(division, validated)
+        for row, dto in zip(prepared, validated):
+            row.rating = dto.rating
+            row.rating_source = dto.rating_source
         if not errors:
             self._pin_ratings(division, prepared)
         return prepared, errors
 
     def _pin_ratings(self, division, prepared):
-        """Give each row the rating snapshot it should carry.
+        """Decide each row's rating snapshot. Three cases, in order.
 
-        An existing entrant keeps whatever is already pinned — including a
-        rating a director fixed by hand — because reconciliation only writes
-        ``update_fields``, and re-deriving here would undo that edit. A row for
-        a player not yet in the division is new, so it snapshots the cascade
-        (plans/PLAN_ENTRANTS.md decision 3).
-
-        The client never supplies the snapshot; it is derived here from the
-        player, which is the only source that can be trusted.
+        1. **The row carries a ``rating_source``.** Only a portable payload
+           being replayed does that, and it is restoring a recorded snapshot
+           rather than deciding one, so it is honoured verbatim. Without this a
+           replayed ``(0, "none")`` entrant would come back ``manual``, because
+           carrying a rating is otherwise what ``manual`` means.
+        2. **The row carries a rating and no source.** A director typed it, so
+           it is ``manual`` — immune to any later sync (decision 3).
+        3. **Neither.** Derive from the player for a new entrant; keep what is
+           already pinned for an existing one, since re-deriving would silently
+           undo a hand-edit.
         """
         pinned = {
             e.player_id: (e.rating, e.rating_source)
             for e in division.entrants.all()
         }
-        new_ids = [
-            row.player_id for row in prepared if row.player_id not in pinned
+        undecided = [
+            row for row in prepared
+            if not row.rating_source and row.rating is None
+            and row.player_id not in pinned
         ]
-        players = Player.objects.in_bulk(new_ids) if new_ids else {}
+        players = (
+            Player.objects.in_bulk([row.player_id for row in undecided])
+            if undecided else {}
+        )
         for row in prepared:
+            if row.rating_source:
+                row.rating = row.rating or 0
+                continue
+            if row.rating is not None:
+                row.rating_source = Entrant.MANUAL
+                continue
             if row.player_id in pinned:
                 row.rating, row.rating_source = pinned[row.player_id]
                 continue
@@ -230,9 +291,17 @@ class EntrantsGrid(EditGrid):
                 row.rating, row.rating_source = player.effective_rating
 
     def _roster_signature(self, division):
-        # (player, dropped) per real entrant — what the pairing engine keys off.
-        # A pure renumber doesn't change it (numbers don't affect pairing).
-        return frozenset(division.entrants.values_list("player_id", "dropped"))
+        # (player, dropped, rating) per real entrant — what the pairing engine
+        # keys off. A pure renumber doesn't change it (numbers don't affect
+        # pairing), and neither do the registration flags.
+        #
+        # The rating belongs here now that the entrant pins it and this grid can
+        # edit it: a director who corrects a rating and then publishes would
+        # otherwise get a round paired off the *old* one, silently. The fuzzer
+        # found exactly that — a bye handed to the wrong player.
+        return frozenset(
+            division.entrants.values_list("player_id", "dropped", "rating")
+        )
 
     def persist(self, division, prepared):
         before = self._roster_signature(division)

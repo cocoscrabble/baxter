@@ -286,9 +286,25 @@ def division_state(division, version: int = DIGEST_VERSION) -> dict:
     def ident(player):
         return player.name if version == 1 else player.player_number
 
+    # Registration state is part of the v2 digest, so replay has to reproduce
+    # it. payment_note stays out: free text that no invariant depends on, and
+    # one a director may reword without changing what the tournament *is*.
+    #
+    # **v1 must keep the three-element tuple.** Its only caller is the backfill's
+    # verification pass, which has to reproduce digests recorded before any of
+    # these columns existed; extending it there would make every pre-existing
+    # tournament fail to verify and be skipped. That is not hypothetical — it is
+    # what happened when this extension was first written for both versions.
+    def entrant_row(e):
+        row = [e.number, ident(e.player), e.dropped]
+        if version == 1:
+            return row
+        return row + [
+            e.rating, e.rating_source, e.tentative, e.paid, e.playing_up
+        ]
+
     entrants = sorted(
-        [e.number, ident(e.player), e.dropped]
-        for e in division.entrants.select_related("player")
+        entrant_row(e) for e in division.entrants.select_related("player")
     )
     # Draft rounds are transient — they're lazily regenerated (deterministically)
     # and their existence at any moment depends on when Pair Rounds was last
@@ -478,12 +494,21 @@ def build_snapshot(tournament) -> dict:
         entrants = [
             {
                 "number": e.number,
-                # ``player`` is the number — the identity. The name rides along
-                # so a replay into a fresh database can create the player.
+                # ``player`` is the number — the identity. The name and the
+                # player's own ratings ride along so a replay into a fresh
+                # database can recreate them; ``entrant_rating`` is the pinned
+                # snapshot, which is a different thing.
                 "player": e.player.player_number,
                 "name": e.player.name,
                 "rating": e.player.rating,
+                "wespa_rating": e.player.wespa_rating,
+                "entrant_rating": e.rating,
+                "rating_source": e.rating_source,
                 "dropped": e.dropped,
+                "tentative": e.tentative,
+                "paid": e.paid,
+                "playing_up": e.playing_up,
+                "payment_note": e.payment_note,
             }
             for e in division.entrants.select_related("player")
         ]

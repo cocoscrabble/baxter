@@ -600,7 +600,10 @@ class Entrant(models.Model):
         return self.player.player_number
 
     @classmethod
-    def enter(cls, division, player, number, *, rating=None, **registration):
+    def enter(
+        cls, division, player, number, *, rating=None, rating_source=None,
+        **registration,
+    ):
         """Enter ``player`` in ``division``, pinning their rating.
 
         The rating is snapshotted from ``Player.effective_rating`` unless one is
@@ -608,8 +611,16 @@ class Entrant(models.Model):
         sync. This is deliberately *not* done in ``save()``: that would fire on
         every unrelated write and silently re-pin a rating a director had fixed
         by hand.
+
+        ``rating_source`` overrides that derivation, and exists for one caller:
+        replay, which is restoring a snapshot rather than making a decision. A
+        recorded ``(0, "none")`` must come back as ``none``, not as the
+        ``manual`` that passing a rating would otherwise imply.
         """
-        if rating is None:
+        if rating_source is not None:
+            source = rating_source
+            rating = rating or 0
+        elif rating is None:
             rating, source = player.effective_rating
         else:
             source = cls.MANUAL
