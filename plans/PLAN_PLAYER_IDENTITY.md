@@ -600,22 +600,34 @@ which a rename can be reproduced.
 
 ---
 
-## Sequencing and risk
+## Sequencing and risk — **ALL PHASES IMPLEMENTED**
 
 Phases 1–3 are one indivisible correctness change and should land together or
 in quick succession: between Phase 1 and Phase 3 the payloads and the engine
 key disagree with each other. Phases 4–7 are independent and can land in any
-order afterwards.
+order afterwards. All seven landed in order.
 
-The three things most likely to bite:
+The three things most likely to bite, and what happened to each:
 
 1. **The functional unique index on Postgres** (Phase 1a) — verify with
-   `sqlmigrate`, not a local SQLite run.
+   `sqlmigrate`, not a local SQLite run. *Done better: migrations 0036–0038 were
+   run against a throwaway Postgres 18.2 with deliberately dirty fixtures, which
+   `sqlmigrate` could not have exercised.*
 2. **The digest backfill** (Phase 3d) — it rewrites an append-only log. The
-   verify-first-then-rewrite procedure is not optional.
+   verify-first-then-rewrite procedure is not optional. *Implemented as
+   specified, in `digest_backfill.py`, with the replay confined to a savepoint
+   that is always rolled back.*
 3. **The bye coincidence** (Phase 2c) — byes keep working only because
    `BYE_PLAYER_NUMBER == "BYE"` matches the Rust `BYE_NAME` compare. Untested,
-   this is a silent breakage waiting for someone to tidy a constant.
+   this is a silent breakage waiting for someone to tidy a constant. *Pinned by
+   `ByeConstantCouplingTests`.*
+
+A fourth that the plan did not anticipate, and which was caught only by reading
+the consumer's code: **the ratings CSV column order** (Phase 6).
+`coco_ratings.io.ResultCSVReader` unpacks positionally, so the interleaved
+layout this plan originally specified would have broken every ratings run
+against a Baxter export. The columns are appended instead, pinned by a test that
+runs the real reader.
 
 ## Explicitly out of scope
 

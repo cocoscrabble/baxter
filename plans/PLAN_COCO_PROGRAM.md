@@ -281,6 +281,11 @@ W3  Baxter entrants          PLAN_ENTRANTS.md             ──┘        │
 W5  live ratings  (needs core extraction from W2 + seeds from W3) ───┘
 ```
 
+**Status:** W2's core extraction and W1 (all seven phases of
+`PLAN_PLAYER_IDENTITY.md`) are **implemented**. W3 (entrants) is unblocked and
+is the next thing to build; W2's remaining phases (number-keyed results, roster
+pull, assigning numbers) are independent of it.
+
 - **W1 and W2 are independent of each other** and can run in parallel — they
   converge on the same canonical number format, which is why decision 1 makes
   the canonicalizer shared code rather than two implementations.
