@@ -56,6 +56,10 @@ default, so a later session should not relitigate them without asking.
    new nullable int. Effective rating is
    `coco if coco else wespa if wespa is not None else 0`.
 
+   `Player.rating` is therefore what the central roster pull writes: the CoCo
+   rating is that database's, and Baxter mirrors it. WESPA stays independent of
+   the sync and of the central database entirely.
+
 3. **The entrant pins the rating.** `Entrant.rating` +
    `Entrant.rating_source` snapshot the effective rating when the player is
    entered. Seeding, display and replay read the snapshot; `Player.*` is free
@@ -120,6 +124,12 @@ wespa_rating = models.IntegerField(null=True, blank=True)
 COCO, WESPA, MANUAL, NONE = "coco", "wespa", "manual", "none"
 rating = models.IntegerField(default=0)          # snapshot, see decision 3
 rating_source = models.CharField(max_length=8, choices=..., default=NONE)
+# The rest of the rating seed, frozen with the rating. The live projection
+# (PLAN_COCO_PROGRAM decision 6) needs all four: RatingsCalculator damps by
+# career games, and deviation grows with time since last_played.
+deviation = models.FloatField(default=0.0)
+career_games = models.IntegerField(default=0)
+last_played = models.DateField(null=True, blank=True)
 tentative = models.BooleanField(default=False)
 paid = models.BooleanField(default=False)
 payment_note = models.TextField(blank=True, default="")
@@ -128,6 +138,12 @@ playing_up = models.BooleanField(default=False)
 
 Every new field has a default, so `Division.bye_entrant()` (`models.py:189`)
 keeps working untouched: the bye entrant gets `rating=0`, `rating_source=none`.
+
+The three new seed fields come from the central roster pull
+(`ratings.CurrentRating`, which holds exactly `rating`, `deviation`,
+`career_games`, `last_played`). Until that pull exists they are simply zero /
+null, which the calculator treats as an unrated player — so the schema can land
+well before the sync does.
 
 ### 1b. The cascade, in one place
 
@@ -332,6 +348,12 @@ class PlayerSource:
 - The registration page's autocomplete and the create-guest flow both go
   through the seam, so swapping in a playerdb-backed source later changes no
   view code.
+- **The concrete implementation is no longer unknown.** `PlayerSource` is
+  backed by the central roster pull specified in `PLAN_COCO_PROGRAM.md` — an
+  authenticated JSON endpoint plus an equivalent downloadable snapshot, both
+  returning `player_number`, `name`, `rating`, `deviation`, `career_games`,
+  `last_played`. `LocalPlayerSource` remains the offline default and the thing
+  tests run against.
 - **WESPA**: add `wespa_ratings.py` with a `refresh_wespa_ratings(rows)`
   upsert setting `Player.wespa_rating`, plus an admin-only upload page modelled
   on `PlayerImportView`. Match on `player_number` when the source supplies one.

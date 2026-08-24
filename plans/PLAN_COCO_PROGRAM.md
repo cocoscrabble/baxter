@@ -72,8 +72,11 @@ them without asking.
 **Identity**
 
 1. `player_number` is the key in both systems. Baxter adopts the central
-   `canonical_player_number` **verbatim as shared code**, so `233`, `0233` and
-   `00233` can never split one person in two.
+   `canonical_player_number` **as shared code**, so `233`, `0233` and `00233`
+   can never split one person in two. It lived in the ratings project's Django
+   app (`web/players/models.py`), which the shipped package does not include, so
+   it moved to `coco_ratings.identity` — dependency-free, importable from both.
+   (Done 2026-08-23 in the ratings repo.)
 
    Conveniently, that function is already correct for Baxter's extra forms:
    `str(int(v)).zfill(4) if v.isdigit() else v` passes `T-7` and `BYE` through
@@ -294,10 +297,10 @@ W4 and W5 in either order.
 
 ---
 
-## Amendments needed to the existing Baxter plans
+## Amendments to the existing Baxter plans — **APPLIED**
 
-Not yet applied — this session produced the program document and the ratings-repo
-plan. A follow-up should fold these in:
+Folded into `PLAN_PLAYER_IDENTITY.md` and `PLAN_ENTRANTS.md` on 2026-08-23.
+Kept here as the record of what changed and why:
 
 **`PLAN_PLAYER_IDENTITY.md`**
 
