@@ -6,6 +6,12 @@ implementation in a fresh session — file/line references are as of commit
 `cf93873`. Each phase is a separate jj commit (keep scopes unmixed; `jj new`
 after each describe).
 
+> **ALL PHASES IMPLEMENTED.** Issues #47, #6 and #42 are covered: entrants carry
+> registration state and a pinned rating, WESPA ratings feed the cascade, and
+> the public list marks tentative and playing-up entrants with an accessible
+> equivalent. What is *not* here, deliberately, is any concrete WESPA fetcher or
+> playerdb HTTP client — see "Explicitly out of scope".
+
 > **Depends on `PLAN_PLAYER_IDENTITY.md`.** That plan makes `player_number` the
 > key everywhere outside the database, in place of the player's name. It lands
 > **first**: every payload, engine call and lookup described below assumes the
