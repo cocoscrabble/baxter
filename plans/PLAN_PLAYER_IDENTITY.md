@@ -86,7 +86,7 @@ them without asking.
 
 ---
 
-## Phase 1 — `player_number` becomes a real identity
+## Phase 1 — `player_number` becomes a real identity — **IMPLEMENTED**
 
 *Landed 2026-08-23. `canonical_player_number` is imported from
 `coco_ratings.identity`; migration `0036_player_number_identity` widens the

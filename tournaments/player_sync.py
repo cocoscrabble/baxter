@@ -9,10 +9,15 @@ The exchange format is a JSON list of ``{player_number, name, rating}``.
 players are matched and updated in place, new ones are inserted, and nothing is
 deleted. Primary keys are never touched, so the ``Entrant`` rows that reference
 players by PK on the remote stay intact.
+
+Numbers are matched in their **canonical** form (``coco_ratings.identity``), so
+a bare ``7`` in the upload updates a stored ``0007`` rather than inserting a
+second row for the same person.
 """
 
 import json
 
+from coco_ratings.identity import canonical_player_number
 from django.db import transaction
 
 from .models import Player
@@ -54,7 +59,11 @@ def import_players(raw):
         if not isinstance(row, dict):
             errors.append(f"Row {i + 1}: expected an object.")
             continue
-        number = str(row.get("player_number", "")).strip()
+        # Canonicalize on the way in. The registry writes numbers bare (7) and
+        # Baxter stores them padded (0007); matching raw strings would miss the
+        # existing row and insert a second copy of the same person. This is the
+        # upsert key, so it has to be the canonical form on both sides.
+        number = canonical_player_number(str(row.get("player_number", "")).strip())
         name = str(row.get("name", "")).strip()
         if not number:
             errors.append(f"Row {i + 1}: player_number is required.")
@@ -72,13 +81,21 @@ def import_players(raw):
     if errors:
         return None, errors
 
-    existing = {p.player_number: p for p in Player.objects.all()}
+    # Key the lookup canonically too. Stored numbers are canonical by
+    # construction (Player.save), but a row written before migration 0036 by
+    # some path that bypassed save() would otherwise be invisible here and get
+    # a duplicate inserted alongside it.
+    existing = {
+        canonical_player_number(p.player_number): p for p in Player.objects.all()
+    }
     to_create = []
     updated = 0
     with transaction.atomic():
         for number, fields in cleaned.items():
             player = existing.get(number)
             if player is None:
+                # bulk_create bypasses Player.save(), so the canonical form has
+                # to be applied here -- `number` already is one (see above).
                 to_create.append(Player(
                     player_number=number,
                     name=fields["name"],
