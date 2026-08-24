@@ -27,6 +27,14 @@ def _entrant_name_map(division):
     }
 
 
+def _entrant_key_map(division):
+    """{entrant pk -> player key} — what the pairing layer identifies people by."""
+    return {
+        e.pk: e.player.player_number
+        for e in division.entrants.select_related("player")
+    }
+
+
 def _entrant_pk_by_name(division):
     """{player name -> entrant pk} — the inverse, for replay (from_portable)."""
     return {
@@ -395,12 +403,12 @@ class ResultsGrid(EditGrid):
         if playoff is not None:
             from tournaments.pairing.base import ResultSlipData
 
-            names = _entrant_name_map(division)
+            keys = _entrant_key_map(division)
             prospective = [
                 ResultSlipData(
                     round=r.round,
-                    winner_name=names.get(r.winner_id),
-                    loser_name=names.get(r.loser_id),
+                    winner_key=keys.get(r.winner_id),
+                    loser_key=keys.get(r.loser_id),
                     winner_score=r.winner_score,
                     loser_score=r.loser_score,
                     winner_started=r.winner_started,

@@ -613,6 +613,37 @@ class PlayoffViewTests(PlayoffRoundsTestCase):
         self.assertContains(response, "not necessary")
         self.assertNotContains(response, "Bye")
 
+    def test_saving_the_results_grid_on_a_playoff_division(self):
+        """The grid's playoff guard runs on the real save path.
+
+        ``ResultsGrid.prepare`` builds ``ResultSlipData`` to ask the bracket
+        whether an edit would rewrite played games. That branch only runs when
+        the division has a playoff, so it is the one place a change to the DTO
+        can break without any other test noticing.
+        """
+        import json
+
+        self.make_playoff()
+        self.record(4, "P1", "P4")
+        rows = [
+            {
+                "round": slip.round,
+                "winner": slip.winner_id,
+                "winner_score": slip.winner_score,
+                "loser": slip.loser_id,
+                "loser_score": slip.loser_score,
+                "winner_started": slip.winner_started,
+            }
+            for slip in self.division.result_slips.order_by("round", "id")
+        ]
+        response = self.client.post(
+            reverse("division_edit_results", kwargs=self.division.slug_kwargs()),
+            json.dumps({"rows": rows}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertNotIn("errors", json.loads(response.content))
+
     def test_the_bracket_shows_names_and_highlights_on_identity(self):
         """The bracket renders player names, but decides who won on their keys.
 
