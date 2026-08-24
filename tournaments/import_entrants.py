@@ -1,6 +1,11 @@
 """Bulk import of entrants from CSV data.
 
 Parses CSV rows, resolves or creates Players, and adds Entrants to a Division.
+
+A row may name a player, or give their player number. The number is the
+identity, so it resolves exactly; a bare name is a lookup that may turn out to
+be ambiguous, and an ambiguous name aborts the whole import rather than guessing
+which of two people the director meant (see plans/PLAN_PLAYER_IDENTITY.md).
 """
 
 import csv
@@ -9,7 +14,12 @@ from dataclasses import dataclass, field
 
 from django.db import models
 
-from tournaments.models import Entrant, Player, next_temp_player_number
+from tournaments.models import (
+    Entrant,
+    Player,
+    canonical_player_number,
+    next_temp_player_number,
+)
 
 
 @dataclass
@@ -22,9 +32,11 @@ class ImportResult:
 
 
 def parse_csv(text):
-    """Parse CSV text into a list of (name, rating) tuples.
+    """Parse CSV text into a list of (number, name, rating) tuples.
 
-    Accepts 1-column (name) or 2-column (name, rating) format.
+    Accepts ``name``, ``name, rating`` or ``number, name, rating``. ``number`` is
+    empty for the first two shapes.
+
     Returns (parsed_rows, errors) where errors is a list of strings.
     """
     reader = csv.reader(io.StringIO(text))
@@ -34,28 +46,36 @@ def parse_csv(text):
 
     errors = []
     parsed = []
-    seen_names = set()
+    seen = set()
 
     for i, row in enumerate(rows, start=1):
         row = [cell.strip() for cell in row]
         if len(row) == 1:
-            name = row[0]
-            rating_str = ""
+            number, name, rating_str = "", row[0], ""
         elif len(row) == 2:
-            name, rating_str = row
+            number, (name, rating_str) = "", row
+        elif len(row) == 3:
+            number, name, rating_str = row
         else:
-            errors.append(f"Row {i}: expected 1 or 2 columns, got {len(row)}.")
+            errors.append(f"Row {i}: expected 1, 2 or 3 columns, got {len(row)}.")
             continue
 
         if not name:
             errors.append(f"Row {i}: name is required.")
             continue
 
-        name_lower = name.lower()
-        if name_lower in seen_names:
-            errors.append(f"Row {i}: duplicate name '{name}' in CSV.")
+        number = canonical_player_number(number) if number else ""
+        # Two rows for the same *person*. A repeated name with distinct numbers
+        # is two people and perfectly legal; a repeated bare name is not, because
+        # both rows would resolve to whoever holds it.
+        key = number or name.casefold()
+        if key in seen:
+            errors.append(
+                f"Row {i}: duplicate {'player number' if number else 'name'} "
+                f"'{number or name}' in CSV."
+            )
             continue
-        seen_names.add(name_lower)
+        seen.add(key)
 
         try:
             rating = int(rating_str) if rating_str else 0
@@ -63,21 +83,43 @@ def parse_csv(text):
             errors.append(f"Row {i}: invalid rating '{rating_str}'.")
             continue
 
-        parsed.append((name, rating))
+        parsed.append((number, name, rating))
 
     return parsed, errors
 
 
-def resolve_players(parsed_rows, existing_entrant_names):
+def _resolve_one(number, name, row_number):
+    """(player, error) for one parsed row. ``player`` is None if it must be created."""
+    if number:
+        player = Player.objects.filter(player_number=number).first()
+        if player is None:
+            return None, (
+                f"Row {row_number}: no player with number '{number}'."
+            )
+        return player, None
+
+    candidates = list(Player.objects.filter(name__iexact=name).order_by("player_number"))
+    if len(candidates) > 1:
+        listed = ", ".join(f"{p.name} (#{p.player_number})" for p in candidates)
+        return None, (
+            f"Row {row_number}: '{name}' matches {len(candidates)} players — "
+            f"{listed}. Use the three-column form (number, name, rating) to say "
+            f"which one."
+        )
+    return (candidates[0] if candidates else None), None
+
+
+def resolve_players(parsed_rows, existing_entrant_keys):
     """Resolve parsed rows to Player objects, creating new ones as needed.
 
-    Looks up players by name (case-insensitive). If found, uses the existing
-    player (ignoring the CSV rating). If not found, creates a new player with
-    the CSV rating.
+    A row carrying a player number resolves to exactly that player. A bare name
+    resolves if it matches exactly one player, creates one if it matches none,
+    and aborts the import if it matches several. An existing player keeps their
+    current rating; the CSV rating is only used for someone being created.
 
     Args:
-        parsed_rows: list of (name, rating) tuples from parse_csv.
-        existing_entrant_names: set of lowercased player names already in the division.
+        parsed_rows: list of (number, name, rating) tuples from parse_csv.
+        existing_entrant_keys: player numbers already entered in the division.
 
     Returns:
         (players_to_add, result, errors) where:
@@ -89,11 +131,14 @@ def resolve_players(parsed_rows, existing_entrant_names):
     result = ImportResult()
     players_to_add = []
 
-    for name, rating in parsed_rows:
-        player = Player.objects.filter(name__iexact=name).first()
+    for i, (number, name, rating) in enumerate(parsed_rows, start=1):
+        player, error = _resolve_one(number, name, i)
+        if error:
+            errors.append(error)
+            continue
 
         if player:
-            if player.name.lower() in existing_entrant_names:
+            if player.player_number in existing_entrant_keys:
                 result.skipped.append(player.name)
                 continue
             result.matched.append(player.name)
@@ -121,12 +166,12 @@ def import_entrants(division, text):
     if errors:
         return None, errors
 
-    existing_entrant_names = set(
-        e.player.name.lower()
+    existing_entrant_keys = set(
+        e.player.player_number
         for e in division.entrants.select_related("player")
     )
 
-    players_to_add, result, errors = resolve_players(parsed, existing_entrant_names)
+    players_to_add, result, errors = resolve_players(parsed, existing_entrant_keys)
     if errors:
         return None, errors
 

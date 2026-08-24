@@ -444,16 +444,29 @@ class Player(models.Model):
         return player
 
     @classmethod
-    def create_unique(cls, name, rating=0):
-        """Create a Player with case-insensitive name uniqueness and auto-assigned number.
+    def same_named(cls, name):
+        """Existing players with this name, case-insensitively.
 
-        Returns (player, error_message). On conflict or invalid input, player is None.
+        Sharing a name is legal — the number is the identity — but it is far
+        more often a typo than two real people, so the create flow shows these
+        and asks rather than either refusing or silently adding a twin.
+        """
+        name = (name or "").strip()
+        if not name:
+            return cls.objects.none()
+        return cls.objects.filter(name__iexact=name).order_by("player_number")
+
+    @classmethod
+    def create(cls, name, rating=0):
+        """Create a Player with an auto-assigned temporary number.
+
+        Returns (player, error_message). The name is not checked for uniqueness:
+        two people may genuinely share one. Callers that want the director to
+        confirm a duplicate ask ``same_named`` first.
         """
         name = (name or "").strip()
         if not name:
             return None, "Name is required."
-        if cls.objects.filter(name__iexact=name).exists():
-            return None, f"A player named '{name}' already exists."
         try:
             rating = int(rating)
         except ValueError, TypeError:

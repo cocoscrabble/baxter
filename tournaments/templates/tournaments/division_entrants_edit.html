@@ -37,13 +37,35 @@
         <button type="button" data-on:click="$showNewPlayer = false">Cancel</button>
     </p>
     <span id="new-player-status"></span>
+
+    {% comment %}
+    Shown when the name matches players who already exist. Sharing a name is
+    allowed — the player number is the identity — but it is usually a typo, so
+    the director picks one of these or says they meant a new person.
+    {% endcomment %}
+    <div id="duplicate-name-panel" class="hidden mt-sm">
+        <p id="duplicate-name-prompt"></p>
+        <ul id="duplicate-name-list"></ul>
+        <p>
+            <button id="create-anyway-btn" type="button" class="btn-secondary">
+                Add as a different person
+            </button>
+            <button id="duplicate-cancel-btn" type="button" class="btn-secondary">
+                Cancel
+            </button>
+        </p>
+    </div>
 </div>
 
 <details class="mt-sm">
     <summary>Bulk Import (CSV)</summary>
     <p class="mt-sm">
-        Upload a CSV file. One column: <code>name</code>. Two columns: <code>name, rating</code>.
-        Rating is optional (defaults to 0). Existing players keep their current rating. Existing entrants are skipped.
+        Upload a CSV file. One column: <code>name</code>. Two columns:
+        <code>name, rating</code>. Three columns:
+        <code>player number, name, rating</code>.
+        Rating is optional (defaults to 0). Existing players keep their current
+        rating. Existing entrants are skipped. A name shared by more than one
+        player stops the import — use the three-column form to say which one.
     </p>
     <form id="bulk-import-form" enctype="multipart/form-data">
         <input type="file" id="csv-file" accept=".csv,.txt">

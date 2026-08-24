@@ -338,3 +338,39 @@ class CanonicalNumberConformanceTests(TestCase):
             with self.subTest(value=value):
                 once = canonical_player_number(value)
                 self.assertEqual(canonical_player_number(once), once)
+
+
+class SharedNameTests(TestCase):
+    """Names are not identities, so two players may hold the same one."""
+
+    def test_two_players_may_share_a_name(self):
+        first, error = Player.create("John Smith", rating=1600)
+        self.assertIsNone(error)
+        second, error = Player.create("John Smith", rating=1400)
+        self.assertIsNone(error)
+        self.assertNotEqual(first.pk, second.pk)
+        self.assertNotEqual(first.player_number, second.player_number)
+        self.assertEqual(Player.objects.filter(name="John Smith").count(), 2)
+
+    def test_create_still_requires_a_name(self):
+        player, error = Player.create("   ")
+        self.assertIsNone(player)
+        self.assertEqual(error, "Name is required.")
+
+    def test_same_named_finds_the_existing_players_in_number_order(self):
+        Player.objects.create(name="Ann", player_number="0500", rating=1500)
+        Player.objects.create(name="ANN", player_number="0100", rating=1400)
+        Player.objects.create(name="Bea", player_number="0200", rating=1300)
+        self.assertEqual(
+            [p.player_number for p in Player.same_named("ann")], ["0100", "0500"]
+        )
+
+    def test_same_named_is_empty_for_a_blank_name(self):
+        Player.objects.create(name="Ann", player_number="0500", rating=1500)
+        self.assertFalse(Player.same_named("").exists())
+        self.assertFalse(Player.same_named(None).exists())
+
+    def test_a_non_numeric_rating_falls_back_to_zero(self):
+        player, error = Player.create("Ann", rating="not a number")
+        self.assertIsNone(error)
+        self.assertEqual(player.rating, 0)

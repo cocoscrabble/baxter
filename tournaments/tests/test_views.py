@@ -400,16 +400,44 @@ class CreatePlayerViewTests(TestCase):
         self.assertEqual(data["label"], "NewPlayer")
         self.assertTrue(Player.objects.filter(name="NewPlayer").exists())
 
-    def test_duplicate_name_rejected(self):
-        Player.objects.create(name="Alice", player_number="001", rating=1600)
+    def test_a_repeated_name_asks_before_creating_a_twin(self):
+        alice = Player.objects.create(name="Alice", player_number="001", rating=1600)
         self.client.login(username="owner", password="testpass123")
         response = self.client.post(
             reverse("create_player"),
             json.dumps({"name": "alice"}),  # case-insensitive
             content_type="application/json",
         )
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("already exists", response.json()["error"])
+        self.assertEqual(response.status_code, 409)
+        body = response.json()
+        self.assertTrue(body["duplicate_name"])
+        self.assertEqual(
+            body["candidates"],
+            [{
+                "id": alice.pk,
+                "label": "Alice",
+                "player_number": alice.player_number,
+                "rating": 1600,
+            }],
+        )
+        # Nothing was created while the question is outstanding.
+        self.assertEqual(Player.objects.filter(name__iexact="alice").count(), 1)
+
+    def test_a_confirmed_repeat_creates_a_second_person(self):
+        alice = Player.objects.create(name="Alice", player_number="001", rating=1600)
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.post(
+            reverse("create_player"),
+            json.dumps({"name": "Alice", "rating": 1400, "confirm": True}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["ok"])
+        both = Player.objects.filter(name__iexact="alice")
+        self.assertEqual(both.count(), 2)
+        # Two people, two numbers.
+        self.assertEqual(len({p.player_number for p in both}), 2)
+        self.assertNotEqual(response.json()["player_number"], alice.player_number)
 
     def test_empty_name_rejected(self):
         self.client.login(username="owner", password="testpass123")
@@ -2711,10 +2739,11 @@ class DivisionEntrantsEditViewTests(TestCase):
         self.assertEqual(self.division.entrants.count(), 2)
         self.assertEqual(self.division.entrants.get(number=1).player, self.player2)
 
-    def test_post_two_players_same_name_rejected(self):
-        # Two distinct Player rows sharing a name (registry sync can produce
-        # these) must not both enter one division — the engine keys entrants by
-        # name and would silently collide.
+    def test_post_two_players_same_name_is_allowed(self):
+        # Two distinct Player rows sharing a name are two people. The grid used
+        # to refuse them because the engine keyed entrants by name; it keys on
+        # the player number now, so this is merely something the display has to
+        # disambiguate.
         dup = Player.objects.create(
             name="Alice", player_number="099", rating=1234
         )
@@ -2728,9 +2757,12 @@ class DivisionEntrantsEditViewTests(TestCase):
         response = self.client.post(
             self.url, json.dumps(payload), content_type="application/json"
         )
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("errors", response.json())
-        self.assertEqual(self.division.entrants.count(), 0)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.division.entrants.count(), 2)
+        self.assertEqual(
+            set(self.division.entrants.values_list("player_id", flat=True)),
+            {self.player1.pk, dup.pk},
+        )
 
     def test_post_duplicate_player_returns_errors(self):
         self.client.login(username="owner", password="testpass123")

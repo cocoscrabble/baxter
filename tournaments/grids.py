@@ -175,33 +175,10 @@ class EntrantsGrid(EditGrid):
             )
         return None
 
-    def prepare(self, division, validated):
-        prepared, errors = super().prepare(division, validated)
-        if errors:
-            return prepared, errors
-        return prepared, self._duplicate_name_errors(prepared)
-
-    def _duplicate_name_errors(self, prepared):
-        # The pairing engine keys entrants by display name, so two *different*
-        # players sharing a name (case-insensitively) in one division would
-        # silently corrupt entrant_by_name. Player names aren't DB-unique
-        # (registry sync can introduce collisions), so guard here.
-        player_ids = [inst.player_id for inst in prepared]
-        names = dict(
-            Player.objects.filter(pk__in=player_ids).values_list("pk", "name")
-        )
-        seen, reported, errors = {}, set(), []
-        for pid in player_ids:
-            name = names.get(pid, "")
-            key = name.casefold()
-            if key in seen and seen[key] != pid and key not in reported:
-                errors.append(
-                    f"Two different players are both named “{name}” — entrant "
-                    "names must be unique within a division."
-                )
-                reported.add(key)
-            seen.setdefault(key, pid)
-        return errors
+    # Two entrants in one division may share a name. The guard that used to
+    # reject that existed because the pairing engine keyed on the display name;
+    # it now keys on the player number, so the collision is merely a display
+    # problem — which is what the disambiguation rule handles.
 
     def _roster_signature(self, division):
         # (player, dropped) per real entrant — what the pairing engine keys off.
