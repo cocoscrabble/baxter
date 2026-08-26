@@ -18,15 +18,35 @@ exactly as they are.</p>
 <p>This roster holds {{ player_count }} player{{ player_count|pluralize }},
 {{ provisional_count }} of them still on a temporary number.</p>
 
+{% if endpoint_configured %}
+<h2>Pull from the central database</h2>
+<p>Fetches the current roster from <code>{{ endpoint_url }}</code>. Do this
+before an event; Baxter never needs the connection once one is running.</p>
+<form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="source" value="fetch">
+    <button type="submit">Pull now</button>
+</form>
+
+<h2>Or upload a snapshot</h2>
+<p>For an event with no connection: download the file from the central
+database's <code>/manage/roster/</code> page and upload it here. It is the same
+document the pull above fetches.</p>
+{% else %}
+<h2>Upload a snapshot</h2>
+<p>Download the file from the CoCo player database's
+<code>/manage/roster/</code> page and upload it here. It is a
+<code>coco.roster/1</code> document.</p>
+<p class="settings-intro">No roster endpoint is configured, so this is the only
+way in. Setting <code>ROSTER_API_URL</code> and <code>ROSTER_API_TOKEN</code>
+adds a one-click pull.</p>
+{% endif %}
+
 <form method="post" enctype="multipart/form-data">
     {% csrf_token %}
     <p><input type="file" name="roster_file" accept=".json,application/json" required></p>
     <button type="submit">Upload and pull</button>
 </form>
-
-<h2>Getting the file</h2>
-<p>On the CoCo player database, go to <code>/manage/roster/</code> and download
-the snapshot. It is a <code>coco.roster/1</code> document.</p>
 
 <p>WESPA ratings are not part of this — the central database does not hold them.
 <a href="{% url 'wespa_import' %}">Import those separately</a>.</p>

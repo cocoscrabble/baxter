@@ -5,6 +5,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import PermissionDenied
+from django.conf import settings
 from django.db import models, transaction
 from django.http import Http404, HttpResponse, JsonResponse
 from django.utils import timezone
@@ -100,7 +101,13 @@ from .pairing.methods import (
     pairing_method_schedule,
 )
 from .player_sync import import_players
-from .roster_import import RosterParseError, import_roster
+from .roster_import import (
+    RosterFetchError,
+    RosterParseError,
+    fetch_roster,
+    import_roster,
+    roster_endpoint_configured,
+)
 from .wespa_ratings import parse_wespa_csv, refresh_wespa_ratings
 from users.models import User
 from .generate_pairings import publish_rounds, regenerate_pairings, unpublish_rounds
@@ -1979,18 +1986,30 @@ class RosterImportView(LoginRequiredMixin, IsAdminMixin, View):
             "provisional_count": Player.objects.filter(
                 is_bye=False, is_provisional=True
             ).count(),
+            "endpoint_configured": roster_endpoint_configured(),
+            "endpoint_url": settings.ROSTER_API_URL,
         }
 
     def get(self, request):
         return render(request, self.template_name, self._context())
 
     def post(self, request):
-        uploaded = request.FILES.get("roster_file")
-        if not uploaded:
-            messages.error(request, "No file uploaded.")
-            return redirect("roster_import")
+        """Two transports, one importer.
+
+        ``fetch`` goes to the central database; anything else is a file upload.
+        Both end up in ``import_roster``, so the two paths differ only in where
+        the bytes came from.
+        """
         try:
-            result = import_roster(uploaded.read())
+            raw = self._bytes(request)
+        except RosterFetchError as exc:
+            messages.error(request, str(exc))
+            return redirect("roster_import")
+        if raw is None:
+            return redirect("roster_import")
+
+        try:
+            result = import_roster(raw)
         except RosterParseError as exc:
             messages.error(request, str(exc))
             return redirect("roster_import")
@@ -2002,6 +2021,16 @@ class RosterImportView(LoginRequiredMixin, IsAdminMixin, View):
             f"{len(result.updated)} updated, {len(result.unchanged)} unchanged.",
         )
         return redirect("roster_import")
+
+    def _bytes(self, request):
+        """The roster document, or None with a message already queued."""
+        if request.POST.get("source") == "fetch":
+            return fetch_roster()
+        uploaded = request.FILES.get("roster_file")
+        if not uploaded:
+            messages.error(request, "No file uploaded.")
+            return None
+        return uploaded.read()
 
 
 class WespaImportView(LoginRequiredMixin, IsAdminMixin, View):
