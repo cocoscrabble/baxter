@@ -1,0 +1,57 @@
+{% extends "tournaments/base_division.html" %}
+
+{% block title %}Projected ratings - {{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
+
+{% block content %}
+<h1>Projected ratings: {{ division.name }}</h1>
+
+<p class="settings-intro">
+  <strong>Provisional.</strong> Ratings are official only once the whole history
+  is replayed in order, so these change if another tournament is rated ahead of
+  this one. This is a preview of what the games played so far would do.
+</p>
+
+{% if not rows %}
+{% include "tournaments/_empty_state.html" with message="No completed games yet." %}
+{% else %}
+<div class="table-scroll table-narrow">
+<table>
+    <thead>
+        <tr>
+            <th>Player</th>
+            <th class="num">Record</th>
+            <th class="num">Spread</th>
+            <th class="num">Before</th>
+            <th class="num">Projected</th>
+            <th class="num">Change</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in rows %}
+        <tr>
+            <td>{{ row.entrant.display_name|default:row.projection.name }}{% if row.projection.was_unrated %}*{% endif %}</td>
+            <td class="num">{{ row.projection.wins|floatformat:"-1" }}-{{ row.projection.losses|floatformat:"-1" }}</td>
+            <td class="num">{{ row.projection.spread }}</td>
+            {% comment %}
+            A newly rated player has no "before": the official run records their
+            first tournament with old == new, so showing a 0 change would read
+            as "nothing happened" rather than "a rating was established".
+            {% endcomment %}
+            <td class="num">{% if row.projection.was_unrated %}—{% else %}{{ row.projection.old_rating }}{% endif %}</td>
+            <td class="num">{{ row.projection.new_rating }}</td>
+            <td class="num">
+              {% if row.projection.was_unrated %}new{% elif row.projection.delta > 0 %}+{{ row.projection.delta }}{% else %}{{ row.projection.delta }}{% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+
+{% if has_unrated %}
+<dl class="entrant-legend">
+    <dt>*</dt><dd>Rating established by this tournament</dd>
+</dl>
+{% endif %}
+{% endif %}
+{% endblock %}
