@@ -252,7 +252,7 @@ def project_ratings(division) -> dict[player_number, Projection]:
     (new_rating, delta) per entrant. Derived; never stored."""
 ```
 
-Details that matter:
+**IMPLEMENTED.** Details that matter:
 
 - Seed each `core.Player` from the entrant snapshot (`rating`, `deviation`,
   `career_games`, `last_played`), then call `adjust_initial_deviation(start_date)`
@@ -267,6 +267,33 @@ Details that matter:
 - The projection is stale the moment another tournament rates ahead of this one
   in the chronological replay. That is inherent, and is exactly why it is
   labelled non-binding.
+
+### What the corpus comparison caught
+
+Three things no unit test would have:
+
+- **A newly rated entrant must show `delta == 0`, not a change from 1500.** An
+  early draft reported the 1500 seed as `old_rating`, reasoning that it showed a
+  rating being *established*. The official record disagrees:
+  `ratings.TournamentResult` stores `old == new` for a player's first
+  tournament. The projection exists to predict what the official run will say,
+  so it says the same and flags `was_unrated` instead.
+
+- **A player whose every game is skipped came back rated 0.**
+  `set_init_rating` clamps a sub-100 rating up to the 1500 seed but leaves
+  `new_rating` on the raw value, which only shows if the player is never
+  actually rated — all byes, or all forfeits. Reachable in Baxter, and nonsense
+  on a page.
+
+- **The engine logged on the root logger.** Once per player per run, so a
+  200-player division would put hundreds of INFO lines into Baxter's log for one
+  page load — and naming a `coco_ratings` logger did nothing, because the
+  records never came from one. Fixed in the ratings repo; the golden master
+  passes unchanged, which is the point.
+
+Two things the corpus *cannot* see, covered by unit tests instead: the corpus
+files carry no last-played dates and no bye rows, so deviation ageing and bye
+handling are invisible there.
 
 ---
 
@@ -307,10 +334,11 @@ repo's court or waiting on a protocol:
   mechanism (`commands.change_player_number`); what is missing is moving the
   bundle and the director-confirmed resolution UI (the "number resolution" flow
   above, steps 4–5).
-- **W5 (live ratings)** is unblocked and has real data: the shared calculator,
-  and entrants that pin `rating`/`deviation`/`career_games`/`last_played` as the
-  seed — now filled by the pull rather than left at zero. `project_ratings` is
-  the only piece not written.
+- **W5 (live ratings) — DONE.** `tournaments/live_ratings.py` +
+  `/division/<slug>/ratings/`. Verified the only way that means anything:
+  `test_live_ratings_corpus` rates **119 real tournaments** two ways — through
+  `coco_ratings`' own `Tournament` and through `project_ratings` — and demands
+  they agree exactly on rating, deviation, record and spread.
 
 - **W1 and W2 are independent of each other** and can run in parallel — they
   converge on the same canonical number format, which is why decision 1 makes

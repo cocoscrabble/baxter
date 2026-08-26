@@ -11,6 +11,7 @@
 <div class="nav-tabs">
 <a href="{% url 'division_entrants' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'entrants' %} active{% endif %}">Entrants</a>
 <a href="{% url 'division_standings' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'standings' %} active{% endif %}">Standings</a>
+<a href="{% url 'division_live_ratings' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'ratings' %} active{% endif %}">Ratings</a>
 <a href="{% url 'division_pairings' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'pairings' %} active{% endif %}">Pairings</a>
 <a href="{% url 'division_all_results' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'results' %} active{% endif %}">Results</a>
 {% if division.playoff %}<a href="{% url 'division_playoff' division.tournament.slug division.slug %}" class="nav-tab{% if active_tab == 'playoff' %} active{% endif %}">Playoff</a>{% endif %}

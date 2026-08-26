@@ -26,6 +26,7 @@ from django.views.generic import (
 
 from .datastar_utils import fragment_response, is_datastar
 from .display import division_labels, label_entrants, label_standings
+from .live_ratings import project_ratings
 from .player_source import get_player_source
 from datastar_py.django import read_signals
 from .forms import (
@@ -767,6 +768,46 @@ def division_standings(division, current_round):
         p.dropped = p.key in dropped_keys
     label_standings(division, standings)
     return standings
+
+
+class DivisionLiveRatingsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
+    """Projected ratings from the games played so far.
+
+    **Non-binding**, and the page says so: ratings are official only when the
+    whole history is replayed in chronological order, so this is stale the
+    moment another tournament rates ahead of this one. It is a preview of what
+    this tournament will do to a player's rating.
+
+    Recomputed on every render. A few hundred players is nothing, and caching a
+    derived number that is *already* labelled provisional would only add a way
+    for it to be wrong.
+    """
+
+    model = Division
+    template_name = "tournaments/division_live_ratings.html"
+    context_object_name = "division"
+    active_tab = "ratings"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        division = self.object
+        projections = project_ratings(division)
+        labels = {
+            e.key: e for e in division.entrants.select_related("player")
+        }
+        label_entrants(division_labels(division), labels.values())
+        rows = sorted(
+            (
+                {"projection": p, "entrant": labels.get(key)}
+                for key, p in projections.items()
+            ),
+            key=lambda r: -r["projection"].new_rating,
+        )
+        context["rows"] = rows
+        context["has_unrated"] = any(
+            r["projection"].was_unrated for r in rows
+        )
+        return context
 
 
 class DivisionStandingsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):

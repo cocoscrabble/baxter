@@ -220,3 +220,18 @@ LOGGING = {
         },
     },
 }
+
+# The rating engine logs at INFO once per player per rating run — deliberately,
+# since it is a library and leaves the decision to whoever imports it (see
+# coco_ratings.core.calculator). Baxter runs it for a live projection that may
+# be recomputed on every page load, so a 200-player division would put hundreds
+# of lines into the log for one request. This is that decision: warnings and
+# above.
+#
+# The engine's own logging config is untouched; this only says what *this*
+# application listens to. Raise it to INFO when debugging a projection.
+LOGGING["loggers"]["coco_ratings"] = {
+    "handlers": ["console"],
+    "level": env("RATINGS_LOG_LEVEL", default="WARNING"),
+    "propagate": False,
+}
