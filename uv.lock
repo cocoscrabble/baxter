@@ -83,7 +83,7 @@ dev = [
 [[package]]
 name = "coco-ratings"
 version = "0.1.0"
-source = { git = "https://github.com/cocoscrabble/ratings.git?branch=main#c0531038e29f99c37b3271568701a0d3c3164bdf" }
+source = { git = "https://github.com/cocoscrabble/ratings.git?branch=main#66ad3ec16f2111c84becaf59a4dbd878099c2c5d" }
 
 [[package]]
 name = "colorama"
