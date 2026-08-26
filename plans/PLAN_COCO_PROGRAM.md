@@ -291,15 +291,25 @@ repo's court or waiting on a protocol:
   assigning numbers centrally — live in `../ratings/plans/baxter-integration.md`.
   Baxter's side of the first is already done (the export carries numbers; both
   CSV widths parse).
-- **W4 (sync)** needs the roster pull to exist. Baxter has the seam
-  (`player_source.PlayerSource`), the outbound bundle
-  (`tournament_export.py`), and the rename mechanism
-  (`commands.change_player_number`) — what is missing is the transport and
-  applying the returned id_map.
-- **W5 (live ratings)** now has everything it needs on this side: the shared
-  calculator, and entrants that pin `rating`/`deviation`/`career_games`/
-  `last_played` as the seed. The last three are zero/null until the pull fills
-  them, which the calculator reads as an unrated player.
+- **W4 (sync), pull half — DONE.** The ratings repo publishes the
+  `coco.roster/1` snapshot (`ratings.roster`, `/manage/roster/`) and Baxter
+  imports it (`tournaments/roster_import.py`, `/players/roster/`). Verified end
+  to end against the live 222-player database: pull, re-pull as a clean no-op,
+  entrant freezes the full seed, seed feeds `coco_ratings.core`.
+
+  What remains on the pull side is the *endpoint* (ratings phase 3a) — the same
+  document over HTTP, which needs the auth decision below. Baxter's importer is
+  one code path and will not change when it arrives.
+
+- **W4, push half** still needs the transport and applying the returned id_map.
+  Baxter has the outbound bundle (`tournament_export.py`) and the rename
+  mechanism (`commands.change_player_number`); what is missing is moving the
+  bundle and the director-confirmed resolution UI (the "number resolution" flow
+  above, steps 4–5).
+- **W5 (live ratings)** is unblocked and has real data: the shared calculator,
+  and entrants that pin `rating`/`deviation`/`career_games`/`last_played` as the
+  seed — now filled by the pull rather than left at zero. `project_ratings` is
+  the only piece not written.
 
 - **W1 and W2 are independent of each other** and can run in parallel — they
   converge on the same canonical number format, which is why decision 1 makes

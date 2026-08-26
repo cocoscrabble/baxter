@@ -16,6 +16,12 @@ def backfill(apps, schema_editor):
     # every digest at v1. So the check below is explicit, and refuses rather
     # than skipping: a backfill that quietly does nothing is worse than one that
     # stops the deploy and tells you what to run.
+    #
+    # **If you add a schema migration, renumber this one to sit after it.** That
+    # has now happened twice (0038 -> 0041 -> 0042). It is a one-time
+    # transitional migration that will eventually be squashed away, and the
+    # check makes getting it wrong loud rather than silent — but the rule is
+    # this, and there is no way to express "always last" in Django.
     from tournaments.digest_backfill import backfill_all, schema_mismatch
 
     mismatch = schema_mismatch()
@@ -44,7 +50,7 @@ def noop_reverse(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("tournaments", "0040_backfill_entrant_ratings"),
+        ("tournaments", "0041_player_rating_seed"),
     ]
 
     operations = [

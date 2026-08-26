@@ -107,6 +107,17 @@ def backfill_tournament(tournament):
     except Exception as exc:  # a log that will not replay cannot be verified
         return 0, f"replay failed: {type(exc).__name__}: {exc}"
 
+    # Already done? Every stored digest matching the v2 recomputation means a
+    # previous run finished, so this is a re-run and there is nothing to do.
+    # Checked *before* the v1 comparison, which would otherwise report an
+    # already-backfilled tournament as divergent — technically true and
+    # thoroughly misleading.
+    if all(
+        seq in digests and digests[seq][1] == digest
+        for seq, digest in stored.items()
+    ):
+        return 0, None
+
     diverged = [
         seq
         for seq, digest in stored.items()

@@ -393,6 +393,19 @@ class Player(models.Model):
     # central database and is only consulted when there is no CoCo rating.
     # NULL means "not known", which is distinct from a rating of 0.
     wespa_rating = models.IntegerField(null=True, blank=True)
+
+    # The rest of the rating seed, mirrored from the central roster alongside
+    # ``rating``. The live rating projection needs all four: the calculator
+    # damps by career games, and deviation grows with time since last_played.
+    #
+    # These live here rather than only on Entrant because an entrant *freezes*
+    # them at registration (plans/PLAN_COCO_PROGRAM.md decision 6) — so they
+    # need a place to sit between a roster pull and the next person entered.
+    # NULL means the roster has never told us, which the calculator reads as an
+    # unrated player.
+    deviation = models.FloatField(null=True, blank=True)
+    career_games = models.IntegerField(default=0)
+    last_played = models.DateField(null=True, blank=True)
     # True for players created locally that the registry has not yet seen; their
     # player_number is a temporary T- value the registry replaces on upload.
     is_provisional = models.BooleanField(default=False)
@@ -624,6 +637,12 @@ class Entrant(models.Model):
             rating, source = player.effective_rating
         else:
             source = cls.MANUAL
+        # The rest of the seed is frozen with the rating, and always from the
+        # player: a director overriding a rating by hand is saying what this
+        # player is worth, not rewriting their playing history.
+        registration.setdefault("deviation", player.deviation or 0.0)
+        registration.setdefault("career_games", player.career_games)
+        registration.setdefault("last_played", player.last_played)
         return cls.objects.create(
             division=division,
             player=player,
