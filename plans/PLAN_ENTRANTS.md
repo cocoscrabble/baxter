@@ -427,11 +427,20 @@ status never depends on punctuation alone (#42's acceptance criteria).
 New route `/t/<slug>/d/<slug>/entrants/embed/` rendering the same table with no
 site chrome, no nav, and inline-safe styling.
 
+**An embedded view contains strictly what a signed-out visitor would get, and
+nothing more** (settled with the owner). An iframe is loaded by the *visitor's*
+browser carrying the visitor's cookies, so a director browsing the CoCo site
+while signed into Baxter must be served the same bytes as everyone else. Two
+separate things enforce that and both are needed: the division is resolved as
+anonymous (`PubliclyVisibleDivisionMixin`), and `can_edit` is forced False.
+
 - Django's `XFrameOptionsMiddleware` defaults to `SAMEORIGIN`, so this view
   needs `@xframe_options_exempt` — otherwise the CoCo site's iframe renders
   blank. Note it explicitly in the view docstring.
 - Editor-only fields are never included, regardless of who is logged in.
-- Respects `VisibleDivisionMixin` (test divisions stay 404).
+- A test division is a 404 **even for the editor who owns it** — the ordinary
+  division page still shows it to them, so this is the embed's rule rather than
+  a change to what an editor may see.
 
 **Verification:** `test_views.py` — a tentative entrant's name carries the
 asterisk and the accessible text; a confirmed entrant carries neither; a
@@ -451,9 +460,17 @@ Three decisions worth recording:
   tentative entrant should not tell the reader what an asterisk would have
   meant. The view computes the three flags; the template renders what is true.
 
-- **Payment is absent from the fragment even for a signed-in editor.** An
-  embedded page has no business varying by viewer, so ``can_edit`` is forced
-  False there rather than merely being unset.
+- **Nothing in the fragment varies by viewer**, which is the rule the owner
+  settled: an embed contains strictly what a signed-out visitor would get.
+  Payment is absent even for a signed-in editor (``can_edit`` forced False,
+  explicitly rather than merely unset), and a test division is a 404 even for
+  its own organizer (`PubliclyVisibleDivisionMixin`). The strongest test simply
+  fetches the page twice, signed in and signed out, and asserts the bytes are
+  identical.
+
+  The first cut only did the ``can_edit`` half, and its test passed by accident:
+  nothing else sets ``can_edit`` on that view, so leaving it unset looked the
+  same. Both halves are pinned by tests confirmed to fail without them.
 
 - **The fragment inlines its own styles.** The embedding site has no reason to
   carry Baxter's stylesheet, and a fragment that only renders correctly when

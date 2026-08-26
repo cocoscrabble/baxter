@@ -419,12 +419,49 @@ class EntrantsEmbedTests(RegistrationTestCase):
         response = self.client.get(self._url())  # still logged in as the owner
         self.assertNotContains(response, "cash")
         self.assertNotContains(response, "Unpaid")
+        # Explicitly False, not merely absent. Nothing sets can_edit on this view
+        # today, so leaving it unset would pass this test by accident and break
+        # the moment someone adds a nav mixin or a context processor.
+        self.assertIs(response.context["can_edit"], False)
 
-    def test_a_test_division_is_still_hidden(self):
+    def test_a_test_division_is_hidden_from_a_signed_out_visitor(self):
         self.division.is_test = True
         self.division.save(update_fields=["is_test"])
         self.client.logout()
         self.assertEqual(self.client.get(self._url()).status_code, 404)
+
+    def test_a_test_division_is_hidden_from_its_own_editor_too(self):
+        """An embed contains strictly what a signed-out visitor would get.
+
+        The iframe is loaded by the *visitor's* browser with the visitor's
+        cookies, so a director browsing the CoCo site while signed into Baxter
+        must be served the same bytes as everyone else. The ordinary division
+        page still shows them their test division; this one must not.
+        """
+        self.division.is_test = True
+        self.division.save(update_fields=["is_test"])
+        # Still logged in as the owner, who *can* edit this tournament.
+        self.assertTrue(self.tournament.can_edit(self.owner))
+        self.assertEqual(self.client.get(self._url()).status_code, 404)
+        # …and the ordinary page still works for them, so this is the embed's
+        # rule rather than a change to what an editor may see.
+        ordinary = reverse(
+            "division_entrants", kwargs=self.division.slug_kwargs()
+        )
+        self.assertEqual(self.client.get(ordinary).status_code, 200)
+
+    def test_the_bytes_do_not_depend_on_who_is_asking(self):
+        """The whole rule, in one assertion."""
+        Entrant.enter(
+            self.division, self.ann, 1, paid=True, payment_note="cash",
+            tentative=True,
+        )
+        Entrant.enter(self.division, self.bea, 2, playing_up=True)
+
+        as_editor = self.client.get(self._url()).content
+        self.client.logout()
+        as_visitor = self.client.get(self._url()).content
+        self.assertEqual(as_editor, as_visitor)
 
     def test_an_empty_division_says_so(self):
         response = self.client.get(self._url())

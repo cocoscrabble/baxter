@@ -3,6 +3,7 @@ from collections import defaultdict
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import PermissionDenied
 from django.db import models, transaction
 from django.http import Http404, HttpResponse, JsonResponse
@@ -408,6 +409,28 @@ class VisibleDivisionMixin(DivisionURLMixin):
         return self.division
 
 
+class PubliclyVisibleDivisionMixin(DivisionURLMixin):
+    """Resolve the division **as a signed-out visitor would see it**.
+
+    For a page that is embedded in someone else's site: an embedded view must
+    contain strictly what an anonymous request would get, and nothing more.
+
+    The distinction matters because an iframe is loaded by the *visitor's*
+    browser, carrying the visitor's cookies. A director browsing the CoCo site
+    while signed into Baxter would otherwise be served a different page from
+    everyone else — a test division, say, which ``VisibleDivisionMixin`` shows
+    to editors. Nobody chose to visit an embed; it must not vary by who is
+    looking.
+
+    Views using this must also refuse to render editor-only fields regardless of
+    ``request.user`` — see ``DivisionEntrantsEmbedView``.
+    """
+
+    def get_object(self, queryset=None):
+        _ensure_visible_division(self.division, AnonymousUser())
+        return self.division
+
+
 class DivisionNavMixin:
     """Adds active_tab and can_edit to context for the division navbar."""
 
@@ -687,19 +710,23 @@ class DivisionEntrantsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
 
 
 @method_decorator(xframe_options_exempt, name="dispatch")
-class DivisionEntrantsEmbedView(VisibleDivisionMixin, DetailView):
+class DivisionEntrantsEmbedView(PubliclyVisibleDivisionMixin, DetailView):
     """The entrant list as a chrome-free fragment, for the CoCo site to iframe.
 
-    ``xframe_options_exempt`` is not optional: Django's XFrameOptionsMiddleware
-    defaults to SAMEORIGIN, so without it the embedding page renders a blank
-    box with a console error and no other clue what went wrong.
+    **This view contains strictly what a signed-out visitor would get.** An
+    iframe is loaded by the visitor's browser with the visitor's cookies, so a
+    director browsing the CoCo site while signed into Baxter must be served the
+    same bytes as everyone else. Two things enforce that, and both are needed:
 
-    Editor-only fields are absent regardless of who is logged in — ``can_edit``
-    is never put in this context, so the payment column is not rendered even for
-    an organizer who happens to be signed in. An embedded page has no business
-    varying by viewer.
+    - ``PubliclyVisibleDivisionMixin`` resolves the division as anonymous, so a
+      test division is a 404 even for the organizer who owns it.
+    - ``can_edit`` is forced False, so the payment column is not rendered for a
+      signed-in editor either.
 
-    ``VisibleDivisionMixin`` still applies, so a test division stays a 404.
+    ``xframe_options_exempt`` is not optional either: Django's
+    XFrameOptionsMiddleware defaults to SAMEORIGIN, so without it the embedding
+    page renders a blank box with a console error and no other clue what went
+    wrong.
     """
 
     model = Division
