@@ -198,3 +198,101 @@ class RerunTests(DigestBackfillTests):
         self.assertEqual(
             {e.seq: e.digest for e in self.tournament.events.all()}, after_first
         )
+
+
+@tag("slow")
+class ImportedDivisionBackfillTests(TestCase):
+    """A what-if import must verify under v1 like anything else.
+
+    ``division_imported`` is the one command whose payload stays name-keyed —
+    it *is* the historical document — so its replay path differs from every
+    other tournament's. The backfill refuses to rewrite a log that does not
+    reproduce, which is only a trustworthy signal if the v1 reconstruction
+    handles this shape too. Otherwise a perfectly good sandbox division looks
+    divergent and gets skipped for no reason.
+
+    The final assertion is the load-bearing one. Seeding the v1 digests and then
+    verifying them with the same function proves only that the function agrees
+    with itself; comparing the rewritten digest against the *live* division is
+    what proves the replay reproduces what is actually there.
+
+    **What this cannot see.** ``division_imported`` replays by re-running the
+    same command that recorded it, so a change to *that* command moves the
+    recording and the replay together and stays invisible here — as does a
+    change to the v1 digest, which seeds and verifies both sides. What it does
+    catch is the replay diverging from the recording: a resolve step that
+    invents a new player instead of matching the existing one, dict ordering,
+    a minted number that drifts. That is the failure this shape is prone to,
+    and it is why the assertion is against live state rather than a round trip.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(username="whatif", password="pw")
+        Player.objects.create(name="Alice", player_number="0001", rating=1600)
+        Player.objects.create(name="Bob", player_number="0002", rating=1500)
+
+    def _import(self):
+        from tournaments.commands import create_tournament, import_division
+
+        tournament = create_tournament(
+            None, self.owner,
+            {
+                "name": "What-if", "location": "X",
+                "start_date": "2026-04-01", "editors": [],
+                "default_division": {"name": "Division 1", "pairing_seed": 3},
+            },
+        )
+        import_division(
+            tournament, self.owner,
+            {
+                "name": "Imported",
+                "entrants": [
+                    {"player": "Alice", "rating": 1600, "number": 1},
+                    {"player": "Bob", "rating": 1500, "number": 2},
+                    # Not on the roster: resolve_player mints a T- number, which
+                    # is the part most likely to differ between record and replay.
+                    {"player": "Carol Newcomer", "rating": 0, "number": 3},
+                ],
+                "results": [
+                    {"round": 1, "winner": "Alice", "loser": "Bob",
+                     "winner_score": 450, "loser_score": 380,
+                     "winner_started": True},
+                    {"round": 2, "winner": "Carol Newcomer", "loser": "Alice",
+                     "winner_score": 500, "loser_score": 400,
+                     "winner_started": True},
+                ],
+            },
+        )
+        return tournament
+
+    def test_an_imported_division_verifies_and_is_rewritten(self):
+        from tournaments.digest_backfill import backfill_tournament, replayed_digests
+        from tournaments.events import division_digest
+        from tournaments.replay import events_from_tournament
+
+        tournament = self._import()
+        division = tournament.divisions.get(name="Imported")
+        # The live state, before anything is replayed. Every assertion below
+        # anchors to this: seeding the v1 digests *and* verifying them with the
+        # same function would prove only that the function agrees with itself.
+        live = division_digest(division)
+
+        # Walk its digests back to v1, as an older database holds them.
+        digests = replayed_digests(events_from_tournament(tournament))
+        self.assertTrue(digests, "the import should have recorded a digest")
+        for event in tournament.events.filter(seq__in=digests):
+            event.digest = digests[event.seq][0]
+            event.save(update_fields=["digest"])
+
+        count, reason = backfill_tournament(tournament)
+        self.assertIsNone(
+            reason,
+            "an imported division should verify under v1, not look divergent",
+        )
+        self.assertEqual(count, len(digests))
+
+        # The rewritten digest describes the division that is actually here —
+        # which is what makes the replay faithful rather than merely repeatable.
+        self.assertEqual(
+            tournament.events.order_by("seq").last().digest, live
+        )
