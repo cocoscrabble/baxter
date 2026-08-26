@@ -103,10 +103,12 @@ from .pairing.methods import (
 )
 from .player_sync import import_players
 from .roster_import import (
+    PendingResolution,
     RosterFetchError,
     RosterParseError,
     fetch_roster,
     import_roster,
+    resolve_number,
     roster_endpoint_configured,
 )
 from .wespa_ratings import parse_wespa_csv, refresh_wespa_ratings
@@ -2020,27 +2022,52 @@ class RosterImportView(LoginRequiredMixin, IsAdminMixin, View):
     """
 
     template_name = "tournaments/roster_import.html"
+    # Where held-back resolutions wait between the pull that found them and the
+    # click that confirms them. The session, not the database, because they are
+    # a proposal rather than state: losing them costs another pull, which is
+    # idempotent — the guest is still provisional and the number still free.
+    PENDING_KEY = "roster_pending"
 
-    def _context(self):
-        return {
+    def _context(self, **overrides):
+        context = {
             "player_count": Player.objects.filter(is_bye=False).count(),
             "provisional_count": Player.objects.filter(
                 is_bye=False, is_provisional=True
             ).count(),
             "endpoint_configured": roster_endpoint_configured(),
             "endpoint_url": settings.ROSTER_API_URL,
+            "pending": self._pending(),
         }
+        context.update(overrides)
+        return context
+
+    def _pending(self):
+        return [
+            PendingResolution.from_session(entry)
+            for entry in self.request.session.get(self.PENDING_KEY, [])
+        ]
+
+    def _remember(self, pending):
+        self.request.session[self.PENDING_KEY] = [
+            p.to_session() for p in pending
+        ]
+
+    def _forget(self, key):
+        remaining = [p for p in self._pending() if p.key != key]
+        self._remember(remaining)
 
     def get(self, request):
         return render(request, self.template_name, self._context())
 
     def post(self, request):
-        """Two transports, one importer.
+        """Two transports, one importer, plus the confirm step.
 
-        ``fetch`` goes to the central database; anything else is a file upload.
-        Both end up in ``import_roster``, so the two paths differ only in where
-        the bytes came from.
+        ``fetch`` goes to the central database; ``resolve`` confirms one held-back
+        rename; anything else is a file upload. The two pull paths end up in
+        ``import_roster``, so they differ only in where the bytes came from.
         """
+        if request.POST.get("action") == "resolve":
+            return self._resolve(request)
         try:
             raw = self._bytes(request)
         except RosterFetchError as exc:
@@ -2060,6 +2087,34 @@ class RosterImportView(LoginRequiredMixin, IsAdminMixin, View):
             request,
             f"Pulled {result.total} player(s){stamp}: {len(result.added)} added, "
             f"{len(result.updated)} updated, {len(result.unchanged)} unchanged.",
+        )
+        self._remember(result.pending)
+        if result.pending:
+            messages.warning(
+                request,
+                f"{len(result.pending)} player(s) look like guests who have since "
+                f"been given a number. Nothing was changed for them — confirm "
+                f"each below.",
+            )
+        return redirect("roster_import")
+
+    def _resolve(self, request):
+        """Confirm one held-back rename."""
+        key = request.POST.get("pending", "")
+        entry = next((p for p in self._pending() if p.key == key), None)
+        if entry is None:
+            messages.error(request, "That resolution is no longer pending.")
+            return redirect("roster_import")
+        try:
+            player = resolve_number(entry, actor=request.user)
+        except (RosterParseError, ValueError) as exc:
+            messages.error(request, str(exc))
+            return redirect("roster_import")
+        self._forget(key)
+        messages.success(
+            request,
+            f"{player.name} is now #{player.player_number}, "
+            f"keeping their entrants and results.",
         )
         return redirect("roster_import")
 

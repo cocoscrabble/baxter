@@ -329,11 +329,22 @@ repo's court or waiting on a protocol:
   mocks — 222 players pulled, a re-pull a clean no-op, a wrong token reported
   readably. **The pull half of W4 is complete.**
 
-- **W4, push half** still needs the transport and applying the returned id_map.
-  Baxter has the outbound bundle (`tournament_export.py`) and the rename
-  mechanism (`commands.change_player_number`); what is missing is moving the
-  bundle and the director-confirmed resolution UI (the "number resolution" flow
-  above, steps 4–5).
+- **W4, number resolution (steps 4–5) — DONE.** A pull holds back a roster row
+  whose number is new but whose name belongs to exactly one *provisional*
+  player, and offers it for confirmation
+  (`roster_import.PendingResolution`, `/players/roster/`). Confirming renames
+  the guest in place — same row, so entrants, results and the pinned rating all
+  survive — and logs `player_number_changed` in every tournament they played in.
+
+  **Holding back is the point.** The first cut let the pull create the row, and
+  the result was two of the same human: one carrying the entrants and results,
+  one carrying the number, with the entrant as unexportable as before. Found by
+  asking what an actual pull would do to the three guests the production
+  migration had just parked.
+
+- **W4, push half** still needs the transport. Baxter has the outbound bundle
+  (`tournament_export.py`); what is missing is moving it and applying the
+  id_map the registry returns.
 - **W5 (live ratings) — DONE.** `tournaments/live_ratings.py` +
   `/division/<slug>/ratings/`. Verified the only way that means anything:
   `test_live_ratings_corpus` rates **119 real tournaments** two ways — through
