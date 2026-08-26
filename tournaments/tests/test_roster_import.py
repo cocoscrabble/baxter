@@ -425,3 +425,261 @@ class FetchViewTests(TestCase):
 
         self.assertContains(response, "rejected the token")
         self.assertFalse(Player.objects.filter(player_number="0233").exists())
+
+
+class HeldBackTests(TestCase):
+    """A roster row that looks like a local guest is not created.
+
+    This is the case that motivated the whole feature: a guest plays under a
+    ``T-`` number, an admin gives them a real one centrally, and the next pull
+    would otherwise create a *second* copy of them — one holding the entrants
+    and results, one holding the number — leaving the entrant as unexportable as
+    before, and a duplicate to clean up.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(username="td-held", password="pw")
+        self.tournament = Tournament.objects.create(
+            name="Champs", location="X",
+            start_date=date(2026, 5, 1), owner=self.owner,
+        )
+        self.division = Division.objects.create(
+            tournament=self.tournament, name="Open"
+        )
+        self.guest = Player.objects.create(
+            name="Joe Thorngren", player_number="T-4", rating=0,
+            is_provisional=True,
+        )
+        self.entrant = Entrant.enter(self.division, self.guest, 1)
+
+    def test_the_pull_holds_it_back_and_creates_nothing(self):
+        result = import_roster(roster(entry("0301", "Joe Thorngren")))
+        self.assertEqual(result.added, [])
+        self.assertEqual(len(result.pending), 1)
+
+        held = result.pending[0]
+        self.assertEqual(held.local_number, "T-4")
+        self.assertEqual(held.roster_number, "0301")
+        # Nothing written: still one Joe, still provisional, still on T-4.
+        self.assertEqual(Player.objects.filter(name="Joe Thorngren").count(), 1)
+        self.guest.refresh_from_db()
+        self.assertEqual(self.guest.player_number, "T-4")
+        self.assertTrue(self.guest.is_provisional)
+
+    def test_two_guests_sharing_a_name_are_not_matched(self):
+        """Exactly the case a human has to disambiguate."""
+        Player.objects.create(
+            name="Joe Thorngren", player_number="T-9", rating=0,
+            is_provisional=True,
+        )
+        result = import_roster(roster(entry("0301", "Joe Thorngren")))
+        self.assertEqual(result.pending, [])
+        self.assertEqual(result.added, ["0301"])
+
+    def test_a_settled_player_with_the_same_name_is_two_people(self):
+        """Both have real numbers, so they are not the same human and the
+        roster is right to add the one Baxter has not seen."""
+        Player.objects.create(
+            name="Ada Real", player_number="0500", rating=1500,
+            is_provisional=False,
+        )
+        result = import_roster(roster(entry("0600", "Ada Real")))
+        self.assertEqual(result.pending, [])
+        self.assertEqual(result.added, ["0600"])
+
+    def test_a_guest_the_roster_still_does_not_know_is_untouched(self):
+        result = import_roster(roster(entry("0999", "Someone Else")))
+        self.assertEqual(result.pending, [])
+        self.guest.refresh_from_db()
+        self.assertEqual(self.guest.player_number, "T-4")
+
+
+class ResolutionTests(TestCase):
+    """Confirming a held-back rename."""
+
+    def setUp(self):
+        self.owner = User.objects.create_user(username="td-res", password="pw")
+        from tournaments.commands import create_tournament
+
+        self.tournament = create_tournament(
+            None, self.owner,
+            {
+                "name": "Champs", "location": "X", "start_date": "2026-05-01",
+                "editors": [], "default_division": {"name": "Open", "pairing_seed": 1},
+            },
+        )
+        self.division = self.tournament.divisions.get()
+        self.guest = Player.objects.create(
+            name="Joe Thorngren", player_number="T-4", rating=0,
+            is_provisional=True,
+        )
+        self.entrant = Entrant.enter(self.division, self.guest, 1)
+
+    def _pending(self):
+        result = import_roster(
+            roster(entry("0301", "Joe Thorngren", rating=1400,
+                         deviation=90.0, games=12, last_played="2026-08-01"))
+        )
+        return result.pending[0]
+
+    def test_it_renames_in_place_and_keeps_everything(self):
+        from tournaments.roster_import import resolve_number
+
+        resolve_number(self._pending(), actor=self.owner)
+
+        # One player, on the new number, no longer provisional.
+        self.assertEqual(Player.objects.filter(name="Joe Thorngren").count(), 1)
+        self.guest.refresh_from_db()
+        self.assertEqual(self.guest.player_number, "0301")
+        self.assertFalse(self.guest.is_provisional)
+        # …and carrying the registry's data.
+        self.assertEqual(self.guest.rating, 1400)
+        self.assertEqual(self.guest.career_games, 12)
+        self.assertEqual(self.guest.last_played, date(2026, 8, 1))
+        # The entrant is the same row, so results and pairings are untouched.
+        self.entrant.refresh_from_db()
+        self.assertEqual(self.entrant.player_id, self.guest.pk)
+        self.assertEqual(self.entrant.key, "0301")
+
+    def test_the_pinned_rating_does_not_move(self):
+        """A rename is not a reason to reseed a tournament already under way."""
+        from tournaments.roster_import import resolve_number
+
+        before = (self.entrant.rating, self.entrant.rating_source)
+        resolve_number(self._pending(), actor=self.owner)
+        self.entrant.refresh_from_db()
+        self.assertEqual((self.entrant.rating, self.entrant.rating_source), before)
+
+    def test_it_is_logged(self):
+        from tournaments.roster_import import resolve_number
+
+        resolve_number(self._pending(), actor=self.owner)
+        event = self.tournament.events.get(event_type="player_number_changed")
+        self.assertEqual(event.payload, {"old": "T-4", "new": "0301"})
+
+    def test_it_is_logged_in_every_tournament_the_player_played_in(self):
+        from tournaments.commands import create_tournament
+        from tournaments.roster_import import resolve_number
+
+        second = create_tournament(
+            None, self.owner,
+            {
+                "name": "Other", "location": "X", "start_date": "2026-06-01",
+                "editors": [], "default_division": {"name": "Open", "pairing_seed": 1},
+            },
+        )
+        Entrant.enter(second.divisions.get(), self.guest, 1)
+
+        resolve_number(self._pending(), actor=self.owner)
+
+        for tournament in (self.tournament, second):
+            with self.subTest(tournament=tournament.name):
+                self.assertEqual(
+                    tournament.events.filter(
+                        event_type="player_number_changed"
+                    ).count(),
+                    1,
+                    "each log names this player by number, so each needs the change",
+                )
+
+    def test_a_taken_number_is_refused(self):
+        from tournaments.roster_import import RosterParseError, resolve_number
+
+        pending = self._pending()
+        Player.objects.create(name="Someone", player_number="0301", rating=1500)
+        with self.assertRaisesRegex(RosterParseError, "already belongs"):
+            resolve_number(pending, actor=self.owner)
+        self.guest.refresh_from_db()
+        self.assertEqual(self.guest.player_number, "T-4")
+
+    def test_a_stale_resolution_is_refused(self):
+        from tournaments.roster_import import RosterParseError, resolve_number
+
+        pending = self._pending()
+        self.guest.player_number = "T-99"
+        self.guest.save(update_fields=["player_number"])
+        with self.assertRaisesRegex(RosterParseError, "no longer on"):
+            resolve_number(pending, actor=self.owner)
+
+    def test_a_player_with_no_tournaments_is_renamed_without_an_event(self):
+        """There is no log for it to belong to."""
+        from tournaments.roster_import import resolve_number
+
+        self.entrant.delete()
+        resolve_number(self._pending(), actor=self.owner)
+        self.guest.refresh_from_db()
+        self.assertEqual(self.guest.player_number, "0301")
+        self.assertEqual(
+            self.tournament.events.filter(
+                event_type="player_number_changed"
+            ).count(),
+            0,
+        )
+
+
+class ResolutionViewTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            username="admin-res", password="pw", role="admin", is_staff=True
+        )
+        self.client.force_login(self.admin)
+        self.url = reverse("roster_import")
+        self.guest = Player.objects.create(
+            name="Joe Thorngren", player_number="T-4", rating=0,
+            is_provisional=True,
+        )
+
+    def _pull(self):
+        return self.client.post(
+            self.url,
+            {
+                "roster_file": SimpleUploadedFile(
+                    "roster.json",
+                    json.dumps(roster(entry("0301", "Joe Thorngren"))).encode(),
+                    "application/json",
+                )
+            },
+            follow=True,
+        )
+
+    def test_a_pull_offers_the_resolution_rather_than_applying_it(self):
+        response = self._pull()
+        self.assertContains(response, "Needs confirming")
+        self.assertContains(response, "T-4")
+        self.assertContains(response, "0301")
+        self.assertContains(response, "look like guests")
+        self.assertEqual(Player.objects.filter(name="Joe Thorngren").count(), 1)
+
+    def test_confirming_applies_it(self):
+        self._pull()
+        response = self.client.post(
+            self.url, {"action": "resolve", "pending": "T-4:0301"}, follow=True
+        )
+        self.assertContains(response, "now #0301")
+        self.guest.refresh_from_db()
+        self.assertEqual(self.guest.player_number, "0301")
+        # …and it stops being offered.
+        self.assertNotContains(response, "Needs confirming")
+
+    def test_declining_leaves_everything_alone(self):
+        self._pull()
+        self.guest.refresh_from_db()
+        self.assertEqual(self.guest.player_number, "T-4")
+        self.assertTrue(self.guest.is_provisional)
+
+    def test_an_unknown_resolution_is_reported(self):
+        response = self.client.post(
+            self.url, {"action": "resolve", "pending": "T-9:9999"}, follow=True
+        )
+        self.assertContains(response, "no longer pending")
+
+    def test_a_director_cannot_resolve(self):
+        director = User.objects.create_user(
+            username="td-only", password="pw", role="director"
+        )
+        self.client.force_login(director)
+        self.client.post(
+            self.url, {"action": "resolve", "pending": "T-4:0301"}
+        )
+        self.guest.refresh_from_db()
+        self.assertEqual(self.guest.player_number, "T-4")

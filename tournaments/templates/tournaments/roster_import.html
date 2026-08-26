@@ -48,6 +48,48 @@ adds a one-click pull.</p>
     <button type="submit">Upload and pull</button>
 </form>
 
+{% if pending %}
+{% comment %}
+Held-back rows: the roster has a number for someone Baxter only knows as a
+guest. Matching them is the one step done by name, so it is the one step a
+human has to confirm — and nothing was written for them, so declining costs
+nothing.
+{% endcomment %}
+<h2>Needs confirming ({{ pending|length }})</h2>
+<p>The roster has a player number for someone Baxter knows only as a guest.
+These were matched <em>by name</em>, which is a guess, so nothing has been
+changed for them yet. Confirming keeps the guest's entrants and results and
+moves them onto the real number.</p>
+
+<table>
+    <thead>
+        <tr><th>Player</th><th>Now</th><th>Becomes</th><th>Rating</th><th></th></tr>
+    </thead>
+    <tbody>
+        {% for entry in pending %}
+        <tr>
+            <td>{{ entry.name }}</td>
+            <td><code>{{ entry.local_number }}</code></td>
+            <td><code>{{ entry.roster_number }}</code></td>
+            <td class="num">{% if entry.row.rating %}{{ entry.row.rating }}{% else %}unrated{% endif %}</td>
+            <td>
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="resolve">
+                    <input type="hidden" name="pending" value="{{ entry.key }}">
+                    <button type="submit">Confirm</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<p class="settings-intro">Not the same person? Leave it — pulling again will
+offer it again, and adding them to Baxter under their real number instead makes
+the match go away.</p>
+{% endif %}
+
 <p>WESPA ratings are not part of this — the central database does not hold them.
 <a href="{% url 'wespa_import' %}">Import those separately</a>.</p>
 {% endblock %}
