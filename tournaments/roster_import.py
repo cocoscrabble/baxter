@@ -25,10 +25,13 @@ separate, director-confirmed step.
 """
 
 import json
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 from datetime import date
 
 from coco_ratings.identity import canonical_player_number
+from django.conf import settings
 from django.db import transaction
 
 from .models import Player
@@ -163,3 +166,64 @@ def import_roster(raw):
             to_update, [*SYNCED_FIELDS, "is_provisional"], batch_size=500
         )
     return result
+
+
+# ---------------------------------------------------------------------------
+# Fetching
+# ---------------------------------------------------------------------------
+
+# Long enough for a slow link, short enough that a wedged endpoint does not hold
+# a request thread open indefinitely. The roster is ~40 KB.
+FETCH_TIMEOUT = 30
+
+
+class RosterFetchError(Exception):
+    """The roster could not be retrieved. The message is shown to an admin."""
+
+
+def roster_endpoint_configured() -> bool:
+    """Whether a fetch is even possible. Both halves are required."""
+    return bool(settings.ROSTER_API_URL and settings.ROSTER_API_TOKEN)
+
+
+def fetch_roster(url=None, token=None) -> bytes:
+    """GET the roster document from the central database.
+
+    The *normal* path; the file upload is the offline one. Both hand their bytes
+    to the same ``import_roster``, so nothing downstream knows which was used.
+
+    Errors are translated into something an admin can act on, because the raw
+    ones are not: a bare ``HTTPError: 401`` does not say "check the token", and
+    ``URLError`` does not say "check the address".
+    """
+    url = url or settings.ROSTER_API_URL
+    token = token or settings.ROSTER_API_TOKEN
+    if not (url and token):
+        raise RosterFetchError(
+            "No roster endpoint is configured — set ROSTER_API_URL and "
+            "ROSTER_API_TOKEN, or upload a snapshot file instead."
+        )
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=FETCH_TIMEOUT) as response:
+            return response.read()
+    except urllib.error.HTTPError as exc:
+        if exc.code == 401:
+            raise RosterFetchError(
+                f"The central database rejected the token ({url})."
+            ) from None
+        raise RosterFetchError(
+            f"The central database returned {exc.code} {exc.reason} ({url})."
+        ) from None
+    except urllib.error.URLError as exc:
+        raise RosterFetchError(f"Could not reach {url}: {exc.reason}.") from None
+    except TimeoutError:
+        raise RosterFetchError(
+            f"{url} did not respond within {FETCH_TIMEOUT} seconds."
+        ) from None

@@ -9,7 +9,7 @@ import json
 from datetime import date
 
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from tournaments.models import Division, Entrant, Player, Tournament
@@ -290,4 +290,138 @@ class RosterImportViewTests(TestCase):
         doc["schema"] = "something/else"
         response = self._upload(doc)
         self.assertContains(response, "Unsupported roster schema")
+        self.assertFalse(Player.objects.filter(player_number="0233").exists())
+
+
+class FetchTests(TestCase):
+    """Pulling over HTTP — the normal path (the file upload is the offline one).
+
+    Errors are translated because the raw ones are not actionable: a bare
+    ``HTTPError: 401`` does not say "check the token".
+    """
+
+    URL = "https://cocodb.example/api/roster/"
+
+    def _fetch(self, **patches):
+        from unittest.mock import patch
+
+        from tournaments.roster_import import fetch_roster
+
+        with patch("tournaments.roster_import.urllib.request.urlopen", **patches):
+            return fetch_roster()
+
+    @override_settings(ROSTER_API_URL=URL, ROSTER_API_TOKEN="tok")
+    def test_it_sends_the_bearer_token_and_returns_the_body(self):
+        from unittest.mock import MagicMock, patch
+
+        from tournaments.roster_import import fetch_roster
+
+        body = json.dumps(roster(entry("0233", "Alec"))).encode()
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = body
+        with patch(
+            "tournaments.roster_import.urllib.request.urlopen", return_value=response
+        ) as opener:
+            self.assertEqual(fetch_roster(), body)
+
+        request = opener.call_args.args[0]
+        self.assertEqual(request.full_url, self.URL)
+        self.assertEqual(request.get_header("Authorization"), "Bearer tok")
+
+    @override_settings(ROSTER_API_URL="", ROSTER_API_TOKEN="")
+    def test_an_unconfigured_endpoint_says_what_to_set(self):
+        from tournaments.roster_import import RosterFetchError, fetch_roster
+
+        with self.assertRaisesRegex(RosterFetchError, "ROSTER_API_URL"):
+            fetch_roster()
+
+    @override_settings(ROSTER_API_URL=URL, ROSTER_API_TOKEN="tok")
+    def test_a_rejected_token_says_so(self):
+        import urllib.error
+
+        from tournaments.roster_import import RosterFetchError
+
+        with self.assertRaisesRegex(RosterFetchError, "rejected the token"):
+            self._fetch(
+                side_effect=urllib.error.HTTPError(
+                    self.URL, 401, "Unauthorized", {}, None
+                )
+            )
+
+    @override_settings(ROSTER_API_URL=URL, ROSTER_API_TOKEN="tok")
+    def test_another_http_error_reports_its_code(self):
+        import urllib.error
+
+        from tournaments.roster_import import RosterFetchError
+
+        with self.assertRaisesRegex(RosterFetchError, "500"):
+            self._fetch(
+                side_effect=urllib.error.HTTPError(
+                    self.URL, 500, "Server Error", {}, None
+                )
+            )
+
+    @override_settings(ROSTER_API_URL=URL, ROSTER_API_TOKEN="tok")
+    def test_an_unreachable_host_names_the_address(self):
+        import urllib.error
+
+        from tournaments.roster_import import RosterFetchError
+
+        with self.assertRaisesRegex(RosterFetchError, "cocodb.example"):
+            self._fetch(side_effect=urllib.error.URLError("nodename nor servname"))
+
+    @override_settings(ROSTER_API_URL=URL, ROSTER_API_TOKEN="tok")
+    def test_a_timeout_says_how_long_it_waited(self):
+        from tournaments.roster_import import RosterFetchError
+
+        with self.assertRaisesRegex(RosterFetchError, "30 seconds"):
+            self._fetch(side_effect=TimeoutError())
+
+
+class FetchViewTests(TestCase):
+    URL = "https://cocodb.example/api/roster/"
+
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            username="admin", password="pw", role="admin", is_staff=True
+        )
+        self.client.force_login(self.admin)
+        self.url = reverse("roster_import")
+
+    @override_settings(ROSTER_API_URL=URL, ROSTER_API_TOKEN="tok")
+    def test_the_fetch_button_appears_when_configured(self):
+        response = self.client.get(self.url)
+        self.assertContains(response, "Pull now")
+        self.assertContains(response, "cocodb.example")
+
+    @override_settings(ROSTER_API_URL="", ROSTER_API_TOKEN="")
+    def test_without_configuration_only_the_upload_is_offered(self):
+        response = self.client.get(self.url)
+        self.assertNotContains(response, "Pull now")
+        self.assertContains(response, "No roster endpoint is configured")
+
+    @override_settings(ROSTER_API_URL=URL, ROSTER_API_TOKEN="tok")
+    def test_a_fetch_imports_the_same_way_an_upload_does(self):
+        from unittest.mock import patch
+
+        body = json.dumps(roster(entry("0233", "Alec"))).encode()
+        with patch("tournaments.views.fetch_roster", return_value=body):
+            response = self.client.post(self.url, {"source": "fetch"}, follow=True)
+
+        self.assertContains(response, "1 added")
+        self.assertTrue(Player.objects.filter(player_number="0233").exists())
+
+    @override_settings(ROSTER_API_URL=URL, ROSTER_API_TOKEN="tok")
+    def test_a_failed_fetch_is_reported_not_crashed(self):
+        from unittest.mock import patch
+
+        from tournaments.roster_import import RosterFetchError
+
+        with patch(
+            "tournaments.views.fetch_roster",
+            side_effect=RosterFetchError("The central database rejected the token."),
+        ):
+            response = self.client.post(self.url, {"source": "fetch"}, follow=True)
+
+        self.assertContains(response, "rejected the token")
         self.assertFalse(Player.objects.filter(player_number="0233").exists())

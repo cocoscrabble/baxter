@@ -39,6 +39,14 @@ CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
 # Python engine has been retired; see tournaments/pairing/engine.py.
 PAIRING_ENGINE = env("PAIRING_ENGINE", default="rust")
 
+# The central CoCo player database, which Baxter pulls its roster from before an
+# event (plans/PLAN_COCO_PROGRAM.md). Both must be set for the fetch button to
+# appear; without them the snapshot-file upload still works, which is the whole
+# point of having two transports. Baxter never needs either while a tournament
+# is running.
+ROSTER_API_URL = env("ROSTER_API_URL", default="")
+ROSTER_API_TOKEN = env("ROSTER_API_TOKEN", default="")
+
 # Production hardening (behind the dokku nginx proxy, which terminates TLS and
 # sets X-Forwarded-Proto). Kept off in DEBUG so local http still works.
 # HSTS is deliberately left for a later deploy decision.

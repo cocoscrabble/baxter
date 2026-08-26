@@ -297,9 +297,10 @@ repo's court or waiting on a protocol:
   to end against the live 222-player database: pull, re-pull as a clean no-op,
   entrant freezes the full seed, seed feeds `coco_ratings.core`.
 
-  What remains on the pull side is the *endpoint* (ratings phase 3a) — the same
-  document over HTTP, which needs the auth decision below. Baxter's importer is
-  one code path and will not change when it arrives.
+  The endpoint (ratings phase 3a) is in too: `GET /api/roster/`, on a shared
+  static token, with Baxter fetching from it. Verified over real HTTP with no
+  mocks — 222 players pulled, a re-pull a clean no-op, a wrong token reported
+  readably. **The pull half of W4 is complete.**
 
 - **W4, push half** still needs the transport and applying the returned id_map.
   Baxter has the outbound bundle (`tournament_export.py`) and the rename
@@ -364,10 +365,13 @@ Kept here as the record of what changed and why:
 
 - **The WESPA source is still unknown** and is unaffected by any of this; it
   remains a stub seam in `PLAN_ENTRANTS.md` Phase 5.
-- **Auth for the roster endpoint** is unspecified: a shared static token is
-  almost certainly enough for a 245-player read-only roster, but it is a
-  decision, not an assumption. The snapshot-file path works with no auth story
-  at all, which is a reason to build it first.
+- ~~**Auth for the roster endpoint**~~ — **settled**: a shared static token
+  (`ROSTER_API_TOKEN`), the owner's call, on the grounds that this is not highly
+  sensitive data. An unset token disables the endpoint rather than opening it,
+  so a deploy that forgets to set one fails closed. **It is not yet set on the
+  production app** — see the ratings repo's CLAUDE.md for the `dokku
+  config:set`. The snapshot-file path needs no token and keeps working either
+  way.
 - **`complete-ratings-list.csv` is name-keyed and carries no player number**
   (`Name,Rating,Deviation,Games played`). It is not part of the contract above —
   the pull reads the DB, not this file — but it is another name-keyed artifact
