@@ -24,6 +24,11 @@ added, and nothing is ever deleted.</p>
 <pre>uv run manage.py export_players -o players.json</pre>
 <p>then upload <code>players.json</code> here.</p>
 
+<h2>The central roster</h2>
+<p>If you have a snapshot from the CoCo player database, that is the better way
+in — it carries ratings and rating history, not just names and numbers.
+<a href="{% url 'roster_import' %}">Pull it here</a>.</p>
+
 <h2>WESPA ratings</h2>
 <p>WESPA ratings are separate — they are only used for players with no CoCo
 rating and never sync to the central database.

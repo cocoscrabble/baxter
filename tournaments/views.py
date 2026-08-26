@@ -100,6 +100,7 @@ from .pairing.methods import (
     pairing_method_schedule,
 )
 from .player_sync import import_players
+from .roster_import import RosterParseError, import_roster
 from .wespa_ratings import parse_wespa_csv, refresh_wespa_ratings
 from users.models import User
 from .generate_pairings import publish_rounds, regenerate_pairings, unpublish_rounds
@@ -1953,6 +1954,54 @@ class PlayerImportView(LoginRequiredMixin, IsAdminMixin, View):
                 f"{result['updated']} updated, {result['unchanged']} unchanged."
             )
         return redirect("player_import")
+
+
+class RosterImportView(LoginRequiredMixin, IsAdminMixin, View):
+    """Admin-only page to pull the central roster from a snapshot file.
+
+    The "before" half of the registry sync: once this has run, Baxter can run a
+    whole tournament with no connection to the central database
+    (``plans/PLAN_COCO_PROGRAM.md``). The authenticated endpoint is the normal
+    path and the file is the offline one, but both produce the same document and
+    ``import_roster`` is one code path — so this page will keep working
+    unchanged when the endpoint arrives.
+
+    Global and unlogged, like the other roster imports, and for the same reason:
+    entrants freeze their rating seed when they enter, so a pull cannot move a
+    tournament that is already under way.
+    """
+
+    template_name = "tournaments/roster_import.html"
+
+    def _context(self):
+        return {
+            "player_count": Player.objects.filter(is_bye=False).count(),
+            "provisional_count": Player.objects.filter(
+                is_bye=False, is_provisional=True
+            ).count(),
+        }
+
+    def get(self, request):
+        return render(request, self.template_name, self._context())
+
+    def post(self, request):
+        uploaded = request.FILES.get("roster_file")
+        if not uploaded:
+            messages.error(request, "No file uploaded.")
+            return redirect("roster_import")
+        try:
+            result = import_roster(uploaded.read())
+        except RosterParseError as exc:
+            messages.error(request, str(exc))
+            return redirect("roster_import")
+
+        stamp = f" (generated {result.generated_at})" if result.generated_at else ""
+        messages.success(
+            request,
+            f"Pulled {result.total} player(s){stamp}: {len(result.added)} added, "
+            f"{len(result.updated)} updated, {len(result.unchanged)} unchanged.",
+        )
+        return redirect("roster_import")
 
 
 class WespaImportView(LoginRequiredMixin, IsAdminMixin, View):

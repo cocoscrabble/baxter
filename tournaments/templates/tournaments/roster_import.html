@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}Pull Roster - Baxter{% endblock %}
+
+{% block page_class %}page--narrow{% endblock %}
+
+{% block content %}
+<h1>Pull the central roster</h1>
+
+<p>Upload a roster snapshot from the CoCo player database to refresh names,
+ratings and rating history. Once this has run, Baxter can run a whole tournament
+with no connection to the central database.</p>
+
+<p>Players are matched on their player number, never on name. Nothing is deleted:
+a player the roster has never heard of — a guest on a temporary number — is left
+exactly as they are.</p>
+
+<p>This roster holds {{ player_count }} player{{ player_count|pluralize }},
+{{ provisional_count }} of them still on a temporary number.</p>
+
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <p><input type="file" name="roster_file" accept=".json,application/json" required></p>
+    <button type="submit">Upload and pull</button>
+</form>
+
+<h2>Getting the file</h2>
+<p>On the CoCo player database, go to <code>/manage/roster/</code> and download
+the snapshot. It is a <code>coco.roster/1</code> document.</p>
+
+<p>WESPA ratings are not part of this — the central database does not hold them.
+<a href="{% url 'wespa_import' %}">Import those separately</a>.</p>
+{% endblock %}

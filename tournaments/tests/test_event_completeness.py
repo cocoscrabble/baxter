@@ -72,6 +72,9 @@ EXEMPT = {
     # Global rating refresh. Unlogged on purpose: entrants pin their rating when
     # they enter, so this mutates no replayable tournament state.
     "WespaImportView",
+    # Roster pull. Unlogged for the same reason: entrants freeze their seed at
+    # registration, so a pull cannot move a tournament already under way.
+    "RosterImportView",
     # Dev tool that builds a whole fake tournament directly; rebuilt on commands
     # in event-log Phase 5.
     "FakeTournamentCreateView",

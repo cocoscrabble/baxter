@@ -167,3 +167,34 @@ class DigestBackfillTests(TestCase):
     def test_a_tournament_with_no_digests_is_left_alone(self):
         self.tournament.events.update(digest="")
         self.assertEqual(backfill_tournament(self.tournament), (0, None))
+
+
+@tag("slow")
+class RerunTests(DigestBackfillTests):
+    """The backfill is safe to run twice.
+
+    It has to be: it is a migration *and* a management command, and the command
+    exists precisely for the case where the migration could not run.
+    """
+
+    def test_a_second_run_reports_nothing_to_do(self):
+        self._make_digests_v1()
+        first, reason = backfill_tournament(self.tournament)
+        self.assertIsNone(reason)
+        self.assertTrue(first)
+
+        second, reason = backfill_tournament(self.tournament)
+        self.assertEqual(second, 0)
+        self.assertIsNone(
+            reason,
+            "an already-backfilled tournament is done, not divergent",
+        )
+
+    def test_a_second_run_changes_nothing(self):
+        self._make_digests_v1()
+        backfill_tournament(self.tournament)
+        after_first = {e.seq: e.digest for e in self.tournament.events.all()}
+        backfill_tournament(self.tournament)
+        self.assertEqual(
+            {e.seq: e.digest for e in self.tournament.events.all()}, after_first
+        )
