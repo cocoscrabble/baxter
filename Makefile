@@ -1,4 +1,4 @@
-.PHONY: run test test-all rust-engine
+.PHONY: run test test-all test-browser rust-engine
 
 run:
 	uv run python manage.py runserver
@@ -8,6 +8,9 @@ test:
 
 test-all:
 	uv run python manage.py test tournaments.tests
+
+test-browser:
+	npm run test:browser
 
 # Rebuild the scrabble-pairing-py extension after editing the Rust crates. uv
 # does not watch the crate source, so this must be run by hand.
