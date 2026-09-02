@@ -7,6 +7,7 @@ the Rust engine. ``pair_with_engine`` is the single entry point.
 
 import json
 
+from tournaments.models import DEFAULT_COP_CONFIG
 from tournaments.pairing.base import (
     DisplayPairing,
     PairingData,
@@ -29,7 +30,9 @@ def _cop_config_to_input(c: dict | None) -> dict | None:
 
     return {
         "place_prizes": int(c["place_prizes"]),
-        "gibson_spreads": arr(c.get("gibson_spread", 250)),
+        "gibson_spreads": arr(
+            c.get("gibson_spread", DEFAULT_COP_CONFIG["gibson_spread"])
+        ),
         "hopefulness": arr(c.get("hopefulness", 0.05)),
         "control_loss_thresholds": arr(c.get("control_loss_threshold", 0.25)),
         "control_loss_activation_round": int(c.get("control_loss_activation_round", 0)),
