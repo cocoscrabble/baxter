@@ -3158,6 +3158,7 @@ class DivisionSettingsCopConfigTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "COP pairing")
         self.assertContains(response, "Number of place prizes")
+        self.assertContains(response, 'name="gibson_spread" value="500"')
 
     def test_basic_fields_above_advanced_box(self):
         html = self.client.get(self.url).content.decode()

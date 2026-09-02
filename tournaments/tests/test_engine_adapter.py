@@ -183,6 +183,10 @@ class CopConfigTests(TestCase):
             },
         )
 
+    def test_partial_config_uses_application_gibson_default(self):
+        d = pairing_data_to_input(_cop_pd({"place_prizes": 3}))
+        self.assertEqual(d["cop_config"]["gibson_spreads"], [500])
+
     def test_horizon_flag_passes_through_when_set(self):
         # Not in DEFAULT_COP_CONFIG and not on the settings form, so a division
         # only carries it if it was written into cop_config directly (as

@@ -258,7 +258,7 @@ class DivisionSlugAlias(models.Model):
 # settings form's field defaults so the two never drift.
 DEFAULT_COP_CONFIG = {
     "place_prizes": 3,
-    "gibson_spread": 250,
+    "gibson_spread": 500,
     "hopefulness": 0.05,
     "control_loss_threshold": 0.25,
     "control_loss_activation_round": 0,
