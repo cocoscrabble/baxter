@@ -72,3 +72,13 @@ Current plans:
   site, and a `PlayerSource` seam standing in for the not-yet-built playerdb and
   the not-yet-known WESPA source. **Not started**; 5 phases plus an optional
   sixth. Depends on `PLAN_PLAYER_IDENTITY.md`, which lands first.
+- `PLAN_PASSWORD_RESET.md` — self-service password reset by email. Gated on a
+  **phase 0 go/no-go**: publish the domain's missing SPF and DKIM records,
+  then prove the production host can send mail as `cocoscrabble.org` and have
+  it land in an inbox — all before any code is written, since outbound mail
+  under the domain's name is unauthenticated today and a reset flow that
+  silently fails to deliver is worse than none. Then email as a unique/required
+  identity field, transport config via Ansible, Django's four reset views, and
+  a rate limit. **Not started**; phase 0 is a manual investigation, phases 1–5
+  are ordinary work. (Password *change* for a signed-in user already exists and
+  needs none of this.)
