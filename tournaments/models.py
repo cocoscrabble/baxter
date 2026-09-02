@@ -99,9 +99,20 @@ class Tournament(models.Model):
         return reverse("tournament_detail", kwargs=self.slug_kwargs())
 
     def can_edit(self, user):
-        """Check if user can edit this tournament. Anonymous users always return False."""
+        """Check if user can edit this tournament. Anonymous users always return False.
+
+        Supervisors and above hold director-level access to *every* tournament.
+        That membership is silent by design: it is derived here rather than
+        stored, so it never appears in ``editors`` — not on the tournament page,
+        not in the edit form, and not in the event log, which records only the
+        editors a director actually named. A role change takes effect everywhere
+        at once, and revoking it revokes it everywhere.
+        """
         if not user.is_authenticated:
             return False
+        from users.models import User
+        if user.has_role_at_least(User.Role.SUPERVISOR):
+            return True
         return user == self.owner or self.editors.filter(pk=user.pk).exists()
 
     def can_delete(self, user):
@@ -114,7 +125,7 @@ class Tournament(models.Model):
         if not self.is_fake:
             return False
         from users.models import User
-        return user.is_superuser or user.role == User.Role.ADMIN
+        return user.has_role_at_least(User.Role.ADMIN)
 
     def division_buckets(self):
         """Return divisions grouped into regular, test, and deleted lists."""

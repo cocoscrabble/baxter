@@ -391,9 +391,7 @@ class IsAdminMixin(UserPassesTestMixin):
 
     def test_func(self):
         user = self.request.user
-        return user.is_authenticated and (
-            user.is_superuser or user.role == User.Role.ADMIN
-        )
+        return user.is_authenticated and user.has_role_at_least(User.Role.ADMIN)
 
 
 def _ensure_visible_division(division, user):

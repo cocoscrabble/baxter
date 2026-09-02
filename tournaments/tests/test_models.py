@@ -62,6 +62,22 @@ class TournamentModelTests(TestCase):
     def test_other_user_cannot_edit(self):
         self.assertFalse(self.tournament.can_edit(self.other))
 
+    def test_supervisor_can_edit_and_stays_out_of_the_editor_list(self):
+        """The grant is silent: access without membership in ``editors``, which
+        is what the tournament page, the edit form and the event log read."""
+        supervisor = User.objects.create_user(
+            username="super_visor", password="testpass123",
+            role=User.Role.SUPERVISOR,
+        )
+        self.assertTrue(self.tournament.can_edit(supervisor))
+        self.assertNotIn(supervisor, self.tournament.editors.all())
+
+    def test_admin_can_edit_without_being_an_editor(self):
+        admin = User.objects.create_user(
+            username="an_admin", password="testpass123", role=User.Role.ADMIN,
+        )
+        self.assertTrue(self.tournament.can_edit(admin))
+
 
 class DivisionModelTests(TestCase):
     @classmethod
