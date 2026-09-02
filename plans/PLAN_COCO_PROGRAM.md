@@ -407,10 +407,10 @@ Kept here as the record of what changed and why:
 - ~~**Auth for the roster endpoint**~~ — **settled**: a shared static token
   (`ROSTER_API_TOKEN`), the owner's call, on the grounds that this is not highly
   sensitive data. An unset token disables the endpoint rather than opening it,
-  so a deploy that forgets to set one fails closed. **It is not yet set on the
-  production app** — see the ratings repo's CLAUDE.md for the `dokku
-  config:set`. The snapshot-file path needs no token and keeps working either
-  way.
+  so a deploy that forgets to set one fails closed. **It is now declared in
+  Ansible** (`../vps` `6e4d006`): one value in the vault-encrypted `secrets.yml`,
+  handed to both apps, so the two roles cannot drift apart. The snapshot-file
+  path needs no token and keeps working either way.
 - **`complete-ratings-list.csv` is name-keyed and carries no player number**
   (`Name,Rating,Deviation,Games played`). It is not part of the contract above —
   the pull reads the DB, not this file — but it is another name-keyed artifact
