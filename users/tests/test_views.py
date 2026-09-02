@@ -121,3 +121,83 @@ class ProfileViewTests(TestCase):
         self.assertRedirects(response, reverse("profile"))
         self.user.refresh_from_db()
         self.assertEqual(self.user.username, "updateduser")
+
+
+class ChangePasswordViewTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="testuser",
+            email="test@example.com",
+            password="testpass123",
+        )
+
+    def test_change_password_requires_login(self):
+        response = self.client.get(reverse("password_change"))
+        self.assertRedirects(
+            response, f"{reverse('login')}?next={reverse('password_change')}"
+        )
+
+    def test_change_password_success(self):
+        self.client.login(username="testuser", password="testpass123")
+        response = self.client.post(
+            reverse("password_change"),
+            {
+                "old_password": "testpass123",
+                "new_password1": "s3cretpass!456",
+                "new_password2": "s3cretpass!456",
+            },
+        )
+        self.assertRedirects(response, reverse("profile"))
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("s3cretpass!456"))
+
+    def test_change_password_keeps_user_logged_in(self):
+        self.client.login(username="testuser", password="testpass123")
+        self.client.post(
+            reverse("password_change"),
+            {
+                "old_password": "testpass123",
+                "new_password1": "s3cretpass!456",
+                "new_password2": "s3cretpass!456",
+            },
+        )
+        response = self.client.get(reverse("profile"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_change_password_wrong_old_password(self):
+        self.client.login(username="testuser", password="testpass123")
+        response = self.client.post(
+            reverse("password_change"),
+            {
+                "old_password": "wrongpassword",
+                "new_password1": "s3cretpass!456",
+                "new_password2": "s3cretpass!456",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFormError(
+            response.context["form"],
+            "old_password",
+            "Your old password was entered incorrectly. Please enter it again.",
+        )
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("testpass123"))
+
+    def test_change_password_mismatched_confirmation(self):
+        self.client.login(username="testuser", password="testpass123")
+        response = self.client.post(
+            reverse("password_change"),
+            {
+                "old_password": "testpass123",
+                "new_password1": "s3cretpass!456",
+                "new_password2": "s3cretpass!789",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFormError(
+            response.context["form"],
+            "new_password2",
+            "The two password fields didn’t match.",
+        )
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("testpass123"))
