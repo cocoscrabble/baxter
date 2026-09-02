@@ -1,4 +1,6 @@
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.views import PasswordChangeView
+from django.contrib.messages.views import SuccessMessageMixin
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, UpdateView
 
@@ -24,3 +26,11 @@ class ProfileView(LoginRequiredMixin, UpdateView):
 
     def get_object(self):
         return self.request.user
+
+
+class ChangePasswordView(SuccessMessageMixin, PasswordChangeView):
+    """View for changing your own password."""
+
+    template_name = "users/password_change.html"
+    success_url = reverse_lazy("profile")
+    success_message = "Your password has been changed."
