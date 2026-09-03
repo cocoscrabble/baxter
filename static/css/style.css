@@ -1,3 +1,11 @@
+/* The `hidden` attribute must win. It is only `display: none` from the UA
+   stylesheet, so any rule that sets `display` on the same element overrides it
+   -- `.editgrid-columns { display: grid }` did exactly that, leaving a hidden
+   container fully visible. Anything toggled with `el.hidden` relies on this. */
+[hidden] {
+    display: none !important;
+}
+
 /* ── Design Tokens ─────────────────────────────────────────── */
 :root {
     /* Colors */
@@ -1421,6 +1429,26 @@ dd {
    convention; the legend below the table says what it means. */
 .rating-wespa {
     font-style: italic;
+}
+
+/* A grid cell whose value is chosen from a list. Tabulator's list editor is
+   invisible until clicked, so the caret is the only thing saying the cell is a
+   dropdown rather than text. */
+.cell-select {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-xs);
+}
+
+.cell-select-caret {
+    color: var(--color-muted);
+    font-size: 0.75em;
+    line-height: 1;
+}
+
+.tabulator-cell:hover .cell-select-caret {
+    color: inherit;
 }
 
 /* Drift between an entrant's pinned seed and the player table. Editor-only:

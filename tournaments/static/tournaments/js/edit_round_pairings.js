@@ -19,7 +19,21 @@ const isRoundRobin = p => ROUND_ROBIN.includes(p);
 const STRATEGY_LABEL = Object.fromEntries(
     pageData.strategyTypes.map(s => [s.value, s.label]),
 );
-const strategyFormatter = cell => STRATEGY_LABEL[cell.getValue()] ?? cell.getValue();
+const labelFor = value => STRATEGY_LABEL[value] ?? value ?? "";
+const escapeHtml = text =>
+    String(text).replace(/[&<>"']/g, c => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    })[c]);
+
+// Read-only: the label alone.
+const strategyFormatter = cell => escapeHtml(labelFor(cell.getValue()));
+
+// Editable: the label plus a caret. A Tabulator list editor looks exactly like
+// text until it is clicked, so without this nobody discovers the strategy is
+// a choice -- which is the whole content of the cell.
+const strategyChoiceFormatter = cell =>
+    `<span class="cell-select">${escapeHtml(labelFor(cell.getValue()))}` +
+    `<span class="cell-select-caret" aria-hidden="true">\u25be</span></span>`;
 
 const saveStatus = document.getElementById("rp-save-status");
 
@@ -43,7 +57,7 @@ const blocksTable = new Tabulator("#pairing-blocks-table", {
         { rowHandle: true, formatter: "handle", headerSort: false, width: 30, frozen: true },
         {
             title: "Pairing", field: "pairing", minWidth: 170,
-            formatter: strategyFormatter,
+            formatter: strategyChoiceFormatter,
             editor: "list", editorParams: { values: pageData.strategyTypes, autocomplete: true, listOnEmpty: true },
         },
         {
@@ -154,6 +168,57 @@ blocksTable.on("cellEdited", cell => {
     afterChange();
 });
 
+// --- Showing the editor -------------------------------------------------
+// The two tables are the *output* of the method above, so a fresh division does
+// not show them: two empty grids next to a "Predefined Pairings" control made
+// the method look like a third setting rather than what fills them in.
+const scheduleEditor = document.getElementById("schedule-editor");
+const methodSelect = document.getElementById("pairing-method");
+const roundsControls = document.getElementById("method-rounds-controls");
+const generateBtn = document.getElementById("generate-method-btn");
+const methodStatus = document.getElementById("method-status");
+
+// Tabulator builds asynchronously, and redrawing before that throws on a null
+// element. Both tables are measured while the container has no layout, so the
+// redraw is required -- it just has to wait its turn.
+const tablesBuilt = Promise.all(
+    [blocksTable, previewTable].map(
+        table => new Promise(resolve => table.on("tableBuilt", resolve)),
+    ),
+);
+
+function showEditor() {
+    const wasHidden = scheduleEditor.hidden;
+    scheduleEditor.hidden = false;
+    // Measured at zero width while hidden; without this both tables come back
+    // collapsed.
+    if (wasHidden) {
+        tablesBuilt.then(() => {
+            blocksTable.redraw(true);
+            previewTable.redraw(true);
+        });
+    }
+}
+
+// A division that already has a schedule shows it straight away -- there is
+// nothing to reveal, and hiding saved work behind a button would be worse than
+// the problem being fixed.
+if ((pageData.blocks || []).length) showEditor();
+
+function syncMethodControls() {
+    const custom = methodSelect.value === "custom";
+    // Total rounds is an input to generation; Custom generates nothing.
+    roundsControls.hidden = custom;
+    generateBtn.textContent = custom ? "Define blocks manually" : "Generate Schedule";
+    document.querySelectorAll("[data-method]").forEach(el => {
+        el.hidden = el.dataset.method !== methodSelect.value;
+    });
+    methodStatus.textContent = "";
+}
+
+methodSelect.addEventListener("change", syncMethodControls);
+syncMethodControls();
+
 document.getElementById("add-block-btn").addEventListener("click", () => {
     const pairing = pageData.strategyTypes[0].value;
     blocksTable
@@ -161,8 +226,19 @@ document.getElementById("add-block-btn").addEventListener("click", () => {
         .then(afterChange);
 });
 
-document.getElementById("generate-method-btn").addEventListener("click", () => {
-    const status = document.getElementById("method-status");
+generateBtn.addEventListener("click", () => {
+    const status = methodStatus;
+
+    if (methodSelect.value === "custom") {
+        // Reveal only. Existing blocks are deliberately left alone: a division
+        // with a saved schedule would otherwise lose it to a button press.
+        showEditor();
+        status.textContent = (pageData.blocks || []).length
+            ? "Editing the existing blocks."
+            : "Add a block to start.";
+        return;
+    }
+
     const totalRounds = parseInt(document.getElementById("method-total-rounds").value);
     status.textContent = "Generating...";
     postJson({
@@ -178,6 +254,7 @@ document.getElementById("generate-method-btn").addEventListener("click", () => {
             status.textContent = errors.length ? `Error: ${errors.join("; ")}` : "Error generating schedule.";
             return;
         }
+        showEditor();
         blocksTable.setData(res.body.blocks).then(() => {
             previewTable.setData(res.body.rows);
             recomputeRanges();
