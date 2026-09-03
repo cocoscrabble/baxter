@@ -369,7 +369,9 @@ class RoundCountForm(forms.Form):
 class RoundPairingForm(forms.Form):
     round = forms.IntegerField(widget=forms.HiddenInput)
     pairing_type = forms.ChoiceField(
-        choices=[(s, s) for s in STRATEGY_TYPES],
+        # (value, label): the value is the identifier the engine and the stored
+        # schedule use, the label is what the director reads.
+        choices=[(s, s.label) for s in STRATEGY_TYPES],
         label="Pairing type",
     )
     start_round = forms.IntegerField(min_value=0, label="Based on round")

@@ -989,10 +989,16 @@ class DivisionRoundPairingsEditViewTests(TestCase):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
         self.assertIn("default_rounds_json", response.context)
-        self.assertIn("KotH", json.loads(response.context["strategy_types_json"]))
-        self.assertIn(
-            "SwissMinRepeats", json.loads(response.context["strategy_types_json"])
-        )
+        # {value, label} pairs: the grid stores the value and shows the label.
+        strategies = json.loads(response.context["strategy_types_json"])
+        by_value = {s["value"]: s["label"] for s in strategies}
+        self.assertEqual(by_value["KotH"], "King of the Hill")
+        self.assertEqual(by_value["SwissMinRepeats"], "Swiss with Minimal Repeats")
+        # And they arrive in the enum's declaration order, which is the order the
+        # dropdown offers them in.
+        from tournaments.pairing.round_pairing import RP
+
+        self.assertEqual([s["value"] for s in strategies], [str(r) for r in RP])
         self.assertContains(response, "Swiss Contenders")
         self.assertNotContains(response, "Three Phase")
         self.assertNotContains(response, "fontes", html=False)

@@ -13,6 +13,14 @@ if (getEditVersion(GRID_ID) === undefined) setEditVersion(GRID_ID, cfg.version);
 const ROUND_ROBIN = ["RoundRobin", "DoubleRoundRobin", "Charlottesville"];
 const isRoundRobin = p => ROUND_ROBIN.includes(p);
 
+// strategyTypes is [{value, label}]: the value is the identifier stored in the
+// schedule and sent to the engine, the label is what a director reads. Cells
+// hold the value, so both Pairing columns format through this to show the name.
+const STRATEGY_LABEL = Object.fromEntries(
+    pageData.strategyTypes.map(s => [s.value, s.label]),
+);
+const strategyFormatter = cell => STRATEGY_LABEL[cell.getValue()] ?? cell.getValue();
+
 const saveStatus = document.getElementById("rp-save-status");
 
 // --- The generated, read-only per-round table ---------------------------
@@ -21,7 +29,7 @@ const previewTable = new Tabulator("#round-pairings-preview-table", {
     data: pageData.preview,
     columns: [
         { title: "Round", field: "round", width: 90 },
-        { title: "Pairing", field: "pairing", minWidth: 160 },
+        { title: "Pairing", field: "pairing", minWidth: 160, formatter: strategyFormatter },
         { title: "Pairs from round", field: "start_round", width: 160 },
     ],
 });
@@ -35,6 +43,7 @@ const blocksTable = new Tabulator("#pairing-blocks-table", {
         { rowHandle: true, formatter: "handle", headerSort: false, width: 30, frozen: true },
         {
             title: "Pairing", field: "pairing", minWidth: 170,
+            formatter: strategyFormatter,
             editor: "list", editorParams: { values: pageData.strategyTypes, autocomplete: true, listOnEmpty: true },
         },
         {
@@ -146,7 +155,7 @@ blocksTable.on("cellEdited", cell => {
 });
 
 document.getElementById("add-block-btn").addEventListener("click", () => {
-    const pairing = pageData.strategyTypes[0];
+    const pairing = pageData.strategyTypes[0].value;
     blocksTable
         .addRow({ pairing, rounds: pageData.defaultRounds[pairing] || 1, pair_from: 1 })
         .then(afterChange);

@@ -16,7 +16,7 @@ standings. Nothing is saved.</p>
     </label>
     <label>Strategy
         <select data-bind="exStrategy">
-            {% for s in strategies %}<option value="{{ s }}"{% if s == strategy %} selected{% endif %}>{{ s }}</option>{% endfor %}
+            {% for s in strategies %}<option value="{{ s }}"{% if s == strategy %} selected{% endif %}>{{ s.label }}</option>{% endfor %}
         </select>
     </label>
     <label>Based on
