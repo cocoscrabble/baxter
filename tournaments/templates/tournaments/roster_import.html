@@ -18,10 +18,30 @@ exactly as they are.</p>
 <p>This roster holds {{ player_count }} player{{ player_count|pluralize }},
 {{ provisional_count }} of them still on a temporary number.</p>
 
+{% comment %}
+The last pull, whoever or whatever ran it. Baxter pulls on a schedule, so the
+usual state of this page is that nobody here did the last one — and a scheduled
+pull that has been failing since a token rotation has nowhere else to say so.
+{% endcomment %}
+{% if last_sync %}
+{% if last_sync.ok %}
+<p class="settings-intro">Last pull {{ last_sync.created_at|timesince }} ago
+({{ last_sync.get_source_display|lower }}): {{ last_sync.summary }}</p>
+{% else %}
+<p class="error">The last pull {{ last_sync.created_at|timesince }} ago
+({{ last_sync.get_source_display|lower }}) failed: {{ last_sync.error }}
+Player data is as of the last successful pull.</p>
+{% endif %}
+{% else %}
+<p class="settings-intro">No pull has run yet.</p>
+{% endif %}
+
 {% if endpoint_configured %}
 <h2>Pull from the central database</h2>
-<p>Fetches the current roster from <code>{{ endpoint_url }}</code>. Do this
-before an event; Baxter never needs the connection once one is running.</p>
+<p>Fetches the current roster from <code>{{ endpoint_url }}</code>. This also
+runs on its own every six hours, so a pull here is for when you need a change
+sooner than that. Either way Baxter never needs the connection once an event is
+running.</p>
 <form method="post">
     {% csrf_token %}
     <input type="hidden" name="source" value="fetch">
@@ -60,6 +80,9 @@ nothing.
 These were matched <em>by name</em>, which is a guess, so nothing has been
 changed for them yet. Confirming keeps the guest's entrants and results and
 moves them onto the real number.</p>
+
+<p>These may have come from a scheduled pull rather than from anything you did:
+it holds them back for exactly this reason, and leaves them here.</p>
 
 <table>
     <thead>

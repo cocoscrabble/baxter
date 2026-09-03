@@ -70,12 +70,12 @@ class PendingResolution:
         """Stable identifier for a confirm form."""
         return f"{self.local_number}:{self.roster_number}"
 
-    # A pending resolution waits in the session between the pull that found it
-    # and the click that confirms it, and Django serializes sessions as JSON —
-    # which a date is not. The conversion lives here rather than in the view
-    # because ``row``'s shape is this module's business.
+    # A pending resolution waits on the ``RosterSync`` record between the pull
+    # that found it and the click that confirms it, so it has to survive a round
+    # trip through JSON — which a date does not. The conversion lives here
+    # rather than in the view because ``row``'s shape is this module's business.
 
-    def to_session(self) -> dict:
+    def to_json(self) -> dict:
         row = dict(self.row)
         if row.get("last_played") is not None:
             row["last_played"] = row["last_played"].isoformat()
@@ -87,7 +87,7 @@ class PendingResolution:
         }
 
     @classmethod
-    def from_session(cls, data) -> "PendingResolution":
+    def from_json(cls, data) -> "PendingResolution":
         row = dict(data["row"])
         if row.get("last_played"):
             row["last_played"] = date.fromisoformat(row["last_played"])

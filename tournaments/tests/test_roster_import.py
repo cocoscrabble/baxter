@@ -405,7 +405,7 @@ class FetchViewTests(TestCase):
         from unittest.mock import patch
 
         body = json.dumps(roster(entry("0233", "Alec"))).encode()
-        with patch("tournaments.views.fetch_roster", return_value=body):
+        with patch("tournaments.roster_sync.fetch_roster", return_value=body):
             response = self.client.post(self.url, {"source": "fetch"}, follow=True)
 
         self.assertContains(response, "1 added")
@@ -418,7 +418,7 @@ class FetchViewTests(TestCase):
         from tournaments.roster_import import RosterFetchError
 
         with patch(
-            "tournaments.views.fetch_roster",
+            "tournaments.roster_sync.fetch_roster",
             side_effect=RosterFetchError("The central database rejected the token."),
         ):
             response = self.client.post(self.url, {"source": "fetch"}, follow=True)

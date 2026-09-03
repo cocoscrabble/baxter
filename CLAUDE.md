@@ -99,6 +99,37 @@ the log replays into a fresh DB. Key pieces:
 **A new mutating POST view must route through a command** (or be added to the
 exempt set in `test_event_completeness.py`, which fails CI otherwise).
 
+## Roster sync (the central player database)
+
+Baxter mirrors player identity and CoCo ratings from the central database
+(`cocodb`, the `../ratings` repo). `tournaments/roster_import.py` fetches and
+upserts a `coco.roster/1` document; `tournaments/roster_sync.py` runs that and
+records the outcome. See `plans/PLAN_COCO_PROGRAM.md` (W4).
+
+**It runs unattended.** `app.json` declares a Dokku cron entry that runs
+`manage.py pull_roster` every six hours, so the player table keeps up on its own;
+`/players/roster/` is for pulling sooner than that, or for uploading a snapshot
+at an event with no connection. All three paths go through `run_sync`, so they
+leave the same kind of record.
+
+Two things follow from nobody watching a scheduled pull, and both are the reason
+`RosterSync` exists at all:
+
+- **A failure has to be visible.** A rotated `ROSTER_API_TOKEN` would otherwise
+  401 four times a day in silence (and `../vps` sets Dokku config with
+  `--no-restart`, so a rotation lands on the next deploy, not immediately). The
+  command exits non-zero for cron, and every attempt writes a `RosterSync` row
+  that `/players/roster/` shows.
+- **Held-back rows have to outlive the run.** A pull that finds a roster number
+  whose name matches exactly one local guest changes nothing and offers the
+  match for confirmation — matching by name is a guess, so it is the one step a
+  human makes. Those live on the record, not in the puller's session, which is
+  what lets a director confirm what a cron tick found.
+
+A pull cannot disturb a running event: entrants freeze their whole rating seed
+at registration (`plans/PLAN_ENTRANTS.md` decision 3), which is what makes an
+unattended pull safe at any hour.
+
 ## Code Standards
 
 - Do not add tests that are just testing django functionality

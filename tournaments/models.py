@@ -1074,3 +1074,85 @@ class TournamentEvent(models.Model):
 
     def __str__(self):
         return f"{self.tournament} #{self.seq} {self.event_type}"
+
+
+class RosterSync(models.Model):
+    """The outcome of one pull of the central roster.
+
+    A scheduled pull has nobody watching it. Without a record, two things go
+    silent: rows the pull holds back for a human to confirm would evaporate
+    (they used to live in the puller's session, which a cron run does not have),
+    and a rotated ``ROSTER_API_TOKEN`` would 401 every six hours with no symptom
+    anywhere. So every pull — scheduled, manual or uploaded — lands a row here,
+    and ``/players/roster/`` reads the latest.
+
+    Kept as a history rather than a single row so "it broke on Tuesday" is
+    answerable. It is four rows a day against a table nothing joins to.
+
+    See ``plans/PLAN_COCO_PROGRAM.md`` (W4, the pull half).
+    """
+
+    SCHEDULED = "scheduled"
+    MANUAL = "manual"
+    UPLOAD = "upload"
+    SOURCES = [
+        (SCHEDULED, "Scheduled"),
+        (MANUAL, "Pulled by hand"),
+        (UPLOAD, "Uploaded snapshot"),
+    ]
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    source = models.CharField(max_length=16, choices=SOURCES)
+    ok = models.BooleanField(default=False)
+    # Empty when ok. Carries the RosterFetchError/RosterParseError message,
+    # which is already written to be read by an admin rather than a programmer.
+    error = models.TextField(blank=True)
+    # The document's own stamp — when the *central* database generated it, not
+    # when we pulled it. A pull that keeps returning the same generated_at is a
+    # central database that has stopped rebuilding.
+    generated_at = models.CharField(max_length=40, blank=True)
+    added = models.PositiveIntegerField(default=0)
+    updated = models.PositiveIntegerField(default=0)
+    unchanged = models.PositiveIntegerField(default=0)
+    # Rows held back for a director to confirm, as PendingResolution.to_json()
+    # dicts. Nothing was written for them. Entries are removed as each is
+    # confirmed, so an empty list means there is nothing left to do.
+    pending = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        outcome = "ok" if self.ok else "failed"
+        return f"{self.get_source_display()} roster pull ({outcome})"
+
+    @classmethod
+    def latest(cls):
+        """The most recent attempt, successful or not, or None."""
+        return cls.objects.first()
+
+    @classmethod
+    def latest_successful(cls):
+        """The most recent attempt that actually read a roster, or None.
+
+        Held-back rows come from here rather than from :meth:`latest`, so a
+        failed pull does not hide the resolutions the last good one found.
+        """
+        return cls.objects.filter(ok=True).first()
+
+    @property
+    def total(self):
+        return self.added + self.updated + self.unchanged + len(self.pending)
+
+    def summary(self):
+        """One line for a log, a cron mail, or the page."""
+        if not self.ok:
+            return f"Roster pull failed: {self.error}"
+        stamp = f" (generated {self.generated_at})" if self.generated_at else ""
+        line = (
+            f"Pulled {self.total} player(s){stamp}: {self.added} added, "
+            f"{self.updated} updated, {self.unchanged} unchanged"
+        )
+        if self.pending:
+            line += f", {len(self.pending)} awaiting confirmation"
+        return line + "."

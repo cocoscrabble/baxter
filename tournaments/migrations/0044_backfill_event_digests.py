@@ -50,7 +50,7 @@ def noop_reverse(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("tournaments", "0041_player_rating_seed"),
+        ("tournaments", "0043_rostersync"),
     ]
 
     operations = [

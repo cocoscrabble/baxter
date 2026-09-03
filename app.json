@@ -1,0 +1,10 @@
+{
+  "name": "baxter",
+  "description": "Scrabble tournament manager. The cron entry keeps the local player table in step with the central CoCo player database; see plans/PLAN_COCO_PROGRAM.md (W4) and tournaments/roster_sync.py.",
+  "cron": [
+    {
+      "command": "uv run manage.py pull_roster",
+      "schedule": "23 */6 * * *"
+    }
+  ]
+}
