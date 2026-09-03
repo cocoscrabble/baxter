@@ -32,6 +32,16 @@ class User(AbstractUser):
     def __str__(self):
         return self.username
 
+    @property
+    def is_admin(self):
+        """Whether this user holds the Admin role (or outranks it).
+
+        Exists for templates, which cannot call a method with an argument: the
+        navbar tests this on every page. It delegates rather than comparing
+        ``role`` itself, so the ranking stays defined in exactly one place.
+        """
+        return self.has_role_at_least(self.Role.ADMIN)
+
     def has_role_at_least(self, role):
         """Does this user hold ``role`` or something above it?
 
