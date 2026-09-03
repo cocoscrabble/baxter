@@ -127,6 +127,9 @@ records the outcome. See `plans/PLAN_COCO_PROGRAM.md` (W4).
 
 **It runs unattended.** `app.json` declares a Dokku cron entry that runs
 `manage.py pull_roster` every six hours, so the player table keeps up on its own;
+it is `uv run --no-sync` because a plain `uv run` rebuilds the Rust extension
+inside every one-off container (the Dockerfile's `COPY . .` lands fresh mtimes on
+the crate sources after `uv sync`);
 `/players/roster/` is for pulling sooner than that, or for uploading a snapshot
 at an event with no connection. All three paths go through `run_sync`, so they
 leave the same kind of record.

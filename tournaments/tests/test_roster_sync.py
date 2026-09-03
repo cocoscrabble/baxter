@@ -299,6 +299,17 @@ class ScheduleTests(TestCase):
         schedule = self._app_json()["cron"][0]["schedule"]
         self.assertEqual(len(schedule.split()), 5, schedule)
 
+    def test_it_does_not_resync_the_environment_on_every_tick(self):
+        # The image already has the venv. Without --no-sync, uv rebuilds the
+        # Rust extension inside every one-off container -- the Dockerfile's
+        # `COPY . .` lands fresh mtimes on the crate sources after `uv sync`,
+        # so uv sees the path dependency as stale each time. Observed on the
+        # first production run: "Built scrabble-pairing-py", four times a day,
+        # putting a maturin build in the failure path of a job that otherwise
+        # only touches HTTP and the database.
+        command = self._app_json()["cron"][0]["command"]
+        self.assertIn("--no-sync", command)
+
 
 class LiveTournamentTests(TestCase):
     """A pull cannot move an event that is already under way — scheduled or not.
