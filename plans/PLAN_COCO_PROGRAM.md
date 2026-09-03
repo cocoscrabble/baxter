@@ -329,6 +329,31 @@ repo's court or waiting on a protocol:
   mocks — 222 players pulled, a re-pull a clean no-op, a wrong token reported
   readably. **The pull half of W4 is complete.**
 
+- **W4, scheduled pull — DONE.** The pull runs on its own every six hours:
+  `app.json` declares a Dokku cron entry for `manage.py pull_roster`, which
+  shares `tournaments/roster_sync.run_sync` with the admin page. So the player
+  table keeps up without anyone remembering to press anything, and the page
+  becomes the "sooner than six hours" path rather than the only one.
+
+  **Automating it is what forced the record.** With a human pulling, the two
+  awkward outcomes had somewhere to go — held-back rows sat in that admin's
+  session, and a failure was a message on their screen. A cron tick has neither,
+  so both would have gone to nowhere: a rotated token would 401 four times a day
+  in silence, and every resolution the pull found would be discarded as soon as
+  the process exited. `RosterSync` (`tournaments/models.py`) records every
+  attempt — scheduled, manual or uploaded — and `/players/roster/` reads the
+  latest one. Held-back rows live there too, which also fixed something that was
+  wrong before automation: they were visible only to whoever happened to pull.
+
+  Verified over real HTTP against a live `cocodb`: 244 players, 21 added, 222
+  updated; a re-pull a clean no-op; a wrong token exiting non-zero with the
+  reason on the page; and a real guest (`T-37` → `0237`) held back, surviving a
+  later failed pull still awaiting confirmation.
+
+  The schedule is `23 */6 * * *` — six-hourly, off the hour. The central table
+  changes when an admin adds a player, which is rare and never urgent within a
+  day; the cost of a tighter loop is a one-off container per tick.
+
 - **W4, number resolution (steps 4–5) — DONE.** A pull holds back a roster row
   whose number is new but whose name belongs to exactly one *provisional*
   player, and offers it for confirmation

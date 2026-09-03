@@ -84,6 +84,7 @@ from .models import (
     Pairing,
     Player,
     ResultSlip,
+    RosterSync,
     RoundPairings,
     Tournament,
     TournamentSlugAlias,
@@ -103,14 +104,11 @@ from .pairing.methods import (
 )
 from .player_sync import import_players
 from .roster_import import (
-    PendingResolution,
-    RosterFetchError,
     RosterParseError,
-    fetch_roster,
-    import_roster,
     resolve_number,
     roster_endpoint_configured,
 )
+from .roster_sync import forget_resolution, pending_resolutions, run_sync
 from .wespa_ratings import parse_wespa_csv, refresh_wespa_ratings
 from users.models import User
 from .generate_pairings import publish_rounds, regenerate_pairings, unpublish_rounds
@@ -2005,14 +2003,19 @@ class PlayerImportView(LoginRequiredMixin, IsAdminMixin, View):
 
 
 class RosterImportView(LoginRequiredMixin, IsAdminMixin, View):
-    """Admin-only page to pull the central roster from a snapshot file.
+    """Admin-only page to pull the central roster.
 
     The "before" half of the registry sync: once this has run, Baxter can run a
     whole tournament with no connection to the central database
     (``plans/PLAN_COCO_PROGRAM.md``). The authenticated endpoint is the normal
     path and the file is the offline one, but both produce the same document and
-    ``import_roster`` is one code path — so this page will keep working
-    unchanged when the endpoint arrives.
+    ``import_roster`` is one code path — so this page did not change when the
+    endpoint arrived, and did not change again when the pull became scheduled.
+
+    Every pull from here goes through ``run_sync``, which is also what the
+    ``pull_roster`` command runs on its cron tick. So a hand pull and an
+    unattended one leave the same kind of record, and this page shows whichever
+    happened last — including one that failed while nobody was looking.
 
     Global and unlogged, like the other roster imports, and for the same reason:
     entrants freeze their rating seed when they enter, so a pull cannot move a
@@ -2020,11 +2023,6 @@ class RosterImportView(LoginRequiredMixin, IsAdminMixin, View):
     """
 
     template_name = "tournaments/roster_import.html"
-    # Where held-back resolutions wait between the pull that found them and the
-    # click that confirms them. The session, not the database, because they are
-    # a proposal rather than state: losing them costs another pull, which is
-    # idempotent — the guest is still provisional and the number still free.
-    PENDING_KEY = "roster_pending"
 
     def _context(self, **overrides):
         context = {
@@ -2034,25 +2032,15 @@ class RosterImportView(LoginRequiredMixin, IsAdminMixin, View):
             ).count(),
             "endpoint_configured": roster_endpoint_configured(),
             "endpoint_url": settings.ROSTER_API_URL,
-            "pending": self._pending(),
+            # The last attempt, so a scheduled pull that has been failing since
+            # a token rotation says so here rather than nowhere.
+            "last_sync": RosterSync.latest(),
+            # …but held-back rows come from the last attempt that read a
+            # roster, so a failure does not hide them.
+            "pending": pending_resolutions(),
         }
         context.update(overrides)
         return context
-
-    def _pending(self):
-        return [
-            PendingResolution.from_session(entry)
-            for entry in self.request.session.get(self.PENDING_KEY, [])
-        ]
-
-    def _remember(self, pending):
-        self.request.session[self.PENDING_KEY] = [
-            p.to_session() for p in pending
-        ]
-
-    def _forget(self, key):
-        remaining = [p for p in self._pending() if p.key != key]
-        self._remember(remaining)
 
     def get(self, request):
         return render(request, self.template_name, self._context())
@@ -2061,36 +2049,31 @@ class RosterImportView(LoginRequiredMixin, IsAdminMixin, View):
         """Two transports, one importer, plus the confirm step.
 
         ``fetch`` goes to the central database; ``resolve`` confirms one held-back
-        rename; anything else is a file upload. The two pull paths end up in
-        ``import_roster``, so they differ only in where the bytes came from.
+        rename; anything else is a file upload. Both pull paths end up in
+        ``run_sync``, so they differ only in where the bytes came from and how
+        the record spells its source.
         """
         if request.POST.get("action") == "resolve":
             return self._resolve(request)
-        try:
-            raw = self._bytes(request)
-        except RosterFetchError as exc:
-            messages.error(request, str(exc))
-            return redirect("roster_import")
-        if raw is None:
+
+        if request.POST.get("source") == "fetch":
+            record = run_sync(RosterSync.MANUAL)
+        else:
+            uploaded = request.FILES.get("roster_file")
+            if not uploaded:
+                messages.error(request, "No file uploaded.")
+                return redirect("roster_import")
+            record = run_sync(RosterSync.UPLOAD, uploaded.read())
+
+        if not record.ok:
+            messages.error(request, record.error)
             return redirect("roster_import")
 
-        try:
-            result = import_roster(raw)
-        except RosterParseError as exc:
-            messages.error(request, str(exc))
-            return redirect("roster_import")
-
-        stamp = f" (generated {result.generated_at})" if result.generated_at else ""
-        messages.success(
-            request,
-            f"Pulled {result.total} player(s){stamp}: {len(result.added)} added, "
-            f"{len(result.updated)} updated, {len(result.unchanged)} unchanged.",
-        )
-        self._remember(result.pending)
-        if result.pending:
+        messages.success(request, record.summary())
+        if record.pending:
             messages.warning(
                 request,
-                f"{len(result.pending)} player(s) look like guests who have since "
+                f"{len(record.pending)} player(s) look like guests who have since "
                 f"been given a number. Nothing was changed for them — confirm "
                 f"each below.",
             )
@@ -2099,7 +2082,8 @@ class RosterImportView(LoginRequiredMixin, IsAdminMixin, View):
     def _resolve(self, request):
         """Confirm one held-back rename."""
         key = request.POST.get("pending", "")
-        entry = next((p for p in self._pending() if p.key == key), None)
+        record = RosterSync.latest_successful()
+        entry = next((p for p in pending_resolutions(record) if p.key == key), None)
         if entry is None:
             messages.error(request, "That resolution is no longer pending.")
             return redirect("roster_import")
@@ -2108,23 +2092,13 @@ class RosterImportView(LoginRequiredMixin, IsAdminMixin, View):
         except (RosterParseError, ValueError) as exc:
             messages.error(request, str(exc))
             return redirect("roster_import")
-        self._forget(key)
+        forget_resolution(record, key)
         messages.success(
             request,
             f"{player.name} is now #{player.player_number}, "
             f"keeping their entrants and results.",
         )
         return redirect("roster_import")
-
-    def _bytes(self, request):
-        """The roster document, or None with a message already queued."""
-        if request.POST.get("source") == "fetch":
-            return fetch_roster()
-        uploaded = request.FILES.get("roster_file")
-        if not uploaded:
-            messages.error(request, "No file uploaded.")
-            return None
-        return uploaded.read()
 
 
 class WespaImportView(LoginRequiredMixin, IsAdminMixin, View):
