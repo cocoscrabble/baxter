@@ -1003,6 +1003,21 @@ class DivisionRoundPairingsEditViewTests(TestCase):
         self.assertNotContains(response, "Three Phase")
         self.assertNotContains(response, "fontes", html=False)
 
+    def test_the_editor_starts_hidden_and_custom_is_offered(self):
+        # The two tables are the method's output, not settings to fill in: a
+        # fresh division shows the method control alone until something reveals
+        # them. Custom is the escape hatch, and is UI-only -- there is no
+        # PairingMethod behind it because it generates nothing.
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.get(self.url)
+        self.assertContains(response, 'id="schedule-editor" hidden')
+        self.assertContains(response, '<option value="custom">Custom</option>', html=False)
+        self.assertNotIn(
+            "custom",
+            [str(v) for v, _ in response.context["pairing_methods"]],
+            "Custom must not become a server-side method",
+        )
+
     def test_get_backfills_blocks_from_existing_schedule(self):
         DivisionSettings.objects.create(
             division=self.division,

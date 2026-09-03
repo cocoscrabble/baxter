@@ -10,33 +10,55 @@
 <div data-eg-presence="pairing-blocks-table" class="presence-banner" hidden></div>
 
 <p class="empty-state">
-    Choose a pairing method to generate a complete schedule, or define the round
-    pairings directly in blocks. Generated blocks remain fully editable.
+    Choose a pairing method to generate a complete schedule, or choose Custom to
+    write the blocks yourself. Generated blocks remain fully editable.
 </p>
 
 <section class="settings-section">
-    <h2>Pairing Method</h2>
+    <h2>Predefined Pairings</h2>
     <div class="table-toolbar pairing-method-controls">
         <label for="pairing-method">Method</label>
         <select id="pairing-method">
             {% for value, label in pairing_methods %}
             <option value="{{ value }}">{{ label }}</option>
             {% endfor %}
+            {% comment %}
+            Deliberately not a PairingMethod: it generates nothing, so there is
+            no server side to it. It reveals the block editor and leaves the
+            schedule to the director.
+            {% endcomment %}
+            <option value="custom">Custom</option>
         </select>
-        <label for="method-total-rounds">Total rounds</label>
-        <input id="method-total-rounds" type="number" min="14" value="{{ method_total_rounds }}">
+        <span id="method-rounds-controls">
+            <label for="method-total-rounds">Total rounds</label>
+            <input id="method-total-rounds" type="number" min="14" value="{{ method_total_rounds }}">
+        </span>
         <button id="generate-method-btn" type="button">Generate Schedule</button>
         <span id="method-status"></span>
     </div>
-    <p class="empty-state">
+    {% comment %}
+    One description per method, shown by the selector. Copy lives here rather
+    than in the JS so it stays with the rest of the page's prose.
+    {% endcomment %}
+    <p class="empty-state" data-method="SwissContenders">
         Swiss Contenders uses no-repeat Swiss for the first third,
         Swiss pairings minimizing repeats for the middle third, and COP for the
         final third. Minimal-repeat Swiss remains repeat-free while possible.
         Extra rounds go first to the middle third, then the first.
     </p>
+    <p class="empty-state" data-method="custom" hidden>
+        Build the schedule yourself, one block at a time — a pairing strategy
+        and how many rounds it runs for. Nothing is generated.
+    </p>
 </section>
 
-<div class="editgrid-columns">
+{% comment %}
+Hidden until a method is generated or Custom is chosen. Two empty tables on a
+fresh division read as settings to fill in, which is exactly the confusion this
+page had: the method above looked like a third setting rather than the thing
+that produces these.
+{% endcomment %}
+<div class="editgrid-columns" id="schedule-editor" hidden>
     <div>
         <h2>Pairing Strategy Specification</h2>
         <div class="table-toolbar">
