@@ -152,6 +152,27 @@ A pull cannot disturb a running event: entrants freeze their whole rating seed
 at registration (`plans/PLAN_ENTRANTS.md` decision 3), which is what makes an
 unattended pull safe at any hour.
 
+## Entrant ratings
+
+An entrant freezes their whole rating seed at registration, and the roster pull
+cannot move it — that is what makes the six-hourly sync safe mid-tournament
+(`plans/PLAN_ENTRANTS.md` decision 3).
+
+The exception is deliberate and per-entrant: `/entrants/refresh-ratings/`
+re-pins the ticked entrants from the player table. The entrants page shows the
+drift for editors, with checkboxes, and warns if a round has already left draft.
+
+Three rules it follows, all easy to break:
+
+- **Manual ratings are never offered.** A typed rating is a director saying what
+  a player is worth; a sync does not overrule it.
+- **The event records the values it wrote**, not the intent to sync. Entrant
+  ratings are in `division_digest`, so an event meaning "take whatever the
+  roster says" would replay to a different digest every time.
+- **The drift column is editor-only.** `_entrants_table.html` is shared with the
+  public embed; `show_drift` is only ever set for editors, like `can_edit` for
+  the payment column.
+
 ## Code Standards
 
 - Do not add tests that are just testing django functionality

@@ -1423,6 +1423,27 @@ dd {
     font-style: italic;
 }
 
+/* Drift between an entrant's pinned seed and the player table. Editor-only:
+   the public entrant list and the embed never render this column. */
+.drift {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--space-xs);
+    white-space: nowrap;
+}
+
+.drift-quiet {
+    color: var(--color-muted);
+    font-style: italic;
+}
+
+.drift-banner {
+    margin-bottom: var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+    border-left: 3px solid var(--color-muted);
+    background: transparent;
+}
+
 .entrant-legend {
     margin-top: var(--space-sm);
     color: var(--color-muted);

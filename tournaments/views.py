@@ -27,6 +27,7 @@ from django.views.generic import (
 
 from .datastar_utils import fragment_response, is_datastar
 from .display import division_labels, label_entrants, label_standings
+from .entrant_sync import division_under_way, payload_for, rating_drift
 from .live_ratings import project_ratings
 from .player_source import get_player_source
 from datastar_py.django import read_signals
@@ -48,6 +49,7 @@ from .fixed_pairings import (
 from .match_simulation import simulate_match, simulate_round
 from .commands import (
     add_entrant,
+    refresh_entrant_ratings,
     add_fixed_pairing_cmd,
     add_result,
     bulk_import_entrants,
@@ -714,7 +716,66 @@ class DivisionEntrantsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
         entrants, flags = entrants_for_display(self.object)
         context["entrants"] = entrants
         context.update(flags)
+        # Editors only: the drift between each pinned seed and the player table,
+        # keyed by player number so the shared table can look one up per row.
+        # The public embed renders the same partial with can_edit False and gets
+        # none of this — a stale seed is internal bookkeeping, not a result.
+        if context.get("can_edit"):
+            drifted = rating_drift(self.object)
+            # Hung on the entrant rather than passed as a lookup table, the way
+            # display_name already is: the shared partial then needs no filter,
+            # and an entrant with no drift simply has no attribute to render.
+            by_key = {d.key: d for d in drifted}
+            for entrant in entrants:
+                entrant.drift = by_key.get(entrant.player.player_number)
+            context["drift"] = drifted
+            context["show_drift"] = bool(drifted)
+            context["division_under_way"] = division_under_way(self.object)
         return context
+
+
+class DivisionRefreshRatingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    """Re-pin the ticked entrants' seeds from the player table.
+
+    The entrant snapshot exists so a roster pull cannot move a running
+    tournament (PLAN_ENTRANTS decision 3). This is the director choosing to move
+    it anyway, for the entrants they picked — so it is a logged command, unlike
+    the global rating refreshes, because it mutates state the digest covers.
+
+    The seeds are re-read here rather than taken from the form: this means
+    "update from the player table", and a form carrying rating values would be a
+    way to set arbitrary ones without them being marked manual. The cost is a
+    race — the cron could pull between render and submit — which is benign,
+    since the newer value is the one the director was asking for.
+    """
+
+    def post(self, request, *args, **kwargs):
+        division = self.get_division()
+        back = redirect(
+            "division_entrants", division.tournament.slug, division.slug
+        )
+        picked = set(request.POST.getlist("entrants"))
+        if not picked:
+            messages.error(request, "No entrants selected.")
+            return back
+
+        drifted = [d for d in rating_drift(division) if d.key in picked]
+        if not drifted:
+            # Everything ticked has been refreshed or hand-edited since the page
+            # was drawn. Nothing to do, and nothing worth logging.
+            messages.info(request, "Those entrants already match the player table.")
+            return back
+
+        moved = sum(1 for d in drifted if d.rating_changed)
+        refresh_entrant_ratings(
+            division.tournament, request.user, payload_for(division, drifted)
+        )
+        messages.success(
+            request,
+            f"Refreshed {len(drifted)} entrant(s) from the player table; "
+            f"{moved} rating(s) changed.",
+        )
+        return back
 
 
 @method_decorator(xframe_options_exempt, name="dispatch")

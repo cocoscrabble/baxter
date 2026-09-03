@@ -759,9 +759,13 @@ def add_entrant(tournament, actor, payload):
     if division.entrants.filter(player=player).exists():
         raise ValueError(f"{player.name} is already entered in {division.name}.")
 
+    # ``rating`` and ``rating_source`` are handed to Entrant.enter as its own
+    # arguments below, so they must not also ride along in **fields -- passing
+    # both is a TypeError, which is what a payload spelling out the source used
+    # to do.
     fields = {
         k: payload[k] for k in _REGISTRATION_FIELDS
-        if k in payload and k not in ("number", "rating")
+        if k in payload and k not in ("number", "rating", "rating_source")
     }
     entrant = Entrant.enter(
         division, player, int(payload["number"]),
@@ -806,6 +810,56 @@ def update_entrant(tournament, actor, payload):
         changed.append("rating_source")
     entrant.save(update_fields=changed)
     return EventResult(payload=payload, division=division, result=entrant)
+
+
+@records_event("entrant_ratings_refreshed")
+def refresh_entrant_ratings(tournament, actor, payload):
+    """payload: {division, entrants: [{player, + the five seed fields}, …]}.
+
+    Re-pin the seeds this payload names, and only those. Entrants pin their
+    rating at registration so a roster pull cannot move a running tournament
+    (PLAN_ENTRANTS decision 3); this is the director deliberately taking the new
+    values for the entrants they picked.
+
+    **The values are carried, not re-derived.** Reading the player table here
+    would make the event mean "whatever the roster said at replay time", and
+    entrant ratings are in the division digest — so the replay would diverge
+    from the run it is meant to reproduce. See tournaments/entrant_sync.py.
+
+    A row naming an entrant who is not in the division is an error rather than a
+    skip: the payload was built from this division's own drift, so a name that
+    does not resolve means the log and the database disagree about who is here.
+    """
+    from datetime import date
+
+    from tournaments.entrant_sync import SEED_FIELDS
+    from tournaments.models import Entrant, canonical_player_number
+
+    division = _division(tournament, payload["division"])
+    rows = payload.get("entrants") or []
+    if not rows:
+        return EventResult(payload=payload, division=division, record=False)
+
+    updated = []
+    for row in rows:
+        number = canonical_player_number(row["player"])
+        entrant = Entrant.all_objects.filter(
+            division=division, player__player_number=number
+        ).first()
+        if entrant is None:
+            raise ValueError(
+                f"No entrant with player number {row['player']!r} in "
+                f"{division.name}."
+            )
+        for field in SEED_FIELDS:
+            value = row[field]
+            if field == "last_played" and isinstance(value, str):
+                value = date.fromisoformat(value)
+            setattr(entrant, field, value)
+        entrant.save(update_fields=list(SEED_FIELDS))
+        updated.append(entrant)
+
+    return EventResult(payload=payload, division=division, result=updated)
 
 
 # ---------------------------------------------------------------------------

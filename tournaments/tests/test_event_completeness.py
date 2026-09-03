@@ -59,6 +59,7 @@ COMMAND_BACKED = {
     "PublishRoundView",
     "UnpublishRoundView",
     "SimulateMatchView",
+    "DivisionRefreshRatingsView",
     "SimulateRoundView",
     "PlayoffSetupView",
 }

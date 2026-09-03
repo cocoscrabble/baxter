@@ -13,7 +13,12 @@ so every marked row also carries a visually-hidden textual equivalent, and the
 legend below spells the markers out.
 
 Payment is editor-only and never rendered otherwise — not "hidden by CSS",
-simply absent from the response.
+simply absent from the response. The same goes for the drift column: whether a
+pinned seed has fallen behind the player table is internal bookkeeping, not a
+result, and `show_drift` is only ever set for editors.
+
+The checkboxes carry `form="refresh-ratings"`, which lives on the division page
+outside this partial — the embed has no such form and renders no checkboxes.
 {% endcomment %}
 <div class="table-scroll table-narrow">
 <table>
@@ -22,6 +27,7 @@ simply absent from the response.
             <th class="num">#</th>
             <th>Player</th>
             <th class="num">Rating</th>
+            {% if show_drift %}<th class="num">Player table</th>{% endif %}
             {% if can_edit %}<th>Payment</th>{% endif %}
         </tr>
     </thead>
@@ -38,6 +44,19 @@ simply absent from the response.
             <td class="num{% if entrant.rating_source == 'wespa' %} rating-wespa{% endif %}">
                 {{ entrant.rating }}{% if entrant.rating_source == 'wespa' %}<span class="visually-hidden"> (WESPA rating)</span>{% endif %}
             </td>
+            {% if show_drift %}
+            <td class="num">
+                {% if entrant.drift %}
+                <label class="drift">
+                    <input type="checkbox" name="entrants" value="{{ entrant.drift.key }}" form="refresh-ratings" checked>
+                    {% if entrant.drift.rating_changed %}{{ entrant.drift.new_rating }}{% else %}
+                    {# The seed moved but the number did not: more games played, or
+                       a newer last-played date. Worth taking, not worth an arrow. #}
+                    <span class="drift-quiet">seed only</span>{% endif %}
+                </label>
+                {% endif %}
+            </td>
+            {% endif %}
             {% if can_edit %}
             <td>
                 {% if entrant.paid %}Paid{% else %}Unpaid{% endif %}
