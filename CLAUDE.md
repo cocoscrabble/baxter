@@ -99,6 +99,25 @@ the log replays into a fresh DB. Key pieces:
 **A new mutating POST view must route through a command** (or be added to the
 exempt set in `test_event_completeness.py`, which fails CI otherwise).
 
+## Admin pages
+
+Anything gated on the Admin role is listed at `/tournaments/manage/`
+(`AdminIndexView`), and admins get an **Admin** link in the navbar — the only
+navigation into it. The three player pages (roster pull, player import, WESPA
+import) used to link only to each other, so they were reachable only by typing a
+URL; that stopped being tolerable when the roster pull started running on a
+timer and could leave work waiting on a page nobody visited.
+
+**A new admin-only view must appear on that page.**
+`test_admin_index.CompletenessTests` reads the URLconf for every view gated on
+`IsAdminMixin` and fails if one is not linked there, so a new page cannot
+quietly become unreachable the way those three were.
+
+The page shows the roster's *state*, not just links: a guest awaiting
+confirmation, or a scheduled pull that has been failing, is flagged here.
+`/manage/` mirrors the sibling cocodb site's staff area; `/admin/` stays Django's
+own, which is gated on `is_staff` rather than on the role.
+
 ## Roster sync (the central player database)
 
 Baxter mirrors player identity and CoCo ratings from the central database

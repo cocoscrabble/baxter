@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import (
+    AdminIndexView,
     AddFixedPairingView,
     BulkImportEntrantsView,
     CreatePlayerView,
@@ -75,6 +76,10 @@ urlpatterns = [
     path("fake-tournament/", FakeTournamentCreateView.as_view(), name="fake_tournament_create"),
     path("what-if/import/", WhatIfImportView.as_view(), name="whatif_import"),
     path("create-player/", CreatePlayerView.as_view(), name="create_player"),
+    # The admin landing page. Named "manage/" to match the sibling cocodb site
+    # (../ratings), whose staff area is /manage/ — and to leave "/admin/" meaning
+    # Django's own admin, which is gated on is_staff rather than on the role.
+    path("manage/", AdminIndexView.as_view(), name="admin_index"),
     path("players/import/", PlayerImportView.as_view(), name="player_import"),
     path("players/wespa/", WespaImportView.as_view(), name="wespa_import"),
     path("players/roster/", RosterImportView.as_view(), name="roster_import"),

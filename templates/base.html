@@ -19,6 +19,7 @@
             </div>
             <div class="nav-right">
                 {% if user.is_authenticated %}
+                    {% if user.is_admin %}<a href="{% url 'admin_index' %}">Admin</a>{% endif %}
                     <a href="{% url 'profile' %}">{{ user.username }}</a>
                     <form method="post" action="{% url 'logout' %}" class="nav-logout-form">{% csrf_token %}<button type="submit" class="nav-link-btn">Logout</button></form>
                 {% else %}

@@ -21,6 +21,7 @@ from django.views.generic import (
     DeleteView,
     DetailView,
     ListView,
+    TemplateView,
     UpdateView,
 )
 
@@ -1964,6 +1965,36 @@ class CreatePlayerView(LoginRequiredMixin, View):
         return Division.objects.filter(
             tournament__slug=slugs[0], slug=slugs[1]
         ).first()
+
+
+class AdminIndexView(LoginRequiredMixin, IsAdminMixin, TemplateView):
+    """The one page listing everything only an admin can do.
+
+    Before this, the admin pages linked to each other and to nothing else: no
+    navbar entry, nothing on the tournament list, so they were reachable only by
+    typing a URL. That was survivable while every one of them was something an
+    admin went looking for. It stopped being survivable when the roster pull
+    started running on a timer, because a scheduled pull can now leave a guest
+    waiting for a director's confirmation on a page nobody navigates to.
+
+    So this page carries the roster's state, not just a link to it — the point is
+    that an admin who visits sees whether anything needs them.
+
+    ``test_admin_index`` asserts every ``IsAdminMixin`` view appears here, so a
+    new admin page cannot quietly become unreachable the way these three were.
+    """
+
+    template_name = "tournaments/admin_index.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["player_count"] = Player.objects.filter(is_bye=False).count()
+        context["provisional_count"] = Player.objects.filter(
+            is_bye=False, is_provisional=True
+        ).count()
+        context["last_sync"] = RosterSync.latest()
+        context["pending_count"] = len(pending_resolutions())
+        return context
 
 
 class PlayerImportView(LoginRequiredMixin, IsAdminMixin, View):

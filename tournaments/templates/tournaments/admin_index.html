@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - Baxter{% endblock %}
+
+{% block page_class %}page--narrow{% endblock %}
+
+{% block content %}
+<h1>Admin</h1>
+
+<p>Everything here needs the Admin role. Nothing on this page belongs to a single
+tournament — these are the site-wide player and account tools.</p>
+
+{% comment %}
+The roster's state, not just a link to it. The pull runs on a timer now, so the
+two things needing a human — a held-back guest, and a pull that has been failing
+— arrive without anyone watching. This is where an admin finds out.
+{% endcomment %}
+{% if pending_count %}
+<p class="error"><strong>{{ pending_count }} player{{ pending_count|pluralize }}
+need{{ pending_count|pluralize:"s," }} confirming</strong> — a roster pull found
+a real player number for someone Baxter knows only as a guest, and changed
+nothing pending your say-so.
+<a href="{% url 'roster_import' %}">Review {{ pending_count|pluralize:"it,them" }}</a>.</p>
+{% endif %}
+
+{% if last_sync and not last_sync.ok %}
+<p class="error">The last roster pull ({{ last_sync.created_at|timesince }} ago,
+{{ last_sync.get_source_display|lower }}) failed: {{ last_sync.error }}</p>
+{% endif %}
+
+<h2>Players</h2>
+
+<p>{{ player_count }} player{{ player_count|pluralize }},
+{{ provisional_count }} of them still on a temporary number.</p>
+
+<ul>
+    <li><a href="{% url 'roster_import' %}">Pull the central roster</a> —
+    names, CoCo ratings and rating history from the CoCo player database. Runs
+    on its own every six hours; come here to pull sooner, to upload a snapshot
+    at an event with no connection, or to confirm a guest's new number.
+    {% if last_sync and last_sync.ok %}Last pull
+    {{ last_sync.created_at|timesince }} ago.{% endif %}</li>
+
+    <li><a href="{% url 'player_import' %}">Import players from another Baxter</a>
+    — a JSON export from <code>manage.py export_players</code>. Adds and updates,
+    never deletes.</li>
+
+    <li><a href="{% url 'wespa_import' %}">Import WESPA ratings</a> — a CSV.
+    Separate from the CoCo rating, used only for players who have none, and
+    never sent to the central database.</li>
+</ul>
+
+<h2>Accounts and raw data</h2>
+
+<ul>
+    <li><a href="{% url 'admin:index' %}">Django admin</a> — user accounts and
+    roles, and direct access to every table. Gated separately, on Django's
+    staff flag rather than on the Admin role, so an admin without it will be
+    asked to log in again there.</li>
+</ul>
+{% endblock %}
