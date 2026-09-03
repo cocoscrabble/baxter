@@ -77,6 +77,14 @@ default, so a later session should not relitigate them without asking.
    rating refresh (WESPA pull, playerdb sync) mutates no replayable tournament
    state, so it stays an unlogged global action like `PlayerImportView`.
 
+   *Added later:* a director may also re-pin chosen entrants from the player
+   table (`tournaments/entrant_sync.py`, `/entrants/refresh-ratings/`). That is
+   the deliberate opposite gesture and it **is** logged — it moves state the
+   digest covers — as `entrant_ratings_refreshed`, carrying the seeds it wrote
+   rather than an instruction to sync, since a replay reads a player table that
+   has moved on. Manual ratings are still never touched, and the entrants page
+   marks the drift for editors only.
+
 4. **Guests are not a new kind.** A guest is simply a player with no CoCo
    number and no CoCo rating: a `T-` number, `is_provisional=True`, and a WESPA
    or manually-entered rating. No `is_guest` field, no `kind` enum. Their `T-`

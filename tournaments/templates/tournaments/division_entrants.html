@@ -9,6 +9,34 @@
 </div>
 
 {% if entrants %}
+{% comment %}
+The form lives outside the table because the table partial is shared with the
+public embed. The checkboxes inside it point back here with form="refresh-ratings",
+which is why they can sit in a table this form does not wrap.
+{% endcomment %}
+{% if drift %}
+<form method="post" id="refresh-ratings"
+      action="{% url 'division_refresh_ratings' division.tournament.slug division.slug %}">
+    {% csrf_token %}
+</form>
+<div class="drift-banner">
+    <p><strong>{{ drift|length }} entrant{{ drift|length|pluralize }}</strong>
+    {{ drift|length|pluralize:"has,have" }} a pinned rating that no longer matches
+    the player table. Entrants keep the rating they were entered with, so nothing
+    changes until you say so.</p>
+    {% if division_under_way %}
+    <p class="error">This division is already under way. Re-pinning now changes
+    the live rating projection and the seed order below; it does not re-pair
+    rounds that have already gone out.</p>
+    {% endif %}
+    <p>
+        <button type="submit" form="refresh-ratings">Update ticked ratings</button>
+        <button type="button" class="btn-secondary"
+                data-on:click="document.querySelectorAll('input[form=refresh-ratings]').forEach(c =&gt; c.checked = !c.checked)">Toggle all</button>
+    </p>
+</div>
+{% endif %}
+
 {% include "tournaments/_entrants_table.html" %}
 {% if can_edit %}
 <p class="settings-intro">

@@ -24,6 +24,7 @@ from .views import (
     DivisionRegisterSearchView,
     DivisionRegisterView,
     DivisionEntrantsView,
+    DivisionRefreshRatingsView,
     DivisionExploreView,
     DivisionFixturesEditView,
     DivisionRoundPairingsEditView,
@@ -93,6 +94,7 @@ urlpatterns = [
 
     path(D, DivisionDetailView.as_view(), name="division_detail"),
     path(D + "entrants/", DivisionEntrantsView.as_view(), name="division_entrants"),
+    path(D + "entrants/refresh-ratings/", DivisionRefreshRatingsView.as_view(), name="division_refresh_ratings"),
     path(D + "results/", DivisionAllResultsView.as_view(), name="division_all_results"),
     path(D + "add-result/", ResultSlipCreateView.as_view(), name="resultslip_create"),
     path(D + "edit-result/<int:result_pk>/", ResultSlipCreateView.as_view(), name="resultslip_edit"),
