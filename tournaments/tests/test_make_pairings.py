@@ -57,8 +57,11 @@ class MakePairingsTests(TestCase):
         )
 
     def test_unknown_abbreviation_raises(self):
+        # "CH" was the example here until it became Charlottesville. Anything
+        # ABBREV does not claim will do; test_strategy_names keeps that set
+        # honest from the other direction.
         with self.assertRaises(KeyError):
-            make_pairings("CH:3")
+            make_pairings("ZZ:3")
 
     def test_mixed_spec(self):
         self.assert_pairings(

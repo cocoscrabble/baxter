@@ -1210,7 +1210,10 @@ class DivisionExploreView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionM
         context = super().get_context_data(**kwargs)
         division = self.object
         max_round = division.max_round()
-        strategies = [str(s) for s in STRATEGY_TYPES]
+        # The members themselves, so the template can render the value and the
+        # label separately. RP is a StrEnum, so `s == strategy` still compares
+        # against the string that came in on the query.
+        strategies = list(STRATEGY_TYPES)
         get = self.request.GET
         # Only pair when the user actually asks (the Pair/Reshuffle button, or a
         # shared URL, carries `round`). A bare tab visit shows a placeholder, so
@@ -1560,7 +1563,9 @@ class DivisionRoundPairingsEditView(LoginRequiredMixin, CanEditDivisionMixin, Vi
             "blocks_json": json.dumps(blocks),
             "preview_json": json.dumps(preview),
             "default_rounds_json": json.dumps(default_block_rounds(division.entrants.count())),
-            "strategy_types_json": json.dumps([str(s) for s in STRATEGY_TYPES]),
+            "strategy_types_json": json.dumps(
+                [{"value": str(s), "label": s.label} for s in STRATEGY_TYPES]
+            ),
             "pairing_methods": [(str(m), m.label) for m in PairingMethod],
             "method_total_rounds": method_total_rounds,
             "edit_version": EditVersion.version_for(key),

@@ -5,22 +5,42 @@ from dataclasses_json import dataclass_json
 
 
 class RP(StrEnum):
-    KotH = "KotH"
-    QotH = "QotH"
-    Swiss = "Swiss"
-    SwissNoRepeats = "SwissNoRepeats"
-    SwissMinRepeats = "SwissMinRepeats"
-    RoundRobin = "RoundRobin"
-    DoubleRoundRobin = "DoubleRoundRobin"
-    Random = "Random"
-    RandomNoRepeats = "RandomNoRepeats"
-    Quads_Clustered = "Quads_Clustered"
-    Quads_Distributed = "Quads_Distributed"
-    Quads_Equalized = "Quads_Equalized"
-    Sixes = "Sixes"
-    Charlottesville = "Charlottesville"
-    SwissPlusRandom = "SwissPlusRandom"
-    COP = "COP"
+    """A pairing strategy: a stable identifier, plus the name a human reads.
+
+    **The value is a wire identifier, not a label.** It is what crosses into the
+    Rust engine (``{"pairing": "SwissNoRepeats"}`` — see
+    ``scrabble-pairing/src/round_pairing.rs``), what a division's stored schedule
+    holds, and what every ``round_pairings_saved`` payload in the event log
+    names. Renaming one silently breaks pairing for existing divisions and stops
+    their logs replaying, so the values are fixed; ``label`` is the part free to
+    change.
+
+    Declaration order is display order: ``STRATEGY_TYPES`` is derived from it, so
+    moving a member here moves it in the dropdown.
+    """
+
+    def __new__(cls, value, label):
+        member = str.__new__(cls, value)
+        member._value_ = value
+        member.label = label
+        return member
+
+    KotH = ("KotH", "King of the Hill")
+    QotH = ("QotH", "Queen of the Hill")
+    COP = ("COP", "C-O Pairings")
+    Swiss = ("Swiss", "Swiss")
+    SwissPlusRandom = ("SwissPlusRandom", "Swiss with Random")
+    SwissNoRepeats = ("SwissNoRepeats", "Swiss without Repeats")
+    SwissMinRepeats = ("SwissMinRepeats", "Swiss with Minimal Repeats")
+    RoundRobin = ("RoundRobin", "Round Robin")
+    DoubleRoundRobin = ("DoubleRoundRobin", "Double Round Robin")
+    Charlottesville = ("Charlottesville", "Split Field Round Robin")
+    Random = ("Random", "Random")
+    RandomNoRepeats = ("RandomNoRepeats", "Random without Repeats")
+    Quads_Clustered = ("Quads_Clustered", "Quads (Clustered)")
+    Quads_Distributed = ("Quads_Distributed", "Quads (Distributed)")
+    Quads_Equalized = ("Quads_Equalized", "Quads (Equalized)")
+    Sixes = ("Sixes", "Sixes")
 
     @staticmethod
     def is_round_robin(name) -> bool:
@@ -28,32 +48,22 @@ class RP(StrEnum):
 
     @staticmethod
     def is_quad(name) -> bool:
-        return name in (RP.Quads_Clustered, RP.Quads_Distributed, RP.Quads_Equalized, RP.Sixes)
+        return name in (
+            RP.Quads_Clustered,
+            RP.Quads_Distributed,
+            RP.Quads_Equalized,
+            RP.Sixes,
+        )
 
 
-# The pairing strategies the schedule editor offers. Every entry must be a name
-# the Rust engine accepts (see test_rust_engine); the engine is now the only
-# implementation.
-STRATEGY_TYPES = [
-    RP.KotH,
-    RP.QotH,
-    RP.Swiss,
-    RP.SwissNoRepeats,
-    RP.SwissMinRepeats,
-    RP.RoundRobin,
-    RP.DoubleRoundRobin,
-    RP.Random,
-    RP.RandomNoRepeats,
-    RP.Quads_Clustered,
-    RP.Quads_Distributed,
-    RP.Quads_Equalized,
-    RP.Sixes,
-    RP.Charlottesville,
-    RP.SwissPlusRandom,
-    # COP pairs off the previous round like a sliding strategy; it additionally
-    # needs DivisionSettings.cop_config (prizes + tuning) to pair.
-    RP.COP,
-]
+# The pairing strategies the schedule editor offers, in the order it offers
+# them. Derived from the enum rather than listed again: the two had drifted into
+# different orders, and a hand-kept copy of a complete list is only a way to
+# forget one. Every entry must be a name the Rust engine accepts, which
+# ``test_rust_engine`` checks; the engine is now the only implementation.
+#
+# COP additionally needs DivisionSettings.cop_config (prizes + tuning) to pair.
+STRATEGY_TYPES = list(RP)
 
 
 ABBREV = {
@@ -70,6 +80,7 @@ ABBREV = {
     "QD": RP.Quads_Distributed,
     "QE": RP.Quads_Equalized,
     "SX": RP.Sixes,
+    "CH": RP.Charlottesville,
     "SR": RP.SwissPlusRandom,
     "CO": RP.COP,
 }
