@@ -14,7 +14,7 @@ import random
 from django.test import Client
 
 from tournaments.events import division_digest
-from tournaments.models import Player, RoundPairings, Tournament
+from tournaments.models import Entrant, Player, RoundPairings, Tournament
 from tournaments.replay import events_from_tournament, replay
 from users.models import User
 
@@ -242,6 +242,7 @@ class Fuzzer:
     def check_invariants(self):
         self._inv_no_double_pairing()
         self._inv_round_status_consistent()
+        self._inv_seeded_by_rating()
 
     def _inv_no_double_pairing(self):
         for rp in self.division.round_pairings_set.all():
@@ -253,6 +254,30 @@ class Fuzzer:
                             f"entrant {eid} paired twice in round {rp.round}"
                         )
                     seen.add(eid)
+
+    def _inv_seeded_by_rating(self):
+        """A draft division is numbered by rating, whatever just happened to it.
+
+        Entrant numbers are a seeding the server derives, but the deriving is a
+        call every write path has to remember to make — the registration page's
+        four handlers, the grid, the CSV import, the ratings refresh. Nothing
+        makes that mechanical, so this is the guard: whichever of them the
+        fuzzer just exercised, the field comes out seeded.
+
+        Only while the division is in draft. After that the seeding is frozen
+        and a late entrant is *supposed* to sit out of rating order.
+        """
+        if self.division.under_way():
+            return
+        expected = Entrant.seeding_for(self.division)
+        actual = [
+            [e.player.player_number, e.number]
+            for e in self.division.entrants.select_related("player").order_by("number")
+        ]
+        if actual != expected:
+            raise InvariantError(
+                f"division not seeded by rating: {actual} != {expected}"
+            )
 
     def _inv_round_status_consistent(self):
         for rp in self.division.round_pairings_set.all():
