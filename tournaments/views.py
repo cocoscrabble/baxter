@@ -55,6 +55,7 @@ from .commands import (
     bulk_import_entrants,
     create_division,
     create_player,
+    reseed_entrants,
     update_entrant,
     create_playoff,
     create_tournament,
@@ -774,6 +775,14 @@ class DivisionRefreshRatingsView(LoginRequiredMixin, CanEditDivisionMixin, View)
         moved = sum(1 for d in drifted if d.rating_changed)
         refresh_entrant_ratings(
             division.tournament, request.user, payload_for(division, drifted)
+        )
+        # Numbers are a seeding off the pinned rating, so re-pinning moves them
+        # — while the division is still in draft. Once it is under way the
+        # command records nothing, which is the whole point: this page already
+        # warns that a round has left draft, and it should not renumber the
+        # field it warned about.
+        reseed_entrants(
+            division.tournament, request.user, {"division": division.name}
         )
         messages.success(
             request,
@@ -1706,13 +1715,29 @@ class DivisionEntrantsEditView(DivisionEditGridView):
     grid = EntrantsGrid()
     active_tab = "edit_entrants"
 
+    def on_saved(self, division, rows):
+        # The grid's "#" is an auto-increment for new rows, so a bulk add leaves
+        # the field in entry order rather than rating order. Renumber it —
+        # after the save event, so the log holds what was entered and then what
+        # it was renumbered to, in that order, which is also the order a replay
+        # applies them in. Recording it separately is what leaves every grid
+        # save written before numbers were derived replaying exactly as it did.
+        super().on_saved(division, rows)
+        actor = self.request.user if self.request.user.is_authenticated else None
+        reseed_entrants(division.tournament, actor, {"division": division.name})
+
 
 class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
     """Register entrants one at a time — the primary *add* flow.
 
-    The edit grid stays the bulk surface (seat numbers, dropped, quick flag
-    edits); this page is where a director adds someone, creates a guest, or
+    The edit grid stays the bulk surface (dropped, ratings, quick flag edits);
+    this page is where a director adds someone, creates a guest, or
     confirms/fixes one entrant without touching a spreadsheet.
+
+    Neither surface asks for an entrant *number*. That number is a seeding —
+    the entrant's number for this tournament, not a seat or a board — so it is
+    derived from the pinned rating (``commands.reseed_entrants``) and frozen
+    once a round has left draft.
 
     Three actions, all POSTing here:
 
@@ -1744,7 +1769,6 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
             overrides["editing"] = entrant
             overrides["registration_form"] = RegistrationForm(
                 initial={
-                    "number": entrant.number,
                     "rating": entrant.rating,
                     "tentative": entrant.tentative,
                     "paid": entrant.paid,
@@ -1765,10 +1789,9 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
         division = self.get_division()
         action = request.POST.get("action")
         # A WESPA result posts the *add* form — entering one is the same act as
-        # entering anyone else, and it should carry the same seat number, rating
-        # override and payment flags — so it is told apart by the id it carries
-        # rather than by a second hidden action field the button would have to
-        # fight with.
+        # entering anyone else, and it should carry the same rating override and
+        # payment flags — so it is told apart by the id it carries rather than by
+        # a second hidden action field the button would have to fight with.
         if action == "add" and request.POST.get("wespa"):
             return self._wespa_guest(request, division)
         handler = {
@@ -1783,11 +1806,6 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
 
     # -- context -----------------------------------------------------------
 
-    def _next_number(self, division):
-        return (
-            division.entrants.aggregate(m=models.Max("number"))["m"] or 0
-        ) + 1
-
     def _context(self, division, **overrides):
         entrants = list(
             division.entrants.select_related("player").order_by("number")
@@ -1799,16 +1817,11 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
             "entrants": entrants,
             "can_edit": True,
             "active_tab": "entrants",
-            "registration_form": RegistrationForm(
-                initial={"number": self._next_number(division)}
-            ),
+            "registration_form": RegistrationForm(),
             # The same fieldset appears twice on this page, so the guest copy is
             # prefixed. Without it both render identical element ids and the
             # guest form's labels silently point at the add form's inputs.
-            "guest_registration_form": RegistrationForm(
-                prefix=self.GUEST_PREFIX,
-                initial={"number": self._next_number(division)},
-            ),
+            "guest_registration_form": RegistrationForm(prefix=self.GUEST_PREFIX),
             "guest_form": GuestForm(prefix=self.GUEST_PREFIX),
             "search_query": "",
             "search_results": [],
@@ -1853,6 +1866,18 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
     def _redirect(self, division):
         return redirect("division_register", **division.slug_kwargs())
 
+    def _reseed(self, request, division):
+        """Renumber by rating after anything that could change the order.
+
+        An entrant's number is a seeding, so entering somebody — or correcting a
+        rating — moves it. The command is a no-op once a round has left draft,
+        and records nothing when no number actually moves, so these calls can be
+        unconditional.
+        """
+        reseed_entrants(
+            division.tournament, request.user, {"division": division.name}
+        )
+
     def _add(self, request, division):
         form = RegistrationForm(request.POST)
         record = get_player_source().fetch(request.POST.get("player", ""))
@@ -1877,6 +1902,7 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
                 request, self.template_name,
                 self._context(division, registration_form=form),
             )
+        self._reseed(request, division)
         messages.success(request, f"Entered {record.name}.")
         return self._redirect(division)
 
@@ -1931,6 +1957,7 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
         except ValueError as exc:
             messages.error(request, str(exc))
             return self._redirect(division)
+        self._reseed(request, division)
         messages.success(
             request, f"Entered {row.name} from the WESPA list."
         )
@@ -1975,6 +2002,7 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
                     division, guest_registration_form=form, guest_form=guest
                 ),
             )
+        self._reseed(request, division)
         messages.success(request, f"Entered {guest.cleaned_data['name']}.")
         return self._redirect(division)
 
@@ -2009,6 +2037,7 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
         except ValueError as exc:
             messages.error(request, str(exc))
             return self._redirect(division)
+        self._reseed(request, division)
         messages.success(request, f"Updated {entrant.player.name}.")
         return self._redirect(division)
 
@@ -2522,6 +2551,14 @@ class BulkImportEntrantsView(LoginRequiredMixin, CanEditDivisionMixin, View):
         )
         if errors:
             return JsonResponse({"errors": errors}, status=400)
+
+        # The CSV lands entrants in file order; their numbers are a seeding, so
+        # the import is followed by the same renumber every other entry path
+        # gets. Recorded separately from the import, which stays the verbatim
+        # document the director pasted.
+        reseed_entrants(
+            division.tournament, request.user, {"division": division.name}
+        )
 
         return JsonResponse({
             "ok": True,

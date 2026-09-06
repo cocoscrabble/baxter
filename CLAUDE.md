@@ -186,6 +186,35 @@ Four rules, all easy to break:
   part is `player_created`, which now carries `wespa_id` so a replay recreates a
   guest already linked.
 
+## Entrant numbers are a seeding
+
+`Entrant.number` is the entrant's number **for this tournament** — not a seat,
+not a board, not a table. (Boards and tables are a separate, genuinely physical
+thing: `board_table_map` and `assign_tables`.) Nothing pairs off it; the engine
+keys on rating, and the number is what breaks a tie between equal ratings and
+what the standings show in brackets.
+
+**Nobody types it.** It is derived from the pinned rating, highest rated is 1,
+ties broken on the player number — `Entrant.seeding_for` /
+`commands.reseed_entrants`. The registration form has no number field and the
+grid's column is read-only; every path that can change the order (add, guest,
+WESPA guest, edit, grid save, CSV import, rating refresh) calls
+`reseed_entrants` afterwards.
+
+Three things that are easy to break:
+
+- **It stops once a round has left draft.** After that the seeding is what the
+  division actually started as, so a late entrant is appended rather than
+  shifting every number on the standings page. `reseed_entrants` records
+  nothing when `division_under_way`, so callers need no condition of their own.
+- **The numbers are recorded, not re-derived.** Entrant numbers are in
+  `division_digest`, so a payload meaning "sort by whatever the ratings are"
+  would replay against a different rating table and renumber differently — the
+  same rule `entrant_ratings_refreshed` follows.
+- **It is its own event, not folded into the add or the grid save.** That is
+  what leaves every payload written before numbers were derived replaying
+  exactly as it always did: no `entrants_reseeded` event, no reseed.
+
 ## Entrant ratings
 
 An entrant freezes their whole rating seed at registration, and the roster pull

@@ -518,13 +518,21 @@ class BulkImportEntrantsViewTests(TestCase):
         self.assertEqual(data["added"], 1)
         self.assertEqual(Player.objects.get(name="Charlie").rating, 0)
 
-    def test_entrant_numbers_append(self):
-        # Existing entrants are numbered 1, 2
+    def test_an_import_is_seeded_by_rating_not_appended(self):
+        # The CSV lands entrants in file order, but a number is a seeding: the
+        # import is followed by the same renumber every other entry path gets.
+        # The two existing entrants were created directly and pin a rating of 0,
+        # so Charlie's 1400 seeds him first rather than third.
         response = self._upload("Charlie,1400\n")
         data = response.json()
         self.assertTrue(data["ok"])
-        entrant = self.division.entrants.get(player__name="Charlie")
-        self.assertEqual(entrant.number, 3)
+        self.assertEqual(
+            self.division.entrants.get(player__name="Charlie").number, 1
+        )
+        self.assertEqual(
+            sorted(self.division.entrants.values_list("number", flat=True)),
+            [1, 2, 3],
+        )
 
 
 class ResultSlipCreateViewTests(TestCase):
@@ -2989,15 +2997,19 @@ class DivisionEntrantsEditViewTests(TestCase):
         self.assertFalse(RoundPairings.objects.filter(pk=draft.pk).exists())
         self.assertTrue(RoundPairings.objects.filter(pk=published.pk).exists())
 
-    def test_renumber_swap_succeeds(self):
-        # Swapping two entrants' numbers transiently collides on the
-        # (division, number) unique constraint; the two-pass update handles it.
+    def test_a_save_renumbers_by_rating_whatever_was_posted(self):
+        # Entrant numbers are a seeding, not something the grid types: the save
+        # renumbers by pinned rating. That swaps these two, which transiently
+        # collides on the (division, number) unique constraint — the two-pass
+        # update in Entrant.apply_seeding is what handles it.
         e1, e2 = self._seed_entrants()  # player1=1, player2=2
+        e1.rating, e2.rating = 1400, 1700
+        Entrant.objects.bulk_update([e1, e2], ["rating"])
         self.client.login(username="owner", password="testpass123")
         payload = {
             "rows": [
-                {"number": 2, "player": self.player1.pk},
-                {"number": 1, "player": self.player2.pk},
+                {"number": 1, "player": self.player1.pk, "rating": 1400},
+                {"number": 2, "player": self.player2.pk, "rating": 1700},
             ],
             "_version": 0,
         }
@@ -3005,13 +3017,14 @@ class DivisionEntrantsEditViewTests(TestCase):
             self.url, json.dumps(payload), content_type="application/json"
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            self.division.entrants.get(player=self.player1).number, 2
-        )
+        # Higher rating seeds first, whatever number the grid sent.
         self.assertEqual(
             self.division.entrants.get(player=self.player2).number, 1
         )
-        # pks preserved through the swap.
+        self.assertEqual(
+            self.division.entrants.get(player=self.player1).number, 2
+        )
+        # pks preserved through the renumber.
         self.assertEqual(
             {e.pk for e in self.division.entrants.all()}, {e1.pk, e2.pk}
         )
