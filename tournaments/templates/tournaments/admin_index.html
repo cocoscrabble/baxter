@@ -28,6 +28,20 @@ nothing pending your say-so.
 {{ last_sync.get_source_display|lower }}) failed: {{ last_sync.error }}</p>
 {% endif %}
 
+{% if wespa_pending_count %}
+<p class="error"><strong>{{ wespa_pending_count }} WESPA
+name{{ wespa_pending_count|pluralize }} {{ wespa_pending_count|pluralize:"is,are" }}
+ambiguous</strong> — the list and the roster both know the name, but not
+unambiguously, so nothing was changed.
+<a href="{% url 'wespa_import' %}">Resolve {{ wespa_pending_count|pluralize:"it,them" }}</a>.</p>
+{% endif %}
+
+{% if last_wespa_sync and not last_wespa_sync.ok %}
+<p class="error">The last WESPA pull ({{ last_wespa_sync.created_at|timesince }}
+ago, {{ last_wespa_sync.get_source_display|lower }}) failed:
+{{ last_wespa_sync.error }}</p>
+{% endif %}
+
 <h2>Players</h2>
 
 <p>{{ player_count }} player{{ player_count|pluralize }},
@@ -45,9 +59,15 @@ nothing pending your say-so.
     — a JSON export from <code>manage.py export_players</code>. Adds and updates,
     never deletes.</li>
 
-    <li><a href="{% url 'wespa_import' %}">Import WESPA ratings</a> — a CSV.
-    Separate from the CoCo rating, used only for players who have none, and
-    never sent to the central database.</li>
+    <li><a href="{% url 'wespa_import' %}">WESPA ratings</a> —
+    {{ wespa_mirror_count }} WESPA player{{ wespa_mirror_count|pluralize }} in
+    Baxter's copy of the list, which the registration page searches so a visitor
+    with no CoCo number can be entered by name. Pulls weekly; come here to pull
+    sooner, or to link a player whose name is spelled differently in the two
+    lists. Separate from the CoCo rating, used only for players who have none,
+    and never sent to the central database.
+    {% if last_wespa_sync and last_wespa_sync.ok %}Last pull
+    {{ last_wespa_sync.created_at|timesince }} ago.{% endif %}</li>
 </ul>
 
 <h2>Accounts and raw data</h2>

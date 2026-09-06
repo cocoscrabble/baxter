@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Import WESPA Ratings - Baxter{% endblock %}
+{% block title %}WESPA Ratings - Baxter{% endblock %}
 
 {% block breadcrumbs %}
 <span class="nav-sep">/</span>
@@ -10,34 +10,207 @@
 {% block page_class %}page--narrow{% endblock %}
 
 {% block content %}
-<h1>Import WESPA ratings</h1>
+<h1>WESPA ratings</h1>
 
-<p>Upload a CSV of WESPA ratings to refresh the roster. A WESPA rating is only
-used for a player who has no CoCo rating, and it is never sent to the central
-database — it is Baxter's own copy of somebody else's number.</p>
+<p>Baxter keeps its own copy of the WESPA rating list. A WESPA rating is used
+only for a player who has no CoCo rating, and it is never sent to the central
+database — it is Baxter's copy of somebody else's number.</p>
+
+<p>The list is held in full, including the thousands of players Baxter has never
+seen, because those are the ones it is for: an overseas visitor with no CoCo
+number can be found by name at the registration desk instead of having their
+rating typed in from a website. Pulling the list does not add anyone to the
+roster — a WESPA player becomes a Baxter player when you enter them.</p>
 
 <p>This does not disturb any tournament in progress: entrants pin the rating they
 were seeded from when they enter, so a refresh cannot reshuffle pairings.</p>
 
-<p>The roster currently holds {{ player_count }} player{{ player_count|pluralize }},
-{{ wespa_count }} with a WESPA rating.</p>
+<p>The list holds {{ mirror_count }} WESPA player{{ mirror_count|pluralize }}.
+Of Baxter's {{ player_count }} player{{ player_count|pluralize }},
+{{ linked_count }} {{ linked_count|pluralize:"is,are" }} linked to one and
+{{ wespa_count }} {{ wespa_count|pluralize:"has,have" }} a WESPA rating.</p>
+
+{% comment %}
+The last pull, whoever or whatever ran it. Baxter pulls weekly, so the usual
+state of this page is that nobody here did the last one — and a scheduled pull
+that has been failing since the source moved has nowhere else to say so.
+{% endcomment %}
+{% if last_sync %}
+{% if last_sync.ok %}
+<p class="settings-intro">Last pull {{ last_sync.created_at|timesince }} ago
+({{ last_sync.get_source_display|lower }}): {{ last_sync.summary }}</p>
+{% else %}
+<p class="error">The last pull {{ last_sync.created_at|timesince }} ago
+({{ last_sync.get_source_display|lower }}) failed: {{ last_sync.error }}
+Ratings are as of the last successful pull.</p>
+{% endif %}
+{% else %}
+<p class="settings-intro">No pull has run yet.</p>
+{% endif %}
+
+{% if endpoint_configured %}
+<h2>Pull the list</h2>
+<p>Fetches the current list from <code>{{ endpoint_url }}</code>. This also runs
+on its own once a week, so a pull here is for when you need it sooner — before
+an event with overseas entries, say.</p>
+<form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="source" value="fetch">
+    <button type="submit">Pull now</button>
+</form>
+
+<h2>Or upload a copy</h2>
+<p>For an event with no connection: save the file from
+<code>{{ endpoint_url }}</code> beforehand and upload it here. It is the same
+document the pull above fetches.</p>
+{% else %}
+<h2>Upload the list</h2>
+<p>Save the WESPA list as a JSON file and upload it here.</p>
+<p class="settings-intro">No WESPA endpoint is configured, so this is the only
+way in. Setting <code>WESPA_API_URL</code> adds a one-click pull.</p>
+{% endif %}
 
 <form method="post" enctype="multipart/form-data">
     {% csrf_token %}
-    <p><input type="file" name="wespa_file" accept=".csv,.txt,text/csv" required></p>
-    <button type="submit">Upload and refresh</button>
+    <p><input type="file" name="wespa_file" accept=".json,application/json" required></p>
+    <button type="submit">Upload and apply</button>
 </form>
 
-<h2>File format</h2>
-<p>Two columns, <code>name, rating</code>, or three,
-<code>player number, name, rating</code>. A heading row is optional.</p>
-<pre>0233,Dave Wiegand,1842
-0517,Alec Sjoholm,1795</pre>
+{% if pending %}
+{% comment %}
+Ambiguous names. Nothing was written for these, so leaving one alone costs
+nothing — and the next pull will offer it again.
+{% endcomment %}
+<h2>Ambiguous names ({{ pending|length }})</h2>
+<p>These names belong to more than one person on one side or the other, so the
+list cannot say who it means. Nothing has been changed for them. Pick the pair
+that is the same person, or leave them — a wrong rating is worse than a missing
+one.</p>
 
-<p><a href="{% url 'player_import' %}">Importing the CoCo roster</a> is a
-separate thing — that upload sets names and CoCo ratings.</p>
+{% for entry in pending %}
+<h3>{{ entry.name }}</h3>
+<table>
+    <thead>
+        <tr><th>Baxter player</th><th>CoCo</th><th>WESPA</th><th>Link to</th></tr>
+    </thead>
+    <tbody>
+        {% for player in entry.players %}
+        <tr>
+            <td>{{ player.name }} <code>{{ player.player_number }}</code></td>
+            <td class="num">{% if player.rating %}{{ player.rating }}{% else %}—{% endif %}</td>
+            <td class="num">{% if player.wespa_rating %}{{ player.wespa_rating }}{% else %}—{% endif %}</td>
+            <td>
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="link">
+                    <input type="hidden" name="player_number" value="{{ player.player_number }}">
+                    <select name="wespa_id">
+                        {% for candidate in entry.candidates %}
+                        <option value="{{ candidate.wespa_id }}">{{ candidate.name }}{% if candidate.country %} ({{ candidate.country }}){% endif %} — {{ candidate.rating|default:"unrated" }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit">Link</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endfor %}
+{% endif %}
 
-<p>A player number matches exactly. A bare name matches only if exactly one
-player has it — a name shared by several players updates none of them and is
-reported, because the file cannot say which one it means.</p>
+{% if linking %}
+<h2>Link {{ linking.name }}</h2>
+<p>Search the WESPA list for whoever <code>{{ linking.player_number }}</code>
+is. The search starts from their name in Baxter, since a spelling that is nearly
+right is the usual reason a pull could not match them.</p>
+<form method="get">
+    <input type="hidden" name="link" value="{{ linking.player_number }}">
+    <input type="search" name="q" value="{{ search_query }}" autofocus>
+    <button type="submit">Search</button>
+</form>
+
+{% if search_results %}
+<table>
+    <thead>
+        <tr><th>WESPA player</th><th>Country</th><th>Rating</th><th></th></tr>
+    </thead>
+    <tbody>
+        {% for row in search_results %}
+        <tr>
+            <td>{{ row.name }}</td>
+            <td>{{ row.country|default:"—" }}</td>
+            <td class="num">{% if row.rating %}{{ row.rating }}{% else %}unrated{% endif %}</td>
+            <td>
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="link">
+                    <input type="hidden" name="player_number" value="{{ linking.player_number }}">
+                    <input type="hidden" name="wespa_id" value="{{ row.wespa_id }}">
+                    <button type="submit">This is them</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% elif search_query %}
+<p class="settings-intro">Nobody in the WESPA list matches “{{ search_query }}”.
+{% if not mirror_count %}The list is empty — pull it first.{% endif %}</p>
+{% endif %}
+<p><a href="{% url 'wespa_import' %}">Done</a></p>
+{% endif %}
+
+{% if guests %}
+{% comment %}
+Not the pull's pending list, deliberately: most of these have simply never
+played a WESPA event, which is not something anyone can act on. They are listed
+because a player whose two spellings differ can only ever be linked by hand, and
+because "did this guest get a rating" is the question this page is opened to
+answer. Unlinked ones sort first — those are the rows with work in them.
+{% endcomment %}
+<h2>Guests ({{ guest_total }})</h2>
+<p>These players have no CoCo rating, so a WESPA rating is the only one they
+could be seeded from. Most of the unlinked ones have never played a WESPA event
+and there is nothing to find; link the ones that are spelled differently in the
+two lists.</p>
+<table>
+    <thead>
+        <tr><th>Player</th><th>Number</th><th>WESPA rating</th><th>Linked to</th><th></th></tr>
+    </thead>
+    <tbody>
+        {% for row in guests %}
+        <tr>
+            <td>{{ row.player.name }}</td>
+            <td><code>{{ row.player.player_number }}</code></td>
+            <td class="num">{% if row.player.wespa_rating %}{{ row.player.wespa_rating }}{% else %}&mdash;{% endif %}</td>
+            <td>
+                {% if row.wespa %}{{ row.wespa.name }}{% if row.wespa.country %} ({{ row.wespa.country }}){% endif %}
+                {% elif row.player.wespa_id %}WESPA id {{ row.player.wespa_id }}, not in the list
+                {% else %}&mdash;{% endif %}
+            </td>
+            <td>
+                {% if row.player.wespa_id %}
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="unlink">
+                    <input type="hidden" name="player_number" value="{{ row.player.player_number }}">
+                    <button type="submit" class="btn-secondary">Unlink</button>
+                </form>
+                {% else %}
+                <a href="?link={{ row.player.player_number }}">Find in WESPA</a>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% if guests_truncated %}
+<p class="settings-intro">Showing the first {{ guests|length }} of
+{{ guest_total }}, unlinked first.</p>
+{% endif %}
+{% endif %}
+
+<p><a href="{% url 'roster_import' %}">Pulling the CoCo roster</a> is a separate
+thing — that sets names and CoCo ratings, and never touches a WESPA rating.</p>
 {% endblock %}

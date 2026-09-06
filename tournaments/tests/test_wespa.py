@@ -282,3 +282,84 @@ class SyncRecordTests(TestCase):
         wespa_sync.forget_link(record, "john smith")
         record.refresh_from_db()
         self.assertEqual(record.pending, [])
+
+
+class WespaPageTests(TestCase):
+    """The admin page. Its job is to show state, not just offer a button."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin = User.objects.create_user(
+            username="wespa-admin", password="pw", role=User.Role.ADMIN
+        )
+        cls.guest = Player.objects.create(
+            name="Bea Fox", player_number="T-1", rating=0, is_provisional=True
+        )
+        cls.row = WespaPlayer.objects.create(
+            wespa_id=7, name="Beatrice Fox", country="NZL", rating=1450
+        )
+
+    def setUp(self):
+        self.client.force_login(self.admin)
+        self.url = reverse("wespa_import")
+
+    def test_an_unlinked_guest_is_listed(self):
+        response = self.client.get(self.url)
+        self.assertContains(response, "Bea Fox")
+        self.assertContains(response, "Find in WESPA")
+
+    def test_the_search_starts_from_the_players_own_name(self):
+        response = self.client.get(self.url, {"link": "T-1"})
+        self.assertEqual(response.context["search_query"], "Bea Fox")
+
+    def test_a_hand_search_finds_the_differently_spelled_row(self):
+        response = self.client.get(self.url, {"link": "T-1", "q": "Beatrice"})
+        self.assertEqual(
+            [r.wespa_id for r in response.context["search_results"]], [7]
+        )
+
+    def test_linking_by_hand_writes_the_link_and_the_rating(self):
+        self.client.post(
+            self.url,
+            {"action": "link", "player_number": "T-1", "wespa_id": "7"},
+        )
+        self.guest.refresh_from_db()
+        self.assertEqual((self.guest.wespa_id, self.guest.wespa_rating), (7, 1450))
+
+    def test_unlinking_is_reachable_from_the_guest_list(self):
+        link_player(self.guest, self.row)
+        response = self.client.get(self.url)
+        self.assertContains(response, "Unlink")
+        self.client.post(
+            self.url, {"action": "unlink", "player_number": "T-1"}
+        )
+        self.guest.refresh_from_db()
+        self.assertIsNone(self.guest.wespa_id)
+
+    def test_an_upload_applies_the_document(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        upload = SimpleUploadedFile(
+            "wespa.json",
+            document(row(7, "Beatrice Fox", 1500)).encode(),
+            content_type="application/json",
+        )
+        self.client.post(self.url, {"wespa_file": upload})
+        self.assertEqual(WespaPlayer.objects.get(wespa_id=7).rating, 1500)
+        self.assertTrue(WespaSync.objects.latest("pk").ok)
+
+    def test_a_bad_upload_is_a_message_not_a_500(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        upload = SimpleUploadedFile(
+            "wespa.json", b"broken", content_type="application/json"
+        )
+        response = self.client.post(self.url, {"wespa_file": upload}, follow=True)
+        self.assertContains(response, "Not valid JSON")
+
+    def test_a_non_admin_is_kept_out(self):
+        self.client.logout()
+        other = User.objects.create_user(username="td", password="pw")
+        self.client.force_login(other)
+        response = self.client.get(self.url)
+        self.assertNotEqual(response.status_code, 200)

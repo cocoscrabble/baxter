@@ -78,6 +78,7 @@ from .commands import (
     update_tournament,
 )
 from .grids import BoardTableMapGrid, EntrantsGrid, FixedPairingsGrid, FixedTablesGrid, ResultsGrid
+from coco_ratings.identity import canonical_player_number
 from .models import (
     EDIT_SCOPES,
     Division,
@@ -91,6 +92,8 @@ from .models import (
     RoundPairings,
     Tournament,
     TournamentSlugAlias,
+    WespaPlayer,
+    WespaSync,
 )
 from editgrid.concurrency import check_conflict
 from editgrid.models import EditVersion
@@ -112,7 +115,9 @@ from .roster_import import (
     roster_endpoint_configured,
 )
 from .roster_sync import forget_resolution, pending_resolutions, run_sync
-from .wespa_ratings import parse_wespa_csv, refresh_wespa_ratings
+from . import wespa_sync
+from .wespa_api import wespa_endpoint_configured
+from .wespa_ratings import link_player, unlink_player
 from users.models import User
 from .generate_pairings import publish_rounds, regenerate_pairings, unpublish_rounds
 from .pairing.base import PairingData, PairingError, standings_after_round
@@ -2060,6 +2065,12 @@ class AdminIndexView(LoginRequiredMixin, IsAdminMixin, TemplateView):
         ).count()
         context["last_sync"] = RosterSync.latest()
         context["pending_count"] = len(pending_resolutions())
+        # The WESPA list's state, for the same reason as the roster's: its pull
+        # is scheduled too, so a source that has gone away and an ambiguous name
+        # both arrive with nobody watching.
+        context["last_wespa_sync"] = WespaSync.latest()
+        context["wespa_pending_count"] = len(wespa_sync.pending_links())
+        context["wespa_mirror_count"] = WespaPlayer.objects.count()
         return context
 
 
@@ -2199,56 +2210,203 @@ class RosterImportView(LoginRequiredMixin, IsAdminMixin, View):
 
 
 class WespaImportView(LoginRequiredMixin, IsAdminMixin, View):
-    """Admin-only page to refresh WESPA ratings from a CSV upload.
+    """Admin-only page for the WESPA rating list: pull it, and resolve its names.
 
-    Global and unlogged, like ``PlayerImportView``, and for a reason worth
-    stating: entrants pin their rating when they enter (PLAN_ENTRANTS decision
-    3), so refreshing the roster mutates no replayable tournament state and
-    cannot reshuffle a division that is already under way.
+    The roster page's shape, for the roster page's reasons. Every pull from here
+    goes through ``wespa_sync.run_sync``, which is also what the ``pull_wespa``
+    command runs on its weekly cron tick, so a hand pull and an unattended one
+    leave the same kind of record — and this page shows whichever happened last,
+    including one that failed while nobody was looking.
+
+    Three lists, in the order a director cares about them:
+
+    - **Ambiguous names**, held back by the pull because a name belongs to
+      several people on one side or the other. Nothing was written for these.
+    - **Unlinked guests**: players with no CoCo rating and no WESPA link, whom a
+      missing rating actually hurts. They are *not* in the pull's pending list —
+      the overwhelming majority have simply never played a WESPA event, and a
+      pending list containing most of the roster is a list nobody reads
+      (``plans/PLAN_WESPA.md`` decision 4). They are here because a spelling that
+      differs between the two lists can only ever be fixed by hand.
+    - The search, when linking one of them.
+
+    Global and unlogged, like the other roster imports, and for the same reason:
+    entrants freeze their rating seed when they enter, so a pull cannot move a
+    tournament that is already under way.
     """
 
     template_name = "tournaments/wespa_import.html"
+    # An autocomplete-sized answer, not a roster dump.
+    SEARCH_LIMIT = 25
+    # The guest list is a worklist, not a report. Past a screenful or two of it
+    # nobody is reading down the page anyway, and the unlinked ones — the only
+    # actionable rows — sort first.
+    GUEST_LIMIT = 100
 
-    def _context(self):
-        return {
+    def _context(self, request, **overrides):
+        context = {
             "player_count": Player.objects.filter(is_bye=False).count(),
             "wespa_count": Player.objects.filter(
                 is_bye=False, wespa_rating__isnull=False
             ).count(),
+            "linked_count": Player.objects.filter(
+                is_bye=False, wespa_id__isnull=False
+            ).count(),
+            "mirror_count": WespaPlayer.objects.count(),
+            "endpoint_configured": wespa_endpoint_configured(),
+            "endpoint_url": settings.WESPA_API_URL,
+            # The last attempt, so a scheduled pull that has been failing since
+            # the mirror went away says so here rather than nowhere.
+            "last_sync": WespaSync.latest(),
+            # …but held-back names come from the last attempt that read a list,
+            # so a failure does not hide them.
+            "pending": wespa_sync.pending_links(),
+            "linking": None,
+            "search_query": "",
+            "search_results": [],
+        }
+        context.update(self._guests())
+        context.update(self._search(request))
+        context.update(overrides)
+        return context
+
+    def _guests(self):
+        """Players the cascade would fall through to WESPA for.
+
+        No CoCo rating means a WESPA rating is the only one they could be seeded
+        from, so these are the players a missing link actually costs something.
+        Unlinked first: those are the rows with work in them.
+        """
+        # nulls_first explicitly: SQLite and Postgres disagree about where NULLs
+        # sort, and "unlinked first" is the whole point of the ordering.
+        guests = Player.objects.filter(is_bye=False, rating=0).order_by(
+            models.F("wespa_id").asc(nulls_first=True), "name"
+        )
+        total = guests.count()
+        guests = list(guests[: self.GUEST_LIMIT])
+        rows = {
+            w.wespa_id: w
+            for w in WespaPlayer.objects.filter(
+                wespa_id__in=[g.wespa_id for g in guests if g.wespa_id is not None]
+            )
+        }
+        return {
+            "guests": [
+                {"player": g, "wespa": rows.get(g.wespa_id)} for g in guests
+            ],
+            "guest_total": total,
+            "guests_truncated": total > len(guests),
+        }
+
+    def _search(self, request):
+        """The link-by-hand step: ``?link=<player number>`` with an optional q.
+
+        The query defaults to the player's own name, since the common case is a
+        spelling that is nearly right rather than one nobody can guess.
+        """
+        number = request.GET.get("link")
+        if not number:
+            return {}
+        player = Player.objects.filter(
+            player_number=canonical_player_number(number), is_bye=False
+        ).first()
+        if player is None:
+            return {}
+        query = request.GET.get("q")
+        if query is None:
+            query = player.name
+        query = query.strip()
+        results = []
+        if query:
+            results = list(
+                WespaPlayer.objects.filter(name__icontains=query)
+                .order_by("name")[: self.SEARCH_LIMIT]
+            )
+        return {
+            "linking": player,
+            "search_query": query,
+            "search_results": results,
         }
 
     def get(self, request):
-        return render(request, self.template_name, self._context())
+        return render(request, self.template_name, self._context(request))
 
     def post(self, request):
-        uploaded = request.FILES.get("wespa_file")
-        if not uploaded:
-            messages.error(request, "No file uploaded.")
+        action = request.POST.get("action")
+        if action == "link":
+            return self._link(request)
+        if action == "unlink":
+            return self._unlink(request)
+
+        if request.POST.get("source") == "fetch":
+            record = wespa_sync.run_sync(WespaSync.MANUAL)
+        else:
+            uploaded = request.FILES.get("wespa_file")
+            if not uploaded:
+                messages.error(request, "No file uploaded.")
+                return redirect("wespa_import")
+            record = wespa_sync.run_sync(WespaSync.UPLOAD, uploaded.read())
+
+        if not record.ok:
+            messages.error(request, record.error)
             return redirect("wespa_import")
 
-        rows, errors = parse_wespa_csv(uploaded.read().decode("utf-8-sig"))
-        if errors:
-            for error in errors[:25]:
-                messages.error(request, error)
-            if len(errors) > 25:
-                messages.error(request, f"... and {len(errors) - 25} more.")
-            return redirect("wespa_import")
+        messages.success(request, record.summary())
+        if record.pending:
+            messages.warning(
+                request,
+                f"{len(record.pending)} name(s) are ambiguous. Nothing was "
+                f"changed for them — resolve each below.",
+            )
+        return redirect("wespa_import")
 
-        result = refresh_wespa_ratings(rows)
+    def _link(self, request):
+        """Assert one link, whether from the pending list or the search."""
+        player = Player.objects.filter(
+            player_number=canonical_player_number(
+                request.POST.get("player_number", "")
+            ),
+            is_bye=False,
+        ).first()
+        row = WespaPlayer.objects.filter(
+            wespa_id=request.POST.get("wespa_id") or 0
+        ).first()
+        if player is None or row is None:
+            messages.error(request, "That player is no longer here — try again.")
+            return redirect("wespa_import")
+        try:
+            link_player(player, row)
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return redirect("wespa_import")
+        # A resolved name leaves the pending list whether it was resolved from
+        # there or from the search, so the same work is never offered twice.
+        record = WespaSync.latest_successful()
+        if record is not None:
+            wespa_sync.forget_link(record, player.name.casefold())
+            wespa_sync.forget_link(record, row.name.casefold())
+        rating = f", rated {row.rating}" if row.rating is not None else ""
+        messages.success(
+            request, f"{player.name} is WESPA {row.name} (id {row.wespa_id}){rating}."
+        )
+        return redirect("wespa_import")
+
+    def _unlink(self, request):
+        player = Player.objects.filter(
+            player_number=canonical_player_number(
+                request.POST.get("player_number", "")
+            ),
+            is_bye=False,
+        ).first()
+        if player is None:
+            messages.error(request, "That player is no longer here.")
+            return redirect("wespa_import")
+        unlink_player(player)
         messages.success(
             request,
-            f"{result.total} row(s): {len(result.updated)} updated, "
-            f"{len(result.unchanged)} unchanged.",
+            f"{player.name} is no longer linked to a WESPA player. The rating "
+            f"already recorded for them is unchanged.",
         )
-        # Unresolved rows are warnings, not failures — the rest applied. They are
-        # listed rather than counted, because "3 names were ambiguous" is not
-        # something anyone can act on.
-        for name in result.ambiguous[:25]:
-            messages.warning(
-                request, f"{name} — more than one player has that name; skipped."
-            )
-        for name in result.unmatched[:25]:
-            messages.warning(request, f"{name} — no such player; skipped.")
         return redirect("wespa_import")
 
 
