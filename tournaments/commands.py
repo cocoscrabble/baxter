@@ -763,13 +763,12 @@ def reseed_entrants(tournament, actor, payload):
     folded into that event, so that every payload written before entrant numbers
     were derived replays exactly as it always did: no reseed event, no reseed.
     """
-    from tournaments.entrant_sync import division_under_way
     from tournaments.models import Entrant
 
     division = _division(tournament, payload["division"])
     seeding = payload.get("seeding")
     if seeding is None:
-        if division_under_way(division):
+        if division.under_way():
             return EventResult(payload=payload, division=division, record=False)
         seeding = Entrant.seeding_for(division)
 

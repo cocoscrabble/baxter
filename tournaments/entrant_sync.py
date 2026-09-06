@@ -28,7 +28,7 @@ again). To move one, edit it by hand — which re-pins it as manual.
 
 from dataclasses import dataclass
 
-from .models import Entrant, RoundPairings
+from .models import Entrant
 
 # What a refresh writes. Exactly the fields Entrant.enter freezes, because half
 # a seed is worse than a stale one: the live projection damps by career games
@@ -105,17 +105,6 @@ def rating_drift(division):
             continue
         drifted.append(Drift(entrant=entrant, seed=seed))
     return drifted
-
-
-def division_under_way(division):
-    """Whether any round has left draft.
-
-    The refresh stays available afterwards — a late entrant with a stale seed is
-    a real case, and so is a seed discovered to be wrong in round two — but the
-    page says what has already happened, because re-pinning moves the live
-    rating projection and the seed order the division is displayed in.
-    """
-    return division.round_pairings_set.exclude(status=RoundPairings.DRAFT).exists()
 
 
 def payload_for(division, drifted):

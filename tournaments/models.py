@@ -205,6 +205,20 @@ class Division(models.Model):
             self.result_slips.aggregate(max_round=models.Max("round"))["max_round"] or 0
         )
 
+    def under_way(self):
+        """Whether any round has left draft.
+
+        Two things hang off this and they are not the same kind of thing, which
+        is why it sits on the division rather than beside either of them: the
+        seeding freezes here (``commands.reseed_entrants``), and the entrants
+        page says so before offering to re-pin ratings
+        (``entrant_sync.rating_drift``). It used to live with the second, which
+        made the first look like a detail of rating sync.
+        """
+        return self.round_pairings_set.exclude(
+            status=RoundPairings.DRAFT
+        ).exists()
+
     def bye_entrant(self):
         """Get or create this division's bye entrant (one per division, all
         referencing the singleton bye Player). Hidden from ``entrants`` by the
