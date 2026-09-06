@@ -5,9 +5,10 @@ re-run without disturbing the registration form beside it.
 Each row carries the player *number*, which is what the add form posts — a name
 would be ambiguous the moment two players share one.
 {% endcomment %}
-{% if search_query and not search_results %}
+{% if search_query and not search_results and not wespa_results %}
   <p class="empty-state">No players match “{{ search_query }}” who are not already entered.</p>
-{% elif search_results %}
+{% endif %}
+{% if search_results %}
   <table>
     <thead>
       <tr>
@@ -28,6 +29,47 @@ would be ambiguous the moment two players share one.
         <td>
           <button type="submit" form="register-add-form" name="player"
                   value="{{ record.player_number }}">Enter</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endif %}
+
+{% comment %}
+The other half of the search: people who are in the WESPA list and not in
+Baxter at all. This is what the WESPA mirror is for — an overseas visitor has no
+CoCo number, so the table above can never find them, and before this their
+rating was typed in from a website at the desk.
+
+The button posts the *add* form, so a WESPA entrant gets the same seat number,
+rating override and payment flags as anyone else; the view tells it apart by the
+WESPA id it carries. Rows already linked to a Baxter player are not here — they
+are in the table above, under the number they will actually be entered on.
+{% endcomment %}
+{% if wespa_results %}
+  <h3>In the WESPA list, not in Baxter ({{ wespa_results|length }})</h3>
+  <p class="settings-intro">Entering one of these creates them as a guest on a
+  temporary number, with their WESPA rating, linked to the WESPA list so later
+  pulls keep it current.</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Player</th>
+        <th>Country</th>
+        <th class="num">WESPA</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in wespa_results %}
+      <tr>
+        <td>{{ row.name }}</td>
+        <td>{{ row.country|default:"—" }}</td>
+        <td class="num">{% if row.rating %}{{ row.rating }}{% else %}unrated{% endif %}</td>
+        <td>
+          <button type="submit" form="register-add-form" name="wespa"
+                  value="{{ row.wespa_id }}">Enter as guest</button>
         </td>
       </tr>
       {% endfor %}
