@@ -72,6 +72,13 @@ Current plans:
   site, and a `PlayerSource` seam standing in for the not-yet-built playerdb and
   the not-yet-known WESPA source. **Not started**; 5 phases plus an optional
   sixth. Depends on `PLAN_PLAYER_IDENTITY.md`, which lands first.
+- `PLAN_WESPA.md` — the WESPA integration: mirror the whole WESPA rating list
+  locally (`WespaPlayer`), link players to it by `Player.wespa_id`, pull it
+  weekly and unattended (`WespaSync`, `pull_wespa`), and — the point of the
+  exercise — let the registration page find a visitor who exists *only* in
+  WESPA and enter them as a guest with their rating already filled in. Fills
+  the fetcher-shaped hole `PLAN_ENTRANTS.md` decision 11 left open.
+  **Implemented** (all five phases).
 - `PLAN_PASSWORD_RESET.md` — self-service password reset by email. Gated on a
   **phase 0 go/no-go**: publish the domain's missing SPF and DKIM records,
   then prove the production host can send mail as `cocoscrabble.org` and have

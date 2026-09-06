@@ -121,6 +121,9 @@ default, so a later session should not relitigate them without asking.
 11. **External sources are seams, not clients.** The WESPA source is unknown
     and the playerdb API does not exist yet. Define one internal interface with
     a local implementation; leave both wire protocols to a later plan.
+    *(Since settled: `plans/PLAN_WESPA.md` is that later plan for WESPA. The
+    source turned out to be one bulk JSON document, and the CSV stub this
+    decision produced has been replaced by it.)*
 
 ---
 
