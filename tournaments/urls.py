@@ -4,7 +4,6 @@ from .views import (
     AdminIndexView,
     AddFixedPairingView,
     BulkImportEntrantsView,
-    CreatePlayerView,
     PlayerImportView,
     RosterImportView,
     WespaImportView,
@@ -76,7 +75,6 @@ urlpatterns = [
     path("create/", TournamentCreateView.as_view(), name="tournament_create"),
     path("fake-tournament/", FakeTournamentCreateView.as_view(), name="fake_tournament_create"),
     path("what-if/import/", WhatIfImportView.as_view(), name="whatif_import"),
-    path("create-player/", CreatePlayerView.as_view(), name="create_player"),
     # The admin landing page. Named "manage/" to match the sibling cocodb site
     # (../ratings), whose staff area is /manage/ — and to leave "/admin/" meaning
     # Django's own admin, which is gated on is_staff rather than on the role.
