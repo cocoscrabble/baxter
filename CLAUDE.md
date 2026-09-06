@@ -152,6 +152,40 @@ A pull cannot disturb a running event: entrants freeze their whole rating seed
 at registration (`plans/PLAN_ENTRANTS.md` decision 3), which is what makes an
 unattended pull safe at any hour.
 
+## WESPA ratings (the other rating list)
+
+Baxter keeps a **local mirror of the whole WESPA rating list** — `WespaPlayer`,
+some 9,200 rows — pulled from one bulk JSON document
+(`WESPA_API_URL`, default `wespa-api.xerafin.net/players.php?idsonly=1`) by
+`tournaments/wespa_api.py` + `wespa_ratings.py`, run and recorded by
+`wespa_sync.run_sync` and `app.json`'s weekly `pull_wespa` cron entry. See
+`plans/PLAN_WESPA.md`.
+
+**Why the whole list and not just the ratings.** The players Baxter has never
+seen are the point: an overseas visitor has no CoCo number and no CoCo rating, so
+the player table can never find them, and their rating used to be typed in at the
+registration desk from a website. The registration page searches the mirror
+alongside the player table, and entering a WESPA-only hit mints the guest with
+their name, rating and `wespa_id` already filled in. Everything else in this
+section exists to make that search trustworthy.
+
+Four rules, all easy to break:
+
+- **A pull creates no `Player` and deletes nothing.** A WESPA row becomes a
+  player when a director enters one, not before.
+- **`Player.wespa_id` is the link, and links survive renames.** It is set when a
+  human picks the row, or when a name is unique on *both* sides — the same guess
+  the old CSV import made, now visible and undoable. Everything else waits.
+- **Ambiguity is held back and listed; absence is not.** A name shared by several
+  people links nobody and lands on `WespaSync.pending`. A player with no WESPA
+  row is the normal case and is not reported — a pending list holding most of the
+  roster is a list nobody reads. Spelling mismatches are linked by hand at
+  `/players/wespa/`.
+- **Still unlogged and still global**, for the reason below: entrants pin their
+  rating at entry, so a weekly pull cannot move a live event. The one logged
+  part is `player_created`, which now carries `wespa_id` so a replay recreates a
+  guest already linked.
+
 ## Entrant ratings
 
 An entrant freezes their whole rating seed at registration, and the roster pull
