@@ -1727,6 +1727,9 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
 
     template_name = "tournaments/division_register.html"
     GUEST_PREFIX = "guest"
+    # Matches the player search's own limit: this is an autocomplete beside it,
+    # not a browse of nine thousand names.
+    WESPA_LIMIT = 20
 
     def get(self, request, *args, **kwargs):
         division = self.get_division()
@@ -1753,6 +1756,7 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
             query, results = self._search(request, division)
             overrides["search_query"] = query
             overrides["search_results"] = results
+            overrides["wespa_results"] = self._wespa_search(query)
         return render(
             request, self.template_name, self._context(division, **overrides)
         )
@@ -1760,6 +1764,13 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
     def post(self, request, *args, **kwargs):
         division = self.get_division()
         action = request.POST.get("action")
+        # A WESPA result posts the *add* form — entering one is the same act as
+        # entering anyone else, and it should carry the same seat number, rating
+        # override and payment flags — so it is told apart by the id it carries
+        # rather than by a second hidden action field the button would have to
+        # fight with.
+        if action == "add" and request.POST.get("wespa"):
+            return self._wespa_guest(request, division)
         handler = {
             "add": self._add,
             "guest": self._guest,
@@ -1801,6 +1812,7 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
             "guest_form": GuestForm(prefix=self.GUEST_PREFIX),
             "search_query": "",
             "search_results": [],
+            "wespa_results": [],
             "editing": None,
         }
         context.update(overrides)
@@ -1811,6 +1823,30 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
         found = get_player_source().search(query)
         entered = set(division.entrants.values_list("player__player_number", flat=True))
         return query, [r for r in found if r.player_number not in entered]
+
+    def _wespa_search(self, query):
+        """WESPA players Baxter has never seen, for the same query.
+
+        The second half of the search, and the reason the WESPA list is mirrored
+        at all: an overseas visitor has no CoCo number, so the player table can
+        never find them, and until now their rating was typed in from a website
+        at the registration desk (plans/PLAN_WESPA.md).
+
+        Rows already linked to a Baxter player are left out — those people are in
+        the results above, under the number they will actually be entered on,
+        and offering both would be offering a way to mint a duplicate.
+        """
+        query = (query or "").strip()
+        if not query:
+            return []
+        known = Player.objects.filter(wespa_id__isnull=False).values_list(
+            "wespa_id", flat=True
+        )
+        return list(
+            WespaPlayer.objects.filter(name__icontains=query)
+            .exclude(wespa_id__in=known)
+            .order_by("name")[: self.WESPA_LIMIT]
+        )
 
     # -- actions -----------------------------------------------------------
 
@@ -1842,6 +1878,62 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
                 self._context(division, registration_form=form),
             )
         messages.success(request, f"Entered {record.name}.")
+        return self._redirect(division)
+
+    def _wespa_guest(self, request, division):
+        """Enter someone who exists only in the WESPA list.
+
+        The flow this integration was built for. It is ``_guest`` with the
+        typing removed: the name and the rating come from the row the director
+        picked, and ``wespa_id`` records *which* row, so no later pull has to
+        guess at the name again.
+        """
+        row = WespaPlayer.objects.filter(
+            wespa_id=request.POST.get("wespa") or 0
+        ).first()
+        if row is None:
+            messages.error(request, "That WESPA player is no longer listed.")
+            return self._redirect(division)
+        form = RegistrationForm(request.POST)
+        if not form.is_valid():
+            return render(
+                request, self.template_name,
+                self._context(division, registration_form=form),
+            )
+
+        # Somebody may have been minted from this row since the page was drawn —
+        # by another director, or by this one in another division. Entering them
+        # is right; minting a second player for the same human is not.
+        player = Player.objects.filter(wespa_id=row.wespa_id).first()
+        if player is None:
+            number = get_player_source().mint_number(row.name)
+            player = create_player(
+                division.tournament, request.user,
+                {
+                    "player_number": number,
+                    "name": row.name,
+                    # No CoCo rating by definition — that is what makes them a
+                    # guest, and what makes the WESPA rating the one that counts.
+                    "rating": 0,
+                    "wespa_rating": row.rating,
+                    "wespa_id": row.wespa_id,
+                },
+            )
+        try:
+            add_entrant(
+                division.tournament, request.user,
+                {
+                    "division": division.name,
+                    "player": player.player_number,
+                    **form.registration(),
+                },
+            )
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return self._redirect(division)
+        messages.success(
+            request, f"Entered {row.name} from the WESPA list."
+        )
         return self._redirect(division)
 
     def _guest(self, request, division):

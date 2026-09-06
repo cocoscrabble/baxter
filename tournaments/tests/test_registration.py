@@ -542,53 +542,77 @@ class PlayerSourceSeamTests(RegistrationTestCase):
         )
 
 
-class WespaImportViewTests(TestCase):
-    """The admin-only upload page (phase 5)."""
+class WespaGuestTests(RegistrationTestCase):
+    """Entering somebody who exists only in the WESPA list.
+
+    The flow the whole WESPA mirror is for (``plans/PLAN_WESPA.md`` phase 5): an
+    overseas visitor has no CoCo number, so the player search can never find
+    them, and their rating used to be typed in at the desk from a website.
+    """
 
     def setUp(self):
-        self.admin = User.objects.create_user(
-            username="admin", password="pw", role="admin", is_staff=True
-        )
-        self.director = User.objects.create_user(
-            username="td2", password="pw", role="director"
-        )
-        self.bea = Player.objects.create(
-            name="Bea Fox", player_number="0002", rating=0
-        )
-        self.url = reverse("wespa_import")
+        super().setUp()
+        from tournaments.models import WespaPlayer
 
-    def _upload(self, text):
-        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.row = WespaPlayer.objects.create(
+            wespa_id=7, name="Nadia Sharma", country="IND", rating=1750
+        )
 
-        return self.client.post(
-            self.url,
-            {"wespa_file": SimpleUploadedFile("w.csv", text.encode(), "text/csv")},
+    def test_the_search_offers_wespa_players_baxter_does_not_have(self):
+        response = self.client.get(self.url(), {"q": "Nadia"})
+        self.assertEqual(
+            [r.wespa_id for r in response.context["wespa_results"]], [7]
+        )
+        self.assertContains(response, "Enter as guest")
+
+    def test_a_row_already_linked_is_not_offered_twice(self):
+        """They are in the player results, under the number they will be entered on."""
+        Player.objects.create(
+            name="Nadia Sharma", player_number="T-9", rating=0, wespa_id=7
+        )
+        response = self.client.get(self.url(), {"q": "Nadia"})
+        self.assertEqual(response.context["wespa_results"], [])
+
+    def test_entering_mints_a_linked_guest_seeded_from_wespa(self):
+        response = self._post(action="add", wespa="7", number=1)
+        self.assertContains(response, "Entered Nadia Sharma")
+        player = Player.objects.get(name="Nadia Sharma")
+        self.assertEqual(player.wespa_id, 7)
+        self.assertEqual(player.wespa_rating, 1750)
+        self.assertEqual(player.rating, 0)
+        self.assertTrue(player.is_provisional)
+        entrant = self.division.entrants.get(player=player)
+        self.assertEqual((entrant.rating, entrant.rating_source), (1750, "wespa"))
+
+    def test_the_registration_fields_apply_as_for_anyone_else(self):
+        self._post(action="add", wespa="7", number=4, tentative="on")
+        entrant = self.division.entrants.get(player__wespa_id=7)
+        self.assertEqual(entrant.number, 4)
+        self.assertTrue(entrant.tentative)
+
+    def test_a_second_division_reuses_the_player_rather_than_minting_one(self):
+        self._post(action="add", wespa="7", number=1)
+        other = Division.objects.create(tournament=self.tournament, name="B")
+        DivisionSettings.objects.create(division=other)
+        self.client.post(
+            reverse("division_register", kwargs=other.slug_kwargs()),
+            {"action": "add", "wespa": "7", "number": 1},
             follow=True,
         )
+        self.assertEqual(Player.objects.filter(wespa_id=7).count(), 1)
 
-    def test_an_admin_can_refresh(self):
-        self.client.force_login(self.admin)
-        response = self._upload("Bea Fox,1450\n")
-        self.assertEqual(response.status_code, 200)
-        self.bea.refresh_from_db()
-        self.assertEqual(self.bea.wespa_rating, 1450)
+    def test_the_creation_is_logged_with_the_link(self):
+        """So a replay recreates the guest already linked, not as a bare name."""
+        from tournaments.models import TournamentEvent
 
-    def test_a_director_cannot(self):
-        self.client.force_login(self.director)
-        self._upload("Bea Fox,1450\n")
-        self.bea.refresh_from_db()
-        self.assertIsNone(self.bea.wespa_rating)
+        self._post(action="add", wespa="7", number=1)
+        event = TournamentEvent.objects.get(
+            tournament=self.tournament, event_type="player_created"
+        )
+        self.assertEqual(event.payload["wespa_id"], 7)
+        self.assertEqual(event.payload["wespa_rating"], 1750)
 
-    def test_an_ambiguous_name_is_warned_about_by_name(self):
-        Player.objects.create(name="Twin", player_number="0010", rating=0)
-        Player.objects.create(name="Twin", player_number="0011", rating=0)
-        self.client.force_login(self.admin)
-        response = self._upload("Twin,1450\n")
-        self.assertContains(response, "more than one player has that name")
-
-    def test_a_malformed_file_changes_nothing(self):
-        self.client.force_login(self.admin)
-        response = self._upload("Bea Fox,not-a-number\n")
-        self.bea.refresh_from_db()
-        self.assertIsNone(self.bea.wespa_rating)
-        self.assertContains(response, "invalid rating")
+    def test_an_unknown_row_is_a_message_not_a_crash(self):
+        response = self._post(action="add", wespa="999", number=1)
+        self.assertContains(response, "no longer listed")
+        self.assertEqual(self.division.entrants.count(), 0)

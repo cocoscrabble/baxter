@@ -696,7 +696,7 @@ def simulate_round_cmd(tournament, actor, payload):
 
 @records_event("player_created")
 def create_player(tournament, actor, payload):
-    """payload: {player_number, name, rating, wespa_rating}.
+    """payload: {player_number, name, rating, wespa_rating, wespa_id}.
 
     Players are global, but a creation still belongs in *some* log — the one
     whose director created them — so a replay into a fresh database recreates
@@ -723,6 +723,12 @@ def create_player(tournament, actor, payload):
         player_number=number,
         rating=int(payload.get("rating") or 0),
         wespa_rating=payload.get("wespa_rating"),
+        # Optional, and absent from every payload written before the WESPA
+        # mirror existed. Carried so a replay into a fresh database recreates a
+        # guest already linked rather than as an unlinked name — the link was a
+        # human's assertion, and re-deriving it by name is exactly what
+        # plans/PLAN_WESPA.md refuses to do.
+        wespa_id=payload.get("wespa_id"),
         is_provisional=number.startswith(TEMP_NUMBER_PREFIX),
     )
     return EventResult(
