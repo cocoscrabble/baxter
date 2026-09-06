@@ -636,6 +636,22 @@ class Entrant(models.Model):
         """The entrant's identity for the pairing layer — never the name."""
         return self.player.player_number
 
+    @staticmethod
+    def is_rating_override(pinned, submitted):
+        """Whether ``submitted`` is a director overriding ``pinned`` by hand.
+
+        The rule both editing surfaces need, in one place. Every form that can
+        edit a rating pre-fills it with the value already pinned, so treating a
+        value's mere *presence* as an override would flip an entrant to
+        ``manual`` on any save that touched anything at all — silently making
+        them immune to a later sync. Only an actual change is an override.
+
+        Blank is never an override: on the registration page it means "use the
+        player's own rating", and in the grid it means the column was not
+        touched.
+        """
+        return submitted is not None and submitted != pinned
+
     @classmethod
     def next_number(cls, division):
         """The number a new entrant takes when the seeding is frozen."""

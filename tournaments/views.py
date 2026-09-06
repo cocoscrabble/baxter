@@ -2068,11 +2068,11 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
                 self._context(division, registration_form=form, editing=entrant),
             )
         registration = form.registration()
-        # The form prefills the current rating, so a director who opens this
-        # page and saves without touching it must not thereby convert a `coco`
-        # snapshot into a `manual` one. Only an actual change is an override.
-        if registration.get("rating") == entrant.rating:
-            registration.pop("rating")
+        # A rating equal to the one already pinned is not a hand-edit; sending
+        # it would convert a `coco` snapshot into a `manual` one just because
+        # the form pre-filled it. Same question the grid asks in _pin_ratings.
+        if not Entrant.is_rating_override(entrant.rating, registration.get("rating")):
+            registration.pop("rating", None)
         try:
             update_entrant(
                 division.tournament, request.user,
