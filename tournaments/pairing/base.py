@@ -152,9 +152,14 @@ class PairingData:
         # select_related the joined rows every DTO touches: without it, each
         # e.player / slip.winner.player.name is a separate query — an N+1 that
         # dominated for_division for finished divisions (hundreds of slips).
+        # Ordered explicitly, because ``seedings`` below sorts these by rating
+        # *stably* and so inherits this order as its tiebreak. It was relying on
+        # ``Entrant.Meta.ordering`` to be ["number"] — true, but nothing said so,
+        # and a change there would have quietly moved who gets paired with whom
+        # when two entrants share a rating.
         entrants = [
             EntrantData(PlayerData.from_entrant(e), dropped=e.dropped)
-            for e in division.entrants.select_related("player")
+            for e in division.entrants.select_related("player").order_by("number")
         ]
         slips = [
             ResultSlipData.from_db(r)
@@ -474,6 +479,19 @@ Standings = list[Player]
 
 
 def seedings(pd: PairingData, include_dropped: bool = False) -> Standings:
+    """The field in seeding order: by pinned rating, then as handed to us.
+
+    This is the third place the phrase "seed order" appears, and the one that
+    cannot say it the same way as the others. ``Entrant.seeding_for`` breaks a
+    tie on the player number and ``entrants_for_display`` reads the stored
+    entrant number, but neither number reaches this layer — ``EntrantData``
+    carries a key, a name and a rating, because the engine deliberately pairs
+    off none of the rest.
+
+    So the tiebreak here is the order ``PairingData`` was built in, which
+    ``for_division`` now sets explicitly to the stored seeding. The sort is
+    stable, so equal ratings keep it.
+    """
     # Dropped entrants are unpairable, so they never seed a round (the pairing
     # path leaves include_dropped False); the standings *display* passes True to
     # keep showing them.
