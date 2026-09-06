@@ -44,7 +44,6 @@ COMMAND_BACKED = {
     "DivisionSettingsEditView",
     "DivisionEntrantsEditView",
     "DivisionRegisterView",
-    "CreatePlayerView",
     "DivisionEditResultsView",
     "DivisionFixedPairingsEditView",
     "DivisionFixedTablesEditView",

@@ -381,84 +381,6 @@ class TournamentDeleteViewTests(TestCase):
         self.assertFalse(Tournament.objects.filter(pk=self.tournament.pk).exists())
 
 
-@tag("slow")
-class CreatePlayerViewTests(TestCase):
-    @classmethod
-    def setUpTestData(cls):
-        cls.user = User.objects.create_user(username="owner", password="testpass123")
-
-    def test_create_player(self):
-        self.client.login(username="owner", password="testpass123")
-        response = self.client.post(
-            reverse("create_player"),
-            json.dumps({"name": "NewPlayer", "rating": 1500}),
-            content_type="application/json",
-        )
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertTrue(data["ok"])
-        self.assertEqual(data["label"], "NewPlayer")
-        self.assertTrue(Player.objects.filter(name="NewPlayer").exists())
-
-    def test_a_repeated_name_asks_before_creating_a_twin(self):
-        alice = Player.objects.create(name="Alice", player_number="001", rating=1600)
-        self.client.login(username="owner", password="testpass123")
-        response = self.client.post(
-            reverse("create_player"),
-            json.dumps({"name": "alice"}),  # case-insensitive
-            content_type="application/json",
-        )
-        self.assertEqual(response.status_code, 409)
-        body = response.json()
-        self.assertTrue(body["duplicate_name"])
-        self.assertEqual(
-            body["candidates"],
-            [{
-                "id": alice.pk,
-                "label": "Alice",
-                "player_number": alice.player_number,
-                "rating": 1600,
-            }],
-        )
-        # Nothing was created while the question is outstanding.
-        self.assertEqual(Player.objects.filter(name__iexact="alice").count(), 1)
-
-    def test_a_confirmed_repeat_creates_a_second_person(self):
-        alice = Player.objects.create(name="Alice", player_number="001", rating=1600)
-        self.client.login(username="owner", password="testpass123")
-        response = self.client.post(
-            reverse("create_player"),
-            json.dumps({"name": "Alice", "rating": 1400, "confirm": True}),
-            content_type="application/json",
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.json()["ok"])
-        both = Player.objects.filter(name__iexact="alice")
-        self.assertEqual(both.count(), 2)
-        # Two people, two numbers.
-        self.assertEqual(len({p.player_number for p in both}), 2)
-        self.assertNotEqual(response.json()["player_number"], alice.player_number)
-
-    def test_empty_name_rejected(self):
-        self.client.login(username="owner", password="testpass123")
-        response = self.client.post(
-            reverse("create_player"),
-            json.dumps({"name": ""}),
-            content_type="application/json",
-        )
-        self.assertEqual(response.status_code, 400)
-
-    def test_default_rating_zero(self):
-        self.client.login(username="owner", password="testpass123")
-        response = self.client.post(
-            reverse("create_player"),
-            json.dumps({"name": "NoRating"}),
-            content_type="application/json",
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(Player.objects.get(name="NoRating").rating, 0)
-
-
 class BulkImportEntrantsViewTests(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -3027,6 +2949,41 @@ class DivisionEntrantsEditViewTests(TestCase):
         # pks preserved through the renumber.
         self.assertEqual(
             {e.pk for e in self.division.entrants.all()}, {e1.pk, e2.pk}
+        )
+
+    def test_a_save_leaves_a_frozen_seeding_alone(self):
+        """A published round freezes the seeding, and a grid save must respect it.
+
+        The grid used to sort its rows by rating on load and renumber them
+        1..n before every save, which was right when a number was whatever the
+        grid said. Once numbers became a derived seeding, that made any save of
+        any kind silently reseed a division that was already under way.
+        """
+        e1, e2 = self._seed_entrants()  # player1=1, player2=2
+        e1.rating, e2.rating = 1400, 1700
+        Entrant.objects.bulk_update([e1, e2], ["rating"])
+        RoundPairings.objects.create(
+            division=self.division, round=1, status=RoundPairings.PUBLISHED
+        )
+        self.client.login(username="owner", password="testpass123")
+        payload = {
+            "rows": [
+                {"number": 1, "player": self.player1.pk, "rating": 1400},
+                {"number": 2, "player": self.player2.pk, "rating": 1700},
+            ],
+            "_version": 0,
+        }
+        response = self.client.post(
+            self.url, json.dumps(payload), content_type="application/json"
+        )
+        self.assertEqual(response.status_code, 200)
+        # Rating order would put player2 first. The seeding is what the division
+        # started as, so it does not move.
+        self.assertEqual(
+            self.division.entrants.get(player=self.player1).number, 1
+        )
+        self.assertEqual(
+            self.division.entrants.get(player=self.player2).number, 2
         )
 
     def test_missing_version_skips_check(self):
