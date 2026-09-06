@@ -236,6 +236,28 @@ Three rules it follows, all easy to break:
   public embed; `show_drift` is only ever set for editors, like `can_edit` for
   the payment column.
 
+## Commit as you go
+
+**Commit each piece of work as it lands, not in a batch at the end.** When a
+change is complete and its tests pass, commit it before starting the next one —
+even when the next one is obviously coming, and even when the user has not asked
+for a commit yet.
+
+This repo is `jj` (colocated with git). `jj commit -m "..."` describes the
+working copy and starts a new change on top; `jj commit <paths> -m "..."` commits
+only those paths and leaves the rest in the working copy.
+
+The reason is what happens otherwise. Several pieces of work pile into one
+working copy, their edits interleave in the same files, and splitting them
+afterwards means hand-reconstructing intermediate versions of `views.py` and
+friends that have to be rebuilt and re-tested one at a time to check each commit
+stands on its own. Committing at the point the work is done costs nothing; not
+committing costs that.
+
+Related, and the reason it is worth the discipline here specifically: a change
+in this codebase usually touches a model, a command, a view, a template and the
+plan document together, so *every* piece of work is the kind that entangles.
+
 ## Code Standards
 
 - Do not add tests that are just testing django functionality
