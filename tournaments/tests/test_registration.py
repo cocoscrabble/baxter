@@ -970,3 +970,88 @@ class RatingOverrideRuleTests(RegistrationTestCase):
         )
         entrant.refresh_from_db()
         self.assertEqual((entrant.rating, entrant.rating_source), (1800, "manual"))
+
+
+class SeedingIsAppliedByEveryWritePathTests(RegistrationTestCase):
+    """Every path that can change the field leaves it seeded.
+
+    ``reseed_entrants`` is a call each write path has to remember; nothing makes
+    it mechanical. The fuzzer guards this generally (``_inv_seeded_by_rating``);
+    these name the paths, so a failure says which one forgot.
+    """
+
+    def assertSeeded(self):
+        from tournaments.models import Entrant
+
+        actual = [
+            [e.player.player_number, e.number]
+            for e in self.division.entrants.select_related("player").order_by("number")
+        ]
+        self.assertEqual(actual, Entrant.seeding_for(self.division))
+
+    def test_adding_an_existing_player(self):
+        self._post(action="add", player=self.unrated.player_number)
+        self._post(action="add", player=self.ann.player_number)
+        self.assertSeeded()
+
+    def test_adding_a_guest(self):
+        self._post(action="add", player=self.unrated.player_number)
+        self._guest_post(name="Walk In", rating=1800)
+        self.assertSeeded()
+
+    def test_adding_from_the_wespa_list(self):
+        from tournaments.models import WespaPlayer
+
+        WespaPlayer.objects.create(wespa_id=7, name="Nadia Sharma", rating=1750)
+        self._post(action="add", player=self.unrated.player_number)
+        self._post(action="add", wespa="7")
+        self.assertSeeded()
+
+    def test_correcting_a_rating(self):
+        self._post(action="add", player=self.ann.player_number)
+        self._post(action="add", player=self.bea.player_number)
+        entrant = self.division.entrants.get(player=self.bea)
+        self._post(action="update", entrant=entrant.pk, rating=1900)
+        self.assertSeeded()
+
+    def test_saving_the_grid(self):
+        import json
+
+        self._post(action="add", player=self.ann.player_number)
+        self._post(action="add", player=self.bea.player_number)
+        rows = [
+            {"number": e.number, "player": e.player_id, "rating": e.rating}
+            for e in self.division.entrants.order_by("number")
+        ]
+        rows[-1]["rating"] = 2000  # the lowest seed becomes the highest
+        self.client.post(
+            reverse("division_entrants_edit", kwargs=self.division.slug_kwargs()),
+            json.dumps({"rows": rows}),
+            content_type="application/json",
+        )
+        self.assertSeeded()
+
+    def test_importing_a_csv(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        self._post(action="add", player=self.unrated.player_number)
+        self.client.post(
+            reverse("bulk_import_entrants", kwargs=self.division.slug_kwargs()),
+            {"csv_file": SimpleUploadedFile(
+                "e.csv", b"Imported One,1750\nImported Two,900\n", "text/csv"
+            )},
+        )
+        self.assertSeeded()
+
+    def test_refreshing_entrant_ratings(self):
+        self._post(action="add", player=self.ann.player_number)
+        self._post(action="add", player=self.bea.player_number)
+        # The player table moves under them, then the director takes the change.
+        self.bea.rating = 2000
+        self.bea.save(update_fields=["rating"])
+        entrant = self.division.entrants.get(player=self.bea)
+        self.client.post(
+            reverse("division_refresh_ratings", kwargs=self.division.slug_kwargs()),
+            {"entrants": [entrant.key]},
+        )
+        self.assertSeeded()
