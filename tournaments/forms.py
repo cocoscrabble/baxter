@@ -415,6 +415,14 @@ class RegistrationForm(forms.Form):
         widget=forms.Textarea(attrs={"rows": 2}),
     )
 
+    # The three flags are one row about one person, laid out horizontally by
+    # the template. Named here rather than hard-coded there so adding a fourth
+    # is one edit, in the place the fields are already declared.
+    FLAG_FIELDS = ("tentative", "paid", "playing_up")
+
+    def flag_fields(self):
+        return [self[name] for name in self.FLAG_FIELDS]
+
     def clean(self):
         cleaned = super().clean()
         # Marking someone paid confirms them by default; an organizer who means
@@ -440,13 +448,19 @@ class RegistrationForm(forms.Form):
 
 
 class GuestForm(forms.Form):
-    """The extra fields for creating a guest: a name, and whatever rating they
-    have. A guest is not a new kind of player — just one with no CoCo number and
-    no CoCo rating (decision 4) — so this mints a ``T-`` number and nothing else
-    about them is special."""
+    """The one field a guest needs beyond the registration fieldset: a name.
+
+    A guest is not a new kind of player — just one with no CoCo number and no
+    CoCo rating (decision 4) — so this mints a ``T-`` number and nothing else
+    about them is special.
+
+    **No WESPA rating box.** There used to be one, back when the only way to get
+    a WESPA rating into Baxter was for somebody to read it off a website and
+    type it. The WESPA list is mirrored now (``plans/PLAN_WESPA.md``) and the
+    search offers it directly, so a rating typed here would be a number nobody
+    can source. What a director types instead is the ordinary rating override
+    beside it — which pins as ``manual``, meaning "this is what I judge them to
+    be worth", which is exactly what it is.
+    """
 
     name = forms.CharField(max_length=200, label="Name")
-    wespa_rating = forms.IntegerField(
-        required=False, min_value=0, label="WESPA rating",
-        help_text="Used as their rating when they have no CoCo one.",
-    )

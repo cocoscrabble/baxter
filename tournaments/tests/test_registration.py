@@ -47,12 +47,12 @@ class RegistrationTestCase(TestCase):
         return self.client.post(self.url(), data, follow=True)
 
     def _guest_post(self, **data):
-        """The guest form shares the registration fieldset with the add form, so
-        its fields are prefixed — otherwise both render the same element ids."""
-        return self._post(
-            action="guest",
-            **{f"guest-{k}": v for k, v in data.items()},
-        )
+        """The guest branch of the unified add form.
+
+        One form serves all three ways in, so there is no prefix any more; the
+        branch is told apart by the button that submitted it.
+        """
+        return self._post(action="add", guest="1", **data)
 
 
 class AddExistingTests(RegistrationTestCase):
@@ -130,27 +130,28 @@ class PaidClearsTentativeTests(RegistrationTestCase):
 
 class GuestTests(RegistrationTestCase):
     def test_creates_a_provisional_player_and_enters_them(self):
-        self._guest_post(
-            name="Gwen Guest", wespa_rating=1450, number=1, payment_note="",
-        )
+        self._guest_post(name="Gwen Guest", rating=1450, payment_note="")
         player = Player.objects.get(name="Gwen Guest")
         self.assertTrue(player.is_provisional)
         self.assertTrue(player.player_number.startswith("T-"))
         self.assertEqual(player.rating, 0, "a guest has no CoCo rating")
-        self.assertEqual(player.wespa_rating, 1450)
+        self.assertIsNone(
+            player.wespa_rating,
+            "a typed rating is the director's judgement, not a WESPA number",
+        )
 
         entrant = self.division.entrants.get()
         self.assertEqual(entrant.player, player)
-        self.assertEqual((entrant.rating, entrant.rating_source), (1450, "wespa"))
+        self.assertEqual((entrant.rating, entrant.rating_source), (1450, "manual"))
 
     def test_a_guest_with_no_rating_at_all(self):
-        self._guest_post(name="Nobody", number=1, payment_note="")
+        self._guest_post(name="Nobody", payment_note="")
         entrant = self.division.entrants.get()
         self.assertEqual((entrant.rating, entrant.rating_source), (0, "none"))
 
     def test_a_guest_may_share_a_name_with_a_member(self):
         """Their T- number is a first-class identity, so this is ordinary."""
-        self._guest_post(name="Ann Lee", number=1, payment_note="")
+        self._guest_post(name="Ann Lee", payment_note="")
         self.assertEqual(Player.objects.filter(name="Ann Lee").count(), 2)
         numbers = set(
             Player.objects.filter(name="Ann Lee").values_list(
@@ -283,7 +284,7 @@ class RegistrationEventTests(RegistrationTestCase):
         self.assertNotIn("Ann Lee", json.dumps(event.payload))
 
     def test_creating_a_guest_logs_the_player_then_the_entrant(self):
-        self._guest_post(name="Gwen", number=1, payment_note="")
+        self._guest_post(name="Gwen", payment_note="")
         self.assertEqual(self._types()[-2:], ["player_created", "entrant_added"])
         created = self.tournament.events.get(event_type="player_created")
         self.assertEqual(created.payload["name"], "Gwen")
@@ -303,14 +304,13 @@ class RegistrationEventTests(RegistrationTestCase):
         from tournaments.events import division_digest
         from tournaments.replay import events_from_tournament, replay
 
-        self._post(action="add", player="0001", number=1, payment_note="")
+        self._post(action="add", player="0001", payment_note="")
         self._guest_post(
-            name="Gwen", wespa_rating=1450, number=2,
-            tentative="on", payment_note="pending",
+            name="Gwen", rating=1450, tentative="on", payment_note="pending",
         )
         entrant = self.division.entrants.get(player=self.ann)
         self._post(
-            action="update", entrant=entrant.pk, number=1, rating=1720,
+            action="update", entrant=entrant.pk, rating=1720,
             paid="on", payment_note="cash",
         )
         recorded = division_digest(self.division)
@@ -533,7 +533,7 @@ class PlayerSourceSeamTests(RegistrationTestCase):
 
         fake = self._fake_source([])
         with patch("tournaments.views.get_player_source", return_value=fake):
-            self._guest_post(name="Sourced Sam", number=1, payment_note="")
+            self._guest_post(name="Sourced Sam", payment_note="")
 
         player = Player.objects.get(name="Sourced Sam")
         self.assertEqual(
@@ -723,3 +723,95 @@ class SeedingTests(RegistrationTestCase):
             tournament=self.tournament, event_type="entrant_added"
         )
         self.assertEqual(event.payload["number"], 1)
+
+
+class UnifiedAddTests(RegistrationTestCase):
+    """One search, three outcomes — the whole point of the unified form.
+
+    A director types a name and takes whoever comes back: a CoCo player entered
+    on their own number, a WESPA-only player entered as a guest in one click, or
+    a stranger entered as a guest with a rating the director types.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from tournaments.models import WespaPlayer
+
+        WespaPlayer.objects.create(
+            wespa_id=7, name="Nadia Sharma", country="IND", rating=1750
+        )
+
+    def test_one_search_offers_both_lists(self):
+        self.ann.name = "Nadia Lee"
+        self.ann.save(update_fields=["name"])
+        response = self.client.get(self.url(), {"q": "Nadia"})
+        self.assertEqual(
+            [r.player_number for r in response.context["search_results"]], ["0001"]
+        )
+        self.assertEqual(
+            [r.wespa_id for r in response.context["wespa_results"]], [7]
+        )
+
+    def test_the_guest_name_is_prefilled_from_the_search(self):
+        """Re-typing it at a busy desk is how a visitor ends up as "Nadia"."""
+        response = self.client.get(self.url(), {"q": "  Nadia Sharma  "})
+        self.assertEqual(
+            response.context["guest_form"].initial["name"], "Nadia Sharma"
+        )
+
+    def test_the_guest_branch_only_appears_once_a_search_has_run(self):
+        self.assertNotContains(self.client.get(self.url()), "Add as guest")
+        self.assertContains(
+            self.client.get(self.url(), {"q": "nobody"}), "Add as guest"
+        )
+
+    def test_the_three_branches_share_one_registration_fieldset(self):
+        """It used to be rendered twice, which is why the guest copy was
+        prefixed. One form, one fieldset, no prefix."""
+        page = self.client.get(self.url(), {"q": "x"}).content.decode()
+        self.assertEqual(page.count('name="payment_note"'), 1)
+        self.assertNotIn("guest-payment_note", page)
+
+    def test_a_coco_hit_enters_the_existing_player(self):
+        self._post(action="add", player=self.ann.player_number)
+        entrant = self.division.entrants.get()
+        self.assertEqual(entrant.player, self.ann)
+        self.assertEqual(entrant.rating_source, "coco")
+
+    def test_a_wespa_hit_enters_a_linked_guest_in_one_click(self):
+        self._post(action="add", wespa="7")
+        player = Player.objects.get(name="Nadia Sharma")
+        self.assertEqual((player.wespa_id, player.wespa_rating), (7, 1750))
+        self.assertEqual(
+            self.division.entrants.get().rating_source, "wespa"
+        )
+
+    def test_a_stranger_is_a_guest_with_a_manual_rating(self):
+        self._guest_post(name="Walk In", rating=1234)
+        entrant = self.division.entrants.get()
+        self.assertEqual(entrant.player.name, "Walk In")
+        self.assertEqual((entrant.rating, entrant.rating_source), (1234, "manual"))
+
+    def test_the_button_pressed_picks_the_branch_not_a_hidden_action(self):
+        """All three post action=add; only the button's own name differs."""
+        self._post(action="add", wespa="7")
+        self._guest_post(name="Walk In", rating=1234)
+        self._post(action="add", player=self.ann.player_number)
+        self.assertEqual(
+            set(self.division.entrants.values_list("player__name", flat=True)),
+            {"Nadia Sharma", "Walk In", "Ann Lee"},
+        )
+
+    def test_the_fields_are_hidden_until_there_is_somebody_to_apply_them_to(self):
+        page = self.client.get(self.url()).content.decode()
+        self.assertNotIn('name="payment_note"', page)
+        self.assertIn('name="q"', page)
+
+    def test_a_rejected_guest_comes_back_with_its_fields_and_errors(self):
+        """The fields are gated on the search, so a bare error page would
+        otherwise lose the form the director was filling in."""
+        response = self._guest_post(name="", rating=1400)
+        page = response.content.decode()
+        self.assertIn('name="payment_note"', page)
+        self.assertIn("Add as guest", page)
+        self.assertEqual(self.division.entrants.count(), 0)
