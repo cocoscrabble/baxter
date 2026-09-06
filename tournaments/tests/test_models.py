@@ -504,3 +504,44 @@ class UnratedSimulationTests(TestCase):
 
         wins = sum(_random_outcome(2000, 0)[0] for _ in range(200))
         self.assertEqual(wins, 200)
+
+
+class EffectiveRatingCascadeTests(TestCase):
+    """The cascade has one implementation and two callers, which must agree.
+
+    ``PlayerRecord`` describes a player some other source is offering and holds
+    no model, so it used to re-derive the cascade line for line — under a
+    docstring on ``Player`` saying nothing may.
+    """
+
+    CASES = [
+        ((1600, None), (1600, "coco"), "a CoCo rating wins"),
+        ((1600, 1450), (1600, "coco"), "…even with a WESPA rating beside it"),
+        ((0, 1450), (1450, "wespa"), "0 CoCo means none, so WESPA answers"),
+        ((0, 0), (0, "wespa"), "a WESPA 0 is a rating; NULL is 'not known'"),
+        ((0, None), (0, "none"), "neither"),
+    ]
+
+    def test_the_cascade(self):
+        from tournaments.models import effective_rating
+
+        for (rating, wespa), expected, why in self.CASES:
+            with self.subTest(why):
+                self.assertEqual(effective_rating(rating, wespa), expected)
+
+    def test_both_callers_answer_identically(self):
+        from tournaments.models import Player
+        from tournaments.player_source import PlayerRecord
+
+        for i, ((rating, wespa), expected, why) in enumerate(self.CASES):
+            with self.subTest(why):
+                player = Player.objects.create(
+                    name=f"P{i}", player_number=f"90{i}",
+                    rating=rating, wespa_rating=wespa,
+                )
+                record = PlayerRecord(
+                    player_number=player.player_number, name=player.name,
+                    rating=rating, wespa_rating=wespa,
+                )
+                self.assertEqual(player.effective_rating, expected)
+                self.assertEqual(record.effective_rating, expected)
