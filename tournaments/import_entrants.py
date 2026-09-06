@@ -12,8 +12,6 @@ import csv
 import io
 from dataclasses import dataclass, field
 
-from django.db import models
-
 from tournaments.models import (
     Entrant,
     Player,
@@ -175,10 +173,11 @@ def import_entrants(division, text):
     if errors:
         return None, errors
 
-    max_number = division.entrants.aggregate(
-        max_num=models.Max("number")
-    )["max_num"] or 0
-    for j, player in enumerate(players_to_add, start=max_number + 1):
+    # Appended in file order and renumbered afterwards: entrant numbers are a
+    # seeding derived from the rating, and the caller applies it
+    # (``commands.reseed_entrants``). These are the numbers they hold in
+    # between.
+    for j, player in enumerate(players_to_add, start=Entrant.next_number(division)):
         # enter(), not create(): the entrant pins the rating it is seeded from.
         Entrant.enter(division, player, j)
 
