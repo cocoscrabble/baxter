@@ -404,6 +404,12 @@ class Player(models.Model):
     # central database and is only consulted when there is no CoCo rating.
     # NULL means "not known", which is distinct from a rating of 0.
     wespa_rating = models.IntegerField(null=True, blank=True)
+    # Which row of the WESPA mirror this player is, if anyone has said. Set
+    # when a guest is minted from a WESPA row (a human picked it) or when a
+    # name is unique on both sides; left NULL when it would be a guess. Once
+    # set it is what a pull matches on, so a player who is spelled differently
+    # in the two lists keeps working. See plans/PLAN_WESPA.md decision 3.
+    wespa_id = models.IntegerField(null=True, blank=True, unique=True)
 
     # The rest of the rating seed, mirrored from the central roster alongside
     # ``rating``. The live rating projection needs all four: the calculator
@@ -1153,6 +1159,126 @@ class RosterSync(models.Model):
             f"Pulled {self.total} player(s){stamp}: {self.added} added, "
             f"{self.updated} updated, {self.unchanged} unchanged"
         )
+        if self.pending:
+            line += f", {len(self.pending)} awaiting confirmation"
+        return line + "."
+
+
+class WespaPlayer(models.Model):
+    """One row of the WESPA rating list, mirrored locally.
+
+    Baxter holds the whole list — some 9,200 players — rather than only applying
+    it to players it already knows, because the players it does *not* know are
+    the point. An overseas visitor at a CoCo event has no CoCo number and no CoCo
+    rating; their WESPA rating is the only number anyone has for them, and until
+    now a director typed it in at the registration desk from a website. Mirroring
+    the list is what turns that into a search, and it is what lets the search
+    work at a venue with no connection (plans/PLAN_WESPA.md decision 1).
+
+    **Nothing here is a Baxter player.** A row becomes a :class:`Player` when a
+    director enters one, and not before (decision 2). The link, once anyone has
+    asserted it, lives on ``Player.wespa_id``.
+    """
+
+    # WESPA's own identifier, and the reason a link survives a name change on
+    # either side. Not Baxter's key for anything else.
+    wespa_id = models.IntegerField(unique=True)
+    name = models.CharField(max_length=200)
+    # Three-letter code as the source gives it, or blank: a fair number of rows
+    # have none, and it is display data either way.
+    country = models.CharField(max_length=8, blank=True)
+    # NULL means the list carried no rating for them — the same convention as
+    # ``Player.wespa_rating``, and distinct from a rating of 0. Every row has one
+    # today; a row that stops having one stays searchable rather than vanishing,
+    # since the name alone is still worth more than nothing at a registration
+    # desk.
+    rating = models.IntegerField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+        indexes = [models.Index(fields=["name"])]
+
+    def __str__(self):
+        return f"{self.name} ({self.rating})"
+
+
+class WespaSync(models.Model):
+    """The outcome of one pull of the WESPA rating list.
+
+    :class:`RosterSync`'s twin, for the same two reasons: a scheduled pull has
+    nobody watching it, so a source that has gone away must leave a legible row
+    rather than a silent nothing, and rows held back for a human to confirm must
+    outlive the run that found them.
+
+    The differences from ``RosterSync`` are the source's, not the design's:
+    there is no token to rotate and no ``generated_at`` stamp in the document, so
+    "when did this list last actually change" is answered by the counts.
+    """
+
+    SCHEDULED = "scheduled"
+    MANUAL = "manual"
+    UPLOAD = "upload"
+    SOURCES = [
+        (SCHEDULED, "Scheduled"),
+        (MANUAL, "Pulled by hand"),
+        (UPLOAD, "Uploaded file"),
+    ]
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    source = models.CharField(max_length=16, choices=SOURCES)
+    ok = models.BooleanField(default=False)
+    # Empty when ok. Carries the WespaFetchError/WespaParseError message, which
+    # is written to be read by an admin rather than a programmer.
+    error = models.TextField(blank=True)
+    # The mirror: rows the pull added, changed, or found already correct.
+    added = models.PositiveIntegerField(default=0)
+    updated = models.PositiveIntegerField(default=0)
+    unchanged = models.PositiveIntegerField(default=0)
+    # The players: ratings written, and links newly asserted.
+    rated = models.PositiveIntegerField(default=0)
+    linked = models.PositiveIntegerField(default=0)
+    # Links held back for a director to confirm, as PendingLink.to_json() dicts.
+    # Nothing was written for these. Entries are removed as each is confirmed,
+    # so an empty list means there is nothing left to do.
+    pending = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        outcome = "ok" if self.ok else "failed"
+        return f"{self.get_source_display()} WESPA pull ({outcome})"
+
+    @classmethod
+    def latest(cls):
+        """The most recent attempt, successful or not, or None."""
+        return cls.objects.first()
+
+    @classmethod
+    def latest_successful(cls):
+        """The most recent attempt that actually read a list, or None.
+
+        Held-back links come from here rather than from :meth:`latest`, so a
+        failed pull does not hide what the last good one found.
+        """
+        return cls.objects.filter(ok=True).first()
+
+    @property
+    def total(self):
+        return self.added + self.updated + self.unchanged
+
+    def summary(self):
+        """One line for a log, a cron mail, or the page."""
+        if not self.ok:
+            return f"WESPA pull failed: {self.error}"
+        line = (
+            f"Read {self.total} WESPA player(s): {self.added} added, "
+            f"{self.updated} updated, {self.unchanged} unchanged; "
+            f"{self.rated} local rating(s) written"
+        )
+        if self.linked:
+            line += f", {self.linked} newly linked"
         if self.pending:
             line += f", {len(self.pending)} awaiting confirmation"
         return line + "."
