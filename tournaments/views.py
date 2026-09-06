@@ -27,7 +27,7 @@ from django.views.generic import (
 
 from .datastar_utils import fragment_response, is_datastar
 from .display import division_labels, label_entrants, label_standings
-from .entrant_sync import division_under_way, payload_for, rating_drift
+from .entrant_sync import payload_for, rating_drift
 from .live_ratings import project_ratings
 from .player_source import get_player_source
 from datastar_py.django import read_signals
@@ -743,7 +743,7 @@ class DivisionEntrantsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
                 entrant.drift = by_key.get(entrant.player.player_number)
             context["drift"] = drifted
             context["show_drift"] = bool(drifted)
-            context["division_under_way"] = division_under_way(self.object)
+            context["division_under_way"] = self.object.under_way()
         return context
 
 
