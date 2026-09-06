@@ -900,3 +900,73 @@ class EntrantDisplayOrderTests(RegistrationTestCase):
         # Rating order would put Ann first; she is seeded second, and the
         # numbers in the table have to count up.
         self.assertEqual(self._rows(), [(1, "Cy Ray"), (2, "Ann Lee")])
+
+
+class RatingOverrideRuleTests(RegistrationTestCase):
+    """One rule, asked by both editing surfaces: only a *change* is an override.
+
+    Both forms pre-fill the rating already pinned, so treating its presence as a
+    hand-edit would flip an entrant to ``manual`` on any save at all — and a
+    manual rating is immune to every later sync. The two surfaces used to answer
+    this separately; ``Entrant.is_rating_override`` is where it lives now.
+    """
+
+    def test_the_rule(self):
+        from tournaments.models import Entrant
+
+        self.assertFalse(Entrant.is_rating_override(1600, None), "blank")
+        self.assertFalse(Entrant.is_rating_override(1600, 1600), "unchanged")
+        self.assertTrue(Entrant.is_rating_override(1600, 1700), "changed")
+        self.assertTrue(Entrant.is_rating_override(0, 1200), "given to an unrated")
+
+    def test_the_registration_page_does_not_manual_an_untouched_rating(self):
+        self._post(action="add", player=self.ann.player_number)
+        entrant = self.division.entrants.get()
+        self.assertEqual(entrant.rating_source, "coco")
+        # Save the form back exactly as it was pre-filled.
+        self._post(action="update", entrant=entrant.pk, rating=entrant.rating)
+        entrant.refresh_from_db()
+        self.assertEqual(entrant.rating_source, "coco")
+
+    def test_the_grid_does_not_manual_an_untouched_rating(self):
+        import json
+
+        self._post(action="add", player=self.ann.player_number)
+        entrant = self.division.entrants.get()
+        url = reverse("division_entrants_edit", kwargs=self.division.slug_kwargs())
+        self.client.post(
+            url,
+            json.dumps({
+                "rows": [{
+                    "number": entrant.number,
+                    "player": self.ann.pk,
+                    "rating": entrant.rating,
+                }],
+                "_version": 0,
+            }),
+            content_type="application/json",
+        )
+        entrant.refresh_from_db()
+        self.assertEqual(entrant.rating_source, "coco")
+
+    def test_both_surfaces_agree_that_a_change_is_an_override(self):
+        import json
+
+        self._post(action="add", player=self.ann.player_number)
+        entrant = self.division.entrants.get()
+        self._post(action="update", entrant=entrant.pk, rating=1700)
+        entrant.refresh_from_db()
+        self.assertEqual((entrant.rating, entrant.rating_source), (1700, "manual"))
+
+        url = reverse("division_entrants_edit", kwargs=self.division.slug_kwargs())
+        self.client.post(
+            url,
+            json.dumps({
+                "rows": [{
+                    "number": entrant.number, "player": self.ann.pk, "rating": 1800,
+                }],
+            }),
+            content_type="application/json",
+        )
+        entrant.refresh_from_db()
+        self.assertEqual((entrant.rating, entrant.rating_source), (1800, "manual"))

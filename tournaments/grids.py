@@ -294,10 +294,8 @@ class EntrantsGrid(EditGrid):
         otherwise what ``manual`` means.
 
         Otherwise, for an **existing** entrant only a rating that actually
-        *differs* is a hand-edit. The grid round-trips every row's current
-        rating, so treating a value's mere presence as an override would flip
-        every entrant to ``manual`` on any save — silently making the whole
-        division immune to a later sync.
+        *differs* is a hand-edit — ``Entrant.is_rating_override``, which the
+        registration page's edit form asks the same question of.
 
         For a **new** entrant, any rating supplied is a deliberate override and
         anything else snapshots the cascade. The client is never trusted for the
@@ -318,10 +316,10 @@ class EntrantsGrid(EditGrid):
                 continue
             if row.player_id in pinned:
                 current, source = pinned[row.player_id]
-                if row.rating is None or row.rating == current:
-                    row.rating, row.rating_source = current, source
-                else:
+                if Entrant.is_rating_override(current, row.rating):
                     row.rating_source = Entrant.MANUAL
+                else:
+                    row.rating, row.rating_source = current, source
                 continue
             if row.rating is not None:
                 row.rating_source = Entrant.MANUAL
