@@ -869,10 +869,24 @@ td a:hover {
     margin-bottom: var(--space-sm);
 }
 
-/* Keep the toolbar controls in scale with the 13px table rows below them. */
-.table-toolbar button {
+/* The toolbar shrinks its controls to one size. Link-buttons are named
+   explicitly: they are anchors, so `button` alone left them at full size —
+   noticeably taller and wider than the row they sit in.
+
+   The transparent border is the last pixel of it. .btn-secondary draws a 1px
+   outline and the others do not, so without this the outlined controls stand a
+   pixel taller than the solid ones. */
+.table-toolbar button,
+.table-toolbar a.btn-primary,
+.table-toolbar a.btn-secondary,
+.table-toolbar a.btn-danger {
     font-size: 0.8rem;
     padding: 4px 10px;
+    border: 1px solid transparent;
+}
+
+.table-toolbar .btn-secondary {
+    border-color: var(--color-primary);
 }
 
 /* Inline simulate buttons in the pairings tables, sized to match the rows. */
