@@ -47,6 +47,14 @@ PAIRING_ENGINE = env("PAIRING_ENGINE", default="rust")
 ROSTER_API_URL = env("ROSTER_API_URL", default="")
 ROSTER_API_TOKEN = env("ROSTER_API_TOKEN", default="")
 
+# The WESPA rating list (plans/PLAN_WESPA.md). Unlike the roster there is no
+# token, so this works out of the box; it is a setting so a mirror that moves,
+# or an offline copy served locally at an event, needs no code change. Set it
+# empty to disable fetching and leave only the file upload.
+WESPA_API_URL = env(
+    "WESPA_API_URL", default="https://wespa-api.xerafin.net/players.php?idsonly=1"
+)
+
 # Production hardening (behind the dokku nginx proxy, which terminates TLS and
 # sets X-Forwarded-Proto). Kept off in DEBUG so local http still works.
 # HSTS is deliberately left for a later deploy decision.
