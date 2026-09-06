@@ -35,14 +35,14 @@ class ProjectionTestCase(TestCase):
         self.division = Division.objects.create(
             tournament=self.tournament, name="Open"
         )
-        self._seat = 0
+        self._entrant_number = 0
 
     def player(self, name, rating=1600, deviation=80.0, games=200,
                last_played=date(2026, 5, 1), number=None):
-        self._seat += 1
+        self._entrant_number += 1
         return Player.objects.create(
             name=name,
-            player_number=number or f"{self._seat:04d}",
+            player_number=number or f"{self._entrant_number:04d}",
             rating=rating,
             deviation=deviation,
             career_games=games,
@@ -50,7 +50,7 @@ class ProjectionTestCase(TestCase):
         )
 
     def enter(self, player, **kwargs):
-        return Entrant.enter(self.division, player, self._seat, **kwargs)
+        return Entrant.enter(self.division, player, self._entrant_number, **kwargs)
 
     def game(self, round, winner, loser, winner_score=450, loser_score=380):
         rp, _ = RoundPairings.objects.get_or_create(

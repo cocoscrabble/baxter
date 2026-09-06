@@ -195,7 +195,7 @@ A second results table under the player search, and a `_wespa_guest` handler.
 Two details worth keeping:
 
 - **A WESPA result posts the ordinary add form.** Entering one is the same act
-  as entering anybody else and should carry the same seat number, rating
+  as entering anybody else and should carry the same rating
   override and payment flags; it is told apart by the `wespa` id the button
   carries, rather than by a second hidden `action` field fighting with the
   first.

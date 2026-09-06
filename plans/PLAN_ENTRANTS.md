@@ -106,7 +106,7 @@ default, so a later session should not relitigate them without asking.
    organizer. No rating bands on `Division` — the carat is a judgement call.
 
 8. **Grid stays, registration page is added.** `EntrantsGrid` remains the bulk
-   surface (seat numbers, dropped, quick flag edits). A new per-entrant
+   surface (dropped, ratings, quick flag edits). A new per-entrant
    registration page becomes the primary *add* flow: player search, guest
    creation, rating, tentative/paid/playing-up, note.
 
@@ -321,7 +321,7 @@ grid.
 - **Search**: autocomplete over players, showing name, CoCo number, CoCo
   rating, WESPA rating. Served through the Phase 5 seam so it can later hit the
   playerdb instead of the local table.
-- **Add existing**: pick a player → seat number (auto-next), rating snapshot
+- **Add existing**: pick a player → rating snapshot
   prefilled from the cascade and editable, tentative / paid / playing-up
   checkboxes, payment note.
 - **Create guest**: name + WESPA rating (and/or a manual rating), which mints a
