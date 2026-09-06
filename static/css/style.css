@@ -1537,3 +1537,63 @@ dd {
     display: inline;
     margin: 0 var(--space-md) 0 0.25em;
 }
+
+/* The registration page is a desk: a director works down it with somebody
+   standing in front of them, so it is laid out tight. The global
+   `label { display: block }` puts every field on two lines, which pushed the
+   "add as guest" row below the fold on a laptop; here a row is one flex line of
+   label + control + help. Scoped to .register-form so no other form moves.
+   Everything wraps rather than overflowing, so a narrow window stacks instead
+   of scrolling sideways. */
+.register-form .field-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-sm) var(--space-md);
+    margin-bottom: var(--space-md);
+}
+
+.register-form .field-row label {
+    display: inline;
+    margin: 0;
+    white-space: nowrap;
+}
+
+/* A checkbox belongs to the word beside it, so the pair never breaks apart. */
+.register-form .field-row .flag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+}
+
+.register-form .field-row .helptext {
+    color: var(--color-muted);
+    font-size: 0.875em;
+}
+
+/* The note and the guest name take the slack; the rating is three digits. */
+.register-form .field-row input[type="number"] {
+    width: 6em;
+}
+
+.register-form .field-row textarea,
+.register-form .field-row input[type="text"],
+.register-form .field-row input[type="search"] {
+    width: auto;
+    flex: 1 1 18em;
+    min-width: 10em;
+    /* Capped: a name is not 60 characters, and a box stretched across a
+       laptop reads as a paragraph field rather than a one-line one. */
+    max-width: 28em;
+}
+
+.register-form .field-row textarea {
+    /* One line unless somebody drags it; a payment note is "cash, owes $5". */
+    height: calc(1.5em + 2 * var(--space-sm));
+    min-height: calc(1.5em + 2 * var(--space-sm));
+}
+
+/* The guest row is the odd one out: its label is a sentence, not a word. */
+.register-form .register-guest label {
+    white-space: normal;
+}

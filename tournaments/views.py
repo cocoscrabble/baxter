@@ -1751,7 +1751,6 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
     """
 
     template_name = "tournaments/division_register.html"
-    GUEST_PREFIX = "guest"
     # Matches the player search's own limit: this is an autocomplete beside it,
     # not a browse of nine thousand names.
     WESPA_LIMIT = 20
@@ -1781,6 +1780,10 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
             overrides["search_query"] = query
             overrides["search_results"] = results
             overrides["wespa_results"] = self._wespa_search(query)
+            # The name they searched for is almost always the name they want,
+            # and re-typing it to add a guest is the sort of thing that gets a
+            # visitor entered as "Nadia" because the desk was busy.
+            overrides["guest_form"] = GuestForm(initial={"name": query.strip()})
         return render(
             request, self.template_name, self._context(division, **overrides)
         )
@@ -1788,12 +1791,15 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
     def post(self, request, *args, **kwargs):
         division = self.get_division()
         action = request.POST.get("action")
-        # A WESPA result posts the *add* form — entering one is the same act as
-        # entering anyone else, and it should carry the same rating override and
-        # payment flags — so it is told apart by the id it carries rather than by
-        # a second hidden action field the button would have to fight with.
-        if action == "add" and request.POST.get("wespa"):
-            return self._wespa_guest(request, division)
+        # All three ways in post the same *add* form, because they are the same
+        # act, carrying the same registration fields; what differs
+        # is only which button was pressed, and each carries its own name. A
+        # second hidden ``action`` per button would just fight with the first.
+        if action == "add":
+            if request.POST.get("wespa"):
+                return self._wespa_guest(request, division)
+            if request.POST.get("guest"):
+                return self._guest(request, division)
         handler = {
             "add": self._add,
             "guest": self._guest,
@@ -1821,8 +1827,7 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
             # The same fieldset appears twice on this page, so the guest copy is
             # prefixed. Without it both render identical element ids and the
             # guest form's labels silently point at the add form's inputs.
-            "guest_registration_form": RegistrationForm(prefix=self.GUEST_PREFIX),
-            "guest_form": GuestForm(prefix=self.GUEST_PREFIX),
+            "guest_form": GuestForm(),
             "search_query": "",
             "search_results": [],
             "wespa_results": [],
@@ -1964,25 +1969,38 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
         return self._redirect(division)
 
     def _guest(self, request, division):
-        form = RegistrationForm(request.POST, prefix=self.GUEST_PREFIX)
-        guest = GuestForm(request.POST, prefix=self.GUEST_PREFIX)
+        """Enter somebody neither list has heard of.
+
+        The third outcome of one search: no CoCo player, no WESPA row, so the
+        only thing anybody knows about them is the name that was typed and
+        whatever the director judges them to be worth. That judgement rides on
+        the ordinary rating box and pins as ``manual``, so no later sync moves
+        it; left blank, they enter unrated, which is the truth about a genuine
+        newcomer and something the cascade already handles.
+
+        The player carries no WESPA rating. If they turn out to have one, the
+        honest way to attach it is to link them to the WESPA list at
+        ``/players/wespa/``, not to type a number nobody can source.
+        """
+        form = RegistrationForm(request.POST)
+        guest = GuestForm(request.POST)
         if not (form.is_valid() and guest.is_valid()):
             return render(
                 request, self.template_name,
                 self._context(
-                    division, guest_registration_form=form, guest_form=guest
+                    division, registration_form=form, guest_form=guest
                 ),
             )
-        source = get_player_source()
-        number = source.mint_number(guest.cleaned_data["name"])
+        name = guest.cleaned_data["name"]
+        number = get_player_source().mint_number(name)
         create_player(
             division.tournament, request.user,
             {
                 "player_number": number,
-                "name": guest.cleaned_data["name"],
+                "name": name,
                 # No CoCo rating by definition — that is what makes them a guest.
                 "rating": 0,
-                "wespa_rating": guest.cleaned_data["wespa_rating"],
+                "wespa_rating": None,
             },
         )
         try:
@@ -1999,11 +2017,11 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
             return render(
                 request, self.template_name,
                 self._context(
-                    division, guest_registration_form=form, guest_form=guest
+                    division, registration_form=form, guest_form=guest
                 ),
             )
         self._reseed(request, division)
-        messages.success(request, f"Entered {guest.cleaned_data['name']}.")
+        messages.success(request, f"Entered {name}.")
         return self._redirect(division)
 
     def _update(self, request, division):

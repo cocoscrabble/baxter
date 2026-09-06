@@ -2,13 +2,24 @@
 Search results for the registration page. Its own fragment so the search can be
 re-run without disturbing the registration form beside it.
 
+Two lists, one search. The first is Baxter's own player table — CoCo members and
+the guests of past events alike, which is why it is not headed "the CoCo roster":
+a guest on a T- number is in it and has no CoCo number at all. The second is the
+WESPA mirror, people Baxter has never seen.
+
+The heading on each says which, because what happens when you press the button
+differs: one enters somebody who already exists, the other mints a guest.
+
 Each row carries the player *number*, which is what the add form posts — a name
-would be ambiguous the moment two players share one.
+would be ambiguous the moment two players share one. WESPA rows carry the WESPA
+id for the same reason.
+
+Nothing is said here when a search finds neither: the "add as guest" block in
+the form below is the answer to that, and saying "no players match" directly
+above it would only be telling the director something they can already see.
 {% endcomment %}
-{% if search_query and not search_results and not wespa_results %}
-  <p class="empty-state">No players match “{{ search_query }}” who are not already entered.</p>
-{% endif %}
 {% if search_results %}
+  <h3>Already in Baxter ({{ search_results|length }})</h3>
   <table>
     <thead>
       <tr>
@@ -42,16 +53,13 @@ Baxter at all. This is what the WESPA mirror is for — an overseas visitor has 
 CoCo number, so the table above can never find them, and before this their
 rating was typed in from a website at the desk.
 
-The button posts the *add* form, so a WESPA entrant gets the same seat number,
-rating override and payment flags as anyone else; the view tells it apart by the
-WESPA id it carries. Rows already linked to a Baxter player are not here — they
+The button posts the *add* form, so a WESPA entrant gets the same rating
+override and payment flags as anyone else; the view tells it apart by the WESPA
+id it carries. Rows already linked to a Baxter player are not here — they
 are in the table above, under the number they will actually be entered on.
 {% endcomment %}
 {% if wespa_results %}
   <h3>In the WESPA list, not in Baxter ({{ wespa_results|length }})</h3>
-  <p class="settings-intro">Entering one of these creates them as a guest on a
-  temporary number, with their WESPA rating, linked to the WESPA list so later
-  pulls keep it current.</p>
   <table>
     <thead>
       <tr>

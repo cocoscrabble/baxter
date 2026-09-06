@@ -12,22 +12,43 @@
 </p>
 
 {% comment %}
-One registration fieldset, included by each of the three forms below. The rating
-box is deliberately blank by default: blank means "use the player's own rating",
-a typed value means the director is overriding it.
+One "add" form for all three ways in, because from the director's side they are
+one act: search for a name, and take whoever comes back. The results say which
+list each hit came from, and the button on the row does the rest.
+
+There is exactly one registration fieldset on the page now. It used to be
+rendered twice — once for existing players, once for guests — which meant
+prefixing the guest copy so the two did not share element ids. One form, no
+prefix.
+
+**This is a registration desk, so it is laid out tight.** The global rule is
+`label { display: block }`, which puts every field on two lines and pushed the
+"add as guest" row below the fold on a laptop. `.register-form` overrides that
+within this form only: each row is a flex line of label + control + help, so the
+whole thing fits between the search box and the entrant list.
+
+The prose that used to explain the three outcomes is gone with it. The headings
+say which list each result came from and the buttons say what pressing them
+does ("Enter" / "Enter as guest"), which is the same explanation without
+costing nine lines every time the page is opened.
+
+The rating box is deliberately blank by default: blank means "use the player's
+own rating", a typed value means the director is overriding it. For a guest
+nobody has a rating for, that box *is* their rating — which is what its help
+text says, in the one place somebody filling it in is looking.
 {% endcomment %}
 
-<section class="settings-section">
-  <h2>{% if editing %}Edit {{ editing.display_name }}{% else %}Add an existing player{% endif %}</h2>
+<section class="settings-section register-form">
+  <h2>{% if editing %}Edit {{ editing.display_name }}{% else %}Add a player{% endif %}</h2>
 
   {% if not editing %}
-  <form method="get" action="{% url 'division_register' division.tournament.slug division.slug %}">
-    <label>Search:
-      <input type="search" name="q" value="{{ search_query }}" autocomplete="off">
-    </label>
+  <form method="get" class="field-row"
+        action="{% url 'division_register' division.tournament.slug division.slug %}">
+    <label for="register-search">Search</label>
+    <input type="search" id="register-search" name="q" value="{{ search_query }}"
+           autocomplete="off" autofocus>
     <button type="submit">Search</button>
   </form>
-  {% include "tournaments/_register_results.html" %}
   {% endif %}
 
   <form method="post" id="register-add-form"
@@ -35,31 +56,76 @@ a typed value means the director is overriding it.
     {% csrf_token %}
     <input type="hidden" name="action" value="{% if editing %}update{% else %}add{% endif %}">
     {% if editing %}<input type="hidden" name="entrant" value="{{ editing.pk }}">{% endif %}
-    {{ registration_form.as_p }}
+
+    {% comment %}
+    The results live *inside* the add form, so the three ways in read as one
+    list of choices with the shared registration fields under them: enter one of
+    these, enter one of those, or enter somebody neither list has. Their buttons
+    keep the form="" attribute they needed when they sat outside it — harmless
+    nested, and one less thing to get wrong if this ever moves back.
+    {% endcomment %}
+    {% if not editing %}
+    {% include "tournaments/_register_results.html" %}
+
+    {% comment %}
+    The third way in, in the same list as the other two. Only reachable once a
+    search has been run: "add a guest" with no name in mind is not a thing
+    anybody does, and the name they searched for is almost always the name they
+    want, so it arrives prefilled.
+    {% endcomment %}
+    {% if search_query or guest_form.errors %}
+    <div class="field-row register-guest">
+      <label for="{{ guest_form.name.id_for_label }}">
+        {% if search_results or wespa_results %}Not one of these? Add a guest{% else %}Nobody found. Add a guest{% endif %}
+      </label>
+      {{ guest_form.name }}
+      <button type="submit" name="guest" value="1">Add as guest</button>
+      <span class="helptext">
+        A temporary number, and the rating below pinned as manual.
+      </span>
+    </div>
+    {{ guest_form.name.errors }}
+    {% endif %}
+    {% endif %}
+
+    {% comment %}
+    Nothing to fill in until there is somebody to fill it in for. Before a
+    search the page is just a search box; these fields would otherwise sit there
+    with no button under them and nothing to apply to. A rejected submission
+    brings them straight back, errors and all, which is why the errors are part
+    of the test.
+    {% endcomment %}
+    {% if editing or search_query or registration_form.errors or guest_form.errors %}
+    {{ registration_form.non_field_errors }}
+    {% comment %}
+    Rating, the three flags and the note are one row each at most, and the flags
+    share a row with the rating: they are a single set of answers about one
+    person, and stacked one per line they read as five unrelated questions.
+    {% endcomment %}
+    <div class="field-row">
+      {{ registration_form.rating.label_tag }}
+      {{ registration_form.rating }}
+      <span class="helptext">{{ registration_form.rating.help_text }}</span>
+      {% for field in registration_form.flag_fields %}
+      <label class="flag">{{ field }} {{ field.label }}</label>
+      {% endfor %}
+    </div>
+    {{ registration_form.rating.errors }}
+    <div class="field-row">
+      {{ registration_form.payment_note.label_tag }}
+      {{ registration_form.payment_note }}
+    </div>
+    {{ registration_form.payment_note.errors }}
+    {% endif %}
+
     {% if editing %}
-    <button type="submit">Save</button>
-    <a href="{% url 'division_register' division.tournament.slug division.slug %}">Cancel</a>
+    <div class="field-row">
+      <button type="submit">Save</button>
+      <a href="{% url 'division_register' division.tournament.slug division.slug %}">Cancel</a>
+    </div>
     {% endif %}
   </form>
 </section>
-
-{% if not editing %}
-<section class="settings-section">
-  <h2>Create a guest</h2>
-  <p class="settings-intro">
-    A guest is just a player with no CoCo number and no CoCo rating — they get a
-    temporary number until the registry assigns them a real one.
-  </p>
-  <form method="post"
-        action="{% url 'division_register' division.tournament.slug division.slug %}">
-    {% csrf_token %}
-    <input type="hidden" name="action" value="guest">
-    {{ guest_form.as_p }}
-    {{ guest_registration_form.as_p }}
-    <button type="submit">Create &amp; enter</button>
-  </form>
-</section>
-{% endif %}
 
 <section class="settings-section">
   <h2>Entered ({{ entrants|length }})</h2>
