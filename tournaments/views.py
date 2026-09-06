@@ -1791,9 +1791,7 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
             # and re-typing it to add a guest is the sort of thing that gets a
             # visitor entered as "Nadia" because the desk was busy.
             overrides["guest_form"] = GuestForm(initial={"name": query.strip()})
-        return render(
-            request, self.template_name, self._context(division, **overrides)
-        )
+        return self._render(request, division, **overrides)
 
     def post(self, request, *args, **kwargs):
         division = self.get_division()
@@ -1893,38 +1891,74 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
             division.tournament, request.user, {"division": division.name}
         )
 
+    def _render(self, request, division, **overrides):
+        """The page again, with whatever the handler wants shown on it."""
+        return render(
+            request, self.template_name, self._context(division, **overrides)
+        )
+
+    def _mint_guest(self, request, division, name, *, wespa=None):
+        """Create a provisional player for somebody Baxter has never seen.
+
+        Both guest paths end here. They differ only in where the name and the
+        rating came from — a WESPA row the director picked, or a name they
+        typed — not in what minting a guest means: a ``T-`` number, no CoCo
+        rating (that is what makes them a guest), and the link back to the WESPA
+        list when there is one.
+        """
+        payload = {
+            "player_number": get_player_source().mint_number(name),
+            "name": name,
+            "rating": 0,
+            "wespa_rating": wespa.rating if wespa is not None else None,
+        }
+        if wespa is not None:
+            payload["wespa_id"] = wespa.wespa_id
+        return create_player(division.tournament, request.user, payload)
+
+    def _enter(self, request, division, player_number, form, label, **overrides):
+        """Enter a player who exists by now, renumber the field, and say so.
+
+        The tail all three ways in share. They differ in how they arrive at a
+        player — pick one, take a WESPA row, mint a stranger — and not at all in
+        what entering one means, which is why the seeding call lives here and
+        cannot be forgotten by one of them.
+        """
+        try:
+            add_entrant(
+                division.tournament, request.user,
+                {
+                    "division": division.name,
+                    "player": player_number,
+                    **form.registration(),
+                },
+            )
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return self._render(
+                request, division, registration_form=form, **overrides
+            )
+        self._reseed(request, division)
+        messages.success(request, f"Entered {label}.")
+        return self._redirect(division)
+
     def _add(self, request, division):
+        """Enter somebody Baxter already has."""
         form = RegistrationForm(request.POST)
         record = get_player_source().fetch(request.POST.get("player", ""))
         if record is None:
             messages.error(request, "Pick a player first.")
-            return render(request, self.template_name, self._context(division))
+            return self._render(request, division)
         if not form.is_valid():
-            return render(
-                request, self.template_name,
-                self._context(division, registration_form=form),
-            )
-        payload = {
-            "division": division.name,
-            "player": record.player_number,
-            **form.registration(),
-        }
-        try:
-            add_entrant(division.tournament, request.user, payload)
-        except ValueError as exc:
-            messages.error(request, str(exc))
-            return render(
-                request, self.template_name,
-                self._context(division, registration_form=form),
-            )
-        self._reseed(request, division)
-        messages.success(request, f"Entered {record.name}.")
-        return self._redirect(division)
+            return self._render(request, division, registration_form=form)
+        return self._enter(
+            request, division, record.player_number, form, record.name
+        )
 
     def _wespa_guest(self, request, division):
         """Enter someone who exists only in the WESPA list.
 
-        The flow this integration was built for. It is ``_guest`` with the
+        The flow the WESPA integration was built for. It is ``_guest`` with the
         typing removed: the name and the rating come from the row the director
         picked, and ``wespa_id`` records *which* row, so no later pull has to
         guess at the name again.
@@ -1937,51 +1971,23 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
             return self._redirect(division)
         form = RegistrationForm(request.POST)
         if not form.is_valid():
-            return render(
-                request, self.template_name,
-                self._context(division, registration_form=form),
-            )
+            return self._render(request, division, registration_form=form)
 
         # Somebody may have been minted from this row since the page was drawn —
         # by another director, or by this one in another division. Entering them
         # is right; minting a second player for the same human is not.
         player = Player.objects.filter(wespa_id=row.wespa_id).first()
         if player is None:
-            number = get_player_source().mint_number(row.name)
-            player = create_player(
-                division.tournament, request.user,
-                {
-                    "player_number": number,
-                    "name": row.name,
-                    # No CoCo rating by definition — that is what makes them a
-                    # guest, and what makes the WESPA rating the one that counts.
-                    "rating": 0,
-                    "wespa_rating": row.rating,
-                    "wespa_id": row.wespa_id,
-                },
-            )
-        try:
-            add_entrant(
-                division.tournament, request.user,
-                {
-                    "division": division.name,
-                    "player": player.player_number,
-                    **form.registration(),
-                },
-            )
-        except ValueError as exc:
-            messages.error(request, str(exc))
-            return self._redirect(division)
-        self._reseed(request, division)
-        messages.success(
-            request, f"Entered {row.name} from the WESPA list."
+            player = self._mint_guest(request, division, row.name, wespa=row)
+        return self._enter(
+            request, division, player.player_number, form,
+            f"{row.name} from the WESPA list",
         )
-        return self._redirect(division)
 
     def _guest(self, request, division):
         """Enter somebody neither list has heard of.
 
-        The third outcome of one search: no CoCo player, no WESPA row, so the
+        The third outcome of one search: no player here, no WESPA row, so the
         only thing anybody knows about them is the name that was typed and
         whatever the director judges them to be worth. That judgement rides on
         the ordinary rating box and pins as ``manual``, so no later sync moves
@@ -1995,11 +2001,8 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
         form = RegistrationForm(request.POST)
         guest = GuestForm(request.POST)
         if not (form.is_valid() and guest.is_valid()):
-            return render(
-                request, self.template_name,
-                self._context(
-                    division, registration_form=form, guest_form=guest
-                ),
+            return self._render(
+                request, division, registration_form=form, guest_form=guest
             )
         name = guest.cleaned_data["name"]
 
@@ -2011,48 +2014,18 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
         # another, which is exactly when it happens.
         existing = Player.same_named(name)
         if request.POST.get("guest") != "confirm" and existing.exists():
-            return render(
-                request, self.template_name,
-                self._context(
-                    division,
-                    registration_form=form,
-                    guest_form=guest,
-                    duplicate_name=name,
-                    duplicate_candidates=list(existing),
-                ),
+            return self._render(
+                request, division,
+                registration_form=form,
+                guest_form=guest,
+                duplicate_name=name,
+                duplicate_candidates=list(existing),
             )
 
-        number = get_player_source().mint_number(name)
-        create_player(
-            division.tournament, request.user,
-            {
-                "player_number": number,
-                "name": name,
-                # No CoCo rating by definition — that is what makes them a guest.
-                "rating": 0,
-                "wespa_rating": None,
-            },
+        player = self._mint_guest(request, division, name)
+        return self._enter(
+            request, division, player.player_number, form, name, guest_form=guest
         )
-        try:
-            add_entrant(
-                division.tournament, request.user,
-                {
-                    "division": division.name,
-                    "player": number,
-                    **form.registration(),
-                },
-            )
-        except ValueError as exc:
-            messages.error(request, str(exc))
-            return render(
-                request, self.template_name,
-                self._context(
-                    division, registration_form=form, guest_form=guest
-                ),
-            )
-        self._reseed(request, division)
-        messages.success(request, f"Entered {name}.")
-        return self._redirect(division)
 
     def _update(self, request, division):
         entrant = division.entrants.filter(
@@ -2063,9 +2036,8 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
             return self._redirect(division)
         form = RegistrationForm(request.POST)
         if not form.is_valid():
-            return render(
-                request, self.template_name,
-                self._context(division, registration_form=form, editing=entrant),
+            return self._render(
+                request, division, registration_form=form, editing=entrant
             )
         registration = form.registration()
         # A rating equal to the one already pinned is not a hand-edit; sending
