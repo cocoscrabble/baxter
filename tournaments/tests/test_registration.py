@@ -871,3 +871,36 @@ class DuplicateGuestNameTests(RegistrationTestCase):
         self.assertIn('value="1400"', page)
         self.assertNotIn("Nobody found", page)
         self.assertIn('name="payment_note"', page)
+
+
+class EntrantDisplayOrderTests(RegistrationTestCase):
+    """The entrants table prints the entrant number, so it must sort by it.
+
+    The two only differ once a seeding is frozen: a late entrant is appended
+    rather than slotted in by rating, and sorting the table by rating then made
+    its own ``#`` column count backwards.
+    """
+
+    def _rows(self):
+        from tournaments.views import entrants_for_display
+
+        entrants, _ = entrants_for_display(self.division)
+        return [(e.number, e.player.name) for e in entrants]
+
+    def test_in_draft_seed_order_is_rating_order(self):
+        self._post(action="add", player=self.unrated.player_number)  # 0
+        self._post(action="add", player=self.ann.player_number)      # 1600
+        self.assertEqual(self._rows(), [(1, "Ann Lee"), (2, "Cy Ray")])
+
+    def test_a_frozen_seeding_is_shown_in_its_own_order(self):
+        from tournaments.models import RoundPairings
+
+        self._post(action="add", player=self.unrated.player_number)  # seeds 1
+        RoundPairings.objects.create(
+            division=self.division, round=1, status=RoundPairings.PUBLISHED
+        )
+        self._post(action="add", player=self.ann.player_number)      # appended 2
+
+        # Rating order would put Ann first; she is seeded second, and the
+        # numbers in the table have to count up.
+        self.assertEqual(self._rows(), [(1, "Cy Ray"), (2, "Ann Lee")])
