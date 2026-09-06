@@ -156,7 +156,7 @@ class StartPrefillTests(SimpleTestCase):
             [_spec("Alice", n_rounds=6, starts={1: "1st", 3: "2nd"})]
         )
         table = doc.tables[0]
-        # The prompt text is untouched; the seat is shown by a circle over it.
+        # The prompt text is untouched; the start is shown by a circle over it.
         self.assertIn("1st", self._round_cell(table, 1).text)
         self.assertIn("2nd", self._round_cell(table, 1).text)
         self.assertEqual(_circle_offsets(self._round_cell(table, 1)._tc),
@@ -171,7 +171,7 @@ class StartPrefillTests(SimpleTestCase):
         # Exactly one circle in the whole card (round 1 only).
         self.assertEqual(len(_circle_offsets(table._tbl)), 1)
 
-    def test_each_player_circles_their_own_seat(self):
+    def test_each_player_circles_their_own_start(self):
         specs = [
             _spec("Alice", starts={1: "1st"}),
             _spec("Bob", starts={1: "2nd"}),
@@ -194,7 +194,7 @@ class StartPrefillTests(SimpleTestCase):
 
     def test_circles_are_wps_wrapped_with_a_vml_fallback(self):
         # A bare wps:wsp shape makes Word for the web flag the document corrupt;
-        # a pure-VML ellipse it mis-positions. So each seat circle is a wps shape
+        # a pure-VML ellipse it mis-positions. So each start circle is a wps shape
         # inside mc:Choice (correct position, no corruption) paired with a VML
         # <v:oval> fallback, and no ellipse anchor may sit outside an mc:Choice.
         from docx.oxml.ns import qn

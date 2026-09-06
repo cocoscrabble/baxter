@@ -42,7 +42,7 @@ Payloads must survive replay into a fresh database, and editgrid's
 wipe-and-recreate churns pks even in place. So payloads are pk-free:
 
 - players by **name** (the engine is already name-keyed — same precedent)
-- entrants by player name; seat/order by entrant `number`
+- entrants by player name; seeding order by entrant `number`
 - rounds by number; pairings by `(round, name1, name2)`
 - results by their pairing's natural key
 - divisions by name (rename events update the mapping as the log progresses;
