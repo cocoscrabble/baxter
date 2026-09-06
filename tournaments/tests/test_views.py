@@ -2635,14 +2635,17 @@ class DivisionEntrantsViewTests(TestCase):
         response = self.client.get(self.url)
         self.assertNotContains(response, self.edit_url)
 
-    def test_entrants_listed_in_seed_order_by_rating(self):
-        # A higher-rated player with a larger entrant number still sorts first;
-        # the list is ordered by rating (seed order), not entrant number.
+    def test_entrants_listed_in_seed_order(self):
+        # Seed order is the entrant number, because that is what a number is:
+        # a seeding derived from the rating (commands.reseed_entrants). This
+        # used to sort by rating with the number as a tiebreak, so a top-rated
+        # player entered on number 3 sorted first — and the table, which prints
+        # the number, counted 3, 1, 2.
         top = Player.objects.create(name="Zoe Ace", player_number="099", rating=1700)
         Entrant.enter(self.division, top, 3)
         response = self.client.get(self.url)
-        names = [e.player.name for e in response.context["entrants"]]
-        self.assertEqual(names, ["Zoe Ace", "Alice", "Bob"])
+        rows = [(e.number, e.player.name) for e in response.context["entrants"]]
+        self.assertEqual(rows, [(1, "Alice"), (2, "Bob"), (3, "Zoe Ace")])
 
 
 class DivisionEntrantsEditViewTests(TestCase):

@@ -693,14 +693,21 @@ def entrants_for_display(division):
     """The division's entrants in seed order, with their display names and the
     flags the legend keys off.
 
-    Seed order is by the *pinned* rating — the one the division was actually
-    seeded from — with ties broken by entrant number.
+    Seed order is the entrant *number*, because that is what a number now is:
+    a seeding derived from the pinned rating (``commands.reseed_entrants``).
+
+    This used to sort by ``-rating`` with the number as a tiebreak, from when a
+    number was whatever a director typed and rating order was the better guess.
+    That became wrong in the one case the two can differ — a division whose
+    seeding is frozen, where a late entrant is appended rather than slotted in
+    by rating. The table prints the number, so sorting by anything else made the
+    ``#`` column count 2, 1.
 
     The legend only lists markers that are actually on the page: a table with no
     tentative entrants should not explain what an asterisk would have meant.
     """
     entrants = list(
-        division.entrants.select_related("player").order_by("-rating", "number")
+        division.entrants.select_related("player").order_by("number")
     )
     label_entrants(division_labels(division), entrants)
     flags = {
