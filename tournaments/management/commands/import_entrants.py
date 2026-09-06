@@ -55,9 +55,6 @@ class Command(BaseCommand):
                 self.stderr.write(self.style.ERROR(f"  - {name}"))
             sys.exit(1)
 
-        # Sort by rating descending
-        players_with_ratings.sort(key=lambda x: x[1], reverse=True)
-
         # Clear existing entrants for this division
         existing_count = division.entrants.count()
         if existing_count > 0:
@@ -66,10 +63,18 @@ class Command(BaseCommand):
             )
             division.entrants.all().delete()
 
-        # Create entrants with sequential numbers
-        for number, (player, rating) in enumerate(players_with_ratings, start=1):
-            Entrant.enter(division, player, number)
-            self.stdout.write(f"  {number}. {player.name} ({rating})")
+        # Enter everyone, then seed them. This used to sort by rating and number
+        # 1..n itself, which was a fourth copy of a rule that lives in
+        # Entrant.seeding_for — and one with no tiebreak, so equal ratings came
+        # out in file order.
+        for player, _rating in players_with_ratings:
+            Entrant.enter(division, player, Entrant.next_number(division))
+        Entrant.apply_seeding(division, Entrant.seeding_for(division))
+
+        for entrant in division.entrants.select_related("player").order_by("number"):
+            self.stdout.write(
+                f"  {entrant.number}. {entrant.player.name} ({entrant.rating})"
+            )
 
         self.stdout.write(
             self.style.SUCCESS(
