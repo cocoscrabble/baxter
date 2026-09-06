@@ -1,10 +1,14 @@
 {
   "name": "baxter",
-  "description": "Scrabble tournament manager. The cron entry keeps the local player table in step with the central CoCo player database; see plans/PLAN_COCO_PROGRAM.md (W4) and tournaments/roster_sync.py. --no-sync runs straight from the image's venv: without it uv rebuilds the Rust extension in every one-off container, because the Dockerfile's COPY lands fresh mtimes on the crate sources after uv sync.",
+  "description": "Scrabble tournament manager. The cron entries keep the local player tables in step with their sources: pull_roster mirrors the central CoCo player database six-hourly (plans/PLAN_COCO_PROGRAM.md W4, tournaments/roster_sync.py), pull_wespa mirrors the WESPA rating list weekly (plans/PLAN_WESPA.md, tournaments/wespa_sync.py) -- weekly because WESPA ratings move when a rated tournament is processed, not on the hour. --no-sync runs straight from the image's venv: without it uv rebuilds the Rust extension in every one-off container, because the Dockerfile's COPY lands fresh mtimes on the crate sources after uv sync.",
   "cron": [
     {
       "command": "uv run --no-sync manage.py pull_roster",
       "schedule": "23 */6 * * *"
+    },
+    {
+      "command": "uv run --no-sync manage.py pull_wespa",
+      "schedule": "41 4 * * 1"
     }
   ]
 }
