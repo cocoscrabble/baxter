@@ -150,8 +150,10 @@ class GuestTests(RegistrationTestCase):
         self.assertEqual((entrant.rating, entrant.rating_source), (0, "none"))
 
     def test_a_guest_may_share_a_name_with_a_member(self):
-        """Their T- number is a first-class identity, so this is ordinary."""
-        self._guest_post(name="Ann Lee", payment_note="")
+        """Their T- number is a first-class identity, so this is allowed —
+        it just has to be said out loud, since a repeated name is usually a typo
+        (see DuplicateGuestNameTests). ``confirm`` is the director saying it."""
+        self._post(action="add", guest="confirm", name="Ann Lee", payment_note="")
         self.assertEqual(Player.objects.filter(name="Ann Lee").count(), 2)
         numbers = set(
             Player.objects.filter(name="Ann Lee").values_list(
@@ -815,3 +817,57 @@ class UnifiedAddTests(RegistrationTestCase):
         self.assertIn('name="payment_note"', page)
         self.assertIn("Add as guest", page)
         self.assertEqual(self.division.entrants.count(), 0)
+
+
+class DuplicateGuestNameTests(RegistrationTestCase):
+    """A guest whose name is already taken is a question, not a twin.
+
+    Sharing a name is legal — the player number is the identity — but it is far
+    more often a typo than two real people. The search is the first guard and
+    catches most of it; this catches a director who searched one thing and typed
+    another, which is when it actually happens.
+    """
+
+    def test_an_unconfirmed_duplicate_creates_nobody(self):
+        response = self._guest_post(name="Ann Lee", rating=1400)
+        self.assertEqual(Player.objects.filter(name="Ann Lee").count(), 1)
+        self.assertEqual(self.division.entrants.count(), 0)
+        self.assertEqual(
+            [p.player_number for p in response.context["duplicate_candidates"]],
+            ["0001"],
+        )
+        self.assertContains(response, "Did you mean them?")
+
+    def test_the_check_is_case_insensitive(self):
+        response = self._guest_post(name="  ann lee  ", rating=1400)
+        self.assertTrue(response.context["duplicate_candidates"])
+
+    def test_confirming_creates_a_second_person_on_their_own_number(self):
+        self._post(action="add", guest="confirm", name="Ann Lee", rating=1400)
+        both = Player.objects.filter(name__iexact="Ann Lee")
+        self.assertEqual(both.count(), 2)
+        self.assertEqual(len({p.player_number for p in both}), 2)
+        entrant = self.division.entrants.get()
+        self.assertTrue(entrant.player.is_provisional)
+        self.assertEqual((entrant.rating, entrant.rating_source), (1400, "manual"))
+
+    def test_picking_the_existing_player_is_the_ordinary_add(self):
+        """The candidate button posts their number, like a search result's."""
+        self._post(action="add", player="0001", name="Ann Lee")
+        self.assertEqual(Player.objects.filter(name="Ann Lee").count(), 1)
+        entrant = self.division.entrants.get()
+        self.assertEqual(entrant.player, self.ann)
+        self.assertEqual(entrant.rating_source, "coco")
+
+    def test_a_name_nobody_has_is_not_questioned(self):
+        self._guest_post(name="Wholly New", rating=1400)
+        self.assertEqual(self.division.entrants.count(), 1)
+
+    def test_the_typed_rating_survives_the_question(self):
+        """"Add as a different person" resubmits this form, so a fieldset that
+        is not rendered would silently drop what the director typed."""
+        response = self._guest_post(name="Ann Lee", rating=1400, tentative="on")
+        page = response.content.decode()
+        self.assertIn('value="1400"', page)
+        self.assertNotIn("Nobody found", page)
+        self.assertIn('name="payment_note"', page)

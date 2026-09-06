@@ -869,6 +869,7 @@ td a:hover {
     margin-bottom: var(--space-sm);
 }
 
+/* Keep the toolbar controls in scale with the 13px table rows below them. */
 /* The toolbar shrinks its controls to one size. Link-buttons are named
    explicitly: they are anchors, so `button` alone left them at full size —
    noticeably taller and wider than the row they sit in.
@@ -1610,4 +1611,16 @@ dd {
 /* The guest row is the odd one out: its label is a sentence, not a word. */
 .register-form .register-guest label {
     white-space: normal;
+}
+
+/* A guest whose name is already taken: the question, and the ways out of it.
+   Set apart from the row above so it does not read as more of the same form. */
+.register-duplicate {
+    margin: var(--space-md) 0;
+    padding: var(--space-sm) var(--space-md);
+    border-left: 3px solid var(--color-primary);
+}
+
+.register-duplicate p {
+    margin-top: 0;
 }
