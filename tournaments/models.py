@@ -381,6 +381,28 @@ def is_reserved_player_number(number):
     return str(number or "").strip().casefold() == BYE_PLAYER_NUMBER.casefold()
 
 
+def effective_rating(rating, wespa_rating):
+    """``(rating, source)`` — CoCo, else WESPA, else 0.
+
+    **The one place this cascade lives.** It is a free function rather than a
+    method because two things need it and only one of them is a model:
+    ``Player.effective_rating`` below, and ``player_source.PlayerRecord``, which
+    describes a player some other source is offering and holds no model at all.
+    That second one used to re-derive the cascade line for line under a
+    docstring saying nothing may — which is how a rule ends up with two versions
+    and one of them wrong.
+
+    A CoCo rating of 0 means "no CoCo rating" — Baxter's long-standing spelling
+    of it — so it falls through. A WESPA rating of 0 does not: NULL is how that
+    one says "not known" (plans/PLAN_ENTRANTS.md decision 2).
+    """
+    if rating:
+        return rating, Entrant.COCO
+    if wespa_rating is not None:
+        return wespa_rating, Entrant.WESPA
+    return 0, Entrant.NONE
+
+
 class Player(models.Model):
     """A tournament player.
 
@@ -485,15 +507,10 @@ class Player(models.Model):
     def effective_rating(self):
         """``(rating, source)`` — CoCo, else WESPA, else 0.
 
-        The one place this cascade lives; nothing else may re-derive it. An
-        entrant snapshots the result at entry (``Entrant.enter``) so a later
+        An entrant snapshots the result at entry (``Entrant.enter``) so a later
         drift in either rating cannot reshuffle a running tournament.
         """
-        if self.rating:
-            return self.rating, Entrant.COCO
-        if self.wespa_rating is not None:
-            return self.wespa_rating, Entrant.WESPA
-        return 0, Entrant.NONE
+        return effective_rating(self.rating, self.wespa_rating)
 
     @classmethod
     def same_named(cls, name):

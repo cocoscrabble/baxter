@@ -23,14 +23,14 @@ class PlayerRecord:
 
     @property
     def effective_rating(self):
-        """``(rating, source)``, matching ``Player.effective_rating``."""
-        from tournaments.models import Entrant
+        """``(rating, source)`` — the same cascade a ``Player`` gets.
 
-        if self.rating:
-            return self.rating, Entrant.COCO
-        if self.wespa_rating is not None:
-            return self.wespa_rating, Entrant.WESPA
-        return 0, Entrant.NONE
+        Literally the same: the rule is a free function precisely so this, which
+        holds no model, does not have to keep its own copy of it.
+        """
+        from tournaments.models import effective_rating
+
+        return effective_rating(self.rating, self.wespa_rating)
 
 
 class PlayerSource:
