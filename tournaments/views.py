@@ -2090,31 +2090,6 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
         return self._redirect(division)
 
 
-class DivisionRegisterSearchView(LoginRequiredMixin, CanEditDivisionMixin, View):
-    """The registration page's player search, as an HTML fragment.
-
-    Its own endpoint so the search can be re-run without re-posting the
-    registration form, and so swapping in a registry-backed source later touches
-    nothing else.
-    """
-
-    def get(self, request, *args, **kwargs):
-        division = self.get_division()
-        query = request.GET.get("q", "")
-        entered = set(
-            division.entrants.values_list("player__player_number", flat=True)
-        )
-        results = [
-            r for r in get_player_source().search(query)
-            if r.player_number not in entered
-        ]
-        return render(
-            request,
-            "tournaments/_register_results.html",
-            {"division": division, "search_query": query, "search_results": results},
-        )
-
-
 class AdminIndexView(LoginRequiredMixin, IsAdminMixin, TemplateView):
     """The one page listing everything only an admin can do.
 

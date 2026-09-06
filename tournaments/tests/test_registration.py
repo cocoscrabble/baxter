@@ -230,16 +230,6 @@ class SearchTests(RegistrationTestCase):
         response = self.client.get(self.url(), {"q": ""})
         self.assertEqual(response.context["search_results"], [])
 
-    def test_the_search_fragment_endpoint_renders_rows(self):
-        response = self.client.get(
-            reverse(
-                "division_register_search", kwargs=self.division.slug_kwargs()
-            ),
-            {"q": "bea"},
-        )
-        self.assertContains(response, "Bea Fox")
-        self.assertContains(response, "0002")
-
 
 class PermissionTests(RegistrationTestCase):
     def test_a_non_editor_cannot_open_the_page(self):
@@ -753,6 +743,12 @@ class UnifiedAddTests(RegistrationTestCase):
         self.assertEqual(
             [r.wespa_id for r in response.context["wespa_results"]], [7]
         )
+        # Both halves reach the page, each row carrying the identity its button
+        # posts: a player number on one side, a WESPA id on the other.
+        self.assertContains(response, "Nadia Lee")
+        self.assertContains(response, "0001")
+        self.assertContains(response, "Nadia Sharma")
+        self.assertContains(response, 'value="7">Enter as guest')
 
     def test_the_guest_name_is_prefilled_from_the_search(self):
         """Re-typing it at a busy desk is how a visitor ends up as "Nadia"."""
