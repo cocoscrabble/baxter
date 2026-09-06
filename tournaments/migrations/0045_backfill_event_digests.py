@@ -18,7 +18,7 @@ def backfill(apps, schema_editor):
     # stops the deploy and tells you what to run.
     #
     # **If you add a schema migration, renumber this one to sit after it.** That
-    # has now happened twice (0038 -> 0041 -> 0042). It is a one-time
+    # has now happened three times (0038 -> 0041 -> 0042 -> 0045). It is a one-time
     # transitional migration that will eventually be squashed away, and the
     # check makes getting it wrong loud rather than silent — but the rule is
     # this, and there is no way to express "always last" in Django.
@@ -50,7 +50,7 @@ def noop_reverse(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("tournaments", "0043_rostersync"),
+        ("tournaments", "0044_wespa_mirror"),
     ]
 
     operations = [
