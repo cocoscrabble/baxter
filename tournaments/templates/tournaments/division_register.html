@@ -158,6 +158,14 @@ text says, in the one place somebody filling it in is looking.
 </section>
 
 <section class="settings-section">
+  {% comment %}
+  A director's working list: who is in so far, spelled out in words, with the
+  way back into the form beside each row. `_entrants_table.html` shows the same
+  facts to a different audience — a published list, compact and printable and
+  embedded on the CoCo site, marking status with punctuation and a legend.
+  Deliberately two views of the same data rather than one table trying to be
+  both.
+  {% endcomment %}
   <h2>Entered ({{ entrants|length }})</h2>
   {% if not entrants %}
   <p class="empty-state">Nobody is entered yet.</p>
