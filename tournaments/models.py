@@ -672,6 +672,11 @@ class Entrant(models.Model):
 
         Withdrawn entrants are numbered along with everyone else: they keep
         their place in the field they entered, and their results still count.
+
+        Two other places order a field and must not drift from this one:
+        ``views.entrants_for_display`` reads the number this writes, and
+        ``pairing.base.seedings`` re-sorts by rating with the order
+        ``PairingData`` was built in as its tiebreak — which is this order.
         """
         entrants = sorted(
             cls.all_objects.filter(division=division).select_related("player"),
