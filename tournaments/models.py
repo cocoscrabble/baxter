@@ -671,7 +671,12 @@ class Entrant(models.Model):
 
     @classmethod
     def next_number(cls, division):
-        """The number a new entrant takes when the seeding is frozen."""
+        """The number a new entrant takes when the seeding is frozen.
+
+        Counts the bye, unlike ``seeding_for``: ``(division, number)`` is unique
+        across every entrant, so a number the bye is sitting on is taken whether
+        or not the bye is a competitor.
+        """
         return (
             cls.all_objects.filter(division=division).aggregate(
                 m=models.Max("number")
@@ -689,6 +694,9 @@ class Entrant(models.Model):
 
         Withdrawn entrants are numbered along with everyone else: they keep
         their place in the field they entered, and their results still count.
+        The **bye** is not: it is not a competitor, it lives at number 0, and
+        including it here handed it a seed and left a gap in the real field
+        (``division.entrants`` is the manager that hides it).
 
         Two other places order a field and must not drift from this one:
         ``views.entrants_for_display`` reads the number this writes, and
@@ -696,7 +704,7 @@ class Entrant(models.Model):
         ``PairingData`` was built in as its tiebreak — which is this order.
         """
         entrants = sorted(
-            cls.all_objects.filter(division=division).select_related("player"),
+            division.entrants.select_related("player"),
             key=lambda e: (-e.rating, e.player.player_number),
         )
         return [[e.player.player_number, i] for i, e in enumerate(entrants, 1)]
@@ -710,19 +718,33 @@ class Entrant(models.Model):
         two entrants swap places — and a swap is the common case, not a corner
         one.
         """
+        # all_objects, not division.entrants: a seeding recorded before the bye
+        # was excluded from ``seeding_for`` names it, and a replay has to be able
+        # to reproduce what happened rather than refuse it.
         by_key = {
             e.player.player_number: e
             for e in cls.all_objects.filter(division=division).select_related("player")
         }
-        changed = []
+        targets = []
         for key, number in seeding:
             entrant = by_key.get(key)
             if entrant is None:
                 raise ValueError(
                     f"No entrant with player number {key!r} in {division.name}."
                 )
-            if entrant.number != number:
-                changed.append((entrant, number))
+            targets.append((entrant, number))
+
+        # Send the bye home to 0 unless the seeding itself placed it. A division
+        # seeded while it was still included is holding a number in the middle of
+        # the field, which would collide with the entrant now taking that seat —
+        # so this is a repair, not only a tidy-up, and it rides in the same
+        # two-pass move below.
+        named = {e.pk for e, _ in targets}
+        bye = next((e for e in by_key.values() if e.player.is_bye), None)
+        if bye is not None and bye.pk not in named:
+            targets.append((bye, 0))
+
+        changed = [(e, n) for e, n in targets if e.number != n]
         if not changed:
             return []
         for i, (entrant, _) in enumerate(changed, 1):

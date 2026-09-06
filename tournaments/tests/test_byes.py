@@ -247,3 +247,87 @@ class ByeExportTests(TestCase):
         exported = sum(len(d.results) for d in data.divisions)
         real = division.result_slips.exclude(loser__player__is_bye=True).count()
         self.assertEqual(exported, real)
+
+
+class ByeIsNotSeededTests(TestCase):
+    """The bye is not a competitor, so it takes no seed.
+
+    It lives at number 0. Including it in the seeding handed it a number in the
+    middle of the field and left the real entrants counting 1, 2, 3, 5.
+    """
+
+    def setUp(self):
+        from datetime import date
+
+        from users.models import User
+
+        owner = User.objects.create_user(username="bye-seed", password="pw")
+        self.tournament = Tournament.objects.create(
+            name="Byes", location="X", start_date=date(2026, 5, 1), owner=owner,
+        )
+        self.division = Division.objects.create(
+            tournament=self.tournament, name="Open"
+        )
+        # A rated player and two unrated ones — the bye's own rating is 0, so
+        # unrated entrants are who it can shuffle past.
+        for i, (name, rating) in enumerate(
+            [("Rated", 1500), ("Unrated", 0)], 1
+        ):
+            Entrant.enter(
+                self.division,
+                Player.objects.create(
+                    name=name, player_number=f"000{i}", rating=rating
+                ),
+                i,
+            )
+        # A guest on a T- number: sorts *after* "BYE", so the bye displaces them.
+        Entrant.enter(
+            self.division,
+            Player.objects.create(
+                name="Guest", player_number="T-1", rating=0, is_provisional=True
+            ),
+            3,
+        )
+        self.bye = self.division.bye_entrant()
+
+    def _numbers(self):
+        return [
+            (e.number, e.player.name)
+            for e in self.division.entrants.order_by("number")
+        ]
+
+    def test_the_bye_takes_no_seed_and_leaves_no_gap(self):
+        Entrant.apply_seeding(self.division, Entrant.seeding_for(self.division))
+        self.bye.refresh_from_db()
+        self.assertEqual(self.bye.number, 0)
+        self.assertEqual(
+            self._numbers(), [(1, "Rated"), (2, "Unrated"), (3, "Guest")]
+        )
+
+    def test_a_bye_already_holding_a_seat_is_sent_home(self):
+        """Divisions seeded while it was included are repaired, not broken.
+
+        The entrant taking that seat would otherwise collide with it on the
+        unique (division, number).
+        """
+        # The state the bug left behind: the bye seeded into the middle of the
+        # field, the guest it displaced pushed out to 4.
+        guest = self.division.entrants.get(player__player_number="T-1")
+        Entrant.all_objects.filter(pk=guest.pk).update(number=4)
+        Entrant.all_objects.filter(pk=self.bye.pk).update(number=3)
+        Entrant.apply_seeding(self.division, Entrant.seeding_for(self.division))
+        self.bye.refresh_from_db()
+        self.assertEqual(self.bye.number, 0)
+        self.assertEqual(
+            self._numbers(), [(1, "Rated"), (2, "Unrated"), (3, "Guest")]
+        )
+
+    def test_a_recorded_seeding_that_names_the_bye_still_replays(self):
+        """Logs written while it was included must reproduce what happened."""
+        Entrant.apply_seeding(
+            self.division,
+            [["0001", 1], ["0002", 2], ["BYE", 3], ["T-1", 4]],
+        )
+        self.bye.refresh_from_db()
+        self.assertEqual(self.bye.number, 3)
+        self.assertEqual(self._numbers(), [(1, "Rated"), (2, "Unrated"), (4, "Guest")])
