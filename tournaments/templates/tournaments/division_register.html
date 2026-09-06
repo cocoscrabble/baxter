@@ -73,10 +73,10 @@ text says, in the one place somebody filling it in is looking.
     anybody does, and the name they searched for is almost always the name they
     want, so it arrives prefilled.
     {% endcomment %}
-    {% if search_query or guest_form.errors %}
+    {% if search_query or guest_form.errors or duplicate_candidates %}
     <div class="field-row register-guest">
       <label for="{{ guest_form.name.id_for_label }}">
-        {% if search_results or wespa_results %}Not one of these? Add a guest{% else %}Nobody found. Add a guest{% endif %}
+        {% if duplicate_candidates %}Add a guest{% elif search_results or wespa_results %}Not one of these? Add a guest{% else %}Nobody found. Add a guest{% endif %}
       </label>
       {{ guest_form.name }}
       <button type="submit" name="guest" value="1">Add as guest</button>
@@ -85,6 +85,36 @@ text says, in the one place somebody filling it in is looking.
       </span>
     </div>
     {{ guest_form.name.errors }}
+
+    {% comment %}
+    The name is already taken. Sharing one is legal — the player number is the
+    identity — but it is far more often a typo than two real people, so nothing
+    has been created and the director says which. Entering an existing player
+    here is the ordinary add: the button posts their number, exactly as a search
+    result's would.
+    {% endcomment %}
+    {% if duplicate_candidates %}
+    <div class="register-duplicate">
+      <p>
+        {% if duplicate_candidates|length == 1 %}
+        A player named “{{ duplicate_name }}” already exists. Did you mean them?
+        {% else %}
+        {{ duplicate_candidates|length }} players are already named
+        “{{ duplicate_name }}”. Did you mean one of them?
+        {% endif %}
+      </p>
+      <div class="field-row">
+        {% for candidate in duplicate_candidates %}
+        <button type="submit" name="player" value="{{ candidate.player_number }}">
+          Enter {{ candidate.name }} (#{{ candidate.player_number }}, {{ candidate.rating }})
+        </button>
+        {% endfor %}
+        <button type="submit" name="guest" value="confirm" class="btn-secondary">
+          Add as a different person
+        </button>
+      </div>
+    </div>
+    {% endif %}
     {% endif %}
     {% endif %}
 
@@ -95,7 +125,7 @@ text says, in the one place somebody filling it in is looking.
     brings them straight back, errors and all, which is why the errors are part
     of the test.
     {% endcomment %}
-    {% if editing or search_query or registration_form.errors or guest_form.errors %}
+    {% if editing or search_query or duplicate_candidates or registration_form.errors or guest_form.errors %}
     {{ registration_form.non_field_errors }}
     {% comment %}
     Rating, the three flags and the note are one row each at most, and the flags

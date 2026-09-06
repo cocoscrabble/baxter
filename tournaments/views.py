@@ -1828,6 +1828,9 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
             # prefixed. Without it both render identical element ids and the
             # guest form's labels silently point at the add form's inputs.
             "guest_form": GuestForm(),
+            # Set only when a guest's name is already taken; see _guest.
+            "duplicate_name": "",
+            "duplicate_candidates": [],
             "search_query": "",
             "search_results": [],
             "wespa_results": [],
@@ -1992,6 +1995,26 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
                 ),
             )
         name = guest.cleaned_data["name"]
+
+        # Sharing a name is legal — the number is the identity — but it is far
+        # more often a typo than two real people, so an unconfirmed guest whose
+        # name is already taken is shown who is already here and asked. The
+        # search above is the first guard against this and catches most of it;
+        # this catches the case where a director searched one thing and typed
+        # another, which is exactly when it happens.
+        existing = Player.same_named(name)
+        if request.POST.get("guest") != "confirm" and existing.exists():
+            return render(
+                request, self.template_name,
+                self._context(
+                    division,
+                    registration_form=form,
+                    guest_form=guest,
+                    duplicate_name=name,
+                    duplicate_candidates=list(existing),
+                ),
+            )
+
         number = get_player_source().mint_number(name)
         create_player(
             division.tournament, request.user,
