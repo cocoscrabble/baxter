@@ -738,6 +738,53 @@ def create_player(tournament, actor, payload):
     )
 
 
+@records_event("entrants_reseeded")
+def reseed_entrants(tournament, actor, payload):
+    """payload: {division, seeding: [[player_number, n], …]}.
+
+    Renumber a division by pinned rating, highest first. An entrant's number is
+    a *seeding* — their number for this tournament — so it belongs to the rating
+    order rather than to whatever a director typed, and this is what keeps the
+    two in step as people are entered and ratings corrected.
+
+    **It stops once a round has left draft.** After that the seeding is what the
+    division actually started as, and a late entrant is appended on the end
+    rather than shifting every number on the standings page. Callers may invoke
+    this unconditionally; a division under way records nothing.
+
+    **The numbers are carried, not re-derived.** A payload meaning "sort by
+    whatever the ratings are" would replay against a different rating table and
+    renumber differently, and entrant numbers are in the division digest. So a
+    fresh call derives the order and records the result, and a replay applies
+    exactly what was recorded — the same rule ``entrant_ratings_refreshed``
+    follows, for the same reason.
+
+    Recorded separately from the add or edit that prompted it, rather than
+    folded into that event, so that every payload written before entrant numbers
+    were derived replays exactly as it always did: no reseed event, no reseed.
+    """
+    from tournaments.entrant_sync import division_under_way
+    from tournaments.models import Entrant
+
+    division = _division(tournament, payload["division"])
+    seeding = payload.get("seeding")
+    if seeding is None:
+        if division_under_way(division):
+            return EventResult(payload=payload, division=division, record=False)
+        seeding = Entrant.seeding_for(division)
+
+    changed = Entrant.apply_seeding(division, seeding)
+    if not changed:
+        # Nothing moved. Recording it would fill the log with no-ops, since
+        # every add and rating edit calls this.
+        return EventResult(payload=payload, division=division, record=False)
+    return EventResult(
+        payload={**payload, "seeding": seeding},
+        division=division,
+        result=changed,
+    )
+
+
 # The registration fields an entrant_added / entrant_updated payload may carry.
 # ``rating`` is deliberately alongside ``rating_source``: an update that changes
 # the rating without saying where it came from would be ambiguous.
@@ -773,13 +820,25 @@ def add_entrant(tournament, actor, payload):
         k: payload[k] for k in _REGISTRATION_FIELDS
         if k in payload and k not in ("number", "rating", "rating_source")
     }
+    # ``number`` is optional now that the registration page no longer asks for
+    # one: an entrant's number is a seeding derived from the rating
+    # (``reseed_entrants`` below). It stays *recorded*, though — the payload
+    # this event writes always carries the number that was actually assigned, so
+    # a replay reproduces it without re-deriving anything.
+    number = payload.get("number")
+    if number is None:
+        number = Entrant.next_number(division)
     entrant = Entrant.enter(
-        division, player, int(payload["number"]),
+        division, player, int(number),
         rating=payload.get("rating"),
         rating_source=payload.get("rating_source"),
         **fields,
     )
-    return EventResult(payload=payload, division=division, result=entrant)
+    return EventResult(
+        payload={**payload, "number": entrant.number},
+        division=division,
+        result=entrant,
+    )
 
 
 @records_event("entrant_updated")

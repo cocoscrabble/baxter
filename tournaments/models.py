@@ -570,6 +570,13 @@ class Entrant(models.Model):
         on_delete=models.CASCADE,
         related_name="entries",
     )
+    # The entrant's number *for this tournament* — a seeding, not a physical
+    # seat or board. It is derived from the pinned rating (highest rated is 1)
+    # while the division is still in draft, and frozen once a round has been
+    # published, so a late entrant is appended rather than reshuffling everyone
+    # else's. Nothing pairs off it: the engine keys on rating, and this is what
+    # breaks a tie between equal ratings and what the standings show in
+    # brackets. See ``reseed`` below.
     number = models.IntegerField()
     # A dropped (withdrawn) entrant is excluded from all future pairing but keeps
     # their played results, which still count for everyone else's standings,
@@ -628,6 +635,64 @@ class Entrant(models.Model):
     def key(self):
         """The entrant's identity for the pairing layer — never the name."""
         return self.player.player_number
+
+    @classmethod
+    def next_number(cls, division):
+        """The number a new entrant takes when the seeding is frozen."""
+        return (
+            cls.all_objects.filter(division=division).aggregate(
+                m=models.Max("number")
+            )["m"] or 0
+        ) + 1
+
+    @classmethod
+    def seeding_for(cls, division):
+        """``[[player_number, n], …]`` — this division in rating order.
+
+        Highest rating is 1. Ties break on the player number, because a tie has
+        to break on *something* and the number is the identity everywhere else
+        outside the database (PLAN_PLAYER_IDENTITY.md). Anything less
+        deterministic would make a replay's numbering depend on row order.
+
+        Withdrawn entrants are numbered along with everyone else: they keep
+        their place in the field they entered, and their results still count.
+        """
+        entrants = sorted(
+            cls.all_objects.filter(division=division).select_related("player"),
+            key=lambda e: (-e.rating, e.player.player_number),
+        )
+        return [[e.player.player_number, i] for i, e in enumerate(entrants, 1)]
+
+    @classmethod
+    def apply_seeding(cls, division, seeding):
+        """Write a ``seeding_for``-shaped list. Returns the entrants changed.
+
+        Done in two passes through negative numbers. ``(division, number)`` is
+        unique, so assigning the final numbers directly would collide the moment
+        two entrants swap places — and a swap is the common case, not a corner
+        one.
+        """
+        by_key = {
+            e.player.player_number: e
+            for e in cls.all_objects.filter(division=division).select_related("player")
+        }
+        changed = []
+        for key, number in seeding:
+            entrant = by_key.get(key)
+            if entrant is None:
+                raise ValueError(
+                    f"No entrant with player number {key!r} in {division.name}."
+                )
+            if entrant.number != number:
+                changed.append((entrant, number))
+        if not changed:
+            return []
+        for i, (entrant, _) in enumerate(changed, 1):
+            cls.all_objects.filter(pk=entrant.pk).update(number=-i)
+        for entrant, number in changed:
+            cls.all_objects.filter(pk=entrant.pk).update(number=number)
+            entrant.number = number
+        return [entrant for entrant, _ in changed]
 
     @classmethod
     def enter(

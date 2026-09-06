@@ -104,7 +104,11 @@ class EntrantsGrid(EditGrid):
     )
     unique_within_parent = ("number",)  # (division, number) is unique
     columns = [
-        Column("number", "#", kind="display", width=60, auto_increment=True),
+        # The entrant's number for this tournament — a seeding, derived from
+        # the rating by commands.reseed_entrants and shown here, never typed.
+        # auto_increment only covers the moment between a new row and the
+        # renumber that follows the save.
+        Column("number", "Seed", kind="display", width=70, auto_increment=True),
         Column("player", "Player", kind="choice", lookup="players", autocomplete=True),
         # Editing this makes the snapshot manual, server-side in prepare(); the
         # source column beside it is read-only so the two cannot disagree.

@@ -586,3 +586,85 @@ class PlayerNumberChangeTests(LoggedTournamentMixin, TestCase):
         tournament, _ = self._build_logged_tournament()
         with self.assertRaisesRegex(ValueError, "No player with number"):
             self._rename(tournament, "9999", "0001")
+
+
+class SeedingReplayTests(TestCase):
+    """Renumbering by rating has to survive a replay — it is in the digest.
+
+    Which is exactly why the numbers are *recorded* rather than re-derived, and
+    why the renumber is its own event instead of being folded into the add: a
+    log written before entrant numbers were derived carries no such event, and
+    so replays to the numbers a director typed, unchanged.
+    """
+
+    def setUp(self):
+        from tournaments.commands import (
+            add_entrant,
+            create_tournament,
+            reseed_entrants,
+        )
+
+        self.owner = User.objects.create_user(username="owner", password="pw")
+        self.players = [
+            Player.objects.create(name=n, player_number=f"00{i}", rating=r)
+            for i, (n, r) in enumerate(
+                [("Low", 1200), ("High", 1800), ("Mid", 1500)], 1
+            )
+        ]
+        self.tournament = create_tournament(
+            None, self.owner,
+            {
+                "name": "Champs", "location": "X", "start_date": "2026-04-01",
+                "default_division": {"name": "Open"},
+            },
+        )
+        self.division = self.tournament.divisions.get(name="Open")
+        # Entered worst-first, so entry order and rating order disagree.
+        for player in self.players:
+            add_entrant(
+                self.tournament, self.owner,
+                {"division": "Open", "player": player.player_number},
+            )
+            reseed_entrants(
+                self.tournament, self.owner, {"division": "Open"}
+            )
+
+    def test_the_numbering_survives_a_replay(self):
+        before = division_digest(self.division)
+        numbers = {
+            e.player.name: e.number
+            for e in self.division.entrants.select_related("player")
+        }
+        self.assertEqual(numbers, {"High": 1, "Mid": 2, "Low": 3})
+
+        events = list(events_from_tournament(self.tournament))
+        self.tournament.delete()
+        ctx = replay(events, verify=True)
+
+        division = ctx.tournament.divisions.get(name="Open")
+        self.assertEqual(division_digest(division), before)
+        self.assertEqual(
+            {e.player.name: e.number
+             for e in division.entrants.select_related("player")},
+            numbers,
+        )
+
+    def test_a_log_with_no_reseed_event_keeps_its_typed_numbers(self):
+        """A tournament numbered by hand before any of this replays unchanged."""
+        events = [
+            e for e in events_from_tournament(self.tournament)
+            if e["event_type"] != "entrants_reseeded"
+        ]
+        # Numbers as add_entrant assigned them: entry order, worst first.
+        for event in events:
+            if event["event_type"] == "entrant_added":
+                self.assertIn("number", event["payload"])
+        self.tournament.delete()
+        ctx = replay(events)
+
+        division = ctx.tournament.divisions.get(name="Open")
+        self.assertEqual(
+            {e.player.name: e.number
+             for e in division.entrants.select_related("player")},
+            {"Low": 1, "High": 2, "Mid": 3},
+        )

@@ -400,10 +400,9 @@ class RegistrationForm(forms.Form):
     are meaningfully different and the field must not coerce one to the other.
     """
 
-    number = forms.IntegerField(
-        min_value=1, label="Seat number",
-        help_text="Board/seat order. Defaults to the next free number.",
-    )
+    # No entrant number here on purpose. An entrant's number is a *seeding* —
+    # their number for this tournament, not a seat or a board — so it is derived
+    # from the pinned rating rather than typed (``commands.reseed_entrants``).
     rating = forms.IntegerField(
         required=False, min_value=0, label="Rating",
         help_text="Leave blank to use the player's own rating.",
@@ -430,7 +429,6 @@ class RegistrationForm(forms.Form):
         """The payload fields this form contributes, rating included only when
         the director actually supplied one."""
         data = {
-            "number": self.cleaned_data["number"],
             "tentative": self.cleaned_data["tentative"],
             "paid": self.cleaned_data["paid"],
             "playing_up": self.cleaned_data["playing_up"],

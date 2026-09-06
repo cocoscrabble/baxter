@@ -44,6 +44,7 @@ EVENT_TYPES = frozenset(
         "entrant_added",
         "entrant_updated",
         "entrant_ratings_refreshed",
+        "entrants_reseeded",
         "results_saved",
         "result_added",
         "result_edited",
@@ -672,6 +673,10 @@ def describe_event(event) -> str:
         "entrant_ratings_refreshed": lambda: (
             f"Refreshed {len(p.get('entrants') or [])} entrant rating(s) in {div} "
             f"from the player table"
+        ),
+        "entrants_reseeded": lambda: (
+            f"Renumbered {len(p.get('seeding') or [])} entrant(s) in {div} "
+            f"by rating"
         ),
         "player_number_changed": lambda: (
             f"Changed a player number from {p.get('old', '')} to {p.get('new', '')}"

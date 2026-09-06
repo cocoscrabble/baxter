@@ -585,9 +585,8 @@ class WespaGuestTests(RegistrationTestCase):
         self.assertEqual((entrant.rating, entrant.rating_source), (1750, "wespa"))
 
     def test_the_registration_fields_apply_as_for_anyone_else(self):
-        self._post(action="add", wespa="7", number=4, tentative="on")
+        self._post(action="add", wespa="7", tentative="on")
         entrant = self.division.entrants.get(player__wespa_id=7)
-        self.assertEqual(entrant.number, 4)
         self.assertTrue(entrant.tentative)
 
     def test_a_second_division_reuses_the_player_rather_than_minting_one(self):
@@ -616,3 +615,111 @@ class WespaGuestTests(RegistrationTestCase):
         response = self._post(action="add", wespa="999", number=1)
         self.assertContains(response, "no longer listed")
         self.assertEqual(self.division.entrants.count(), 0)
+
+
+class SeedingTests(RegistrationTestCase):
+    """Entrant numbers are a seeding, derived from the rating and never typed.
+
+    An entrant's ``number`` is their number *for this tournament* — not a seat,
+    not a board — so it follows the pinned rating while the division is still in
+    draft, and freezes once a round has been published.
+    """
+
+    def _numbers(self):
+        return {
+            e.player.name: e.number
+            for e in self.division.entrants.select_related("player")
+        }
+
+    def _publish_a_round(self):
+        from tournaments.models import RoundPairings
+
+        RoundPairings.objects.create(
+            division=self.division, round=1, status=RoundPairings.PUBLISHED
+        )
+
+    def test_the_form_no_longer_asks_for_a_number(self):
+        from tournaments.forms import RegistrationForm
+
+        self.assertNotIn("number", RegistrationForm().fields)
+
+    def test_entering_orders_the_division_by_rating(self):
+        # Entered lowest-rated first, on purpose: the numbers must not follow
+        # entry order.
+        self._post(action="add", player=self.unrated.player_number)   # 0
+        self._post(action="add", player=self.bea.player_number)       # 1400 WESPA
+        self._post(action="add", player=self.ann.player_number)       # 1600 CoCo
+        self.assertEqual(
+            self._numbers(), {"Ann Lee": 1, "Bea Fox": 2, "Cy Ray": 3}
+        )
+
+    def test_a_rating_correction_reorders_the_field(self):
+        self._post(action="add", player=self.ann.player_number)
+        self._post(action="add", player=self.bea.player_number)
+        entrant = self.division.entrants.get(player=self.bea)
+        self._post(action="update", entrant=entrant.pk, rating=1900)
+        self.assertEqual(self._numbers(), {"Bea Fox": 1, "Ann Lee": 2})
+
+    def test_a_tie_breaks_on_the_player_number(self):
+        """A tie has to break on something replayable — not on row order."""
+        self._post(action="add", player=self.unrated.player_number)  # 0003
+        other = Player.objects.create(
+            name="Dee Vee", player_number="0004", rating=0
+        )
+        self._post(action="add", player=other.player_number)
+        self.assertEqual(self._numbers(), {"Cy Ray": 1, "Dee Vee": 2})
+
+    def test_a_late_entrant_is_appended_once_a_round_is_published(self):
+        """The seeding is what the division started as; it does not reshuffle."""
+        self._post(action="add", player=self.ann.player_number)
+        self._post(action="add", player=self.unrated.player_number)
+        before = self._numbers()
+        self._publish_a_round()
+
+        self._post(action="add", player=self.bea.player_number)  # would seed 2nd
+
+        self.assertEqual(self._numbers(), {**before, "Bea Fox": 3})
+
+    def test_a_rating_correction_under_way_moves_nobody(self):
+        self._post(action="add", player=self.ann.player_number)
+        self._post(action="add", player=self.bea.player_number)
+        before = self._numbers()
+        self._publish_a_round()
+
+        entrant = self.division.entrants.get(player=self.bea)
+        self._post(action="update", entrant=entrant.pk, rating=1900)
+
+        self.assertEqual(self._numbers(), before)
+
+    def test_the_renumber_is_logged_with_the_numbers_it_wrote(self):
+        """Not "sort by rating" — a payload meaning that would replay against a
+        different rating table and renumber differently."""
+        from tournaments.models import TournamentEvent
+
+        self._post(action="add", player=self.unrated.player_number)
+        self._post(action="add", player=self.ann.player_number)
+        event = TournamentEvent.objects.filter(
+            tournament=self.tournament, event_type="entrants_reseeded"
+        ).latest("seq")
+        self.assertEqual(event.payload["seeding"], [["0001", 1], ["0003", 2]])
+
+    def test_a_renumber_that_moves_nobody_is_not_logged(self):
+        """Every add calls it, so a no-op must not fill the log."""
+        from tournaments.models import TournamentEvent
+
+        self._post(action="add", player=self.ann.player_number)
+        self.assertFalse(
+            TournamentEvent.objects.filter(
+                tournament=self.tournament, event_type="entrants_reseeded"
+            ).exists()
+        )
+
+    def test_the_added_entrant_records_the_number_it_got(self):
+        """The payload is explicit even though the form supplied nothing."""
+        from tournaments.models import TournamentEvent
+
+        self._post(action="add", player=self.ann.player_number)
+        event = TournamentEvent.objects.get(
+            tournament=self.tournament, event_type="entrant_added"
+        )
+        self.assertEqual(event.payload["number"], 1)
