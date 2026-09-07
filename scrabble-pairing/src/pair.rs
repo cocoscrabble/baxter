@@ -120,9 +120,18 @@ fn round_status(
     slips: &[ResultSlipData],
     inactive_players: &HashMap<i32, Vec<String>>,
 ) -> HashMap<i32, RoundStatus> {
+    // Withdrawn players are excluded for the same reason `inactive_players` are
+    // below: a round is waiting only on the players who were going to play it.
+    // Counting them made every round after a withdrawal read Partial forever --
+    // the withdrawn player has no result and never will -- so `can_pair` refused
+    // the next round and dropping anybody stopped the tournament dead.
+    //
+    // Safe for the rounds they *did* play: this only lowers `expected`, and the
+    // test below is `real >= expected`, so a round they appeared in still counts
+    // them and still finishes.
     let n_real = players
         .iter()
-        .filter(|e| !e.name.eq_ignore_ascii_case(BYE_NAME))
+        .filter(|e| !e.name.eq_ignore_ascii_case(BYE_NAME) && !e.dropped)
         .count();
     let mut appearances: HashMap<i32, usize> = HashMap::new();
     for s in slips {
@@ -519,6 +528,47 @@ mod tests {
         let r2 = out.iter().find(|r| r.round == 2).unwrap();
         assert!(r2.error.is_none(), "{r2:?}");
         assert_eq!(r2.pairings.len(), 2);
+    }
+
+    #[test]
+    fn a_withdrawn_player_does_not_stall_the_next_round() {
+        // Five players, one withdrawn after round 1. Round 2 is played by the
+        // four who remain, so it holds four real appearances -- but the field is
+        // still five players. `round_status` counted the withdrawn player among
+        // those a round is waiting on, so round 2 read Partial forever and round
+        // 3 could never be paired: dropping anybody stopped the tournament.
+        let inp = input(
+            r#"{
+                "players": [
+                    {"name": "A", "rating": 1900},
+                    {"name": "B", "rating": 1800},
+                    {"name": "C", "rating": 1700},
+                    {"name": "D", "rating": 1600},
+                    {"name": "E", "rating": 1500, "dropped": true}
+                ],
+                "round_pairings": [
+                    {"round": 1, "start_round": 0, "pairing": "Swiss"},
+                    {"round": 2, "start_round": 1, "pairing": "Swiss"},
+                    {"round": 3, "start_round": 2, "pairing": "Swiss"}
+                ],
+                "result_slips": [
+                    {"round": 1, "winner_name": "A", "loser_name": "B", "winner_score": 400, "loser_score": 350, "winner_started": true},
+                    {"round": 1, "winner_name": "C", "loser_name": "D", "winner_score": 400, "loser_score": 350, "winner_started": true},
+                    {"round": 1, "winner_name": "E", "loser_name": "Bye", "winner_score": 50, "loser_score": 0, "winner_started": false},
+                    {"round": 2, "winner_name": "A", "loser_name": "C", "winner_score": 400, "loser_score": 350, "winner_started": true},
+                    {"round": 2, "winner_name": "B", "loser_name": "D", "winner_score": 400, "loser_score": 350, "winner_started": true}
+                ]
+            }"#,
+        );
+        let out = pair(&inp);
+        let r3 = out.iter().find(|r| r.round == 3).expect("round 3 not paired");
+        assert!(r3.error.is_none(), "{r3:?}");
+        assert_eq!(r3.pairings.len(), 2);
+        // ...and the withdrawn player is not among them.
+        for p in &r3.pairings {
+            assert_ne!(p.first, "E");
+            assert_ne!(p.second, "E");
+        }
     }
 
     #[test]
