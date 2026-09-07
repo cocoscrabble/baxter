@@ -410,17 +410,13 @@ class NotPlayedPredicateTests(TestCase):
         slip.save()
         return slip
 
-    def test_played_excludes_byes_forfeits_and_bye_wins(self):
+    def test_played_excludes_a_bye_on_either_side(self):
         self.assertNotIn(self.bye_slip, self.division.result_slips.played())
         self.make_forfeit()
+        # The bye on *either* side is the whole test: a forfeit is a bye with
+        # the winner the other way round, and a printed game is split rather
+        # than annotated, so no forfeit is without one.
         self.assertNotIn(self.bye_slip, self.division.result_slips.played())
-        # And the flag alone is enough, with no bye in sight — the shape a
-        # withdrawal from an already-printed board takes.
-        real = self.division.result_slips.exclude(pk=self.bye_slip.pk).first()
-        if real is not None:
-            real.forfeit = True
-            real.save(update_fields=["forfeit"])
-            self.assertNotIn(real, self.division.result_slips.played())
 
     def test_a_forfeit_does_not_make_a_published_round_in_progress(self):
         self.make_forfeit()
@@ -446,41 +442,6 @@ class NotPlayedPredicateTests(TestCase):
             BYE_PLAYER_NUMBER, {k for r in results for k in (r.winner, r.loser)}
         )
         self.assertEqual(results, [])
-
-    def test_the_forfeit_flag_alone_keeps_a_game_out_of_the_ratings(self):
-        """The corner case has no bye to recognise: a withdrawal from a round
-        whose board was already printed is a slip between two *real* entrants,
-        so the flag is the only thing that can stop it being rated."""
-        from tournaments.live_ratings import project_ratings
-
-        division = make_division(self.user, 4, 2, first_number=301)
-        division.entrants.update(rating=1500, rating_source=Entrant.COCO)
-        regenerate_pairings(division)
-        publish_rounds(division, [1])
-        games = list(division.pairings.filter(round=1))
-        self.assertEqual(len(games), 2)  # even field, so no bye
-        for i, pairing in enumerate(games):
-            ResultSlip.objects.create(
-                division=division, round=1, pairing=pairing,
-                winner=pairing.first, winner_score=400 + i,
-                loser=pairing.second, loser_score=350,
-                winner_started=True,
-            )
-        rated = project_ratings(division)
-        forfeited, played = games
-
-        forfeited.result.forfeit = True
-        forfeited.result.save(update_fields=["forfeit"])
-        after = project_ratings(division)
-
-        # The forfeited game's players stop moving...
-        for entrant in (forfeited.first, forfeited.second):
-            self.assertNotEqual(rated[entrant.key].new_rating, entrant.rating)
-            self.assertEqual(after[entrant.key].new_rating, entrant.rating)
-        # ...while the game that was actually played still counts.
-        self.assertEqual(
-            rated[played.first.key].new_rating, after[played.first.key].new_rating
-        )
 
     def test_a_forfeit_stays_out_of_the_results_csv(self):
         # This export already tested both sides, so it is a guard on the

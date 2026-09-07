@@ -169,10 +169,7 @@ def _retire_bye(division, round_pairings, pairing, *, record_absence):
         slip.winner, slip.loser = slip.loser, slip.winner
         # The bye leads either way, so the real player is charged no start.
         slip.winner_started = True
-        slip.forfeit = True
-        slip.save(
-            update_fields=["winner", "loser", "winner_started", "forfeit"]
-        )
+        slip.save(update_fields=["winner", "loser", "winner_started"])
     round_pairings.update_status()
     return {"round": round_pairings.round, "opponent": None}
 

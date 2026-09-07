@@ -99,7 +99,6 @@ class DerivedForfeitTests(TestCase):
             slip = self.forfeits_in(r).get()
             self.assertEqual(slip.loser_id, self.entrant.pk)
             self.assertEqual((slip.winner_score, slip.loser_score), (BYE_WINNER_SCORE, 0))
-            self.assertTrue(slip.forfeit)
             # The bye leads, so the absent player is charged no start.
             self.assertTrue(slip.winner_started)
 
@@ -510,12 +509,11 @@ class OverridingOneAbsenceSpreadTests(TestCase):
         self.assertEqual(slip.winner_score, 75)
         self.assertTrue(slip.winner.player.is_bye)
         self.assertTrue(slip.winner_started)
-        self.assertTrue(slip.forfeit)
 
-    def test_flipping_a_row_keeps_both_forfeit_flags_in_step(self):
-        # The pairing's flag drives the display and the slip's drives
-        # played(); a row where they disagree is a board contradicting its own
-        # result.
+    def test_flipping_a_row_moves_the_pairings_flag_with_it(self):
+        # ``Pairing.forfeit`` drives the display, so a row whose score says
+        # forfeit while its flag says bye is a board contradicting its own
+        # result. Nothing is rated either way — the bye is on one side of it.
         byed = self.byed_entrant()
 
         def flip(row):
@@ -524,5 +522,4 @@ class OverridingOneAbsenceSpreadTests(TestCase):
         self.save(flip)
         pairing = self.division.pairings.get(round=1, first=byed)
         self.assertTrue(pairing.forfeit)
-        self.assertTrue(pairing.result.forfeit)
         self.assertNotIn(pairing.result, self.division.result_slips.played())

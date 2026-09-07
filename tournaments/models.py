@@ -839,13 +839,17 @@ class ResultSlipQuerySet(models.QuerySet):
 
         The one predicate for "this was a real game". It replaced a scatter of
         ``exclude(loser__player__is_bye=True)`` filters, which assumed the bye
-        could only ever *win*; a forfeit slip puts it on the other side, and
-        every one of those filters mis-handled it.
+        could only ever *win*; a forfeit puts it on the other side, and every
+        one of those filters mis-handled it.
+
+        The bye on *either* side is the whole test. A forfeit is a bye with the
+        winner the other way round, and since a game already printed when a
+        player withdraws is split rather than annotated
+        (plans/PLAN_FORFEITS.md §4), there is no forfeit that does not carry it.
         """
         return self.exclude(
             models.Q(winner__player__is_bye=True)
             | models.Q(loser__player__is_bye=True)
-            | models.Q(forfeit=True)
         )
 
     def not_played(self):
@@ -857,7 +861,6 @@ class ResultSlipQuerySet(models.QuerySet):
         return self.filter(
             models.Q(winner__player__is_bye=True)
             | models.Q(loser__player__is_bye=True)
-            | models.Q(forfeit=True)
         )
 
 
@@ -890,17 +893,6 @@ class ResultSlip(models.Model):
     )
     loser_score = models.IntegerField()
     winner_started = models.BooleanField()
-    # Recorded, not played: nobody sat down to this game. Byes and derived
-    # forfeits carry the bye entrant on one side and are recognised by that
-    # alone; this flag exists for the case that has no bye to recognise — a
-    # player withdrawing from a round whose board was already printed, where the
-    # forfeit is written as the result of the real pairing so the board is not
-    # unprinted (plans/PLAN_FORFEITS.md decision 4). Without it, "X forfeited to
-    # Y" is indistinguishable from "Y beat X 50–0".
-    #
-    # It keeps the game out of the ratings and both exports; the standings still
-    # count it, because a forfeit is a loss.
-    forfeit = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
 
     objects = ResultSlipQuerySet.as_manager()
@@ -920,9 +912,7 @@ class ResultSlip(models.Model):
     def is_played(self):
         """Instance-level ``ResultSlipQuerySet.played``, for the callers holding
         slips rather than a queryset. Kept next to it so the two cannot drift."""
-        return not (
-            self.forfeit or self.winner.player.is_bye or self.loser.player.is_bye
-        )
+        return not (self.winner.player.is_bye or self.loser.player.is_bye)
 
     @property
     def winner_key(self):

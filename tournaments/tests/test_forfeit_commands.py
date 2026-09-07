@@ -124,7 +124,7 @@ class WithdrawFromAPrintedRoundTests(PrintedRoundBase):
             return (
                 p.forfeit, p.table,
                 slip.winner.player.is_bye, slip.winner_score,
-                slip.loser_score, slip.winner_started, slip.forfeit,
+                slip.loser_score, slip.winner_started,
             )
 
         self.assertEqual(shape(before, victim), shape(self.division, after))
