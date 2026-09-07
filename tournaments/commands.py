@@ -327,12 +327,11 @@ def edit_result(tournament, actor, payload):
 
 @records_event("division_settings_saved")
 def save_settings(tournament, actor, payload):
-    """payload: {division, blocks} plus optional {withdrawal, bye_spread}.
+    """payload: {division, blocks}. round_pairings are derived from the blocks.
 
-    round_pairings are derived from the blocks. The two absence settings are
-    optional so every payload written before they existed replays unchanged —
-    an absent key leaves the field alone, and the defaults are what Baxter did
-    before the fields existed (plans/PLAN_FORFEITS.md §3).
+    The absence settings are *not* here: they have their own command, so this
+    one stays the schedule's writer and nothing has to send a whole block list
+    to change how a withdrawal is scored (`forfeits.save_absence_settings`).
     """
     from tournaments.pairing.round_pairing import RP, blocks_to_round_pairings
 
@@ -343,10 +342,6 @@ def save_settings(tournament, actor, payload):
     settings_obj.pairing_blocks = blocks
     settings_obj.round_pairings = round_pairings
     update_fields = ["pairing_blocks", "round_pairings"]
-    for name in ("withdrawal", "bye_spread"):
-        if payload.get(name) is not None:
-            setattr(settings_obj, name, payload[name])
-            update_fields.append(name)
     if not settings_obj.cop_config and any(
         pairing["pairing"] == str(RP.COP) for pairing in round_pairings
     ):

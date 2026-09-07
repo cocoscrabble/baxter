@@ -35,9 +35,12 @@
         <tr>
             <td>{{ entry.pairing.table_label|default:entry.pairing.table }}</td>
             <td>{{ entry.pairing.first.display_name }} (#{{ entry.pairing.first.number }})</td>
-            <td>{{ entry.pairing.second.display_name }} (#{{ entry.pairing.second.number }})</td>
+            <td>{% if entry.absence %}<span class="tag tag-{{ entry.absence }}">{{ entry.absence }}</span>{% else %}{{ entry.pairing.second.display_name }} (#{{ entry.pairing.second.number }}){% endif %}</td>
             {% if entry.result %}
             <td class="num">{{ entry.result }}</td>
+            {% elif entry.absence %}
+            {# Nothing to submit: a bye and a forfeit are recorded at publish. #}
+            <td class="no-print"></td>
             {% else %}
             <td class="no-print"><a class="btn-primary" href="{% url 'resultslip_create' division.tournament.slug division.slug %}?pairing={{ entry.pairing.pk }}">Submit results</a></td>
             {% endif %}

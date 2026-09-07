@@ -6,6 +6,28 @@
 <h1>Settings: {{ division.name }}</h1>
 
 <section class="settings-section">
+    <h2>Byes and withdrawals</h2>
+    <p class="settings-intro">
+        How this division scores a bye, and what happens to the rounds a
+        withdrawn player no longer plays. Rounds already played are never
+        affected, and neither are the rounds someone missed before you change
+        this — a round is recorded the way the rule read when it was published.
+    </p>
+    <form method="post">
+        {% csrf_token %}
+        {% for field in absence_form %}
+        <p>
+            {{ field.label_tag }}
+            {{ field }}
+            {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+            {{ field.errors }}
+        </p>
+        {% endfor %}
+        <button type="submit" name="absence" value="1">Save absence settings</button>
+    </form>
+</section>
+
+<section class="settings-section">
     <h2>COP pairing</h2>
     <p class="settings-intro">
         Prize and tuning settings for the COP (Cost-Optimized Pairing) strategy.

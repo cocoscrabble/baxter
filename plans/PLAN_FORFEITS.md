@@ -1,6 +1,6 @@
 # Plan: Forfeits and dropouts
 
-**Status: phases 1–3 done**, phases 4–5 not started. Design drafted 2026-09-07 for
+**Status: phases 1–4 done**, phase 5 not started. Design drafted 2026-09-07 for
 [issue #57](https://github.com/cocoscrabble/baxter/issues/57); code references
 pinned at commit `e3ad086`.
 
@@ -435,14 +435,41 @@ double-booked player are refused; rejoining leaves the printed rounds untouched;
 `OMIT` gives the opponent their bye and the absentee nothing; and a log carrying
 a withdrawal replays under `verify=True` to the same digest, settings included.
 
-### Phase 4 — the surfaces
+### Phase 4 — the surfaces — **done**
 
-A Withdraw/Rejoin control on the entrants page (`_entrants_table.html` is shared
-with the public embed, so editor-only, like the drift column), and a Forfeit
-button per game on the pairings page. Forfeit rows render as "forfeit", not
-"bye", on the pairings and results pages.
+- **Withdraw / Rejoin per row on the entrants page.** A plain per-row form
+  rather than a datastar post: the page reloads on save anyway and a withdrawal
+  should not depend on JS at a registration desk. Editor-only —
+  `_entrants_table.html` is shared with the public embed, so the control is
+  *absent* from that response rather than hidden, like the payment and drift
+  columns. The flash message names the division's policy, so a director who
+  expected forfeits and has `OMIT` set finds out immediately.
+- **A named forfeit button per side of a printed game**, on a published round's
+  unplayed real games. "Alice forfeits", not "1st forfeits": a director looking
+  at a board knows who did not turn up, not which side of the slip they were on.
+  A refusal (game already played, player double-booked) comes back as a banner
+  on the pairings body, the way a `PairingError` does.
+- **Bye and forfeit rows say which they are**, on the editor's pairings tab and
+  the public pairings page, via `AnnotatedPairing.absence`. They are the same
+  shape — one real entrant against the bye — so every surface has to ask there
+  rather than look at the opponent. The public page offers no result-slip link
+  for either, since both are already recorded.
+- **A "Byes and withdrawals" section on the settings page**, with its own
+  command (`division_absence_settings_saved`) rather than a corner of
+  `division_settings_saved`: changing how a withdrawal is scored should not
+  require sending a whole block list, and a block list is not something a
+  settings form should be able to get wrong. Saving it drops the draft rounds,
+  since they were laid out under the old rule.
 
-*Verify:* drive it with `/verify`.
+*Verified* by driving the real app on an isolated DB (`/verify`), and by
+`ForfeitSurfaceTests`. Withdrawing a paired entrant split their printed game
+live into `Barbara Liskov — BYE 50-0` and `Ken Thompson — FORFEIT 0-50`;
+the forfeit button did the same for a player who was *not* withdrawn; the
+standings came out +50/1-0 for the two byes and −50/0-1 for the two forfeits;
+`project_ratings` returned nothing at all, since no completed game was a real
+one; the bye spread saved as 100 with the schedule untouched; and the log held
+`entrant_withdrawn`, `game_forfeited`, `division_absence_settings_saved` in
+order. No console errors.
 
 ### Phase 5 — entering a bye or forfeit by hand in the edit-results grid
 

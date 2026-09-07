@@ -13,9 +13,10 @@ so every marked row also carries a visually-hidden textual equivalent, and the
 legend below spells the markers out.
 
 Payment is editor-only and never rendered otherwise — not "hidden by CSS",
-simply absent from the response. The same goes for the drift column: whether a
-pinned seed has fallen behind the player table is internal bookkeeping, not a
-result, and `show_drift` is only ever set for editors.
+simply absent from the response. The same goes for the drift column and the
+Withdraw/Rejoin control: whether a pinned seed has fallen behind the player
+table is internal bookkeeping, not a result, and withdrawing somebody is a
+director's action, not something the public list should offer.
 
 The checkboxes carry `form="refresh-ratings"`, which lives on the division page
 outside this partial — the embed has no such form and renders no checkboxes.
@@ -34,7 +35,7 @@ in words. Two views of the same data, not a duplicate to be merged.
             <th>Player</th>
             <th class="num">Rating</th>
             {% if show_drift %}<th class="num">Player table</th>{% endif %}
-            {% if can_edit %}<th>Payment</th>{% endif %}
+            {% if can_edit %}<th>Payment</th><th class="no-print"></th>{% endif %}
         </tr>
     </thead>
     <tbody>
@@ -67,6 +68,27 @@ in words. Two views of the same data, not a duplicate to be merged.
             <td>
                 {% if entrant.paid %}Paid{% else %}Unpaid{% endif %}
                 {% if entrant.payment_note %}<br><small>{{ entrant.payment_note }}</small>{% endif %}
+            </td>
+            {% comment %}
+            A plain per-row form rather than a datastar post: this page reloads
+            on save anyway (the command redirects back with a message), and a
+            withdrawal is not something to leave depending on JS at a
+            registration desk.
+            {% endcomment %}
+            <td class="no-print">
+                {% if entrant.dropped %}
+                <form method="post" action="{% url 'division_rejoin_entrant' division.tournament.slug division.slug %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="player" value="{{ entrant.player.player_number }}">
+                    <button type="submit" class="btn-secondary btn-small">Rejoin</button>
+                </form>
+                {% else %}
+                <form method="post" action="{% url 'division_withdraw_entrant' division.tournament.slug division.slug %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="player" value="{{ entrant.player.player_number }}">
+                    <button type="submit" class="btn-danger btn-small">Withdraw</button>
+                </form>
+                {% endif %}
             </td>
             {% endif %}
         </tr>

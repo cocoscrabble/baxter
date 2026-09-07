@@ -36,6 +36,7 @@ EVENT_TYPES = frozenset(
         "division_restored",
         "division_settings_saved",
         "division_cop_config_saved",
+        "division_absence_settings_saved",
         "division_imported",
         "entrants_saved",
         "entrants_bulk_imported",
@@ -630,6 +631,10 @@ def describe_event(event) -> str:
         "division_restored": lambda: f"Restored division “{p.get('name', '')}”",
         "division_settings_saved": lambda: f"Saved pairing schedule for {div}",
         "division_cop_config_saved": lambda: f"Saved COP settings for {div}",
+        "division_absence_settings_saved": lambda: (
+            f"Set {div} to score absences as “{p.get('withdrawal', '')}” "
+            f"at {p.get('bye_spread', '')} points"
+        ),
         "division_imported": lambda: f"Imported division “{p.get('name', '')}” from history",
         "entrants_saved": lambda: f"Saved entrants for {div} ({rows()})",
         "entrants_bulk_imported": lambda: f"Imported entrants for {div}",

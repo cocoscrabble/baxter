@@ -36,6 +36,43 @@ class AnnotatedPairing:
     # "Semifinal 1, game 2" for a playoff game; empty for an ordinary pairing.
     playoff_label: str = ""
 
+    @property
+    def absence(self) -> str:
+        """"bye", "forfeit", or "" — what this row is instead of a game.
+
+        A bye and a forfeit are the same shape (one real entrant against the bye
+        entrant) and only ``Pairing.forfeit`` tells them apart, so every surface
+        that renders "Bye" has to ask here rather than looking at the opponent.
+        """
+        if self.pairing.forfeit:
+            return "forfeit"
+        if self.pairing.first.player.is_bye or self.pairing.second.player.is_bye:
+            return "bye"
+        return ""
+
+    @property
+    def sides(self):
+        """The two entrants of an ordinary game; empty on a bye or forfeit row.
+
+        Named rather than positional so a template can offer "Alice forfeits"
+        instead of "1st forfeits" — a director looking at a board knows who did
+        not turn up, not which side of the slip they were on.
+        """
+        if self.absence:
+            return ()
+        return (self.pairing.first, self.pairing.second)
+
+    @property
+    def absent_player(self):
+        """The real entrant on a bye or forfeit row (they are stored first)."""
+        if not self.absence:
+            return None
+        return (
+            self.pairing.second
+            if self.pairing.first.player.is_bye
+            else self.pairing.first
+        )
+
 
 def _playoff_label(pairing) -> str:
     """"Semifinal 1, game 2" for a playoff game, else empty."""

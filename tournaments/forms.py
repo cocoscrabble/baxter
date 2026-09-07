@@ -6,6 +6,7 @@ from django.forms import formset_factory
 
 from .models import (
     DEFAULT_COP_CONFIG,
+    DivisionSettings,
     Entrant,
     Pairing,
     Player,
@@ -293,6 +294,44 @@ class WhatIfImportForm(forms.Form):
         if not (cleaned.get("pasted", "").strip() or cleaned.get("upload")):
             raise forms.ValidationError("Paste or upload a JSON bundle or CSV file.")
         return cleaned
+
+
+class AbsenceSettingsForm(forms.Form):
+    """How a division scores byes and the rounds a withdrawn player misses.
+
+    Both are rules rather than facts about anybody, which is why they live on
+    the division (plans/PLAN_FORFEITS.md §3).
+    """
+
+    withdrawal = forms.ChoiceField(
+        choices=DivisionSettings.WITHDRAWAL_CHOICES,
+        label="When a player withdraws",
+        help_text="Whether the rounds they no longer play are recorded as "
+        "forfeit losses or simply left blank. Rounds already played are never "
+        "affected.",
+    )
+    bye_spread = forms.IntegerField(
+        min_value=0, label="Bye spread",
+        help_text="Points awarded for a bye and charged for a forfeit. 50 under "
+        "NSA rules, 75 for ABSP, 100 for WESPA events.",
+    )
+
+    @classmethod
+    def for_division(cls, division, data=None):
+        try:
+            settings = division.settings
+            initial = {
+                "withdrawal": settings.withdrawal,
+                "bye_spread": settings.bye_spread,
+            }
+        except DivisionSettings.DoesNotExist:
+            initial = {
+                "withdrawal": DivisionSettings.OMIT,
+                "bye_spread": DivisionSettings._meta.get_field(
+                    "bye_spread"
+                ).default,
+            }
+        return cls(data, initial=initial) if data is not None else cls(initial=initial)
 
 
 class CopConfigForm(forms.Form):
