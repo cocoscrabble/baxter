@@ -500,6 +500,46 @@ class NotPlayedPredicateTests(TestCase):
         self.assertNotIn("Bye", body)
 
 
+class WithdrawalDoesNotStallPairingTests(TestCase):
+    """Dropping a player used to stop the tournament dead.
+
+    ``round_status`` in the Rust engine counted withdrawn players among those a
+    round is waiting on. A withdrawn player has no result and never will, so
+    every round after the withdrawal read Partial forever and ``can_pair``
+    refused to pair the next one. The engine's own regression is
+    ``a_withdrawn_player_does_not_stall_the_next_round``; this is the same bug
+    seen from the app, which is where it actually bit.
+    """
+
+    def play(self, division, round_num):
+        regenerate_pairings(division)
+        rp = division.round_pairings_set.filter(round=round_num).first()
+        if rp is None:
+            return False
+        publish_rounds(division, [round_num])
+        for p in division.pairings.filter(round=round_num, result__isnull=True):
+            ResultSlip.objects.create(
+                division=division, round=round_num, pairing=p,
+                winner=p.first, winner_score=420,
+                loser=p.second, loser_score=380, winner_started=True,
+            )
+        division.round_pairings_set.get(round=round_num).update_status()
+        return True
+
+    def test_pairing_continues_after_a_withdrawal(self):
+        user = User.objects.create_user(username="w", password="p")
+        division = make_division(user, 6, 6)
+        self.assertTrue(self.play(division, 1))
+        division.entrants.filter(
+            pk=division.entrants.order_by("number").first().pk
+        ).update(dropped=True)
+        division.round_pairings_set.filter(status=RoundPairings.DRAFT).delete()
+        for round_num in (2, 3, 4):
+            self.assertTrue(
+                self.play(division, round_num), f"round {round_num} was not paired"
+            )
+
+
 class ByeRotationTests(TestCase):
     def test_no_player_gets_a_second_bye_until_all_have_one(self):
         user = User.objects.create_user(username="rot", password="p")
