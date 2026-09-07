@@ -1,0 +1,15 @@
+{% comment %}
+One row of a settings form: label, control, help text — on a single line.
+
+`display: contents` on the wrapper (see `.settings-fields` in style.css) lets
+the three cells join the form's grid, so labels and controls line up down the
+whole form instead of each field being its own three-line block. The default
+form styling stacks them (`label { display: block }` plus a 15px `form p`
+margin), which cost roughly three lines per field and made a ten-field page
+scroll for no reason.
+{% endcomment %}
+<div class="settings-field">
+    {{ field.label_tag }}
+    <div class="settings-field-control">{{ field }}{{ field.errors }}</div>
+    <p class="settings-field-help">{{ field.help_text }}</p>
+</div>
