@@ -27,15 +27,12 @@ BYE_PLAYER_NUMBER = "BYE"
 
 @dataclass
 class PlayerData:
-    # ``key`` is the identity (the player number); ``name`` is for humans only
-    # — display, error messages, log lines. Two entrants may legitimately share
-    # a name, so nothing may key on it. See plans/PLAN_PLAYER_IDENTITY.md.
+    # ``key`` is the identity (the player number)
     key: str
     name: str
     # The *pinned* rating, from the entrant, not the live one on the player.
     # Seeding reads this so a rating that drifts mid-tournament — a WESPA pull,
     # a roster sync — cannot reshuffle rounds that are already being played
-    # (plans/PLAN_ENTRANTS.md decision 3).
     rating: int
 
     @classmethod

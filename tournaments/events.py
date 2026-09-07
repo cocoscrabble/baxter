@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 # Event catalog
 # ---------------------------------------------------------------------------
 
-# Every state-changing command's event type. The completeness guard (Phase 2)
-# asserts that every mutating view maps to one of these; adding a mutation path
+# Every state-changing command's event type. The completeness guard asserts
+# that every mutating view maps to one of these; adding a mutation path
 # without an event type fails that test.
 EVENT_TYPES = frozenset(
     {
@@ -133,8 +133,8 @@ def as_derived(func):
 # ---------------------------------------------------------------------------
 
 # The payload schema version stamped on new events. v1 payloads identified
-# players by name; v2 identifies them by player number
-# (plans/PLAN_PLAYER_IDENTITY.md). replay.SCHEMA_UPGRADES upgrades v1 on read.
+# players by name; v2 identifies them by player number.
+# replay.SCHEMA_UPGRADES upgrades v1 on read.
 PAYLOAD_VERSION = 2
 
 
@@ -259,8 +259,7 @@ def records_event(event_type):
 
 
 # The digest's schema version. v1 identified players by name; v2 identifies
-# them by player number (plans/PLAN_PLAYER_IDENTITY.md). Stored digests were
-# backfilled to v2 by migration 0038.
+# them by player number. Stored digests were backfilled to v2 by migration 0038.
 DIGEST_VERSION = 2
 
 
@@ -276,15 +275,6 @@ def division_state(division, version: int = DIGEST_VERSION) -> dict:
     digests, which has to prove each tournament still replays to the digest
     already recorded for it before it may rewrite an append-only log, and can
     only do that in the old vocabulary. Nothing else may pass it.
-
-    The two versions share one body rather than being two frozen copies. A
-    frozen copy could not have worked: ``standings_after_round``,
-    ``final_placements`` and ``PlayoffConfig.seeds`` all moved to keys in
-    phase 2, so v1 output has to be *reconstructed* from today's machinery
-    rather than merely preserved. Branching in the four places the vocabularies
-    differ keeps that difference visible and reviewable, where two near-identical
-    90-line functions would invite exactly the silent drift the freeze was meant
-    to prevent.
     """
 
     def ident(player):

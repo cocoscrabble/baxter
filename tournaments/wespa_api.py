@@ -1,30 +1,4 @@
-"""Fetching and reading the WESPA rating list.
-
-The absence this fills was deliberate for a long time (``PLAN_ENTRANTS.md``
-decision 11): where WESPA ratings came from was not settled, and inventing a
-protocol would only have had to be undone. It is settled now — one JSON document
-holding the whole list, no authentication:
-
-    {"players": [{"playerid": 5, "name": "Adam Logan",
-                  "country": "CAN", "cswrating": 2070}, ...]}
-
-Two things about the source are worth keeping in mind, because they shape the
-code below:
-
-- **It is not WESPA's own service.** It is a third party's mirror of WESPA's
-  list, so it may change shape or stop answering without warning. Hence the
-  parser refuses a document it does not recognise rather than half-reading one,
-  hence every failure is a message an admin can act on, and hence the uploaded
-  file stays a supported transport (``PLAN_WESPA.md`` decision 9).
-- **The list is a snapshot, not a feed.** There is no ``generated_at`` and no
-  incremental form; ~9,200 rows and ~700 KB arrive every time. That is small
-  enough that a weekly pull can simply diff it, and it is why ``WespaSync``
-  answers "did anything change" with counts rather than with a stamp.
-
-The per-player endpoint (``player.php?player=<id>``: ranking, W/L/T, city,
-photo) is real and is deliberately unused — the cascade wants a rating, and one
-document is cheaper and more robust than 9,200.
-"""
+"""Fetching and reading the WESPA rating list."""
 
 import json
 import urllib.error
@@ -91,7 +65,7 @@ def parse_wespa(raw):
             raise WespaParseError(f"Player {i}: expected an object.")
         try:
             wespa_id = int(entry["playerid"])
-        except (KeyError, TypeError, ValueError):
+        except KeyError, TypeError, ValueError:
             raise WespaParseError(
                 f"Player {i}: missing or unreadable playerid."
             ) from None
@@ -105,7 +79,7 @@ def parse_wespa(raw):
         if rating is not None:
             try:
                 rating = int(rating)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 raise WespaParseError(
                     f"{name} (id {wespa_id}): rating {rating!r} is not a number."
                 ) from None

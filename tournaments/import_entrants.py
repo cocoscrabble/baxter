@@ -5,7 +5,7 @@ Parses CSV rows, resolves or creates Players, and adds Entrants to a Division.
 A row may name a player, or give their player number. The number is the
 identity, so it resolves exactly; a bare name is a lookup that may turn out to
 be ambiguous, and an ambiguous name aborts the whole import rather than guessing
-which of two people the director meant (see plans/PLAN_PLAYER_IDENTITY.md).
+which of two people the director meant.
 """
 
 import csv

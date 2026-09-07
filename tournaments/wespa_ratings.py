@@ -1,37 +1,21 @@
 """Applying the WESPA rating list: the mirror, the links, and the ratings.
 
-``wespa_api`` knows how to fetch and read the document; this decides what it
-means. Three separate things happen on a pull, and they are worth keeping apart
-in your head because only the first is unconditional:
-
-1. **The mirror is upserted.** Every row of the list lands in ``WespaPlayer``,
-   whether or not Baxter has a player for it. That table is what the
-   registration page searches, and searching it is the reason this integration
-   exists (``plans/PLAN_WESPA.md`` decision 1).
-
-2. **Linked players get their rating.** A ``Player.wespa_id`` is an assertion
-   somebody made — a director picked the row when minting a guest, or confirmed
-   it here — so it is applied without further thought, even if the two names
-   have since diverged.
-
-3. **Unlinked players are matched by name, carefully.** A name belonging to
-   exactly one player *and* exactly one WESPA row links them. Anything else
-   links nobody and is held back for a human, because WESPA has no idea which
-   "John Smith" it means and a wrong rating is worse than a missing one.
+**Unlinked players are matched by name, carefully.** A name belonging to
+exactly one player *and* exactly one WESPA row links them. Anything else
+links nobody and is held back for a human, because WESPA has no idea which
+"John Smith" it means and a wrong rating is worse than a missing one.
 
 What does *not* happen is a player being created. The list has some 9,200
 players and Baxter's roster is CoCo's; a WESPA row becomes a ``Player`` only
-when a director enters one (decision 2). Nor is anything deleted: a row that
-drops out of the list stays in the mirror, exactly as the roster pull deletes
-nothing.
+when a director enters one. Nor is anything deleted: a row that drops out of
+the list stays in the mirror, exactly as the roster pull deletes nothing.
 
 ``Player.name`` is never overwritten from the list either. Baxter's names are
 the central database's, and WESPA's spelling of somebody is not a correction.
 
-Refreshing ratings mutates no replayable tournament state — entrants pinned
-theirs at entry (``PLAN_ENTRANTS.md`` decision 3) — so this stays an unlogged
-global action, like the roster import it is modelled on. It is also what makes
-an unattended weekly pull safe in the middle of an event.
+Refreshing ratings mutates no replayable tournament state; entrants pinned
+theirs at entry, so this stays an unlogged global action. It is also what
+makes an unattended pull safe in the middle of an event.
 """
 
 from dataclasses import dataclass, field
