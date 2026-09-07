@@ -26,30 +26,47 @@
 
   <section class="settings-section">
     <h2>Qualification</h2>
-    <p>
-      <label for="qualification_round">Qualify on the standings after round</label>
-      <select name="qualification_round" id="qualification_round"{% if has_results %} disabled{% endif %}>
-        {% for r in rounds %}
-        <option value="{{ r }}"{% if r == form.qualification_round %} selected{% endif %}>{{ r }}</option>
-        {% endfor %}
-      </select>
-    </p>
-    <p>
-      <label for="qualifier_count">Qualifiers</label>
-      <select name="qualifier_count" id="qualifier_count"{% if has_results %} disabled{% endif %}>
-        {% for count in qualifier_counts %}
-        <option value="{{ count }}"{% if count == form.qualifier_count %} selected{% endif %}>Top {{ count }}</option>
-        {% endfor %}
-      </select>
-    </p>
-    <p>
-      <label for="timing">Timing</label>
-      <select name="timing" id="timing"{% if has_results %} disabled{% endif %}>
-        {% for value, label in timings %}
-        <option value="{{ value }}"{% if value == form.timing %} selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
-    </p>
+    {% comment %}
+    The same label/control grid the settings page uses. These are hand-written
+    selects rather than form fields, so they carry the markup directly instead
+    of going through `_settings_field.html`; the empty help cell keeps each row
+    three columns wide so the controls stay in line.
+    {% endcomment %}
+    <div class="settings-fields">
+      <div class="settings-field">
+        <label for="qualification_round">Qualify on the standings after round</label>
+        <div class="settings-field-control">
+          <select name="qualification_round" id="qualification_round"{% if has_results %} disabled{% endif %}>
+            {% for r in rounds %}
+            <option value="{{ r }}"{% if r == form.qualification_round %} selected{% endif %}>{{ r }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <p class="settings-field-help"></p>
+      </div>
+      <div class="settings-field">
+        <label for="qualifier_count">Qualifiers</label>
+        <div class="settings-field-control">
+          <select name="qualifier_count" id="qualifier_count"{% if has_results %} disabled{% endif %}>
+            {% for count in qualifier_counts %}
+            <option value="{{ count }}"{% if count == form.qualifier_count %} selected{% endif %}>Top {{ count }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <p class="settings-field-help"></p>
+      </div>
+      <div class="settings-field">
+        <label for="timing">Timing</label>
+        <div class="settings-field-control">
+          <select name="timing" id="timing"{% if has_results %} disabled{% endif %}>
+            {% for value, label in timings %}
+            <option value="{{ value }}"{% if value == form.timing %} selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <p class="settings-field-help"></p>
+      </div>
+    </div>
     {% if not has_results %}
     <button type="submit" name="action" value="preview" class="btn-secondary">Preview</button>
     {% endif %}
