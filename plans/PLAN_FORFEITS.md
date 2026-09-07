@@ -277,7 +277,7 @@ Two notes for the phases that follow:
 *Verified:* suite green (1071); the new tests in `NotPlayedPredicateTests` fail
 against the old filters at four of the six sites.
 
-### Phase 2 — derive forfeits at pair and publish
+### Phase 2 — derive forfeits at pair and publish — **done**
 
 `regenerate_pairings` synthesizes a forfeit pairing (`entrant`, `bye_entrant`)
 for each `forfeits` entrant in each draft round, alongside the bye pairings it
@@ -286,13 +286,39 @@ engine never saw the withdrawn entrant, so the odd-field bye is computed on the
 remaining field and the forfeit rows are added on top.
 
 `materialize_byes` becomes `materialize_absences` and picks the direction from
-the real entrant's `dropped`/`forfeits` state at publish time.
+**`Pairing.forfeit`** — a new column, deviating from this plan's first draft,
+which read the entrant's `dropped` state at publish time. That state moves: an
+entrant who forfeits round 5 and rejoins for round 7 would make the round-5 row
+read as an ordinary bye afterwards. The row records what was decided when the
+round was paired, so it carries the decision. Encoding it in *which side* the
+bye sits on was the other option and was rejected for the reason in §5 —
+implicit orientation is what produced the asymmetry §6 had to clean up.
 
-*Verify:* withdraw-with-forfeits before round 5 of an 8-round division; rounds
-5–8 each gain one 0–50 slip on publish; standings show the losses and the −50s;
-the ratings export and `tournament_export` omit them; `replay --verify`
-reproduces the digest. Then rejoin before round 7 and confirm 5–6 keep their
-forfeits and 7–8 pair normally.
+**A pre-existing engine bug had to be fixed to get here.** `round_status` in
+`scrabble-pairing/src/pair.rs` counted withdrawn players among those a round is
+waiting on, so every round after a withdrawal read `Partial` forever and
+`can_pair` refused the next one: **dropping anybody stopped the tournament
+dead**, with or without forfeits. Withdrawn players are now excluded exactly as
+`inactive_players` already were. Only lowering `expected` is safe because the
+test is `real >= expected`, so a round the player did appear in still finishes.
+Forfeits masked the bug — a forfeiting entrant keeps appearing in every round's
+slips — which is why it surfaced only from the *without*-forfeits test.
+
+*Verified* (`tournaments/tests/test_forfeits.py`): rounds published while an
+entrant is withdrawn each gain one 0–50 slip; the standings show the losses and
+the −50s; the ratings projection counts only games actually played and both
+exports omit the forfeits; a rejoin keeps the earlier forfeits and pairs the
+later rounds normally; withdrawing *without* forfeits still records nothing; a
+bye and a forfeit coexist in one round without disturbing parity; and
+regenerating repeatedly neither duplicates the row nor moves the digest.
+
+**Replay is not fully exercisable until phase 3.** Re-deriving is
+digest-stable (tested above) and replay regenerates before every publish
+(`replay.NEEDS_REGEN`), so the derivation itself replays. But `Entrant.forfeits`
+is set out-of-band until `entrant_withdrawn` exists, so there is no event for a
+replay to read it from — a division flagged by hand today replays without its
+forfeits. Nothing existing is affected, since nothing sets the flag. The
+end-to-end `replay --verify` belongs to phase 3's verification.
 
 ### Phase 3 — splitting a paired game, and single-game forfeits
 
