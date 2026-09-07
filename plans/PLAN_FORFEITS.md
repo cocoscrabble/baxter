@@ -1,6 +1,6 @@
 # Plan: Forfeits and dropouts
 
-**Status: phase 1 done**, phases 2–5 not started. Design drafted 2026-09-07 for
+**Status: phases 1–2 done**, phases 3–5 not started. Design drafted 2026-09-07 for
 [issue #57](https://github.com/cocoscrabble/baxter/issues/57); code references
 pinned at commit `e3ad086`.
 
@@ -22,8 +22,9 @@ Four things follow from issue #57:
 4. Byes and forfeits can be entered in the edit-results grid, which today cannot
    express either.
 
-A forfeit is scored like a bye with the sign flipped: the absentee takes 0–50
-and −50 spread, and the game is **not rated**. Where a game was already paired,
+A forfeit is scored like a bye with the sign flipped: the absentee loses by the
+division's `bye_spread` (50 by default, 100 for a WESPA event) instead of
+winning by it, and the game is **not rated**. Where a game was already paired,
 the pairing is split so that both players end up with a bye-shaped row — the
 absentee's a forfeit, the opponent's a bye — which is what makes a withdrawal
 before pairing and one after it the same thing (§4).
@@ -50,7 +51,8 @@ charged a start — the rule `PairingData.for_division` already implements
 when its round is published, under `derived_writes()` — derived state, not a
 command, re-derived on replay. Forfeits ride the same path and become
 `materialize_absences`: for each pairing in the round with the bye on one side,
-write 50–0 if the real entrant is playing and 0–50 if they are withdrawn.
+award the division's `bye_spread` to the real entrant if they are playing, and
+charge it to them if they are withdrawn.
 
 **This is what answers "when did they drop", with no new time field.** The rounds
 an entrant forfeits are exactly the rounds that were published while they were

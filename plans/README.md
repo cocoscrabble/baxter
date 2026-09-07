@@ -89,8 +89,9 @@ Current plans:
   most bye filters are written `loser__player__is_bye`, so they mis-handle a slip
   with the bye on the winning side. **Phases 1–2 done** (the flags, the
   `played()` predicate, and forfeits derived at pair/publish — which turned up a
-  pre-existing engine bug where dropping anybody stalled all further pairing);
-  phases 3–5 not started.
+  pre-existing engine bug where dropping anybody stalled all further pairing).
+  The withdrawal policy and the jurisdictional bye spread are per-division
+  settings, not per-entrant flags; phases 3–5 not started.
 - `PLAN_PASSWORD_RESET.md` — self-service password reset by email. Gated on a
   **phase 0 go/no-go**: publish the domain's missing SPF and DKIM records,
   then prove the production host can send mail as `cocoscrabble.org` and have
