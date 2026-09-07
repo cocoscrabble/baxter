@@ -551,6 +551,9 @@ class ResultsGrid(EditGrid):
         "loser_id",
         "loser_score",
         "winner_started",
+        # Derived from the row's direction in ``prepare``, so an absence row
+        # flipped here keeps the slip's flag in step with the pairing's.
+        "forfeit",
     )
     columns = [
         Column("round", "Round", kind="number", min=1, width=100, auto_increment=True),
@@ -658,6 +661,7 @@ class ResultsGrid(EditGrid):
                 # nothing downstream would put it back. Derive it instead, as
                 # every other write path does.
                 kwargs["winner_started"] = slip.winner == bye_pk
+                kwargs["forfeit"] = slip.winner == bye_pk
             if pairing is None and bye_pk in (slip.winner, slip.loser):
                 # A bye or forfeit entered by hand for a round that never paired
                 # it. The row *is* the pairing — there is no game it stands in

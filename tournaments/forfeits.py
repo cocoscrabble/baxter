@@ -150,14 +150,29 @@ def _retire_bye(division, round_pairings, pairing, *, record_absence):
     if pairing.forfeit:
         return None
     slip = getattr(pairing, "result", None)
-    if slip is not None:
-        slip.delete()
-    if record_absence:
-        pairing.forfeit = True
-        pairing.save(update_fields=["forfeit"])
+    if not record_absence:
+        if slip is not None:
+            slip.delete()
+        pairing.delete()
+        round_pairings.update_status()
+        return {"round": round_pairings.round, "opponent": None}
+
+    pairing.forfeit = True
+    pairing.save(update_fields=["forfeit"])
+    if slip is None:
         materialize_absences(division, round_pairings.round)
     else:
-        pairing.delete()
+        # Turned round rather than rewritten, so a spread the director set on
+        # this row by hand survives: retiring a bye changes its *direction*, not
+        # its magnitude. Rewriting it from ``bye_spread`` would quietly undo a
+        # per-row override.
+        slip.winner, slip.loser = slip.loser, slip.winner
+        # The bye leads either way, so the real player is charged no start.
+        slip.winner_started = True
+        slip.forfeit = True
+        slip.save(
+            update_fields=["winner", "loser", "winner_started", "forfeit"]
+        )
     round_pairings.update_status()
     return {"round": round_pairings.round, "opponent": None}
 
