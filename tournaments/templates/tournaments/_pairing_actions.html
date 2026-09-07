@@ -1,0 +1,38 @@
+{% comment %}
+The action cell of a pairing row on the Pair-rounds tab: the result once there
+is one, the forfeit controls while there is still something to forfeit, and the
+simulate button on a test division.
+
+Shared by the two tables on that page (finished/in-progress, and
+pairable/published) so the controls cannot appear on one and not the other. They
+did: the forfeit buttons were only on the second table, so the moment a round
+took its first result and became in-progress there was no way left to forfeit
+the rest of it — which is exactly when a director needs one.
+
+Forfeiting is offered on a **bye** row too, not just a real game. A player who
+is absent for one round without withdrawing has their bye turned into a forfeit
+here; withdrawing them does the same thing for every round at once
+(plans/PLAN_FORFEITS.md §4a). A row that is already a forfeit offers nothing —
+there is nothing left to take.
+{% endcomment %}
+{% if entry.result %}{{ entry.result }}{% endif %}
+{% if can_edit and selected_status == 'published' or can_edit and selected_status == 'in_progress' %}
+    {% if entry.absence == 'bye' %}
+    <button type="button" class="btn-forfeit"
+        title="{{ entry.absent_player.display_name }} was absent: turn this bye into a forfeit loss"
+        data-on:click="@post('{% url 'forfeit_game' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {round: {{ selected_round }}, player: '{{ entry.absent_player.key }}'}})">{{ entry.absent_player.display_name }} forfeits</button>
+    {% elif not entry.absence and not entry.result %}
+    {% comment %}
+    Named after the players rather than "1st"/"2nd": a director looking at a
+    board knows who did not turn up, not which side of the slip they were on.
+    The opponent takes a bye, so neither game is rated.
+    {% endcomment %}
+    {% for side in entry.sides %}
+    <button type="button" class="btn-forfeit" title="{{ side.display_name }} forfeits this game; their opponent takes a bye"
+        data-on:click="@post('{% url 'forfeit_game' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {round: {{ selected_round }}, player: '{{ side.key }}'}})">{{ side.display_name }} forfeits</button>
+    {% endfor %}
+    {% endif %}
+{% endif %}
+{% if not entry.result and division.is_test and selected_status != 'pairable' %}
+<button type="button" class="btn-sim" data-on:click="@post('{% url 'simulate_match' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {round: {{ selected_round }}, first: '{{ entry.pairing.first.key }}', second: '{{ entry.pairing.second.key }}'}})">simulate</button>
+{% endif %}

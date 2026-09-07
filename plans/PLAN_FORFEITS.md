@@ -198,29 +198,45 @@ second of the two failures `doc/trouble.html` warns about.
   behaviour. See §6's note on the NSA `'alternate'` rule, which is a separate
   policy call.
 
-### 4a. Both players of one game withdrawing
+### 4a. A withdrawn player never keeps a winning bye
 
-The rare one: A and B are paired, A withdraws (so B takes a bye), and then B
-withdraws too. Whether they *both* forfeit is a judgement — B was there until A
-was not — so it is the director's to make, not a consequence.
+The rule, and it settles the awkward case: A and B are paired, A withdraws (so B
+takes a bye), and then B goes too.
 
-**The second withdrawal leaves the first one's shape alone.** A withdrawn
-entrant who already holds a bye-shaped row keeps it: nothing to dissolve, and a
-recorded bye stands. TSH does the same — `SpliceInactive` only fills a round
-with no score yet.
+**Withdrawing retires the bye.** An entrant who already holds a bye-shaped row
+has no game to dissolve and nobody to hand a bye to, but the row may still be a
+*winning* one, and a withdrawn player never keeps that. Under `FORFEIT` it
+becomes a forfeit (the slip is dropped and rewritten by `materialize_absences`,
+so the direction and the start still come from the one writer); under `OMIT` the
+row goes entirely, the same nothing that policy leaves for a dissolved game.
 
-**Converting it is the edit-results grid**, by swapping the row's Winner and
-Opponent. That is not a special case bolted on; it is what the grid already
-means, and `Pairing.forfeit` follows the score so the board cannot keep saying
-"bye" over a forfeit's result. It works both ways, so a mistake is recoverable.
-Too rare for a button, reachable without one.
+Not having to tell the two kinds of bye apart is what makes the rule usable. A
+bye from the round's own rotation and one handed over by an opponent's
+withdrawal are indistinguishable in the data, so a policy that treated them
+differently could not be implemented; this one does not need to.
 
-**One guard-ordering bug came out of this, and it was not rare at all.** A bye's
-result is written at publish, so asking "does this game have a result" *before*
-asking "is this a bye" turned every such withdrawal into the already-played
-refusal — and refused it whole, `dropped` flag included, since the command is
-atomic. An odd field byes a different player every round, so withdrawing
-somebody who happened to hold the current round's bye simply failed.
+So **withdrawing both players gives both a forfeit**, with no second step and no
+"forfeit both" button. Whether B is withdrawn at all stays the director's call —
+B was there until A was not.
+
+**When B is absent for one round only** and is not leaving, withdrawing them
+would be wrong. That case is `game_forfeited`, twice: the first turns the
+printed game into a forfeit and a bye, the second turns that bye into a forfeit
+as well. The Pair-rounds tab offers the same named button on a bye row for
+exactly this, and offers nothing on a row that is already a forfeit.
+
+**The grid is the way back.** Swapping an absence row's Winner and Opponent
+converts it either direction, and `Pairing.forfeit` follows the score, so the
+board never contradicts the result.
+
+**Two bugs came out of this corner, neither of them rare.** A bye's result is
+written at publish, so asking "does this game have a result" *before* asking "is
+this a bye" turned every such withdrawal into the already-played refusal — and
+refused it whole, `dropped` flag included, since the command is atomic. An odd
+field byes a different player every round. And the forfeit buttons lived only on
+the pairable/published table, so the moment a round took its first result and
+went in-progress there was no way left to forfeit the rest of it; the action
+cell is one shared partial now.
 
 ### 5. `ResultSlip.forfeit` — kept, but on a narrower footing
 

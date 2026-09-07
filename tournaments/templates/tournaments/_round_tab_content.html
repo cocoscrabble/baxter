@@ -47,13 +47,7 @@
                 <td>{% if entry.is_fixed %}&#x1F512;{% endif %}</td>
                 <td>{% if entry.absence %}<span class="tag tag-{{ entry.absence }}">{{ entry.absence }}</span>{% else %}{{ entry.pairing.second.display_name }}{% endif %}</td>
                 <td class="num">{% if entry.repeat_rounds %}{{ entry.repeat_rounds|length }}<span class="repeat-rounds">rd. {{ entry.repeat_rounds|join:", " }}</span>{% endif %}</td>
-                <td class="num">
-                    {% if entry.result %}
-                        {{ entry.result }}
-                    {% elif division.is_test %}
-                        <button type="button" class="btn-sim" data-on:click="@post('{% url 'simulate_match' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {round: {{ selected_round }}, first: '{{ entry.pairing.first.key }}', second: '{{ entry.pairing.second.key }}'}})">simulate</button>
-                    {% endif %}
-                </td>
+                <td class="num">{% include "tournaments/_pairing_actions.html" %}</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -122,27 +116,7 @@
                 <td>{% if entry.is_fixed %}&#x1F512;{% endif %}</td>
                 <td>{% if entry.absence %}<span class="tag tag-{{ entry.absence }}">{{ entry.absence }}</span>{% else %}{{ entry.pairing.second.display_name }}{% endif %}</td>
                 <td class="num">{% if entry.repeat_rounds %}{{ entry.repeat_rounds|length }}<span class="repeat-rounds">rd. {{ entry.repeat_rounds|join:", " }}</span>{% endif %}</td>
-                <td>
-                    {% if entry.result %}
-                        {{ entry.result }}
-                    {% else %}
-                        {% if division.is_test and selected_status == 'published' %}
-                        <button type="button" class="btn-sim" data-on:click="@post('{% url 'simulate_match' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {round: {{ selected_round }}, first: '{{ entry.pairing.first.key }}', second: '{{ entry.pairing.second.key }}'}})">simulate</button>
-                        {% endif %}
-                        {% if can_edit and selected_status == 'published' and not entry.absence %}
-                        {% comment %}
-                        Named after the players rather than "1st"/"2nd": a
-                        director looking at a board knows who did not turn up,
-                        not which side of the slip they were on. The opponent
-                        takes a bye, so neither game is rated.
-                        {% endcomment %}
-                        {% for side in entry.sides %}
-                        <button type="button" class="btn-forfeit" title="{{ side.display_name }} forfeits this game; their opponent takes a bye"
-                            data-on:click="@post('{% url 'forfeit_game' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {round: {{ selected_round }}, player: '{{ side.key }}'}})">{{ side.display_name }} forfeits</button>
-                        {% endfor %}
-                        {% endif %}
-                    {% endif %}
-                </td>
+                <td>{% include "tournaments/_pairing_actions.html" %}</td>
             </tr>
             {% endfor %}
         </tbody>

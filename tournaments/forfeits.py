@@ -93,10 +93,9 @@ def resolve_absence(division, round_pairings, entrant, *, record_absence):
     if pairing is not None:
         other = pairing.second if pairing.first_id == entrant.pk else pairing.first
         if other.player.is_bye:
-            # Already a bye or forfeit row, so there is no game to dissolve and
-            # nothing to give an opponent. Whatever is recorded stands: a bye
-            # they were handed stays a bye, which is what TSH does too
-            # (``SpliceInactive`` only fills a round with no score yet).
+            # Already a bye-shaped row, so there is no game to dissolve and
+            # nobody to hand a bye to — but it may still be a *winning* bye,
+            # and a withdrawn player never keeps one of those.
             #
             # **Checked before the result guard below, not after.** A bye's
             # result is written at publish, so asking about the result first
@@ -104,12 +103,9 @@ def resolve_absence(division, round_pairings, entrant, *, record_absence):
             # somebody who held the round's bye is not a corner case, an odd
             # field byes a different player every round. It refused the whole
             # withdrawal, flag included, because the command is atomic.
-            #
-            # Turning that bye into a forfeit is a judgement call, so it is left
-            # to the director rather than made here: flipping the row in the
-            # edit-results grid does it (both players of a dissolved game
-            # withdrawing is the case that wants it).
-            return None
+            return _retire_bye(
+                division, round_pairings, pairing, record_absence=record_absence
+            )
         if getattr(pairing, "result", None) is not None:
             raise ForfeitError(
                 f"{entrant.name}'s round {round_num} game already has a result."
@@ -132,6 +128,38 @@ def resolve_absence(division, round_pairings, entrant, *, record_absence):
         "round": round_num,
         "opponent": opponent.key if opponent is not None else None,
     }
+
+
+def _retire_bye(division, round_pairings, pairing, *, record_absence):
+    """Take the win off a withdrawn entrant's bye.
+
+    **A withdrawn player never gets the winning side of a bye**, whichever kind
+    it was: the round's own rotation bye, or one handed over when an opponent
+    withdrew first. Neither survives the player leaving, and not having to tell
+    them apart is what makes the rule usable — the data does not distinguish
+    them, and a policy that needed it to could not be implemented.
+
+    Under ``FORFEIT`` the row becomes a forfeit; the slip is dropped and
+    rewritten by ``materialize_absences``, so the direction and the start still
+    come from the one writer. Under ``OMIT`` the row goes entirely, which is the
+    same nothing that policy leaves for a dissolved game.
+
+    Already a forfeit means already retired, and returns None so the withdrawal
+    records no change for that round.
+    """
+    if pairing.forfeit:
+        return None
+    slip = getattr(pairing, "result", None)
+    if slip is not None:
+        slip.delete()
+    if record_absence:
+        pairing.forfeit = True
+        pairing.save(update_fields=["forfeit"])
+        materialize_absences(division, round_pairings.round)
+    else:
+        pairing.delete()
+    round_pairings.update_status()
+    return {"round": round_pairings.round, "opponent": None}
 
 
 def _open_rounds(division):
