@@ -1030,6 +1030,21 @@ class Pairing(models.Model):
         related_name="pairings_as_second",
     )
     repeats = models.IntegerField(default=0)
+    # Set on a bye-shaped row whose real player is *absent*, not byed: the bye
+    # entrant wins it and the player takes the loss (plans/PLAN_FORFEITS.md).
+    #
+    # A bye and a forfeit are the same shape — one real entrant against the bye —
+    # so something has to say which this is. Not derived from the entrant's
+    # ``dropped`` flag at publish time, because that flag moves: a player who
+    # forfeits round 5 and rejoins for round 7 would make the round-5 row read as
+    # an ordinary bye afterwards. The row is a record of what was decided when
+    # the round was paired, so it carries the decision.
+    #
+    # Not encoded in which side the bye sits on either, tempting as that is
+    # (TSH distinguishes them by the sign of the spread). Encoding "not played"
+    # implicitly in an orientation is what produced the asymmetry that
+    # ``ResultSlipQuerySet.played`` had to clean up.
+    forfeit = models.BooleanField(default=False)
     # ``table`` is the integer order index (also groups boards that share a
     # physical double table). ``table_label`` is the display string shown to
     # organizers (e.g. "S1" for a streamed table); empty falls back to ``table``.

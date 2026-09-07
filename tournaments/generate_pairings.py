@@ -42,36 +42,50 @@ def _is_bye_key(key):
     return key.casefold() == BYE_PLAYER_NUMBER.casefold()
 
 
-def materialize_byes(division, round_num):
-    """Record the automatic win for each byed player in a round (idempotent).
+def materialize_absences(division, round_num):
+    """Record the automatic result for each bye and forfeit in a round.
 
     Called when a round is published, so the round can reach 'finished' without
-    the director entering the bye by hand. The byed (real) player wins at a fixed
-    spread; the bye entrant is the notional starter, so the real player is not
-    charged a start.
+    the director entering either by hand. Idempotent: only pairings with no
+    result yet are touched.
+
+    A bye and a forfeit are the same row with the winner the other way round.
+    The byed player wins at a fixed spread; the *absent* player loses by it, to
+    the bye entrant. Which one this is comes from ``Pairing.forfeit``, recorded
+    when the round was paired — not from the entrant's current ``dropped``
+    state, which a rejoin moves out from under an already-published round.
+
+    In both directions the bye entrant is the notional starter, so no real
+    player is charged a start: ``winner_started`` is true exactly when the bye
+    is the winner.
     """
-    bye_pairings = (
+    absences = (
         division.pairings.filter(round=round_num, result__isnull=True)
         .filter(Q(first__player__is_bye=True) | Q(second__player__is_bye=True))
         .select_related("first__player", "second__player")
     )
-    # Derived state (not a command): the bye result is a consequence of publish,
+    # Derived state (not a command): the result is a consequence of publish,
     # re-derived on replay.
     with derived_writes():
-        for p in bye_pairings:
+        for p in absences:
             if p.first.player.is_bye:
                 bye_entrant, real_entrant = p.first, p.second
             else:
                 bye_entrant, real_entrant = p.second, p.first
+            if p.forfeit:
+                winner, loser = bye_entrant, real_entrant
+            else:
+                winner, loser = real_entrant, bye_entrant
             ResultSlip.objects.create(
                 division=division,
                 round=round_num,
                 pairing=p,
-                winner=real_entrant,
+                winner=winner,
                 winner_score=BYE_WINNER_SCORE,
-                loser=bye_entrant,
+                loser=loser,
                 loser_score=BYE_LOSER_SCORE,
-                winner_started=False,
+                winner_started=winner.player.is_bye,
+                forfeit=p.forfeit,
             )
 
 
@@ -79,8 +93,8 @@ def publish_rounds(division, round_numbers=None):
     """Publish draft rounds, auto-record their byes, and refresh round status.
 
     ``round_numbers=None`` publishes every draft round. Returns the rounds
-    actually published. Centralises publishing so a bye is always recorded the
-    moment its round goes live.
+    actually published. Centralises publishing so a bye or forfeit is always
+    recorded the moment its round goes live.
     """
     if playoff_for(division) is not None:
         # A playoff round's contents depend on results that may have landed
@@ -93,14 +107,15 @@ def publish_rounds(division, round_numbers=None):
     qs = division.round_pairings_set.filter(status=RoundPairings.DRAFT)
     if round_numbers is not None:
         qs = qs.filter(round__in=round_numbers)
-    # Flip the status, materialize byes, and refresh status atomically: a crash
-    # partway through must not leave a PUBLISHED round whose byes were never
-    # recorded (it could then never reach FINISHED without manual entry).
+    # Flip the status, materialize the byes and forfeits, and refresh status
+    # atomically: a crash partway through must not leave a PUBLISHED round whose
+    # derived results were never recorded (it could then never reach FINISHED
+    # without manual entry).
     with transaction.atomic():
         published = list(qs.values_list("round", flat=True))
         qs.update(status=RoundPairings.PUBLISHED)
         for round_num in published:
-            materialize_byes(division, round_num)
+            materialize_absences(division, round_num)
             rp = division.round_pairings_set.filter(round=round_num).first()
             if rp:
                 rp.update_status()
@@ -294,6 +309,10 @@ def regenerate_pairings(division):
         e.player.player_number: e
         for e in division.entrants.select_related("player")
     }
+    # Withdrawn entrants whose absence is recorded rather than merely omitted.
+    # ``forfeits`` only means anything alongside ``dropped``: an entrant still
+    # being paired plays their games, and has nothing to forfeit.
+    forfeiting = list(division.entrants.filter(dropped=True, forfeits=True))
     # Lazily resolve the bye opponent (created on first odd round) and map its
     # engine key to the division's bye entrant.
     bye_entrant = None
@@ -476,7 +495,7 @@ def regenerate_pairings(division):
             )
 
         # Bye pairings carry no table; the bye result is recorded when the round
-        # is published (see materialize_byes). Show the real player first for
+        # is published (see materialize_absences). Show the real player first for
         # readability — orientation is display-only, the result encodes the win.
         for p, first_entrant, second_entrant in bye_pairings:
             if _is_bye_key(p.first.key):
@@ -489,6 +508,23 @@ def regenerate_pairings(division):
                 second=second_entrant,
                 repeats=p.repeats,
                 table=0,
+            )
+
+        # A withdrawn entrant whose absence is recorded as forfeits gets the same
+        # shape, flagged. These are added *on top* of what the engine returned
+        # rather than mixed into it: the engine never saw the withdrawn entrant
+        # (``dropped`` removes them from the pairable field), so the odd-field
+        # bye above was computed on the remaining players and adding these
+        # cannot disturb its parity.
+        for entrant in forfeiting:
+            Pairing.objects.create(
+                division=division,
+                round=round_num,
+                round_pairings=rp_obj,
+                first=entrant,
+                second=division.bye_entrant(),
+                table=0,
+                forfeit=True,
             )
 
     if bracket is not None:
