@@ -342,6 +342,49 @@ class DivisionSettings(models.Model):
     # means the engine's built-in defaults, which are DEFAULT_SWISS_CONFIG.
     swiss_config = models.JSONField(default=dict)
 
+    # -- how this division scores absences ----------------------------------
+
+    # Points of spread awarded for a bye, and charged for a forfeit. **Not a
+    # constant, because it is jurisdictional**: 50 under NSA rules (the default,
+    # and what CoCo runs on), 75 under ABSP, 100 under WESPA and in Thailand,
+    # 300 in Poland — TSH carries the same number per `realm`. Baxter mirrors
+    # the WESPA rating list and enters WESPA-only visitors, so a WESPA event
+    # needs this to be 100 and had no way to say so.
+    bye_spread = models.IntegerField(default=50)
+
+    # What a withdrawal does to the rounds the entrant is no longer playing.
+    #
+    # A *division* setting, not a per-entrant flag: "is this player out" is a
+    # fact about an entrant, but "how does this tournament record an absence" is
+    # a rule, answered once from the rulebook. An earlier draft put it on the
+    # entrant and produced three valid states across two booleans with one
+    # meaningless combination, which is the usual sign of a rule wearing a
+    # fact's clothes.
+    #
+    # TSH is per-player here (``Deactivate($spread)``), and the reason is real —
+    # a round-1 no-show, a player leaving after round 5, and a lenient exit are
+    # different calls in one event. A per-entrant override can be added on top
+    # of this default when somebody asks for it; the reverse leaves both to
+    # maintain.
+    #
+    # OMIT is the default because it is what Baxter did before the setting
+    # existed, so a division that never saw this field behaves as it always did.
+    OMIT, FORFEIT = "omit", "forfeit"
+    WITHDRAWAL_CHOICES = [
+        # Paired around, and nothing recorded: the rounds simply are not theirs.
+        (OMIT, "Leave the rounds blank"),
+        # A loss of ``bye_spread`` to the bye entrant, every round they miss.
+        (FORFEIT, "Record forfeit losses"),
+    ]
+    # A CharField rather than a boolean because TSH shows the space has four
+    # points, not two: it also supports scoring an absence as a bye every round
+    # (``off 50``) and as an unscored non-event that is neither win nor loss
+    # (``off 0``). Those are not built; this field takes them without changing
+    # shape when they are.
+    withdrawal = models.CharField(
+        max_length=16, choices=WITHDRAWAL_CHOICES, default=OMIT
+    )
+
     def __str__(self):
         return f"Settings for {self.division}"
 
@@ -587,21 +630,6 @@ class Entrant(models.Model):
     # repeats, and spread. Finished rounds are never re-paired, so a boolean is
     # enough — we never need to know *when* they withdrew.
     dropped = models.BooleanField(default=False)
-    # Whether this entrant's absence is recorded as forfeits: while dropped,
-    # every round published without them gets a 0–50 slip against the bye
-    # entrant (plans/PLAN_FORFEITS.md). The rounds they forfeit are exactly the
-    # rounds published while they were withdrawn, which is why withdrawing needs
-    # no "as of round N" — the log already orders the withdrawal against the
-    # publishes around it, and rejoining leaves the earlier forfeits standing.
-    #
-    # Separate from ``dropped`` on purpose. ``dropped`` alone keeps meaning
-    # "withdrawn, leaving no trace in later rounds" — what every existing log
-    # recorded, and what ``division_digest`` hashes. Deriving forfeits from it
-    # would make every pre-log withdrawal replay to slips its recorded digest
-    # does not have. This flag is deliberately *not* in the digest for the same
-    # reason: its whole effect is the forfeit slips, and those are hashed
-    # already.
-    forfeits = models.BooleanField(default=False)
 
     # -- pinned ratings -----------------------------------------------------
 

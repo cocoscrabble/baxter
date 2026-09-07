@@ -503,7 +503,7 @@ def import_division(tournament, actor, payload):
     — but the log records what was imported, not a re-keyed rewrite of it."""
     from collections import defaultdict
 
-    from tournaments.generate_pairings import BYE_LOSER_SCORE, BYE_WINNER_SCORE
+    from tournaments.generate_pairings import BYE_LOSER_SCORE, absence_spread
     from tournaments.grids import resolve_player
     from tournaments.models import Entrant, Pairing, Player, RoundPairings
     from tournaments.pairing.round_pairing import blocks_to_round_pairings
@@ -577,7 +577,7 @@ def import_division(tournament, actor, payload):
             )
             ResultSlip.objects.create(
                 division=division, round=round_num, pairing=pairing,
-                winner=e, winner_score=BYE_WINNER_SCORE,
+                winner=e, winner_score=absence_spread(division),
                 loser=bye_ent, loser_score=BYE_LOSER_SCORE, winner_started=False,
             )
             inferred_byes.append([round_num, e.player.name])

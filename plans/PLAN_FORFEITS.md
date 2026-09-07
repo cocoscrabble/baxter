@@ -62,29 +62,46 @@ are published and record forfeits. Rejoin before round 7; round 7 pairs them
 normally, and rounds 5–6 keep the slips written when *they* were published.
 Nothing is backfilled, because nothing was ever missing.
 
-### 3. A separate `Entrant.forfeits` flag, so old logs replay unchanged
+### 3. The withdrawal policy is a division setting, not a per-entrant flag
 
-`dropped` keeps its current meaning: withdrawn, leaving no trace in later rounds.
-That is what every existing log recorded, and `division_digest` hashes it
-(`tournaments/events.py:293`). If publish started generating forfeits for every
-dropped entrant, replaying an old log would produce slips its recorded digest
-does not have, and every pre-existing tournament with a withdrawal would fail
-`--verify`.
+`Entrant.dropped` keeps its current meaning — withdrawn, leaving no trace in
+later rounds — and stays a bare boolean. That is what every existing log
+recorded and what `division_digest` hashes (`tournaments/events.py:293`); if
+publish started generating forfeits for every dropped entrant, replaying an old
+log would produce slips its recorded digest does not have, and every
+pre-existing tournament with a withdrawal would fail `--verify`.
 
-So withdrawing *with* forfeits is a new, separately recorded decision:
-`Entrant.forfeits` (default `False`), set by a new `entrant_withdrawn` command.
-This is the `entrants_reseeded` precedent — its own event precisely so that
-every payload written before the feature existed replays exactly as it always
-did.
+What decides whether a withdrawal is *recorded* lives on the division:
 
-It is also a real distinction directors want. Removing a player from a small
-club event should leave no forfeit losses; withdrawing one from a rated event
-usually should. The two paths stay separate: the entrants grid's `Dropped`
-column keeps meaning the first, the Withdraw button means the second.
+```
+DivisionSettings.bye_spread   int, default 50       # the jurisdictional magnitude
+DivisionSettings.withdrawal   omit (default) | forfeit
+```
 
-`forfeits` stays **out of the digest**, for the same backward-compatibility
-reason. It needs no place there: its whole effect is the forfeit slips, and
-`results` is already hashed.
+**Why the division and not the entrant.** "Is this player out" is a fact about
+an entrant; "how does this tournament record an absence" is a rule, answered
+once from the rulebook. An earlier draft put it on the entrant as
+`Entrant.forfeits` and produced three valid states across two booleans with one
+meaningless combination (`forfeits` without `dropped`) — the usual sign of a
+rule wearing a fact's clothes. It also belongs beside `bye_spread`, which is
+needed anyway: 50 under NSA, 75 ABSP, **100 WESPA and Thailand**, 300 Poland,
+and Baxter enters WESPA-only visitors while hardcoding 50.
+
+`OMIT` is the default because it is what Baxter did before the setting existed,
+so replay of an old log is unaffected — the same backward-compatibility the
+per-entrant flag had. `DivisionSettings` is outside `division_digest` entirely
+(it is rebuilt from `division_settings_saved`), so nothing else changes.
+
+**`withdrawal` is a choice, not a boolean**, because TSH shows the space has four
+points rather than two: it also scores an absence as a bye every round
+(`off 50`) and as an unscored non-event that is neither win nor loss (`off 0`).
+Those are not built; the field takes them without changing shape.
+
+**Per-entrant is deferred, not rejected.** TSH is per-player
+(`Deactivate($spread)`) and the reason is real — a round-1 no-show, a player
+leaving after round 5, and a lenient exit are different calls in one event. An
+override on top of this default can be added when someone asks; starting
+per-entrant and adding a default later leaves both to maintain.
 
 ### 4. The corner case — the pairing is split, and the split is recorded
 
@@ -199,12 +216,10 @@ is the rejoin case. So the shape of this plan matches the reference.
 
 **Six things it does that this plan does not.**
 
-1. **The spread is configurable, and jurisdictional.** `bye_spread` is 50 under
-   NSA rules, **75** under ABSP, **100** under WESPA and in Thailand, 300 in
-   Poland. Baxter hardcodes `BYE_WINNER_SCORE = 50`. Baxter mirrors the WESPA
-   rating list and enters WESPA-only visitors, so a WESPA event run in Baxter
-   currently scores its byes wrong. `floss` also takes a per-call spread, so a
-   one-off forfeit can be scored differently from the tournament default.
+1. ~~**The spread is configurable, and jurisdictional.**~~ **Closed** —
+   `DivisionSettings.bye_spread` (§3). 50 under NSA, 75 ABSP, 100 WESPA and
+   Thailand, 300 Poland. Still outstanding: `floss` takes a *per-call* spread,
+   so a one-off forfeit can be scored differently from the tournament default.
 
 2. **There is a third outcome: the unscored game.** `off 0` "will record a missed
    game without assigning a win or loss"; `bye_spread = 0` makes byes "count
@@ -218,9 +233,10 @@ is the rejoin case. So the shape of this plan matches the reference.
    nonevent.
 
 4. **Withdrawal carries a spread, not a boolean.** `Deactivate($spread)` stores
-   an integer, and the three modes above are just its sign. `Entrant.forfeits`
-   as a boolean collapses that to two cases; a nullable integer would carry all
-   three through the same machinery, and is the same field either way.
+   an integer, and the modes above are just its sign. Partly closed: the
+   magnitude is now `bye_spread` and the mode is `withdrawal`, a choice field
+   with room for the other two points (§3). Still outstanding: the modes
+   themselves, and that TSH sets them per player rather than per division.
 
 5. **A forfeit counts toward bye distribution — and decision 4 breaks that.**
    `CountByes` counts every round with opponent 0 *regardless of sign*, and that
@@ -260,7 +276,8 @@ default and needs a config to show them; Baxter shows them always
 ### Phase 1 — the predicate — **done**
 
 `ResultSlip.forfeit` and `Entrant.forfeits` (migration `0045_forfeit_flags`,
-both default `False`), `ResultSlipQuerySet.played()` / `.not_played()` with
+both default `False`; `Entrant.forfeits` was later moved to
+`DivisionSettings.withdrawal` — see §3 — and removed in `0047`), `ResultSlipQuerySet.played()` / `.not_played()` with
 `ResultSlip.is_played` beside them, and the six call sites in §6 moved onto
 them. Nothing sets either flag yet.
 
@@ -280,7 +297,8 @@ against the old filters at four of the six sites.
 ### Phase 2 — derive forfeits at pair and publish — **done**
 
 `regenerate_pairings` synthesizes a forfeit pairing (`entrant`, `bye_entrant`)
-for each `forfeits` entrant in each draft round, alongside the bye pairings it
+for each dropped entrant in each draft round, when the division's `withdrawal`
+setting says `forfeit`, alongside the bye pairings it
 already sets aside (`generate_pairings.py:479`). Parity is unaffected: the
 engine never saw the withdrawn entrant, so the odd-field bye is computed on the
 remaining field and the forfeit rows are added on top.
@@ -314,11 +332,11 @@ regenerating repeatedly neither duplicates the row nor moves the digest.
 
 **Replay is not fully exercisable until phase 3.** Re-deriving is
 digest-stable (tested above) and replay regenerates before every publish
-(`replay.NEEDS_REGEN`), so the derivation itself replays. But `Entrant.forfeits`
-is set out-of-band until `entrant_withdrawn` exists, so there is no event for a
-replay to read it from — a division flagged by hand today replays without its
-forfeits. Nothing existing is affected, since nothing sets the flag. The
-end-to-end `replay --verify` belongs to phase 3's verification.
+(`replay.NEEDS_REGEN`), so the derivation itself replays. But nothing writes
+`DivisionSettings.withdrawal` through a command yet, so there is no event for a
+replay to read it from — a division set by hand today replays as `omit`.
+Nothing existing is affected, since the default *is* `omit`. Phase 3 adds the
+command and owns the end-to-end `replay --verify`.
 
 ### Phase 3 — splitting a paired game, and single-game forfeits
 

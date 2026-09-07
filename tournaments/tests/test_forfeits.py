@@ -15,7 +15,12 @@ from tournaments.generate_pairings import (
 )
 from tournaments.events import division_digest
 from tournaments.live_ratings import project_ratings
-from tournaments.models import Entrant, ResultSlip, RoundPairings
+from tournaments.models import (
+    DivisionSettings,
+    Entrant,
+    ResultSlip,
+    RoundPairings,
+)
 from tournaments.pairing.base import PairingData, standings_after_round
 from tournaments.tests.test_byes import make_division
 from tournaments.tournament_export import ExportTournament
@@ -43,16 +48,27 @@ class DerivedForfeitTests(TestCase):
             )
         self.division.round_pairings_set.get(round=round_num).update_status()
 
+    def set_settings(self, **fields):
+        # Through the object, not a queryset update: ``division.settings`` is a
+        # cached reverse relation, and the pairing code reads it off the same
+        # division instance these tests hand it.
+        settings = self.division.settings
+        for name, value in fields.items():
+            setattr(settings, name, value)
+        settings.save(update_fields=list(fields))
+
+    def set_policy(self, policy):
+        self.set_settings(withdrawal=policy)
+
     def withdraw(self, *, forfeits=True):
-        self.division.entrants.filter(pk=self.entrant.pk).update(
-            dropped=True, forfeits=forfeits
+        self.set_policy(
+            DivisionSettings.FORFEIT if forfeits else DivisionSettings.OMIT
         )
+        self.division.entrants.filter(pk=self.entrant.pk).update(dropped=True)
         self.division.round_pairings_set.filter(status=RoundPairings.DRAFT).delete()
 
     def rejoin(self):
-        self.division.entrants.filter(pk=self.entrant.pk).update(
-            dropped=False, forfeits=False
-        )
+        self.division.entrants.filter(pk=self.entrant.pk).update(dropped=False)
         self.division.round_pairings_set.filter(status=RoundPairings.DRAFT).delete()
 
     def pairing_for(self, entrant, round_num):
@@ -141,6 +157,16 @@ class DerivedForfeitTests(TestCase):
             self.assertFalse(
                 pairing.first.player.is_bye or pairing.second.player.is_bye
             )
+
+    def test_the_spread_comes_from_the_division_not_a_constant(self):
+        # A WESPA event scores byes and forfeits at 100, not the NSA 50.
+        self.set_settings(bye_spread=100)
+        self.withdraw()
+        self.play(1)
+        slip = self.forfeits_in(1).get()
+        self.assertEqual(slip.winner_score, 100)
+        bye = self.division.result_slips.get(loser__player__is_bye=True)
+        self.assertEqual(bye.winner_score, 100)
 
     def test_withdrawing_without_forfeits_records_nothing(self):
         self.play(1)
