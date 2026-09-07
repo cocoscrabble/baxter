@@ -276,6 +276,110 @@ class ByeInResultsGridTests(TestCase):
         self.assertNotIn("Bye", labels)
 
 
+class EditByeAndForfeitRowsTests(TestCase):
+    """A bye or forfeit slip already in the table has to be *editable* there —
+    it is a row like any other, and the director who wants to correct one has
+    nowhere else to go."""
+
+    def setUp(self):
+        from tournaments.grids import ResultsGrid
+
+        self.user = User.objects.create_user(username="e", password="p")
+        self.division = make_division(self.user, 3, 2)
+        regenerate_pairings(self.division)
+        publish_rounds(self.division, [1])
+        self.grid = ResultsGrid()
+        self.bye_entrant = self.division.bye_entrant()
+
+    def rows(self):
+        return [self.grid.serialize_row(s) for s in self.grid.queryset(self.division)]
+
+    def bye_row(self, rows):
+        return next(r for r in rows if self.bye_entrant.pk in (r["winner"], r["loser"]))
+
+    def save(self, rows):
+        validated, errors = self.grid.validate(rows, self.division)
+        if errors:
+            return errors
+        prepared, errors = self.grid.prepare(self.division, validated)
+        if errors:
+            return errors
+        self.grid.persist(self.division, prepared)
+        return []
+
+    def test_a_bye_can_be_rescored(self):
+        rows = self.rows()
+        self.bye_row(rows)["winner_score"] = 0
+        self.assertEqual(self.save(rows), [])
+        slip = self.division.result_slips.get(loser__player__is_bye=True)
+        self.assertEqual((slip.winner_score, slip.loser_score), (0, 0))
+
+    def test_a_bye_row_can_be_deleted(self):
+        rows = [r for r in self.rows() if self.bye_entrant.pk not in (r["winner"], r["loser"])]
+        self.assertEqual(self.save(rows), [])
+        self.assertFalse(
+            self.division.result_slips.filter(loser__player__is_bye=True).exists()
+        )
+
+    def test_a_bye_cannot_be_reassigned_to_another_player(self):
+        # Who got the bye is the printed board's business, not the result
+        # table's: there is no pairing for the match this would describe.
+        rows = self.rows()
+        row = self.bye_row(rows)
+        other = next(
+            e.pk for e in self.division.entrants.all() if e.pk != row["winner"]
+        )
+        row["winner"] = other
+        self.assertTrue(self.save(rows))
+
+    def test_the_started_column_is_derived_on_a_bye_row(self):
+        # Not a free choice: winner_started orients the pairing the engine
+        # replays into its start ledger, so ticking "Winner" here would charge
+        # the byed player a start they never took, and correct_result_starts
+        # skips bye pairings so nothing would put it back.
+        rows = self.rows()
+        self.bye_row(rows)["winner_started"] = True
+        self.assertEqual(self.save(rows), [])
+        slip = self.division.result_slips.get(loser__player__is_bye=True)
+        self.assertFalse(slip.winner_started)
+
+    def test_a_forfeit_row_round_trips_and_derives_its_start(self):
+        """A forfeit is a bye with the sign flipped — the bye entrant wins 50-0.
+        The grid has to carry it the same way, with the start derived the other
+        way round (the bye is still the notional starter)."""
+        rows = self.rows()
+        row = self.bye_row(rows)
+        row["winner"], row["loser"] = row["loser"], row["winner"]
+        row["winner_score"], row["loser_score"] = BYE_WINNER_SCORE, 0
+        row["winner_started"] = False
+        self.assertEqual(self.save(rows), [])
+        slip = self.division.result_slips.get(winner__player__is_bye=True)
+        self.assertEqual((slip.winner_score, slip.loser_score), (BYE_WINNER_SCORE, 0))
+        self.assertTrue(slip.winner_started)
+
+    def test_a_forfeit_leaves_the_ledger_orientation_bye_first(self):
+        from tournaments.pairing.base import PairingData, Pairings
+
+        rows = self.rows()
+        row = self.bye_row(rows)
+        forfeiter = row["winner"]
+        row["winner"], row["loser"] = row["loser"], row["winner"]
+        self.assertEqual(self.save(rows), [])
+
+        pairings = Pairings()
+        for slip in PairingData.for_division(self.division).result_slips:
+            pairings.add_result_slip(slip)
+        bye_game = next(
+            p for p in pairings if "BYE" in (p.first.key, p.second.key)
+        )
+        # The bye leads, so the real player is charged no start.
+        self.assertEqual(bye_game.first.key, "BYE")
+        self.assertEqual(
+            bye_game.second.key,
+            Entrant.all_objects.get(pk=forfeiter).player.player_number,
+        )
+
+
 class ByeRotationTests(TestCase):
     def test_no_player_gets_a_second_bye_until_all_have_one(self):
         user = User.objects.create_user(username="rot", password="p")
