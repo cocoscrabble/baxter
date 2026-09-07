@@ -261,33 +261,27 @@ the pairable/published table, so the moment a round took its first result and
 went in-progress there was no way left to forfeit the rest of it; the action
 cell is one shared partial now.
 
-### 5. `ResultSlip.forfeit` — kept, but on a narrower footing
+### 5. `ResultSlip.forfeit` — added, then removed
 
-**Its original justification is gone.** The flag was introduced (phase 1, already
-landed) for a slip sitting on an ordinary pairing between two real entrants,
-where nothing else could distinguish "X forfeited to Y" from "Y beat X 50–0".
-Splitting means no such slip exists: every forfeit now carries the bye entrant,
-as the *winner*, and is identifiable by that alone — TSH's own scheme, where the
-sign of the spread is the whole distinction.
+It was introduced in phase 1 for the design decision 4 later reversed: a forfeit
+recorded on an intact pairing between two *real* entrants, where nothing else
+could distinguish "X forfeited to Y" from "Y beat X 50–0". Splitting means no
+such slip exists — every forfeit carries the bye entrant, as the winner — so
+`ResultSlipQuerySet.played()` recognises one from the bye alone.
 
-It stays for two narrower reasons, and the `forfeit=True` clause in `played()`
-is dead weight until the second one lands:
+It was kept a while longer for the unscored game, and that expired too: a 0–0
+absence row already scores as a tie (§3b), and the only thing left unexpressed
+is a true nonevent, which needs the engine taught to read a marker rather than
+the marker itself. Removed in `0048_drop_resultslip_forfeit`.
 
-- **Explicitness.** Encoding "not played" implicitly in *which side* the bye sat
-  on is precisely what produced the asymmetry §6 fixes — six call sites that all
-  assumed the bye could only win. A column that says what the row is does not
-  have that failure mode.
-- ~~**The unscored game is coming.**~~ **This one has expired.** A 0–0 absence
-  row already scores as a tie (§3b, TSH gap 2), and the only thing left
-  unexpressed — a true nonevent — needs an engine-boundary change, not this
-  column: the outcome is derived from the spread, so a marker only helps if the
-  engine is taught to read it.
+**`Pairing.forfeit` stays**, and is a different thing: the setting says what to
+do, the pairing row records what *was* done, and it has to survive a later
+change of policy. It is also what the display reads — a bye and a forfeit are
+the same shape, so nothing can tell them apart without it.
 
-**So the column is now doing nothing.** `played()` excludes anything with the
-bye on either side, and since decision 4 every forfeit carries the bye, so the
-`forfeit=True` clause is unreachable. It is one migration to remove, plus the
-usual renumber of the digest backfill. Remove it unless the nonevent gets
-built.
+The lesson worth keeping: the flag was speculative from the start, justified
+twice on cases that never arrived, and both times the honest test was "what
+breaks without it".
 
 ### 6. Fix the `loser__player__is_bye` asymmetry while we are here
 
@@ -393,8 +387,9 @@ default and needs a config to show them; Baxter shows them always
 ### Phase 1 — the predicate — **done**
 
 `ResultSlip.forfeit` and `Entrant.forfeits` (migration `0045_forfeit_flags`,
-both default `False`; `Entrant.forfeits` was later moved to
-`DivisionSettings.withdrawal` — see §3 — and removed in `0047`), `ResultSlipQuerySet.played()` / `.not_played()` with
+both default `False`; both were later removed — `Entrant.forfeits` moved to
+`DivisionSettings.withdrawal` in `0047` (§3), `ResultSlip.forfeit` dropped in
+`0048` (§5)), `ResultSlipQuerySet.played()` / `.not_played()` with
 `ResultSlip.is_played` beside them, and the six call sites in §6 moved onto
 them. Nothing sets either flag yet.
 

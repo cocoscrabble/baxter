@@ -217,7 +217,6 @@ def materialize_absences(division, round_num):
                 loser=loser,
                 loser_score=BYE_LOSER_SCORE,
                 winner_started=winner.player.is_bye,
-                forfeit=p.forfeit,
             )
 
 
