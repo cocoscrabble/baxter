@@ -9,8 +9,10 @@ withdrawn, which is what makes rejoining need no backfill.
 from django.db import models
 from django.test import TestCase
 
+from tournaments.forfeits import withdraw_entrant
 from tournaments.generate_pairings import (
     BYE_WINNER_SCORE,
+    materialize_absences,
     publish_rounds,
     regenerate_pairings,
 )
@@ -427,3 +429,100 @@ class HandEnteredAbsenceReplayTests(TestCase):
         forfeit = rebuilt.pairings.get(round=1, forfeit=True)
         self.assertEqual(forfeit.first.player.player_number, absentee.key)
         self.assertEqual(forfeit.result.winner_score, 50)
+
+
+class OverridingOneAbsenceSpreadTests(TestCase):
+    """The spread on a single bye or forfeit, set by hand in the results grid.
+
+    ``bye_spread`` is the division's rule; this is the exception to it for one
+    row. TSH has the same split — ``bye_spread`` is realm config, and ``floss``
+    takes a per-call spread — and a director needs it for the game somebody
+    conceded rather than missed.
+    """
+
+    def setUp(self):
+        from tournaments.grids import ResultsGrid
+
+        self.user = User.objects.create_user(username="ov", password="p")
+        self.division = make_division(self.user, 5, 4, first_number=960)
+        self.division.entrants.update(rating=1500, rating_source=Entrant.COCO)
+        settings = self.division.settings
+        settings.withdrawal = DivisionSettings.FORFEIT
+        settings.save(update_fields=["withdrawal"])
+        regenerate_pairings(self.division)
+        publish_rounds(self.division, [1])
+        self.grid = ResultsGrid()
+        self.bye_pk = self.division.bye_entrant().pk
+
+    def save(self, mutate):
+        rows = []
+        for slip in self.grid.queryset(self.division):
+            row = self.grid.serialize_row(slip)
+            mutate(row)
+            rows.append(row)
+        validated, errors = self.grid.validate(rows, self.division)
+        self.assertEqual(errors, [])
+        prepared, errors = self.grid.prepare(self.division, validated)
+        self.assertEqual(errors, [])
+        self.grid.persist(self.division, prepared)
+        self.grid.after_save(self.division)
+
+    def byed_entrant(self):
+        return self.division.pairings.get(
+            round=1, second__player__is_bye=True
+        ).first
+
+    def set_spread(self, points):
+        def mutate(row):
+            if self.bye_pk in (row["winner"], row["loser"]):
+                row["winner_score"] = points
+        self.save(mutate)
+
+    def test_one_rows_spread_can_differ_from_the_divisions(self):
+        self.set_spread(75)
+        slip = self.division.result_slips.get(winner=self.byed_entrant())
+        self.assertEqual(slip.winner_score, 75)
+        self.assertEqual(self.division.settings.bye_spread, 50)
+
+    def test_the_override_survives_re_deriving_the_round(self):
+        # materialize_absences only fills a row with no result, and regenerating
+        # leaves published rounds alone — but this is the pin, because both run
+        # on nearly every page load.
+        self.set_spread(75)
+        materialize_absences(self.division, 1)
+        regenerate_pairings(self.division)
+        self.assertEqual(
+            self.division.result_slips.get(winner=self.byed_entrant()).winner_score,
+            75,
+        )
+
+    def test_the_override_survives_the_bye_being_retired(self):
+        # Withdrawing turns a bye into a forfeit. That changes its direction,
+        # not its magnitude: rewriting it from bye_spread would quietly undo
+        # what the director set.
+        byed = self.byed_entrant()
+        self.set_spread(75)
+        withdraw_entrant(
+            self.division.tournament, self.user,
+            {"division": self.division.name, "player": byed.key},
+        )
+        slip = self.division.result_slips.get(loser=byed)
+        self.assertEqual(slip.winner_score, 75)
+        self.assertTrue(slip.winner.player.is_bye)
+        self.assertTrue(slip.winner_started)
+        self.assertTrue(slip.forfeit)
+
+    def test_flipping_a_row_keeps_both_forfeit_flags_in_step(self):
+        # The pairing's flag drives the display and the slip's drives
+        # played(); a row where they disagree is a board contradicting its own
+        # result.
+        byed = self.byed_entrant()
+
+        def flip(row):
+            if row["loser"] == self.bye_pk:
+                row["winner"], row["loser"] = row["loser"], row["winner"]
+        self.save(flip)
+        pairing = self.division.pairings.get(round=1, first=byed)
+        self.assertTrue(pairing.forfeit)
+        self.assertTrue(pairing.result.forfeit)
+        self.assertNotIn(pairing.result, self.division.result_slips.played())

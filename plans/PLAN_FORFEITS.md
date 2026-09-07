@@ -198,6 +198,29 @@ second of the two failures `doc/trouble.html` warns about.
   behaviour. See §6's note on the NSA `'alternate'` rule, which is a separate
   policy call.
 
+### 3b. One row's spread can differ from the division's
+
+`bye_spread` is the division's rule; the score cells in the edit-results grid
+are the exception to it for a single row. TSH splits the same way — `bye_spread`
+is realm config and `floss` takes a per-call spread — and a director needs it
+for the game somebody conceded rather than missed.
+
+It falls out of the defaulting rather than being a separate feature: only a
+*blank* cell is filled, so a typed number is simply kept
+(`grids._fill_absence_scores`). Two things had to be made not to undo it:
+
+- **Re-deriving must not rewrite it.** `materialize_absences` only fills a row
+  with no result and regeneration leaves published rounds alone, so this already
+  held — but both run on nearly every page load, so it is pinned by a test.
+- **Retiring a bye must turn the row round, not rewrite it** (§4a). A withdrawal
+  changes an absence's *direction*, not its magnitude; rebuilding the slip from
+  `bye_spread` quietly reset an overridden 75 back to 50.
+
+While fixing that, the grid learned to keep `ResultSlip.forfeit` in step with
+the row's direction as well as `Pairing.forfeit`. The pairing's flag drives the
+display and the slip's drives `played()`, so a row where they disagree is a
+board contradicting its own result.
+
 ### 4a. A withdrawn player never keeps a winning bye
 
 The rule, and it settles the awkward case: A and B are paired, A withdraws (so B
