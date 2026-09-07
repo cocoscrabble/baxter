@@ -422,3 +422,150 @@ class ForfeitSurfaceTests(PrintedRoundBase):
         settings = self.division.settings
         settings.refresh_from_db()
         self.assertEqual(settings.pairing_blocks, before)
+
+
+class WithdrawingSomebodyWhoAlreadySitsOutTests(PrintedRoundBase):
+    """A withdrawal must not be refused because the entrant already has a bye.
+
+    A bye's result is written at publish, so asking "does this game have a
+    result" before asking "is this a bye" turned every such withdrawal into the
+    already-played refusal — and refused it whole, flag included, since the
+    command is atomic. An odd field byes a different player every round, so this
+    was not a corner case.
+    """
+
+    def test_withdrawing_the_player_holding_the_rounds_bye(self):
+        division = make_division(self.user, 5, 4, first_number=901)
+        settings = division.settings
+        settings.withdrawal = DivisionSettings.FORFEIT
+        settings.save(update_fields=["withdrawal"])
+        regenerate_pairings(division)
+        publish_rounds(division, [1])
+        byed = division.pairings.get(round=1, second__player__is_bye=True).first
+
+        withdraw_entrant(
+            division.tournament, self.user,
+            {"division": division.name, "player": byed.key},
+        )
+        self.assertTrue(division.entrants.get(pk=byed.pk).dropped)
+        # The bye they were handed stands — TSH keeps a recorded one too, and
+        # turning it into a forfeit is a judgement, not a consequence.
+        row = division.pairings.get(round=1, first=byed)
+        self.assertFalse(row.forfeit)
+        self.assertEqual(row.result.winner_id, byed.pk)
+
+    def test_both_players_of_one_game_can_withdraw(self):
+        self.publish(1)
+        pairing = self.rows(1).exclude(second__player__is_bye=True).first()
+        first, second = pairing.first, pairing.second
+        for entrant in (first, second):
+            withdraw_entrant(
+                self.tournament, self.user,
+                {"division": self.division.name, "player": entrant.key},
+            )
+        self.assertTrue(self.division.entrants.get(pk=first.pk).dropped)
+        self.assertTrue(self.division.entrants.get(pk=second.pk).dropped)
+        # The first withdrawal's shape stands: a forfeit and the bye it handed
+        # the opponent. Whether the second player also forfeits is the
+        # director's call, made in the grid.
+        self.assertTrue(self.bye_shaped(1, first).forfeit)
+        self.assertFalse(self.bye_shaped(1, second).forfeit)
+
+
+class ConvertingAByeToAForfeitTests(PrintedRoundBase):
+    """How a director gives *both* players of a dissolved game a forfeit.
+
+    Rare enough not to earn a button, but it has to be reachable: flipping the
+    row's winner and opponent in the edit-results grid does it, and the
+    pairing's flag follows the score so the board does not keep saying "bye"
+    over a forfeit's result.
+    """
+
+    def flip_bye_rows(self, division):
+        from tournaments.grids import ResultsGrid
+
+        grid = ResultsGrid()
+        bye_pk = division.bye_entrant().pk
+        rows = []
+        for slip in grid.queryset(division):
+            row = grid.serialize_row(slip)
+            if row["loser"] == bye_pk:
+                row["winner"], row["loser"] = row["loser"], row["winner"]
+            rows.append(row)
+        validated, errors = grid.validate(rows, division)
+        self.assertEqual(errors, [])
+        prepared, errors = grid.prepare(division, validated)
+        self.assertEqual(errors, [])
+        grid.persist(division, prepared)
+        grid.after_save(division)
+
+    def test_both_players_end_up_with_a_forfeit(self):
+        self.publish(1)
+        pairing = self.rows(1).exclude(second__player__is_bye=True).first()
+        first, second = pairing.first, pairing.second
+        for entrant in (first, second):
+            withdraw_entrant(
+                self.tournament, self.user,
+                {"division": self.division.name, "player": entrant.key},
+            )
+        self.flip_bye_rows(self.division)
+
+        for entrant in (first, second):
+            row = self.bye_shaped(1, entrant)
+            self.assertTrue(row.forfeit, f"{entrant.name} should read as a forfeit")
+            self.assertEqual(row.result.loser_id, entrant.pk)
+            self.assertEqual(row.result.winner_score, 50)
+            # The bye leads either way, so neither is charged a start.
+            self.assertTrue(row.result.winner_started)
+
+    def test_the_standings_show_two_losses(self):
+        self.publish(1)
+        pairing = self.rows(1).exclude(second__player__is_bye=True).first()
+        first, second = pairing.first, pairing.second
+        for entrant in (first, second):
+            withdraw_entrant(
+                self.tournament, self.user,
+                {"division": self.division.name, "player": entrant.key},
+            )
+        self.flip_bye_rows(self.division)
+
+        from tournaments.pairing.base import PairingData, standings_after_round
+
+        pd = PairingData.for_division(self.division)
+        by_key = {
+            p.key: p
+            for p in standings_after_round(pd, 1, include_dropped=True)
+        }
+        for entrant in (first, second):
+            self.assertEqual(by_key[entrant.key].losses, 1)
+            self.assertEqual(by_key[entrant.key].spread, -50)
+
+    def test_a_forfeit_can_be_flipped_back_to_a_bye(self):
+        # The conversion has to work both ways, or a mistake is unrecoverable.
+        self.publish(1)
+        pairing = self.rows(1).exclude(second__player__is_bye=True).first()
+        withdraw_entrant(
+            self.tournament, self.user,
+            {"division": self.division.name, "player": pairing.first.key},
+        )
+        self.assertTrue(self.bye_shaped(1, pairing.first).forfeit)
+
+        from tournaments.grids import ResultsGrid
+
+        grid = ResultsGrid()
+        bye_pk = self.division.bye_entrant().pk
+        rows = []
+        for slip in grid.queryset(self.division):
+            row = grid.serialize_row(slip)
+            if row["winner"] == bye_pk:
+                row["winner"], row["loser"] = row["loser"], row["winner"]
+            rows.append(row)
+        validated, errors = grid.validate(rows, self.division)
+        self.assertEqual(errors, [])
+        prepared, errors = grid.prepare(self.division, validated)
+        self.assertEqual(errors, [])
+        grid.persist(self.division, prepared)
+
+        row = self.bye_shaped(1, pairing.first)
+        self.assertFalse(row.forfeit)
+        self.assertEqual(row.result.winner_id, pairing.first.pk)

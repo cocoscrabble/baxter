@@ -91,15 +91,29 @@ def resolve_absence(division, round_pairings, entrant, *, record_absence):
     pairing = game_in_round(division, round_num, entrant)
     opponent = None
     if pairing is not None:
+        other = pairing.second if pairing.first_id == entrant.pk else pairing.first
+        if other.player.is_bye:
+            # Already a bye or forfeit row, so there is no game to dissolve and
+            # nothing to give an opponent. Whatever is recorded stands: a bye
+            # they were handed stays a bye, which is what TSH does too
+            # (``SpliceInactive`` only fills a round with no score yet).
+            #
+            # **Checked before the result guard below, not after.** A bye's
+            # result is written at publish, so asking about the result first
+            # made this the "already has a result" refusal — and withdrawing
+            # somebody who held the round's bye is not a corner case, an odd
+            # field byes a different player every round. It refused the whole
+            # withdrawal, flag included, because the command is atomic.
+            #
+            # Turning that bye into a forfeit is a judgement call, so it is left
+            # to the director rather than made here: flipping the row in the
+            # edit-results grid does it (both players of a dissolved game
+            # withdrawing is the case that wants it).
+            return None
         if getattr(pairing, "result", None) is not None:
             raise ForfeitError(
                 f"{entrant.name}'s round {round_num} game already has a result."
             )
-        other = pairing.second if pairing.first_id == entrant.pk else pairing.first
-        if other.player.is_bye:
-            # Already a bye or forfeit row — the absence is recorded, or
-            # deliberately is not. Nothing to dissolve.
-            return None
         opponent = other
         pairing.delete()
     elif not record_absence:
