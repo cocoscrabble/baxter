@@ -91,7 +91,10 @@ Current plans:
   `played()` predicate, and forfeits derived at pair/publish — which turned up a
   pre-existing engine bug where dropping anybody stalled all further pairing).
   The withdrawal policy and the jurisdictional bye spread are per-division
-  settings, not per-entrant flags; phases 3–5 not started.
+  settings, not per-entrant flags. **Phase 3 done**: the withdrawal,
+  rejoin and single-game-forfeit commands in `tournaments/forfeits.py`, which
+  split an already-printed game into a bye and a forfeit; phases 4–5 (the UI,
+  and entering either by hand in the results grid) not started.
 - `PLAN_PASSWORD_RESET.md` — self-service password reset by email. Gated on a
   **phase 0 go/no-go**: publish the domain's missing SPF and DKIM records,
   then prove the production host can send mail as `cocoscrabble.org` and have
