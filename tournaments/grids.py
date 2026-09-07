@@ -12,6 +12,7 @@ from .models import (
     Player,
     ResultSlip,
     RoundPairings,
+    is_reserved_player_number,
 )
 
 
@@ -47,6 +48,31 @@ def _entrant_pk_by_key(division):
         e.player.player_number: e.pk
         for e in division.entrants.select_related("player")
     }
+
+
+def _result_entrants(division):
+    """Every entrant a result slip may name — the real field *plus the bye*.
+
+    The results grid is the one grid whose rows legitimately reference the bye
+    entrant: ``materialize_byes`` writes a real slip for every bye, and the grid
+    loads the division's whole result set. Everywhere else ``division.entrants``
+    (the manager that hides the bye) is what is wanted, which is why this is not
+    folded into ``_entrant_key_map`` and friends — a fixed pairing against the
+    bye is meaningless and must stay unofferable.
+
+    The bye is included only when it already exists. A division that has never
+    had an odd round has no bye entrant, and creating one here — on a read —
+    would put a competitor-shaped row in a division that never needed it.
+    """
+    entrants = list(
+        Entrant.all_objects.filter(division=division).select_related("player")
+    )
+    real = sorted(
+        (e for e in entrants if not e.player.is_bye), key=lambda e: e.player.name
+    )
+    # The bye sorts last rather than under "B": it is not a competitor, and a
+    # picker that files it among the players invites picking it by accident.
+    return real + [e for e in entrants if e.player.is_bye]
 
 
 def resolve_player(key, name=None, rating=0, wespa_rating=None):
@@ -504,7 +530,10 @@ class ResultsGrid(EditGrid):
         return division.result_slips.select_related("winner", "loser").order_by("round", "pk")
 
     def to_portable(self, rows, division):
-        keys = _entrant_key_map(division)
+        # Bye-inclusive, unlike the other grids: a bye row's opponent *is* the
+        # bye entrant, and mapping it to None would record an event payload with
+        # no opponent in it — a slip replay could not rebuild.
+        keys = {e.pk: e.player.player_number for e in _result_entrants(division)}
         return [
             {
                 "round": r["round"],
@@ -518,9 +547,18 @@ class ResultsGrid(EditGrid):
         ]
 
     def from_portable(self, rows, division):
-        pks = _entrant_pk_by_key(division)
+        pks = {e.player.player_number: e.pk for e in _result_entrants(division)}
+
+        def resolve(key):
+            # A replayed payload can name the bye before this division has a bye
+            # entrant, so it is created on demand here — the same lazy resolve
+            # ``generate_pairings.resolve_entrant`` does, and idempotent.
+            if is_reserved_player_number(key):
+                return division.bye_entrant().pk
+            return pks.get(key)
+
         return [
-            {**r, "winner": pks.get(r["winner"]), "loser": pks.get(r["loser"])}
+            {**r, "winner": resolve(r["winner"]), "loser": resolve(r["loser"])}
             for r in rows
         ]
 
@@ -528,11 +566,17 @@ class ResultsGrid(EditGrid):
         return slip.to_dict()
 
     def lookups(self, division):
-        entrants = division.entrants.select_related("player").order_by("player__name")
-        return {"entrants": [{"id": e.pk, "label": e.player.name} for e in entrants]}
+        # Includes the bye, or a bye row loads with an empty Opponent cell: the
+        # cell's value is an entrant pk the picker cannot resolve to a label, so
+        # it renders blank and the row can no longer be saved.
+        return {
+            "entrants": [
+                {"id": e.pk, "label": e.player.name} for e in _result_entrants(division)
+            ]
+        }
 
     def validate_args(self, division):
-        return (set(division.entrants.values_list("pk", flat=True)),)
+        return ({e.pk for e in _result_entrants(division)},)
 
     def prepare(self, division, validated):
         # Every row must correspond to an existing Pairing — results for
