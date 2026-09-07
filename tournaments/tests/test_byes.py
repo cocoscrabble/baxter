@@ -28,16 +28,20 @@ from tournaments.tournament_export import ExportTournament
 from users.models import User
 
 
-def make_division(owner, n_players, rounds, pairing="KotH"):
+def make_division(owner, n_players, rounds, pairing="KotH", first_number=1):
+    """A division of ``n_players``. ``first_number`` offsets the player numbers,
+    so a test that builds a second division does not collide with the first
+    (player numbers are unique across the whole database)."""
     tournament = Tournament.objects.create(
         name="T", location="x", start_date=date.today(), owner=owner
     )
     division = Division.objects.create(tournament=tournament, name="D")
     for i in range(1, n_players + 1):
+        number = first_number + i - 1
         Entrant.objects.create(
             division=division,
             player=Player.objects.create(
-                name=f"P{i}", player_number=str(i), rating=2000 - i
+                name=f"P{number}", player_number=str(number), rating=2000 - i
             ),
             number=i,
         )
@@ -209,6 +213,67 @@ class ByePairingTests(TestCase):
         standings = standings_after_round(pd, 1)
         self.assertEqual(len(standings), 5)  # all real players, no Bye
         self.assertFalse(any(p.is_bye for p in standings))
+
+
+class ByeInResultsGridTests(TestCase):
+    """The results grid holds bye rows, so it is the one grid that must see the
+    bye entrant. It used to build its picker, its validation set and its
+    portable payload from ``division.entrants`` — the manager that hides the
+    bye — which made a division with an odd round unsavable."""
+
+    def setUp(self):
+        from tournaments.grids import ResultsGrid
+
+        self.user = User.objects.create_user(username="g", password="p")
+        self.division = make_division(self.user, 3, 2)
+        regenerate_pairings(self.division)
+        publish_rounds(self.division, [1])
+        self.grid = ResultsGrid()
+        self.bye_slip = self.division.result_slips.get(loser__player__is_bye=True)
+
+    def rows(self):
+        return [self.grid.serialize_row(s) for s in self.grid.queryset(self.division)]
+
+    def test_the_bye_opponent_is_offered_in_the_picker(self):
+        # Without this the Opponent cell holds a pk the picker cannot label, so
+        # it renders blank and the row can never be saved.
+        entrants = self.grid.lookups(self.division)["entrants"]
+        self.assertIn(self.bye_slip.loser_id, [e["id"] for e in entrants])
+        # It sorts last: the bye is not a competitor, and filing it among the
+        # players invites picking it by accident.
+        self.assertEqual(entrants[-1]["label"], "Bye")
+
+    def test_a_bye_row_survives_an_untouched_save(self):
+        rows = self.rows()
+        (validated, errors) = self.grid.validate(rows, self.division)
+        self.assertEqual(errors, [])
+        prepared, errors = self.grid.prepare(self.division, validated)
+        self.assertEqual(errors, [])
+        self.grid.persist(self.division, prepared)
+        self.assertTrue(
+            self.division.result_slips.filter(loser__player__is_bye=True).exists()
+        )
+
+    def test_the_logged_payload_keeps_the_bye_opponent(self):
+        # to_portable mapped the bye to None, so the recorded event described a
+        # slip with no opponent — one replay could not rebuild.
+        portable = self.grid.to_portable(self.rows(), self.division)
+        bye_row = next(r for r in portable if r["winner_score"] == BYE_WINNER_SCORE)
+        self.assertEqual(bye_row["loser"], "BYE")
+
+    def test_a_payload_naming_the_bye_replays_into_a_fresh_division(self):
+        portable = self.grid.to_portable(self.rows(), self.division)
+        fresh = make_division(self.user, 3, 2, first_number=101)
+        regenerate_pairings(fresh)
+        publish_rounds(fresh, [1])
+        rebuilt = self.grid.from_portable(portable, fresh)
+        bye_row = next(r for r in rebuilt if r["winner_score"] == BYE_WINNER_SCORE)
+        self.assertEqual(bye_row["loser"], fresh.bye_entrant().pk)
+
+    def test_a_division_with_no_bye_is_offered_none(self):
+        even = make_division(self.user, 4, 2, first_number=201)
+        labels = [e["label"] for e in self.grid.lookups(even)["entrants"]]
+        self.assertNotIn("Bye", labels)
 
 
 class ByeRotationTests(TestCase):
