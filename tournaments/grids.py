@@ -582,6 +582,9 @@ class ResultsGrid(EditGrid):
         # Every row must correspond to an existing Pairing — results for
         # unpaired matches are not allowed via this flow.
         pairing_lookup = division.pairings_by_round_pair()
+        bye_pk = next(
+            (e.pk for e in _result_entrants(division) if e.player.is_bye), None
+        )
         instances, errors = [], []
         for i, slip in enumerate(validated):
             pairing = pairing_lookup.get((slip.round, frozenset({slip.winner, slip.loser})))
@@ -590,8 +593,19 @@ class ResultsGrid(EditGrid):
                     f"Row {i + 1}: no pairing for that match in round {slip.round}."
                 )
                 continue
+            kwargs = slip.to_db_kwargs()
+            if bye_pk in (slip.winner, slip.loser):
+                # The Started column is not a free choice on a bye row: the bye
+                # is the notional starter, so the byed player is charged no
+                # start. ``winner_started`` orients the pairing the engine
+                # replays into its ledger (``Pairings.add_result_slip``), so a
+                # director ticking "Winner" here would charge them a start they
+                # never took — and ``starts.correct_result_starts`` skips bye
+                # pairings, so nothing downstream would put it back. Derive it
+                # instead, as every other write path does.
+                kwargs["winner_started"] = slip.winner == bye_pk
             instances.append(
-                ResultSlip(division=division, pairing=pairing, **slip.to_db_kwargs())
+                ResultSlip(division=division, pairing=pairing, **kwargs)
             )
         if errors:
             return [], errors
