@@ -204,18 +204,28 @@ button per game on the pairings page. Forfeit rows render as "forfeit", not
 
 *Verify:* drive it with `/verify`.
 
-### Phase 5 — byes and forfeits in the edit-results grid
+### Phase 5 — entering a bye or forfeit by hand in the edit-results grid
 
-Two blockers today. `ResultsGrid.lookups` builds its dropdowns from
-`division.entrants` (`grids.py:531`), which is the manager that *hides* the bye,
-so "Bye" cannot be selected at all; and `ResultSlipDTO.from_json` rejects any row
-with a blank field (`dto.py:30`), which is the "all fields are required" error
-the issue names. Add the bye entrant to the lookup and default the scores when
-the opponent is the bye (50/0, or 0/50 for a forfeit).
+**Editing an existing one already works** (done ahead of this plan, commits
+`Let the results grid see the bye entrant` and `Derive the Started column on a
+bye or forfeit row`): the grid sees the bye entrant, so a bye row loads with its
+Opponent cell filled, can be rescored or deleted, round-trips into the logged
+payload, and replays. The Started column is derived rather than typed on such a
+row, because `winner_started` orients the pairing the engine replays into its
+start ledger and `correct_result_starts` skips bye pairings, so a wrong value
+there would never be put back. The forfeit shape (bye as *winner*) is covered by
+tests already, so phase 3 lands on a grid that carries it.
 
-`ResultsGrid.prepare` also requires every row to resolve to an existing
-`Pairing` (`grids.py:543`), so a forfeit row entered by hand needs its pairing
-synthesized the same way phase 3 does.
+What remains is entering a *new* bye or forfeit row, which needs two things:
+
+- **Score defaulting.** `ResultSlipDTO.from_json` rejects any row with a blank
+  field (`dto.py:30`) — the "all fields are required" error the issue names.
+  Default the scores when the opponent is the bye: 50/0 for a bye, 0/50 for a
+  forfeit.
+- **A pairing to hang it on.** `ResultsGrid.prepare` requires every row to
+  resolve to an existing `Pairing` (`grids.py:543`). A hand-entered forfeit for
+  a round that never paired the absentee needs its pairing synthesized, the same
+  way phase 3 does.
 
 *Verify:* enter a bye and a forfeit by hand in the grid, save, and confirm the
 round reaches FINISHED and the digest survives a replay.
