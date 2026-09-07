@@ -23,7 +23,10 @@ Four things follow from issue #57:
    express either.
 
 A forfeit is scored like a bye with the sign flipped: the absentee takes 0–50
-and −50 spread, and the game is **not rated**.
+and −50 spread, and the game is **not rated**. Where a game was already paired,
+the pairing is split so that both players end up with a bye-shaped row — the
+absentee's a forfeit, the opponent's a bye — which is what makes a withdrawal
+before pairing and one after it the same thing (§4).
 
 ## Decisions
 
@@ -83,54 +86,82 @@ column keeps meaning the first, the Withdraw button means the second.
 reason. It needs no place there: its whole effect is the forfeit slips, and
 `results` is already hashed.
 
-### 4. The corner case — a printed board is never rewritten
+### 4. The corner case — the pairing is split, and the split is recorded
 
 The case the issue raises: X is paired against Y in round 5, round 5 is
 published, and then X withdraws. The round cannot be re-paired.
 
-**The forfeit is recorded as the result of the game that was printed.** The
-X–Y pairing keeps its identity and its board; its result becomes
-`winner=Y, loser=X, 50–0, forfeit=True`. Y turned up and gets the win and the
-+50; X gets the loss and the −50; the `forfeit` flag keeps the game out of the
-ratings. The withdrawal command repairs every open published round this way,
-mirroring `_add_missing_playoff_games`, which is the existing precedent for a
-published window being corrected in place (`plans/PLAN_PLAYOFFS.md`).
+**The pairing is split, as TSH does it.** The X–Y pairing is dissolved and each
+player is paired with the bye: X takes the forfeit (0–50), Y takes the bye
+(50–0). `doc/trouble.html` is unambiguous that this is the operation — "you
+should manually repair him and his opponent to assign them both byes" — and
+`floss` performs exactly that (`$dp->Pair($opp->ID(), 0, $r0, 'repair')` for the
+opponent, then the same for the forfeiter).
 
-**Why not the two-slip split the issue proposes.** Recording Y's half as a bye
-means deleting the X–Y `Pairing` and creating two bye-shaped ones in a published
-round. That contradicts `PUBLISHED_PAIRING_OWNS_THE_START`
-(`tournaments/starts.py`) — a published pairing is a printed board, and this
-would unprint one. It also drops the game out of `published_pairings`, which is
-what pins an in-progress round-robin round so the solver does not recompute or
-duplicate it (`tournaments/pairing/base.py:180`).
+**Recorded as an explicit unpair, then the two results.** That is what keeps a
+split replayable: the log carries the dissolution as its own step rather than
+leaving it implicit in a forfeit command, so a replay reproduces the same
+surgery, and the primitive is available on its own — TSH has `UnPairPlayer` and
+`UnPairRound` for the same reason.
 
-The standings outcome is identical either way: +50 and a win for Y, −50 and a
-loss for X, neither rated. The only difference is what Y's row says, and "won by
-forfeit" is the more accurate of the two — they showed up.
+**This is what makes the two kinds of forfeit one kind.** A player dropped
+*before* the round was paired never gets a real pairing: §2 gives them
+`Pairing(X, bye)` at pair time. A player dropped *after* it was paired gets the
+same `Pairing(X, bye)` via the unpair. Both then take the identical slip through
+the identical publish path. There is no second shape to carry, no second code
+path, and nothing downstream has to ask which kind of forfeit it is looking at.
 
-One consequence, accepted deliberately: X and Y count as having met, so the
-engine will not pair them again if X rejoins. Removing the forfeited game from
-the repeat ledger would mean removing it from `published_pairings`, which is the
-same round-robin pinning the paragraph above depends on. A rejoining player
-missing one possible opponent is the smaller cost.
+**It also fixes bye distribution, which the alternative could not.** `CountByes`
+in TSH counts every opponent-0 round regardless of sign, and that count is what
+bye assignment minimises. Splitting gives Y a real bye pairing, so
+`disallow_repeat_byes` sees it without any special pleading. Recording the
+forfeit on the intact X–Y pairing (the design this replaces) left Y looking
+bye-less, and they could then be handed a real bye while others had none — the
+second of the two failures `doc/trouble.html` warns about.
 
-### 5. `ResultSlip.forfeit` — one flag for "recorded, not played"
+**What it costs, and where to be careful.**
 
-Needed only for the corner case, and needed there absolutely: that slip sits on
-an ordinary pairing between two real entrants, and nothing else distinguishes
-"X forfeited to Y" from "Y beat X 50–0".
+- **The printed board loses a row.** This is a real cost — it is why the
+  previous design avoided it — and it is accepted: TSH's directors have run on
+  these semantics for two decades, and the board is a record of what was
+  *intended*, which a withdrawal has changed. The pairings page should say so
+  rather than silently dropping the game; TSH's scoreboard renders an `F`.
+- **Round robins are the sharp edge.** `published_pairings` pins an in-progress
+  round-robin round so the solver neither recomputes nor duplicates it
+  (`tournaments/pairing/base.py:180`). Removing X–Y from it means the solver no
+  longer knows that fixture was scheduled, and a round robin's whole invariant is
+  that every pair meets exactly once. A forfeited round-robin fixture must still
+  count as *met* for schedule completion even though it counts as *not met* for
+  Swiss repeat avoidance. Phase 3 has to separate those two uses of the same
+  ledger; today they are one.
+- **Starts.** X–Y's orientation disappears with the pairing, and the two bye
+  rows charge nobody a start under Baxter's current `bye_firsts = 'ignore'`
+  behaviour. See §6's note on the NSA `'alternate'` rule, which is a separate
+  policy call.
 
-Derived forfeits (§2) set it too, so one predicate covers both:
+### 5. `ResultSlip.forfeit` — kept, but on a narrower footing
 
-```python
-def played(self):  # ResultSlipQuerySet
-    """Games actually contested — no byes, no forfeits."""
-    return self.exclude(
-        Q(winner__player__is_bye=True)
-        | Q(loser__player__is_bye=True)
-        | Q(forfeit=True)
-    )
-```
+**Its original justification is gone.** The flag was introduced (phase 1, already
+landed) for a slip sitting on an ordinary pairing between two real entrants,
+where nothing else could distinguish "X forfeited to Y" from "Y beat X 50–0".
+Splitting means no such slip exists: every forfeit now carries the bye entrant,
+as the *winner*, and is identifiable by that alone — TSH's own scheme, where the
+sign of the spread is the whole distinction.
+
+It stays for two narrower reasons, and the `forfeit=True` clause in `played()`
+is dead weight until the second one lands:
+
+- **Explicitness.** Encoding "not played" implicitly in *which side* the bye sat
+  on is precisely what produced the asymmetry §6 fixes — six call sites that all
+  assumed the bye could only win. A column that says what the row is does not
+  have that failure mode.
+- **The unscored game is coming.** TSH's `off 0` records "a missed game without
+  assigning a win or loss", and a 0–0 slip has no winner to put the bye on, so
+  direction cannot encode it. Whatever carries that case is this column or a
+  successor to it.
+
+If neither argument survives contact with phase 3, drop the column — it is one
+migration, and a dead flag is worse than none.
 
 ### 6. Fix the `loser__player__is_bye` asymmetry while we are here
 
@@ -199,13 +230,12 @@ is the rejoin case. So the shape of this plan matches the reference.
    game will count for ratings, and **some players may end up getting multiple
    byes before others get any**."
 
-   Decision 4 keeps the real pairing and flags its result, which answers the
-   ratings half (better than TSH: no board is unprinted). It does **not** answer
-   this half — the opponent still holds a real pairing, so `disallow_repeat_byes`
-   sees them as bye-less and may hand them a real bye later while others have had
-   none. Fixing it does not require reversing decision 4: it requires the bye
-   ledger to count a forfeited game as a bye for both players, which is a change
-   to how the engine is fed, not to what is stored.
+   This is what settled decision 4. An earlier draft of this plan kept the real
+   pairing and flagged its result, which answered the ratings half without
+   unprinting a board — but left Y looking bye-less, so they could be handed a
+   real bye while others had none. Splitting gives Y an actual bye pairing and
+   the count comes out right with no special pleading, which is the argument
+   that carried.
 
 6. **`bye_firsts`, and the NSA rule we are on the wrong side of.** The default is
    `'alternate'`: "use the rule the NSA adopted on 2008-07-24 to assign
@@ -264,23 +294,41 @@ the ratings export and `tournament_export` omit them; `replay --verify`
 reproduces the digest. Then rejoin before round 7 and confirm 5–6 keep their
 forfeits and 7–8 pair normally.
 
-### Phase 3 — the corner case, and single-game forfeits
+### Phase 3 — splitting a paired game, and single-game forfeits
 
-Two commands sharing one implementation:
+Three commands, the first a genuine primitive the other two compose:
 
-- `entrant_withdrawn` — sets `dropped`/`forfeits`, then repairs every
-  PUBLISHED/IN_PROGRESS round in which the entrant has no result yet: a real
-  pairing gets the forfeit result written onto it (§4); no pairing at all gets a
-  forfeit pairing plus slip, the phase-2 shape.
-- `game_forfeited` — issue #57 scenario 1. The same write for one named pairing,
-  with no withdrawal.
+- `pairing_unpaired` — dissolve one pairing in a published round, leaving both
+  players unpaired for it. Payload `{division, round, players}`, name-keyed like
+  every other. TSH's `UnPairPlayer` is the same primitive, and having it separate
+  is what lets the log say plainly what happened (§4).
+- `entrant_withdrawn` — sets `dropped`/`forfeits`, then for every
+  PUBLISHED/IN_PROGRESS round in which the entrant has no result yet: unpair
+  their game if they have one, then give both players their bye-shaped pairing
+  and slip. A round where they were never paired skips straight to the second
+  half — which is the phase-2 shape, unchanged.
+- `game_forfeited` — issue #57 scenario 1: one named player forfeits one game,
+  no withdrawal. `entrant_withdrawn`'s per-round body, called once.
 
-Both must be added to the completeness test's view coverage, per CLAUDE.md.
+Copy `floss`'s defensive check: it verifies the opponent's own record names the
+forfeiting player before assigning them the forfeit win, and warns (`enfwop`,
+"your .t file is corrupt") rather than proceeding on inconsistent data.
 
-*Verify:* publish round 5, withdraw a paired entrant, confirm the board still
-shows X–Y and its result reads as a forfeit; confirm the opponent's standings
-row gains a win and +50 and the ratings export omits the game; `replay --verify`
-green; a fuzzer run with withdrawals enabled reproduces digests.
+**The round-robin split has to be resolved here** (§4). `published_pairings`
+currently serves two masters — Swiss repeat/start avoidance, and round-robin
+schedule completion — and a forfeited fixture must read as *met* to the second
+and *not met* to the first. Expect to separate them rather than pick one.
+
+Every mutating view added here goes through a command, per CLAUDE.md, and the
+completeness test enforces it.
+
+*Verify:* publish round 5, withdraw a paired entrant; confirm the X–Y pairing is
+gone, both players hold a bye-shaped pairing, X's slip is 0–50 and Y's 50–0, and
+that Y now counts as having had a bye for `disallow_repeat_byes`. Confirm the
+ratings export and `tournament_export` omit both. Confirm a withdrawal before
+pairing and one after produce byte-identical round state. `replay --verify`
+green; a fuzzer run with withdrawals enabled reproduces digests. A round-robin
+division must still refuse to re-pair the forfeited fixture.
 
 ### Phase 4 — the surfaces
 
