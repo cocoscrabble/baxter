@@ -50,6 +50,43 @@ def _entrant_pk_by_key(division):
     }
 
 
+def _fill_absence_scores(rows, division):
+    """Default the scores on a row whose opponent is the bye.
+
+    A bye and a forfeit have one score between them — the division's
+    ``bye_spread``, to the winning side — so making a director type both was
+    the "all fields are required" wall that issue #57 names. A typed score is
+    still honoured: TSH lets a one-off forfeit be scored differently from the
+    tournament default, and so does this.
+
+    ``winner_started`` is filled in too, and then overruled in ``prepare``: on
+    an absence row the bye is the notional starter, so the value is derived
+    rather than chosen.
+    """
+    from tournaments.generate_pairings import absence_spread
+
+    bye = next((e for e in _result_entrants(division) if e.player.is_bye), None)
+    if bye is None:
+        return rows
+    spread = absence_spread(division)
+    filled = []
+    for row in rows:
+        if bye.pk in (row.get("winner"), row.get("loser")):
+            row = {
+                **row,
+                "winner_score": _or_default(row.get("winner_score"), spread),
+                "loser_score": _or_default(row.get("loser_score"), 0),
+                "winner_started": _or_default(row.get("winner_started"), False),
+            }
+        filled.append(row)
+    return filled
+
+
+def _or_default(value, default):
+    """``default`` for a blank cell; anything the director typed wins."""
+    return default if value is None or value == "" else value
+
+
 def _result_entrants(division):
     """Every entrant a result slip may name — the real field *plus the bye*.
 
@@ -578,6 +615,9 @@ class ResultsGrid(EditGrid):
     def validate_args(self, division):
         return ({e.pk for e in _result_entrants(division)},)
 
+    def validate(self, rows, division):
+        return super().validate(_fill_absence_scores(rows, division), division)
+
     def prepare(self, division, validated):
         # Every row must correspond to an existing Pairing — results for
         # unpaired matches are not allowed via this flow.
@@ -585,25 +625,69 @@ class ResultsGrid(EditGrid):
         bye_pk = next(
             (e.pk for e in _result_entrants(division) if e.player.is_bye), None
         )
+        round_containers = {
+            rp.round: rp for rp in division.round_pairings_set.all()
+        }
+        # (round, entrant pk) for everyone who already has a game that round.
+        # A player has at most one, which is what stops a hand-entered bye from
+        # quietly becoming a *second* game for somebody.
+        already_playing = {
+            (round_num, pk)
+            for round_num, first, second in division.pairings.values_list(
+                "round", "first_id", "second_id"
+            )
+            for pk in (first, second)
+        }
         instances, errors = [], []
         for i, slip in enumerate(validated):
             pairing = pairing_lookup.get((slip.round, frozenset({slip.winner, slip.loser})))
-            if pairing is None:
+            if pairing is None and bye_pk not in (slip.winner, slip.loser):
                 errors.append(
                     f"Row {i + 1}: no pairing for that match in round {slip.round}."
                 )
                 continue
             kwargs = slip.to_db_kwargs()
             if bye_pk in (slip.winner, slip.loser):
-                # The Started column is not a free choice on a bye row: the bye
-                # is the notional starter, so the byed player is charged no
-                # start. ``winner_started`` orients the pairing the engine
-                # replays into its ledger (``Pairings.add_result_slip``), so a
-                # director ticking "Winner" here would charge them a start they
-                # never took — and ``starts.correct_result_starts`` skips bye
-                # pairings, so nothing downstream would put it back. Derive it
-                # instead, as every other write path does.
+                # The Started column is not a free choice on a bye or forfeit
+                # row: the bye is the notional starter, so the real player is
+                # charged no start. ``winner_started`` orients the pairing the
+                # engine replays into its ledger
+                # (``Pairings.add_result_slip``), so a director ticking
+                # "Winner" here would charge them a start they never took — and
+                # ``starts.correct_result_starts`` skips bye pairings, so
+                # nothing downstream would put it back. Derive it instead, as
+                # every other write path does.
                 kwargs["winner_started"] = slip.winner == bye_pk
+            if pairing is None and bye_pk in (slip.winner, slip.loser):
+                # A bye or forfeit entered by hand for a round that never paired
+                # it. The row *is* the pairing — there is no game it stands in
+                # for — so one is built, but in ``persist``: ``prepare`` runs
+                # before the save transaction, and a pairing created here would
+                # outlive an error further down the list.
+                rp = round_containers.get(slip.round)
+                if rp is None:
+                    errors.append(
+                        f"Row {i + 1}: round {slip.round} has no pairings yet, "
+                        "so there is nothing to record a bye or forfeit against."
+                    )
+                    continue
+                real_pk = slip.loser if slip.winner == bye_pk else slip.winner
+                if (slip.round, real_pk) in already_playing:
+                    # They are already in a game that round, so this row would
+                    # be their second. Moving a bye from one player to another
+                    # is a change to the printed board, not to the results —
+                    # unpublish the round, or forfeit the game they do have.
+                    errors.append(
+                        f"Row {i + 1}: that player already has a game in round "
+                        f"{slip.round}. Who gets a bye is set when the round is "
+                        "paired, not here."
+                    )
+                    continue
+                instance = ResultSlip(division=division, **kwargs)
+                instance._absence_round_pairings = rp
+                instance._absence_is_forfeit = slip.winner == bye_pk
+                instances.append(instance)
+                continue
             instances.append(
                 ResultSlip(division=division, pairing=pairing, **kwargs)
             )
@@ -633,6 +717,25 @@ class ResultsGrid(EditGrid):
             if errors:
                 return [], errors
         return instances, self.reconcile_errors(division, instances)
+
+    def persist(self, division, prepared):
+        """Build any hand-entered absence row's pairing, then reconcile.
+
+        Here rather than in ``prepare`` because this runs inside the save
+        transaction: a pairing created during validation would survive an error
+        raised further down, leaving a bye-shaped game with no result.
+        """
+        from tournaments.generate_pairings import absence_row
+
+        for slip in prepared:
+            rp = getattr(slip, "_absence_round_pairings", None)
+            if rp is None:
+                continue
+            real = slip.winner if slip.loser_id == division.bye_entrant().pk else slip.loser
+            slip.pairing = absence_row(
+                division, rp, real, forfeit=slip._absence_is_forfeit
+            )
+        super().persist(division, prepared)
 
     def after_save(self, division):
         # Recreating the slips can change which rounds have results; refresh the

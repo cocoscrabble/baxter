@@ -28,7 +28,11 @@ play.
 from django.db import models
 
 from tournaments.events import EventResult, records_event
-from tournaments.generate_pairings import materialize_absences, withdrawal_policy
+from tournaments.generate_pairings import (
+    absence_row,
+    materialize_absences,
+    withdrawal_policy,
+)
 from tournaments.models import (
     Division,
     DivisionSettings,
@@ -104,9 +108,9 @@ def resolve_absence(division, round_pairings, entrant, *, record_absence):
         return None
 
     if opponent is not None:
-        _bye_row(division, round_pairings, opponent, forfeit=False)
+        absence_row(division, round_pairings, opponent, forfeit=False)
     if record_absence:
-        _bye_row(division, round_pairings, entrant, forfeit=True)
+        absence_row(division, round_pairings, entrant, forfeit=True)
     # Idempotent, and the one place a bye or forfeit slip is written.
     materialize_absences(division, round_num)
     round_pairings.update_status()
@@ -114,18 +118,6 @@ def resolve_absence(division, round_pairings, entrant, *, record_absence):
         "round": round_num,
         "opponent": opponent.key if opponent is not None else None,
     }
-
-
-def _bye_row(division, round_pairings, entrant, *, forfeit):
-    Pairing.objects.create(
-        division=division,
-        round=round_pairings.round,
-        round_pairings=round_pairings,
-        first=entrant,
-        second=division.bye_entrant(),
-        table=0,
-        forfeit=forfeit,
-    )
 
 
 def _open_rounds(division):

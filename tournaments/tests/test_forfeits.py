@@ -6,6 +6,7 @@ The rounds they forfeit are exactly the rounds published while they were
 withdrawn, which is what makes rejoining need no backfill.
 """
 
+from django.db import models
 from django.test import TestCase
 
 from tournaments.generate_pairings import (
@@ -216,3 +217,213 @@ class DerivedForfeitTests(TestCase):
             self.division.round_pairings_set.get(round=1).status,
             RoundPairings.FINISHED,
         )
+
+
+class HandEnteredAbsenceTests(TestCase):
+    """Entering a bye or a forfeit in the edit-results grid (phase 5).
+
+    Issue #57 asks for "a way to enter both forfeits and byes in the edit
+    results workflow without hitting the 'all fields should be filled out'
+    validation". Two things were in the way: the blank scores, and the fact
+    that a hand-entered absence has no pairing to hang on.
+    """
+
+    def setUp(self):
+        from tournaments.grids import ResultsGrid
+
+        self.user = User.objects.create_user(username="h", password="p")
+        self.division = make_division(self.user, 6, 4, first_number=401)
+        self.division.entrants.update(rating=1500, rating_source=Entrant.COCO)
+        self.grid = ResultsGrid()
+        self.bye = self.division.bye_entrant()
+        regenerate_pairings(self.division)
+        publish_rounds(self.division, [1])
+        # A round published without one entrant, the way a withdrawal leaves it:
+        # they have no game, so a hand-entered absence has nothing to resolve to.
+        self.absentee = self.division.entrants.order_by("number").first()
+        self.division.pairings.filter(round=1).filter(
+            models.Q(first=self.absentee) | models.Q(second=self.absentee)
+        ).delete()
+
+    def rows(self):
+        return [self.grid.serialize_row(s) for s in self.grid.queryset(self.division)]
+
+    def save(self, rows):
+        validated, errors = self.grid.validate(rows, self.division)
+        if errors:
+            return errors
+        prepared, errors = self.grid.prepare(self.division, validated)
+        if errors:
+            return errors
+        self.grid.persist(self.division, prepared)
+        self.grid.after_save(self.division)
+        return []
+
+    def absence_row(self, *, forfeit, **overrides):
+        """A grid row for the absentee, scores left blank as a director would."""
+        row = {
+            "round": 1,
+            "winner": self.bye.pk if forfeit else self.absentee.pk,
+            "winner_score": None,
+            "loser": self.absentee.pk if forfeit else self.bye.pk,
+            "loser_score": None,
+            "winner_started": None,
+        }
+        return {**row, **overrides}
+
+    def test_a_bye_can_be_entered_with_no_scores(self):
+        self.assertEqual(self.save(self.rows() + [self.absence_row(forfeit=False)]), [])
+        slip = self.division.result_slips.get(winner=self.absentee)
+        self.assertEqual((slip.winner_score, slip.loser_score), (50, 0))
+        self.assertFalse(slip.winner_started)
+        pairing = slip.pairing
+        self.assertIsNotNone(pairing)
+        self.assertFalse(pairing.forfeit)
+        self.assertTrue(pairing.second.player.is_bye)
+
+    def test_a_forfeit_can_be_entered_with_no_scores(self):
+        self.assertEqual(self.save(self.rows() + [self.absence_row(forfeit=True)]), [])
+        slip = self.division.result_slips.get(loser=self.absentee)
+        self.assertEqual((slip.winner_score, slip.loser_score), (50, 0))
+        # The bye leads, so the absentee is charged no start.
+        self.assertTrue(slip.winner_started)
+        self.assertTrue(slip.pairing.forfeit)
+
+    def test_the_round_reaches_finished(self):
+        self.assertEqual(self.save(self.rows() + [self.absence_row(forfeit=True)]), [])
+        for p in self.division.pairings.filter(round=1, result__isnull=True):
+            ResultSlip.objects.create(
+                division=self.division, round=1, pairing=p,
+                winner=p.first, winner_score=420,
+                loser=p.second, loser_score=380, winner_started=True,
+            )
+        self.division.round_pairings_set.get(round=1).update_status()
+        self.assertEqual(
+            self.division.round_pairings_set.get(round=1).status,
+            RoundPairings.FINISHED,
+        )
+
+    def test_a_typed_spread_is_honoured(self):
+        # TSH lets a one-off forfeit be scored differently from the tournament
+        # default; only a *blank* cell is filled in.
+        self.assertEqual(
+            self.save(self.rows() + [self.absence_row(forfeit=True, winner_score=75)]),
+            [],
+        )
+        slip = self.division.result_slips.get(loser=self.absentee)
+        self.assertEqual(slip.winner_score, 75)
+
+    def test_the_division_spread_is_used_not_a_constant(self):
+        settings = self.division.settings
+        settings.bye_spread = 100
+        settings.save(update_fields=["bye_spread"])
+        self.assertEqual(self.save(self.rows() + [self.absence_row(forfeit=False)]), [])
+        self.assertEqual(
+            self.division.result_slips.get(winner=self.absentee).winner_score, 100
+        )
+
+    def test_a_player_who_already_has_a_game_is_refused(self):
+        playing = self.division.pairings.filter(round=1).exclude(
+            second__player__is_bye=True
+        ).first().first
+        errors = self.save(
+            self.rows()
+            + [self.absence_row(forfeit=True, loser=playing.pk, winner=self.bye.pk)]
+        )
+        self.assertTrue(errors)
+        self.assertIn("already has a game", errors[0])
+
+    def test_an_unpaired_round_is_refused_clearly(self):
+        errors = self.save(
+            self.rows() + [self.absence_row(forfeit=True, round=4)]
+        )
+        self.assertTrue(errors)
+        self.assertIn("no pairings yet", errors[0])
+
+    def test_nothing_is_written_when_a_later_row_fails(self):
+        # prepare() runs before the save transaction, which is why the pairing
+        # is built in persist(): a pairing created during validation would
+        # outlive the error.
+        before = self.division.pairings.filter(round=1).count()
+        errors = self.save(
+            self.rows()
+            + [self.absence_row(forfeit=True)]
+            + [self.absence_row(forfeit=True, round=4)]
+        )
+        self.assertTrue(errors)
+        self.assertEqual(self.division.pairings.filter(round=1).count(), before)
+
+
+class HandEnteredAbsenceReplayTests(TestCase):
+    """A hand-entered absence lands a *pairing* in a published round, which
+    ``division_digest`` covers — so a replay has to rebuild it from the logged
+    rows alone, synthesized pairing and all."""
+
+    def test_the_grid_save_replays_to_the_same_digest(self):
+        import json
+
+        from django.urls import reverse
+
+        from tournaments.commands import (
+            add_entrant, create_division, create_tournament, publish_round,
+            save_settings,
+        )
+        from tournaments.forfeits import withdraw_entrant
+        from tournaments.events import division_digest, export_jsonl
+        from tournaments.grids import ResultsGrid
+        from tournaments.models import Player, Tournament
+        from tournaments.replay import parse_jsonl, replay
+
+        user = User.objects.create_user(username="hr", password="p")
+        tournament = create_tournament(None, user, {
+            "name": "Grid Replay", "location": "x", "start_date": "2026-03-15",
+        })
+        create_division(tournament, user, {"name": "D"})
+        for i in range(1, 7):
+            Player.objects.create(name=f"G{i}", player_number=f"8{i:02d}",
+                                  rating=1600 - i)
+            add_entrant(tournament, user, {"division": "D", "player": f"8{i:02d}"})
+        save_settings(tournament, user, {
+            "division": "D",
+            "blocks": [{"pairing": "KotH", "rounds": 3, "pair_from": 1}],
+        })
+        division = tournament.divisions.get(name="D")
+        regenerate_pairings(division)
+        publish_round(tournament, user, {"division": "D", "round": 1})
+
+        # Leave one entrant unpaired in the published round the way the app
+        # really does: a withdrawal under OMIT dissolves their printed game,
+        # gives the opponent a bye, and records nothing for them. Deleting a
+        # pairing by hand would leave a state no replay could reach.
+        absentee = division.entrants.order_by("number").first()
+        withdraw_entrant(tournament, user, {"division": "D", "player": absentee.key})
+        self.assertFalse(
+            division.pairings.filter(round=1).filter(
+                models.Q(first=absentee) | models.Q(second=absentee)
+            ).exists()
+        )
+
+        grid = ResultsGrid()
+        rows = [grid.serialize_row(s) for s in grid.queryset(division)]
+        rows.append({
+            "round": 1, "winner": division.bye_entrant().pk,
+            "winner_score": None, "loser": absentee.pk, "loser_score": None,
+            "winner_started": None,
+        })
+        self.client.force_login(user)
+        response = self.client.post(
+            reverse("division_edit_results", kwargs=division.slug_kwargs()),
+            json.dumps({"rows": rows}), content_type="application/json",
+        )
+        self.assertTrue(response.json().get("ok"), response.json())
+        self.assertEqual(division.pairings.filter(round=1, forfeit=True).count(), 1)
+        expected = division_digest(division)
+
+        jsonl = export_jsonl(tournament)
+        Tournament.objects.all().delete()
+        _header, events = parse_jsonl(jsonl)
+        rebuilt = replay(events, verify=True).tournament.divisions.get(name="D")
+        self.assertEqual(division_digest(rebuilt), expected)
+        forfeit = rebuilt.pairings.get(round=1, forfeit=True)
+        self.assertEqual(forfeit.first.player.player_number, absentee.key)
+        self.assertEqual(forfeit.result.winner_score, 50)

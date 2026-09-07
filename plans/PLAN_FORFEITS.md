@@ -1,6 +1,6 @@
 # Plan: Forfeits and dropouts
 
-**Status: phases 1–4 done**, phase 5 not started. Design drafted 2026-09-07 for
+**Status: implemented** (all five phases). Design drafted 2026-09-07 for
 [issue #57](https://github.com/cocoscrabble/baxter/issues/57); code references
 pinned at commit `e3ad086`.
 
@@ -471,28 +471,42 @@ one; the bye spread saved as 100 with the schedule untouched; and the log held
 `entrant_withdrawn`, `game_forfeited`, `division_absence_settings_saved` in
 order. No console errors.
 
-### Phase 5 — entering a bye or forfeit by hand in the edit-results grid
+### Phase 5 — entering a bye or forfeit by hand in the edit-results grid — **done**
 
-**Editing an existing one already works** (done ahead of this plan, commits
+**Editing an existing one already worked** (done ahead of this plan, commits
 `Let the results grid see the bye entrant` and `Derive the Started column on a
-bye or forfeit row`): the grid sees the bye entrant, so a bye row loads with its
-Opponent cell filled, can be rescored or deleted, round-trips into the logged
-payload, and replays. The Started column is derived rather than typed on such a
-row, because `winner_started` orients the pairing the engine replays into its
-start ledger and `correct_result_starts` skips bye pairings, so a wrong value
-there would never be put back. The forfeit shape (bye as *winner*) is covered by
-tests already, so phase 3 lands on a grid that carries it.
+bye or forfeit row`). What phase 5 added is entering a *new* one:
 
-What remains is entering a *new* bye or forfeit row, which needs two things:
+- **The scores default.** A bye and a forfeit have one score between them — the
+  division's `bye_spread`, to the winning side — so making a director type both
+  was the "all fields are required" wall issue #57 names. A row naming the bye
+  gets its blanks filled before parsing (`_fill_absence_scores`), leaving the
+  DTO strict. A *typed* score still wins, the way `floss` takes a per-call
+  spread.
+- **The pairing is synthesized**, because a hand-entered absence has no game to
+  stand in for — the row *is* the pairing. Built in `persist`, not `prepare`:
+  `prepare` runs before the save transaction, so a pairing created there would
+  outlive an error further down the list. There is a test for exactly that.
+- **One game per round is enforced.** A hand-entered absence is refused when the
+  player already has a game that round, which is what keeps "move the bye from
+  Barbara to Alice" out of the results table: it would leave Barbara's own row
+  resultless and the round unable to finish. Who gets a bye is settled when the
+  round is paired.
+- `absence_row` is now the single builder of a bye-shaped `Pairing`, shared by
+  pair time, the withdrawal repair and this, so the three cannot disagree about
+  its shape.
 
-- **Score defaulting.** `ResultSlipDTO.from_json` rejects any row with a blank
-  field (`dto.py:30`) — the "all fields are required" error the issue names.
-  Default the scores when the opponent is the bye: 50/0 for a bye, 0/50 for a
-  forfeit.
-- **A pairing to hang it on.** `ResultsGrid.prepare` requires every row to
-  resolve to an existing `Pairing` (`grids.py:543`). A hand-entered forfeit for
-  a round that never paired the absentee needs its pairing synthesized, the same
-  way phase 3 does.
+*Verified* (`HandEnteredAbsenceTests`, `HandEnteredAbsenceReplayTests`): a bye
+and a forfeit each enter with both score cells blank and come out 50–0 the right
+way round with the start derived; the round reaches FINISHED; a typed spread is
+kept; the division's `bye_spread` is used rather than a constant; an unpaired
+round and a double-booked player are refused with messages that say what to do
+instead; nothing is written when a later row fails; and a grid save carrying a
+hand-entered forfeit replays under `verify=True` to the same digest, synthesized
+pairing included.
 
-*Verify:* enter a bye and a forfeit by hand in the grid, save, and confirm the
-round reaches FINISHED and the digest survives a replay.
+**A note on that replay test.** It first failed, and the failure was the test's
+own setup: it deleted a pairing directly to leave a player unpaired, which is a
+state no log can reach. Driving it the way the app does — a withdrawal under
+`OMIT`, which dissolves the printed game and records nothing for the absentee —
+both replays and is the case a director would actually hit.

@@ -80,24 +80,20 @@ Current plans:
   the fetcher-shaped hole `PLAN_ENTRANTS.md` decision 11 left open.
   **Implemented** (all five phases).
 - `PLAN_FORFEITS.md` — forfeits and dropouts (issue #57): a withdrawn entrant
-  keeps accruing **forfeit slips** (0–50 against the bye entrant), derived at
-  publish exactly as byes are, so "which rounds did they miss" needs no new time
-  field and withdraw-then-rejoin falls out for free. The corner case — a
-  withdrawal landing on an already-published round — is handled by recording the
-  forfeit *as the result of the printed game* rather than splitting the pairing,
-  which would unprint a published board. Also fixes a pre-existing asymmetry:
-  most bye filters are written `loser__player__is_bye`, so they mis-handle a slip
-  with the bye on the winning side. **Phases 1–2 done** (the flags, the
-  `played()` predicate, and forfeits derived at pair/publish — which turned up a
-  pre-existing engine bug where dropping anybody stalled all further pairing).
-  The withdrawal policy and the jurisdictional bye spread are per-division
-  settings, not per-entrant flags. **Phase 3 done**: the withdrawal,
-  rejoin and single-game-forfeit commands in `tournaments/forfeits.py`, which
-  split an already-printed game into a bye and a forfeit. **Phase 4 done**:
-  Withdraw/Rejoin on the entrants page, a named forfeit button per side of a
-  printed game, bye/forfeit labelling, and a settings section for the policy and
-  the jurisdictional bye spread; phase 5 (entering either by hand in the results
-  grid) not started.
+  keeps accruing **forfeit slips** (a loss by the division's `bye_spread`
+  against the bye entrant), derived at publish exactly as byes are, so "which
+  rounds did they miss" needs no time field and withdraw-then-rejoin falls out
+  for free. A game already printed when the player withdraws is **split** into a
+  bye for the opponent and a forfeit for the absentee — TSH's semantics, and
+  what makes a withdrawal before pairing and one after it the same shape. A
+  block that pairs several rounds in advance (round robin, quads, sixes) keeps
+  the field that started it, so a withdrawal voids that player's fixtures
+  instead of re-cutting everyone's. **Implemented** (all five phases): the
+  `played()` predicate, derivation at pair/publish, the withdraw/rejoin/forfeit
+  commands in `tournaments/forfeits.py`, the surfaces, and hand entry in the
+  results grid. Turned up three pre-existing bugs on the way — dropping anybody
+  stalled all further pairing, a forfeit pinned a round-robin block shut, and
+  the results grid could not be saved at all once a division had a bye.
 - `PLAN_PASSWORD_RESET.md` — self-service password reset by email. Gated on a
   **phase 0 go/no-go**: publish the domain's missing SPF and DKIM records,
   then prove the production host can send mail as `cocoscrabble.org` and have
