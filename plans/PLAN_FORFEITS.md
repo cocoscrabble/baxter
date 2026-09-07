@@ -149,6 +149,82 @@ these mis-handles one today, before any of this plan lands:
 All five become `.played()` (or its negation). This is a prerequisite for
 everything else, not a tidy-up.
 
+## What TSH does, and what we neglected
+
+Read out of `~/github/tsh` (John Chew's Tournament Scrabble Helper, the
+reference implementation most CoCo directors have used). Its forfeit handling is
+`TSH::Command::ForfeitLOSS` (`floss`), `TSH::Player::Deactivate` /
+`SpliceInactive`, and the "Players Who Miss Games" section of `doc/trouble.html`.
+
+**What it confirms.** TSH represents a forfeit in the same slot as a bye —
+opponent 0, distinguished by the *sign* of the spread. A bye is `+spread`, a
+forfeit loss is `-spread`, and neither is ever rated (`$ratedwins += $result if
+$oppid`). Withdrawal pre-fills the absent player's rounds at pairing time and
+only where nothing is recorded yet — `SpliceInactive` is documented as "assigns
+them byes for the next N rounds beginning with round R **unless they already
+have pairings/scores for those rounds**", which is decision 2 exactly, and
+`Activate()` pops the auto-filled rows back to the last real paired round, which
+is the rejoin case. So the shape of this plan matches the reference.
+
+**Six things it does that this plan does not.**
+
+1. **The spread is configurable, and jurisdictional.** `bye_spread` is 50 under
+   NSA rules, **75** under ABSP, **100** under WESPA and in Thailand, 300 in
+   Poland. Baxter hardcodes `BYE_WINNER_SCORE = 50`. Baxter mirrors the WESPA
+   rating list and enters WESPA-only visitors, so a WESPA event run in Baxter
+   currently scores its byes wrong. `floss` also takes a per-call spread, so a
+   one-off forfeit can be scored differently from the tournament default.
+
+2. **There is a third outcome: the unscored game.** `off 0` "will record a missed
+   game without assigning a win or loss"; `bye_spread = 0` makes byes "count
+   neither as wins nor losses". In the standings loop a zero-spread bye
+   increments neither `wins` nor `losses` — the round simply does not exist for
+   that player. This plan has only bye (a win) and forfeit (a loss). `off 50`
+   is a third withdrawal mode again: withdrawn but credited a bye every round.
+
+3. **A bye is not necessarily a win.** `all_byes_tie` (Poland) scores every bye
+   as half a win, and `zero_byes_tie` makes a zero-spread bye a tie rather than a
+   nonevent.
+
+4. **Withdrawal carries a spread, not a boolean.** `Deactivate($spread)` stores
+   an integer, and the three modes above are just its sign. `Entrant.forfeits`
+   as a boolean collapses that to two cases; a nullable integer would carry all
+   three through the same machinery, and is the same field either way.
+
+5. **A forfeit counts toward bye distribution — and decision 4 breaks that.**
+   `CountByes` counts every round with opponent 0 *regardless of sign*, and that
+   count is what bye assignment minimises. So in TSH a forfeit win **and** a
+   forfeit loss both count as byes already had. `doc/trouble.html` gives this as
+   one of the two reasons to repair a missed game into two byes: "the unplayed
+   game will count for ratings, and **some players may end up getting multiple
+   byes before others get any**."
+
+   Decision 4 keeps the real pairing and flags its result, which answers the
+   ratings half (better than TSH: no board is unprinted). It does **not** answer
+   this half — the opponent still holds a real pairing, so `disallow_repeat_byes`
+   sees them as bye-less and may hand them a real bye later while others have had
+   none. Fixing it does not require reversing decision 4: it requires the bye
+   ledger to count a forfeited game as a bye for both players, which is a change
+   to how the engine is fed, not to what is stored.
+
+6. **`bye_firsts`, and the NSA rule we are on the wrong side of.** The default is
+   `'alternate'`: "use the rule the NSA adopted on 2008-07-24 to assign
+   alternating firsts and seconds to players who have forfeit losses". `'ignore'`
+   (ABSP, Germany, Pakistan, Singapore) ignores byes and forfeits when comparing
+   firsts. **Baxter is `'ignore'`** — the bye is the notional starter and the
+   absent player is charged nothing — and the derived Started column hardened
+   that. CoCo is an NSA-rules body, so the default is arguably wrong for its home
+   jurisdiction. This is a policy call, not a bug.
+
+**One defensive check worth copying.** `floss` verifies that the opponent's own
+record names the forfeiting player before assigning the forfeit win, and warns
+(`enfwop`, "your .t file is corrupt") rather than proceeding. Phase 3's repair of
+an already-published round should make the same check.
+
+**Not adopted.** `show_inactive` — TSH hides withdrawn players from reports by
+default and needs a config to show them; Baxter shows them always
+(`include_dropped=True`), which is the better default and already decided.
+
 ## Phases
 
 ### Phase 1 — the predicate — **done**
