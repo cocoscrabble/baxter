@@ -198,6 +198,30 @@ second of the two failures `doc/trouble.html` warns about.
   behaviour. See §6's note on the NSA `'alternate'` rule, which is a separate
   policy call.
 
+### 4a. Both players of one game withdrawing
+
+The rare one: A and B are paired, A withdraws (so B takes a bye), and then B
+withdraws too. Whether they *both* forfeit is a judgement — B was there until A
+was not — so it is the director's to make, not a consequence.
+
+**The second withdrawal leaves the first one's shape alone.** A withdrawn
+entrant who already holds a bye-shaped row keeps it: nothing to dissolve, and a
+recorded bye stands. TSH does the same — `SpliceInactive` only fills a round
+with no score yet.
+
+**Converting it is the edit-results grid**, by swapping the row's Winner and
+Opponent. That is not a special case bolted on; it is what the grid already
+means, and `Pairing.forfeit` follows the score so the board cannot keep saying
+"bye" over a forfeit's result. It works both ways, so a mistake is recoverable.
+Too rare for a button, reachable without one.
+
+**One guard-ordering bug came out of this, and it was not rare at all.** A bye's
+result is written at publish, so asking "does this game have a result" *before*
+asking "is this a bye" turned every such withdrawal into the already-played
+refusal — and refused it whole, `dropped` flag included, since the command is
+atomic. An odd field byes a different player every round, so withdrawing
+somebody who happened to hold the current round's bye simply failed.
+
 ### 5. `ResultSlip.forfeit` — kept, but on a narrower footing
 
 **Its original justification is gone.** The flag was introduced (phase 1, already

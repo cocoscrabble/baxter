@@ -727,14 +727,30 @@ class ResultsGrid(EditGrid):
         """
         from tournaments.generate_pairings import absence_row
 
+        bye_pk = next(
+            (e.pk for e in _result_entrants(division) if e.player.is_bye), None
+        )
         for slip in prepared:
             rp = getattr(slip, "_absence_round_pairings", None)
-            if rp is None:
+            if rp is not None:
+                real = slip.winner if slip.loser_id == bye_pk else slip.loser
+                slip.pairing = absence_row(
+                    division, rp, real, forfeit=slip._absence_is_forfeit
+                )
                 continue
-            real = slip.winner if slip.loser_id == division.bye_entrant().pk else slip.loser
-            slip.pairing = absence_row(
-                division, rp, real, forfeit=slip._absence_is_forfeit
-            )
+            # An existing bye-shaped row whose direction the director changed:
+            # the flag follows the score, or the board would keep saying "bye"
+            # over a forfeit's result. This is the one way to convert one into
+            # the other by hand — the case being both players of a dissolved
+            # game withdrawing, where whether they both forfeit is a judgement
+            # the director makes.
+            pairing = slip.pairing
+            if pairing is None or bye_pk not in (pairing.first_id, pairing.second_id):
+                continue
+            forfeit = slip.winner_id == bye_pk
+            if pairing.forfeit != forfeit:
+                pairing.forfeit = forfeit
+                pairing.save(update_fields=["forfeit"])
         super().persist(division, prepared)
 
     def after_save(self, division):
