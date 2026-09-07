@@ -448,11 +448,12 @@ class WithdrawingSomebodyWhoAlreadySitsOutTests(PrintedRoundBase):
             {"division": division.name, "player": byed.key},
         )
         self.assertTrue(division.entrants.get(pk=byed.pk).dropped)
-        # The bye they were handed stands — TSH keeps a recorded one too, and
-        # turning it into a forfeit is a judgement, not a consequence.
+        # A withdrawn player never keeps the winning side of a bye, so the
+        # rotation's own bye becomes a forfeit.
         row = division.pairings.get(round=1, first=byed)
-        self.assertFalse(row.forfeit)
-        self.assertEqual(row.result.winner_id, byed.pk)
+        self.assertTrue(row.forfeit)
+        self.assertEqual(row.result.loser_id, byed.pk)
+        self.assertTrue(row.result.winner.player.is_bye)
 
     def test_both_players_of_one_game_can_withdraw(self):
         self.publish(1)
@@ -465,11 +466,289 @@ class WithdrawingSomebodyWhoAlreadySitsOutTests(PrintedRoundBase):
             )
         self.assertTrue(self.division.entrants.get(pk=first.pk).dropped)
         self.assertTrue(self.division.entrants.get(pk=second.pk).dropped)
-        # The first withdrawal's shape stands: a forfeit and the bye it handed
-        # the opponent. Whether the second player also forfeits is the
-        # director's call, made in the grid.
+        # Both forfeit, with no second step: the first withdrawal handed the
+        # opponent a bye, and the second took the win back off it.
+        for entrant in (first, second):
+            row = self.bye_shaped(1, entrant)
+            self.assertTrue(row.forfeit, entrant.name)
+            self.assertEqual(row.result.loser_id, entrant.pk)
+
+
+class AbsentForOneRoundOnlyTests(PrintedRoundBase):
+    """Both players miss one game, and neither is leaving the tournament.
+
+    Withdrawing them would be wrong — they play on — so the two forfeits are
+    entered per game. The first turns the printed game into a forfeit and a
+    bye; the second turns that bye into a forfeit too, which is the same
+    ``forfeit_game`` command on a row that now offers the same button.
+    """
+
+    def forfeit(self, entrant, round_num=1):
+        forfeit_game(
+            self.tournament, self.user,
+            {"division": self.division.name, "round": round_num,
+             "player": entrant.key},
+        )
+
+    def test_both_players_forfeit_without_withdrawing(self):
+        self.publish(1)
+        pairing = self.rows(1).exclude(second__player__is_bye=True).first()
+        first, second = pairing.first, pairing.second
+
+        self.forfeit(first)
         self.assertTrue(self.bye_shaped(1, first).forfeit)
         self.assertFalse(self.bye_shaped(1, second).forfeit)
+
+        self.forfeit(second)
+        for entrant in (first, second):
+            row = self.bye_shaped(1, entrant)
+            self.assertTrue(row.forfeit, entrant.name)
+            self.assertEqual(row.result.loser_id, entrant.pk)
+            self.assertEqual(row.result.winner_score, 50)
+            # The bye leads either way, so neither is charged a start.
+            self.assertTrue(row.result.winner_started)
+        # Neither has left the tournament.
+        for entrant in (first, second):
+            self.assertFalse(self.division.entrants.get(pk=entrant.pk).dropped)
+
+    def test_the_standings_show_two_losses(self):
+        self.publish(1)
+        pairing = self.rows(1).exclude(second__player__is_bye=True).first()
+        first, second = pairing.first, pairing.second
+        self.forfeit(first)
+        self.forfeit(second)
+
+        from tournaments.pairing.base import PairingData, standings_after_round
+
+        pd = PairingData.for_division(self.division)
+        by_key = {p.key: p for p in standings_after_round(pd, 1, include_dropped=True)}
+        for entrant in (first, second):
+            self.assertEqual(by_key[entrant.key].losses, 1)
+            self.assertEqual(by_key[entrant.key].spread, -50)
+
+    def test_forfeiting_an_already_forfeited_row_is_refused(self):
+        self.publish(1)
+        pairing = self.rows(1).exclude(second__player__is_bye=True).first()
+        self.forfeit(pairing.first)
+        with self.assertRaises(ForfeitError):
+            self.forfeit(pairing.first)
+
+    def test_the_button_is_offered_on_a_bye_row(self):
+        self.publish(1)
+        pairing = self.rows(1).exclude(second__player__is_bye=True).first()
+        self.forfeit(pairing.first)
+        self.client.force_login(self.user)
+        body = self.client.get(
+            reverse("round_pairings_tab",
+                    args=(self.division.tournament.slug, self.division.slug, 1))
+        ).content.decode()
+        # The opponent's bye row offers the way to make it a forfeit too...
+        self.assertIn(f"{pairing.second.name} forfeits", body)
+        # ...and the row that already is one offers nothing.
+        self.assertNotIn(f"{pairing.first.name} forfeits", body)
+
+
+class FlippingAnAbsenceRowInTheGridTests(PrintedRoundBase):
+    """The grid is the way back: a forfeit entered by mistake becomes a bye
+    again by swapping the row's Winner and Opponent, and the pairing's flag
+    follows the score so the board never contradicts the result."""
+
+    def flip(self, division, *, want_forfeit):
+        from tournaments.grids import ResultsGrid
+
+        grid = ResultsGrid()
+        bye_pk = division.bye_entrant().pk
+        rows = []
+        for slip in grid.queryset(division):
+            row = grid.serialize_row(slip)
+            is_forfeit = row["winner"] == bye_pk
+            if bye_pk in (row["winner"], row["loser"]) and is_forfeit != want_forfeit:
+                row["winner"], row["loser"] = row["loser"], row["winner"]
+            rows.append(row)
+        validated, errors = grid.validate(rows, division)
+        self.assertEqual(errors, [])
+        prepared, errors = grid.prepare(division, validated)
+        self.assertEqual(errors, [])
+        grid.persist(division, prepared)
+        grid.after_save(division)
+
+    def test_a_forfeit_can_be_turned_back_into_a_bye(self):
+        self.publish(1)
+        pairing = self.rows(1).exclude(second__player__is_bye=True).first()
+        forfeit_game(
+            self.tournament, self.user,
+            {"division": self.division.name, "round": 1,
+             "player": pairing.first.key},
+        )
+        self.assertTrue(self.bye_shaped(1, pairing.first).forfeit)
+
+        self.flip(self.division, want_forfeit=False)
+        row = self.bye_shaped(1, pairing.first)
+        self.assertFalse(row.forfeit)
+        self.assertEqual(row.result.winner_id, pairing.first.pk)
+
+
+class ForfeitSurfaceTests(PrintedRoundBase):
+    """The pages that expose all this (PLAN_FORFEITS phase 4)."""
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.user)
+        self.slugs = (self.division.tournament.slug, self.division.slug)
+
+    def entrants_page(self):
+        return self.client.get(reverse("division_entrants", args=self.slugs))
+
+    def test_withdraw_and_rejoin_from_the_entrants_page(self):
+        entrant = self.division.entrants.order_by("number").first()
+        withdraw_url = reverse("division_withdraw_entrant", args=self.slugs)
+        self.assertContains(self.entrants_page(), withdraw_url)
+
+        response = self.client.post(withdraw_url, {"player": entrant.key})
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(self.division.entrants.get(pk=entrant.pk).dropped)
+
+        # The row now offers the way back instead.
+        page = self.entrants_page()
+        self.assertContains(page, reverse("division_rejoin_entrant", args=self.slugs))
+        self.client.post(
+            reverse("division_rejoin_entrant", args=self.slugs),
+            {"player": entrant.key},
+        )
+        self.assertFalse(self.division.entrants.get(pk=entrant.pk).dropped)
+
+    def test_the_public_embed_offers_no_withdraw_control(self):
+        # The partial is shared, so this is the check that keeps a director's
+        # action off a page anyone can iframe.
+        response = self.client.get(
+            reverse("division_entrants_embed", args=self.slugs)
+        )
+        self.assertNotContains(
+            response, reverse("division_withdraw_entrant", args=self.slugs)
+        )
+
+    def test_a_forfeit_button_appears_on_a_published_game(self):
+        self.publish(1)
+        response = self.client.get(
+            reverse("round_pairings_tab", args=(*self.slugs, 1))
+        )
+        self.assertContains(response, "forfeits")
+        self.assertContains(response, reverse("forfeit_game", args=self.slugs))
+
+    def test_forfeiting_through_the_view(self):
+        self.publish(1)
+        pairing = self.rows(1).exclude(second__player__is_bye=True).first()
+        absentee, opponent = pairing.first, pairing.second
+        response = self.client.post(
+            reverse("forfeit_game", args=self.slugs),
+            {"round": 1, "player": absentee.key},
+        )
+        # No-JS post: the shared helper flashes and redirects rather than
+        # swapping the pairings body.
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(self.bye_shaped(1, absentee).forfeit)
+        self.assertFalse(self.bye_shaped(1, opponent).forfeit)
+
+    def test_a_forfeit_row_says_forfeit_not_bye(self):
+        self.publish(1)
+        pairing = self.rows(1).exclude(second__player__is_bye=True).first()
+        self.client.post(
+            reverse("forfeit_game", args=self.slugs),
+            {"round": 1, "player": pairing.first.key},
+        )
+        body = self.client.get(
+            reverse("round_pairings_tab", args=(*self.slugs, 1))
+        ).content.decode()
+        self.assertIn("tag-forfeit", body)
+        self.assertIn("tag-bye", body)
+
+    def test_the_public_pairings_page_offers_no_slip_for_an_absence(self):
+        self.publish(1)
+        pairing = self.rows(1).exclude(second__player__is_bye=True).first()
+        self.client.post(
+            reverse("forfeit_game", args=self.slugs),
+            {"round": 1, "player": pairing.first.key},
+        )
+        body = self.client.get(
+            reverse("division_pairings", args=self.slugs)
+        ).content.decode()
+        self.assertIn("tag-forfeit", body)
+
+    def test_the_settings_page_saves_the_absence_rule(self):
+        url = reverse("division_settings", args=self.slugs)
+        self.assertContains(self.client.get(url), "bye_spread")
+        response = self.client.post(
+            url,
+            {"absence": "1", "withdrawal": DivisionSettings.OMIT, "bye_spread": 100},
+        )
+        self.assertEqual(response.status_code, 302)
+        settings = self.division.settings
+        settings.refresh_from_db()
+        self.assertEqual(settings.withdrawal, DivisionSettings.OMIT)
+        self.assertEqual(settings.bye_spread, 100)
+
+    def test_saving_the_absence_rule_does_not_touch_the_schedule(self):
+        # Its own command precisely so a settings form never has to send a
+        # block list it could get wrong.
+        before = self.division.settings.pairing_blocks
+        self.client.post(
+            reverse("division_settings", args=self.slugs),
+            {"absence": "1", "withdrawal": DivisionSettings.FORFEIT,
+             "bye_spread": 75},
+        )
+        settings = self.division.settings
+        settings.refresh_from_db()
+        self.assertEqual(settings.pairing_blocks, before)
+
+
+class WithdrawingSomebodyWhoAlreadySitsOutTests(PrintedRoundBase):
+    """A withdrawal must not be refused because the entrant already has a bye.
+
+    A bye's result is written at publish, so asking "does this game have a
+    result" before asking "is this a bye" turned every such withdrawal into the
+    already-played refusal — and refused it whole, flag included, since the
+    command is atomic. An odd field byes a different player every round, so this
+    was not a corner case.
+    """
+
+    def test_withdrawing_the_player_holding_the_rounds_bye(self):
+        division = make_division(self.user, 5, 4, first_number=901)
+        settings = division.settings
+        settings.withdrawal = DivisionSettings.FORFEIT
+        settings.save(update_fields=["withdrawal"])
+        regenerate_pairings(division)
+        publish_rounds(division, [1])
+        byed = division.pairings.get(round=1, second__player__is_bye=True).first
+
+        withdraw_entrant(
+            division.tournament, self.user,
+            {"division": division.name, "player": byed.key},
+        )
+        self.assertTrue(division.entrants.get(pk=byed.pk).dropped)
+        # A withdrawn player never keeps the winning side of a bye, so the
+        # rotation's own bye becomes a forfeit.
+        row = division.pairings.get(round=1, first=byed)
+        self.assertTrue(row.forfeit)
+        self.assertEqual(row.result.loser_id, byed.pk)
+        self.assertTrue(row.result.winner.player.is_bye)
+
+    def test_both_players_of_one_game_can_withdraw(self):
+        self.publish(1)
+        pairing = self.rows(1).exclude(second__player__is_bye=True).first()
+        first, second = pairing.first, pairing.second
+        for entrant in (first, second):
+            withdraw_entrant(
+                self.tournament, self.user,
+                {"division": self.division.name, "player": entrant.key},
+            )
+        self.assertTrue(self.division.entrants.get(pk=first.pk).dropped)
+        self.assertTrue(self.division.entrants.get(pk=second.pk).dropped)
+        # Both forfeit, with no second step: the first withdrawal handed the
+        # opponent a bye, and the second took the win back off it.
+        for entrant in (first, second):
+            row = self.bye_shaped(1, entrant)
+            self.assertTrue(row.forfeit, entrant.name)
+            self.assertEqual(row.result.loser_id, entrant.pk)
 
 
 class ConvertingAByeToAForfeitTests(PrintedRoundBase):
