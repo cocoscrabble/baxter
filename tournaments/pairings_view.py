@@ -146,12 +146,12 @@ class PairingsPresenter:
 
     @cached_property
     def rounds_with_real_results(self) -> set[int]:
-        """Rounds with a director-entered result. Auto-materialized bye slips
-        don't count, so a freshly published round (bye aside) reads as unplayed
-        and can still be unpublished."""
+        """Rounds with a director-entered result. Auto-materialized bye and
+        forfeit slips don't count, so a freshly published round (those aside)
+        reads as unplayed and can still be unpublished."""
         return set(
             self.division.result_slips
-            .exclude(loser__player__is_bye=True)
+            .played()
             .values_list("round", flat=True)
             .distinct()
         )

@@ -154,13 +154,17 @@ def _add_games(division, players) -> bool:
     would ignore it anyway (it skips a zero score), but it would still count
     toward career games, and career games feed the rating multiplier. The
     official run never sees byes at all, since the results export omits them.
+
+    Forfeits are excluded by the same check (``ResultSlip.is_played``) and for a
+    stronger reason: a forfeit on an already-printed board is a slip between two
+    *real* entrants, so nothing else would stop it being rated.
     """
     slips = division.result_slips.select_related(
         "winner__player", "loser__player"
     ).order_by("round")
     played = False
     for slip in slips:
-        if slip.winner.player.is_bye or slip.loser.player.is_bye:
+        if not slip.is_played:
             continue
         winner = players.get(slip.winner_key)
         loser = players.get(slip.loser_key)

@@ -4,6 +4,7 @@ from collections import Counter
 from datetime import date
 
 from django.test import TestCase
+from django.urls import reverse
 
 from tournaments.fake_tournament import create_fake_tournament
 from tournaments.generate_pairings import (
@@ -14,6 +15,7 @@ from tournaments.generate_pairings import (
 )
 from tournaments.match_simulation import simulate_round
 from tournaments.models import (
+    BYE_PLAYER_NUMBER,
     Division,
     DivisionSettings,
     Entrant,
@@ -378,6 +380,124 @@ class EditByeAndForfeitRowsTests(TestCase):
             bye_game.second.key,
             Entrant.all_objects.get(pk=forfeiter).player.player_number,
         )
+
+
+class NotPlayedPredicateTests(TestCase):
+    """``ResultSlipQuerySet.played`` and the sites that used to open-code it.
+
+    Every one of those was written ``exclude(loser__player__is_bye=True)`` — the
+    bye can only ever *win*. A forfeit slip puts the bye on the other side, so
+    each mis-handled one (plans/PLAN_FORFEITS.md §6). These pin the fix by
+    building the shape the old filters missed.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="n", password="p")
+        self.division = make_division(self.user, 3, 2)
+        regenerate_pairings(self.division)
+        publish_rounds(self.division, [1])
+        self.bye_slip = self.division.result_slips.get(loser__player__is_bye=True)
+
+    def make_forfeit(self):
+        """Turn the round's bye into a forfeit: the bye entrant wins 50–0."""
+        slip = self.bye_slip
+        slip.winner, slip.loser = slip.loser, slip.winner
+        slip.winner_started = True
+        slip.save()
+        return slip
+
+    def test_played_excludes_byes_forfeits_and_bye_wins(self):
+        self.assertNotIn(self.bye_slip, self.division.result_slips.played())
+        self.make_forfeit()
+        self.assertNotIn(self.bye_slip, self.division.result_slips.played())
+        # And the flag alone is enough, with no bye in sight — the shape a
+        # withdrawal from an already-printed board takes.
+        real = self.division.result_slips.exclude(pk=self.bye_slip.pk).first()
+        if real is not None:
+            real.forfeit = True
+            real.save(update_fields=["forfeit"])
+            self.assertNotIn(real, self.division.result_slips.played())
+
+    def test_a_forfeit_does_not_make_a_published_round_in_progress(self):
+        self.make_forfeit()
+        rp = self.division.round_pairings_set.get(round=1)
+        rp.update_status()
+        self.assertEqual(rp.status, RoundPairings.PUBLISHED)
+
+    def test_a_forfeit_does_not_block_unpublishing(self):
+        self.make_forfeit()
+        self.assertEqual(unpublish_rounds(self.division, [1]), [1])
+        # The derived slip goes with it, so the round is a clean draft again.
+        self.assertFalse(self.division.result_slips.filter(round=1).exists())
+        self.assertEqual(
+            self.division.round_pairings_set.get(round=1).status, RoundPairings.DRAFT
+        )
+
+    def test_a_forfeit_stays_out_of_the_registry_export(self):
+        self.make_forfeit()
+        bundle = ExportTournament.from_db(self.division.tournament)
+        results = [r for d in bundle.divisions for r in d.results]
+        # The export keys players by number, so the bye shows up as "BYE".
+        self.assertNotIn(
+            BYE_PLAYER_NUMBER, {k for r in results for k in (r.winner, r.loser)}
+        )
+        self.assertEqual(results, [])
+
+    def test_the_forfeit_flag_alone_keeps_a_game_out_of_the_ratings(self):
+        """The corner case has no bye to recognise: a withdrawal from a round
+        whose board was already printed is a slip between two *real* entrants,
+        so the flag is the only thing that can stop it being rated."""
+        from tournaments.live_ratings import project_ratings
+
+        division = make_division(self.user, 4, 2, first_number=301)
+        division.entrants.update(rating=1500, rating_source=Entrant.COCO)
+        regenerate_pairings(division)
+        publish_rounds(division, [1])
+        games = list(division.pairings.filter(round=1))
+        self.assertEqual(len(games), 2)  # even field, so no bye
+        for i, pairing in enumerate(games):
+            ResultSlip.objects.create(
+                division=division, round=1, pairing=pairing,
+                winner=pairing.first, winner_score=400 + i,
+                loser=pairing.second, loser_score=350,
+                winner_started=True,
+            )
+        rated = project_ratings(division)
+        forfeited, played = games
+
+        forfeited.result.forfeit = True
+        forfeited.result.save(update_fields=["forfeit"])
+        after = project_ratings(division)
+
+        # The forfeited game's players stop moving...
+        for entrant in (forfeited.first, forfeited.second):
+            self.assertNotEqual(rated[entrant.key].new_rating, entrant.rating)
+            self.assertEqual(after[entrant.key].new_rating, entrant.rating)
+        # ...while the game that was actually played still counts.
+        self.assertEqual(
+            rated[played.first.key].new_rating, after[played.first.key].new_rating
+        )
+
+    def test_a_forfeit_stays_out_of_the_results_csv(self):
+        # This export already tested both sides, so it is a guard on the
+        # consolidation onto ``is_played`` rather than a fix. Asserting the real
+        # game *is* there keeps it from passing vacuously.
+        real = self.division.pairings.filter(round=1).exclude(
+            second__player__is_bye=True
+        ).first()
+        ResultSlip.objects.create(
+            division=self.division, round=1, pairing=real,
+            winner=real.first, winner_score=420,
+            loser=real.second, loser_score=390, winner_started=True,
+        )
+        self.make_forfeit()
+        self.division.tournament.editors.add(self.user)
+        self.client.force_login(self.user)
+        body = self.client.get(
+            reverse("division_results_export", kwargs=self.division.slug_kwargs())
+        ).content.decode()
+        self.assertIn(real.first.name, body)
+        self.assertNotIn("Bye", body)
 
 
 class ByeRotationTests(TestCase):
