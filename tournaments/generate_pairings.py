@@ -149,8 +149,13 @@ def commit_withdrawn_to_field(pd, committed):
     return restored
 
 
-def _absence_row(division, round_pairings, entrant, *, forfeit):
-    """One bye-shaped row: a bye when ``forfeit`` is false, else a forfeit."""
+def absence_row(division, round_pairings, entrant, *, forfeit):
+    """One bye-shaped row: a bye when ``forfeit`` is false, else a forfeit.
+
+    The single place a bye-shaped ``Pairing`` is built, so the three callers
+    that need one — pair time, the withdrawal repair, and a hand-entered row in
+    the results grid — cannot disagree about its shape.
+    """
     return Pairing.objects.create(
         division=division,
         round=round_pairings.round,
@@ -674,9 +679,9 @@ def regenerate_pairings(division):
         record_absence = withdrawal_policy(division) == DivisionSettings.FORFEIT
         for absent, opponent in dissolved:
             if opponent is not None:
-                _absence_row(division, rp_obj, opponent, forfeit=False)
+                absence_row(division, rp_obj, opponent, forfeit=False)
             if record_absence:
-                _absence_row(division, rp_obj, absent, forfeit=True)
+                absence_row(division, rp_obj, absent, forfeit=True)
 
         # A withdrawn entrant whose absence is recorded as forfeits gets the same
         # shape, flagged. These are added *on top* of what the engine returned
@@ -687,7 +692,7 @@ def regenerate_pairings(division):
         # them just above, so it is skipped here.
         if round_num not in committed:
             for entrant in forfeiting:
-                _absence_row(division, rp_obj, entrant, forfeit=True)
+                absence_row(division, rp_obj, entrant, forfeit=True)
 
     if bracket is not None:
         # Published rounds are not rebuilt above, so a correction that retired

@@ -325,7 +325,11 @@ class EditByeAndForfeitRowsTests(TestCase):
 
     def test_a_bye_cannot_be_reassigned_to_another_player(self):
         # Who got the bye is the printed board's business, not the result
-        # table's: there is no pairing for the match this would describe.
+        # table's. The grid *will* synthesize a pairing for a hand-entered bye
+        # (phase 5), so what refuses this is the one-game-per-round rule: the
+        # player named already has a game that round, and a second one would
+        # leave the byed player's own row resultless and the round unable to
+        # finish.
         rows = self.rows()
         row = self.bye_row(rows)
         other = next(
