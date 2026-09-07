@@ -129,7 +129,7 @@ def unpublish_rounds(division, round_numbers=None):
         return []
     rounds_with_real_results = set(
         division.result_slips.filter(round__in=candidates)
-        .exclude(loser__player__is_bye=True)
+        .played()
         .values_list("round", flat=True)
     )
     to_unpublish = [r for r in candidates if r not in rounds_with_real_results]
@@ -137,8 +137,8 @@ def unpublish_rounds(division, round_numbers=None):
         return []
     with transaction.atomic():
         ResultSlip.objects.filter(
-            division=division, round__in=to_unpublish, loser__player__is_bye=True
-        ).delete()
+            division=division, round__in=to_unpublish
+        ).not_played().delete()
         division.round_pairings_set.filter(round__in=to_unpublish).update(
             status=RoundPairings.DRAFT
         )
@@ -321,12 +321,12 @@ def regenerate_pairings(division):
         division.round_pairings_set.filter(status=RoundPairings.DRAFT)
         .values_list("round", flat=True)
     )
-    # Auto-created bye results live in draft rounds until published; drop them so
-    # the round can be re-paired cleanly (a draft round with a lingering bye
-    # result would read as Partial and block regeneration).
+    # Auto-created bye and forfeit results live in draft rounds until published;
+    # drop them so the round can be re-paired cleanly (a draft round with a
+    # lingering derived result would read as Partial and block regeneration).
     ResultSlip.objects.filter(
-        division=division, round__in=draft_rounds, loser__player__is_bye=True
-    ).delete()
+        division=division, round__in=draft_rounds
+    ).not_played().delete()
     division.round_pairings_set.filter(status=RoundPairings.DRAFT).delete()
     division.pairings.filter(round_pairings__isnull=True).delete()
 

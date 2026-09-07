@@ -1483,9 +1483,10 @@ class DivisionResultsExportView(LoginRequiredMixin, CanEditDivisionMixin, Detail
                 submitted_on=slip.created_at,
             )
             for slip in slips
-            # A bye is materialized as a result but isn't a played game; leave it
-            # out so it doesn't create a phantom "Bye" player in the ratings.
-            if not (slip.winner.player.is_bye or slip.loser.player.is_bye)
+            # A bye or forfeit is materialized as a result but isn't a played
+            # game; leave it out so a bye doesn't create a phantom "Bye" player
+            # in the ratings and a forfeit isn't rated as a 50–0 win.
+            if slip.is_played
         ]
 
         response = HttpResponse(render_results_csv(rows), content_type="text/csv")

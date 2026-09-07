@@ -587,6 +587,21 @@ class Entrant(models.Model):
     # repeats, and spread. Finished rounds are never re-paired, so a boolean is
     # enough — we never need to know *when* they withdrew.
     dropped = models.BooleanField(default=False)
+    # Whether this entrant's absence is recorded as forfeits: while dropped,
+    # every round published without them gets a 0–50 slip against the bye
+    # entrant (plans/PLAN_FORFEITS.md). The rounds they forfeit are exactly the
+    # rounds published while they were withdrawn, which is why withdrawing needs
+    # no "as of round N" — the log already orders the withdrawal against the
+    # publishes around it, and rejoining leaves the earlier forfeits standing.
+    #
+    # Separate from ``dropped`` on purpose. ``dropped`` alone keeps meaning
+    # "withdrawn, leaving no trace in later rounds" — what every existing log
+    # recorded, and what ``division_digest`` hashes. Deriving forfeits from it
+    # would make every pre-log withdrawal replay to slips its recorded digest
+    # does not have. This flag is deliberately *not* in the digest for the same
+    # reason: its whole effect is the forfeit slips, and those are hashed
+    # already.
+    forfeits = models.BooleanField(default=False)
 
     # -- pinned ratings -----------------------------------------------------
 
@@ -790,6 +805,34 @@ class Entrant(models.Model):
         self.__dict__["_display_name"] = value
 
 
+class ResultSlipQuerySet(models.QuerySet):
+    def played(self):
+        """Games that were actually contested — no byes, no forfeits.
+
+        The one predicate for "this was a real game". It replaced a scatter of
+        ``exclude(loser__player__is_bye=True)`` filters, which assumed the bye
+        could only ever *win*; a forfeit slip puts it on the other side, and
+        every one of those filters mis-handled it.
+        """
+        return self.exclude(
+            models.Q(winner__player__is_bye=True)
+            | models.Q(loser__player__is_bye=True)
+            | models.Q(forfeit=True)
+        )
+
+    def not_played(self):
+        """The complement: the derived slips (byes and forfeits).
+
+        These are re-derived rather than entered, so the paths that rebuild a
+        round delete them and let publish write them again.
+        """
+        return self.filter(
+            models.Q(winner__player__is_bye=True)
+            | models.Q(loser__player__is_bye=True)
+            | models.Q(forfeit=True)
+        )
+
+
 class ResultSlip(models.Model):
     """A game result slip."""
 
@@ -819,7 +862,20 @@ class ResultSlip(models.Model):
     )
     loser_score = models.IntegerField()
     winner_started = models.BooleanField()
+    # Recorded, not played: nobody sat down to this game. Byes and derived
+    # forfeits carry the bye entrant on one side and are recognised by that
+    # alone; this flag exists for the case that has no bye to recognise — a
+    # player withdrawing from a round whose board was already printed, where the
+    # forfeit is written as the result of the real pairing so the board is not
+    # unprinted (plans/PLAN_FORFEITS.md decision 4). Without it, "X forfeited to
+    # Y" is indistinguishable from "Y beat X 50–0".
+    #
+    # It keeps the game out of the ratings and both exports; the standings still
+    # count it, because a forfeit is a loss.
+    forfeit = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
+
+    objects = ResultSlipQuerySet.as_manager()
 
     class Meta:
         ordering = ["round"]
@@ -831,6 +887,14 @@ class ResultSlip(models.Model):
     @property
     def loser_name(self):
         return self.loser.player.name
+
+    @property
+    def is_played(self):
+        """Instance-level ``ResultSlipQuerySet.played``, for the callers holding
+        slips rather than a queryset. Kept next to it so the two cannot drift."""
+        return not (
+            self.forfeit or self.winner.player.is_bye or self.loser.player.is_bye
+        )
 
     @property
     def winner_key(self):
@@ -907,12 +971,13 @@ class RoundPairings(models.Model):
         """Recompute lifecycle status from the current count of results."""
         total = self.pairings.count()
         with_results = self.pairings.filter(result__isnull=False).count()
-        # A bye is auto-recorded at publish time but isn't a played game, so it
-        # doesn't make a round "in progress" — only a real (non-bye) result does.
-        # Byes still count toward `with_results` for reaching FINISHED below.
-        real_results = self.pairings.filter(result__isnull=False).exclude(
-            result__loser__player__is_bye=True
-        ).count()
+        # A bye or forfeit is auto-recorded at publish time but isn't a played
+        # game, so it doesn't make a round "in progress" — only a contested
+        # result does. Both still count toward `with_results` for reaching
+        # FINISHED below.
+        real_results = ResultSlip.objects.filter(
+            pairing__round_pairings=self
+        ).played().count()
         if (
             total > 0
             and with_results == total

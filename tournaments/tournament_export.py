@@ -99,9 +99,9 @@ class ExportDivision:
             ],
             results=[
                 ExportResult.from_db(r)
-                for r in division.result_slips.exclude(
-                    loser__player__is_bye=True
-                ).select_related("winner__player", "loser__player")
+                for r in division.result_slips.played().select_related(
+                    "winner__player", "loser__player"
+                )
             ],
         )
 
