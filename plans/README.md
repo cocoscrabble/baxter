@@ -79,6 +79,16 @@ Current plans:
   WESPA and enter them as a guest with their rating already filled in. Fills
   the fetcher-shaped hole `PLAN_ENTRANTS.md` decision 11 left open.
   **Implemented** (all five phases).
+- `PLAN_FORFEITS.md` — forfeits and dropouts (issue #57): a withdrawn entrant
+  keeps accruing **forfeit slips** (0–50 against the bye entrant), derived at
+  publish exactly as byes are, so "which rounds did they miss" needs no new time
+  field and withdraw-then-rejoin falls out for free. The corner case — a
+  withdrawal landing on an already-published round — is handled by recording the
+  forfeit *as the result of the printed game* rather than splitting the pairing,
+  which would unprint a published board. Also fixes a pre-existing asymmetry:
+  most bye filters are written `loser__player__is_bye`, so they mis-handle a slip
+  with the bye on the winning side. **Not started**; 5 phases, phase 1 is a
+  prerequisite.
 - `PLAN_PASSWORD_RESET.md` — self-service password reset by email. Gated on a
   **phase 0 go/no-go**: publish the domain's missing SPF and DKIM records,
   then prove the production host can send mail as `cocoscrabble.org` and have
