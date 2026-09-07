@@ -17,22 +17,20 @@ two things needing a human — a held-back guest, and a pull that has been faili
 {% endcomment %}
 {% if pending_count %}
 <p class="error"><strong>{{ pending_count }} player{{ pending_count|pluralize }}
-need{{ pending_count|pluralize:"s," }} confirming</strong> — a roster pull found
-a real player number for someone Baxter knows only as a guest, and changed
-nothing pending your say-so.
+need{{ pending_count|pluralize:"s," }} confirming</strong> - the PlayerDB found
+a real player number matching a guest player.
 <a href="{% url 'roster_import' %}">Review {{ pending_count|pluralize:"it,them" }}</a>.</p>
 {% endif %}
 
 {% if last_sync and not last_sync.ok %}
-<p class="error">The last roster pull ({{ last_sync.created_at|timesince }} ago,
+<p class="error">The last PlayerDB sync ({{ last_sync.created_at|timesince }} ago,
 {{ last_sync.get_source_display|lower }}) failed: {{ last_sync.error }}</p>
 {% endif %}
 
 {% if wespa_pending_count %}
 <p class="error"><strong>{{ wespa_pending_count }} WESPA
 name{{ wespa_pending_count|pluralize }} {{ wespa_pending_count|pluralize:"is,are" }}
-ambiguous</strong> — the list and the roster both know the name, but not
-unambiguously, so nothing was changed.
+ambiguous</strong>, requiring human resolution.
 <a href="{% url 'wespa_import' %}">Resolve {{ wespa_pending_count|pluralize:"it,them" }}</a>.</p>
 {% endif %}
 
@@ -48,24 +46,25 @@ ago, {{ last_wespa_sync.get_source_display|lower }}) failed:
 {{ provisional_count }} of them still on a temporary number.</p>
 
 <ul>
-    <li><a href="{% url 'roster_import' %}">Pull the central roster</a> —
-    names, CoCo ratings and rating history from the CoCo player database. Runs
-    on its own every six hours; come here to pull sooner, to upload a snapshot
-    at an event with no connection, or to confirm a guest's new number.
+    <li><a href="{% url 'roster_import' %}">Pull from PlayerDB</a>: Syncs
+    names, CoCo ratings and rating history from the CoCo player database. The
+    automated sync runs periodically; click here to pull sooner, to upload a
+    snapshot at an event with no connection, or to confirm a guest's new
+    number.
     {% if last_sync and last_sync.ok %}Last pull
     {{ last_sync.created_at|timesince }} ago.{% endif %}</li>
 
-    <li><a href="{% url 'player_import' %}">Import players from another Baxter</a>
-    — a JSON export from <code>manage.py export_players</code>. Adds and updates,
-    never deletes.</li>
+    <li><a href="{% url 'player_import' %}">Import players from another Baxter</a>:
+    Upload a JSON export from another instance of Baxter. Adds and updates,
+    never deletes a player from this Baxter's database.</li>
 
-    <li><a href="{% url 'wespa_import' %}">WESPA ratings</a> —
+    <li><a href="{% url 'wespa_import' %}">Pull WESPA ratings</a>: Syncs the
+      latest list of players and ratings from WESPA. The automated sync runs
+      periodically, click here to pull sooner, or to link a player whose name
+      is spelled differently in the two lists. 
+
     {{ wespa_mirror_count }} WESPA player{{ wespa_mirror_count|pluralize }} in
-    Baxter's copy of the list, which the registration page searches so a visitor
-    with no CoCo number can be entered by name. Pulls weekly; come here to pull
-    sooner, or to link a player whose name is spelled differently in the two
-    lists. Separate from the CoCo rating, used only for players who have none,
-    and never sent to the central database.
+    Baxter's copy of the list.
     {% if last_wespa_sync and last_wespa_sync.ok %}Last pull
     {{ last_wespa_sync.created_at|timesince }} ago.{% endif %}</li>
 </ul>
