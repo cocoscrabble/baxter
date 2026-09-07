@@ -277,13 +277,17 @@ is dead weight until the second one lands:
   on is precisely what produced the asymmetry §6 fixes — six call sites that all
   assumed the bye could only win. A column that says what the row is does not
   have that failure mode.
-- **The unscored game is coming.** TSH's `off 0` records "a missed game without
-  assigning a win or loss", and a 0–0 slip has no winner to put the bye on, so
-  direction cannot encode it. Whatever carries that case is this column or a
-  successor to it.
+- ~~**The unscored game is coming.**~~ **This one has expired.** A 0–0 absence
+  row already scores as a tie (§3b, TSH gap 2), and the only thing left
+  unexpressed — a true nonevent — needs an engine-boundary change, not this
+  column: the outcome is derived from the spread, so a marker only helps if the
+  engine is taught to read it.
 
-If neither argument survives contact with phase 3, drop the column — it is one
-migration, and a dead flag is worse than none.
+**So the column is now doing nothing.** `played()` excludes anything with the
+bye on either side, and since decision 4 every forfeit carries the bye, so the
+`forfeit=True` clause is unreachable. It is one migration to remove, plus the
+usual renumber of the digest backfill. Remove it unless the nonevent gets
+built.
 
 ### 6. Fix the `loser__player__is_bye` asymmetry while we are here
 
@@ -326,16 +330,24 @@ is the rejoin case. So the shape of this plan matches the reference.
    Thailand, 300 Poland. Still outstanding: `floss` takes a *per-call* spread,
    so a one-off forfeit can be scored differently from the tournament default.
 
-2. **There is a third outcome: the unscored game.** `off 0` "will record a missed
-   game without assigning a win or loss"; `bye_spread = 0` makes byes "count
-   neither as wins nor losses". In the standings loop a zero-spread bye
-   increments neither `wins` nor `losses` — the round simply does not exist for
-   that player. This plan has only bye (a win) and forfeit (a loss). `off 50`
-   is a third withdrawal mode again: withdrawn but credited a bye every round.
+2. **A zero-spread absence.** ~~Mostly closed~~ — a director can already score
+   an absence row `0–0` in the edit-results grid, and it behaves sensibly: the
+   engine derives the outcome from the spread (`standings.rs:138`), so zero is a
+   **tie** — half a point, no spread, unrated, outside `played()`. That is TSH's
+   `zero_byes_tie = 1`.
 
-3. **A bye is not necessarily a win.** `all_byes_tie` (Poland) scores every bye
-   as half a win, and `zero_byes_tie` makes a zero-spread bye a tie rather than a
-   nonevent.
+   What is still not expressible is TSH's *default* for `off 0` / `bye_spread =
+   0`: a **nonevent**, neither win nor loss nor tie, with the round simply not
+   existing for that player. It cannot be, by construction — the outcome comes
+   from the spread, and a spread of zero is a tie by definition, so telling "they
+   drew" from "nothing happened" would need a marker on the slip *and* a change
+   at the engine boundary to honour it. Worth doing only if somebody wants the
+   half point gone. `off 50` (withdrawn but credited a bye every round) is
+   likewise unbuilt.
+
+3. **A bye is not necessarily a win.** `all_byes_tie` (Poland) scores *every*
+   bye as half a win — still unbuilt, though scoring one row `0–0` gets there by
+   hand (item 2).
 
 4. **Withdrawal carries a spread, not a boolean.** `Deactivate($spread)` stores
    an integer, and the modes above are just its sign. Partly closed: the
