@@ -1365,9 +1365,11 @@ dd {
 
 .settings-fields {
     display: grid;
-    /* The third column caps the help text's measure; nothing else is capped,
-       so it gets the width rather than being squeezed by a wrapper. */
-    grid-template-columns: max-content max-content minmax(12rem, 44rem);
+    /* The third column caps the help text's measure and takes whatever width is
+       left. `minmax(0, ...)` rather than a floor, so a group with no help text
+       at all (the playoff form's three selects) collapses it instead of
+       reserving a column for nothing. */
+    grid-template-columns: max-content max-content minmax(0, 44rem);
     gap: var(--space-xs) var(--space-md);
     align-items: baseline;
     margin-bottom: var(--space-md);
