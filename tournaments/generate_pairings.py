@@ -4,6 +4,8 @@ Generates pairings from the pairing algorithm, resolves fixed table assignments,
 assigns table numbers, and persists RoundPairings + Pairing records.
 """
 
+from collections import defaultdict
+
 from django.db import transaction
 from django.db.models import Q
 
@@ -52,6 +54,112 @@ def withdrawal_policy(division):
         return division.settings.withdrawal
     except DivisionSettings.DoesNotExist:
         return DivisionSettings.OMIT
+
+
+# The strategies that lay out several rounds at once over a *fixed* field: the
+# block is a template — a rotation, or a grouping into quads — decided when it
+# begins rather than round by round from results. Losing a player partway
+# through must not re-cut it.
+#
+# These are exactly the strategies that call ``guard_no_dropped_in_block`` in the
+# engine (`strategies/roundrobin.rs`, `strategies/quads.rs`), which is the list
+# to check this against: a strategy that guards there and is missing here goes
+# back to refusing outright, and one added here that does not guard there is
+# being handed a field it never asked to keep.
+_FIXED_FIELD_STRATEGIES = frozenset(
+    str(rp)
+    for rp in (
+        RP.RoundRobin,
+        RP.DoubleRoundRobin,
+        RP.Charlottesville,
+        RP.Quads_Clustered,
+        RP.Quads_Distributed,
+        RP.Quads_Equalized,
+        RP.Sixes,
+    )
+)
+
+
+def committed_field_rounds(division, pd):
+    """Rounds whose field is fixed because their block has already started.
+
+    A round robin over N players is an N-1 round rotation of a template; a quad
+    block is a grouping into fours. Either way the schedule is decided when the
+    block begins, and it belongs to the players who began it. Losing one of them
+    partway through does not re-cut it — it voids that player's remaining
+    fixtures and leaves everyone else's alone.
+
+    So for a block already under way the engine is handed the field that
+    *started* it, withdrawals included, and ``regenerate_pairings`` dissolves the
+    withdrawn player's fixtures when the pairings come back. A block that has not
+    started yet is not committed to anybody and is simply solved for whoever is
+    left, which is the better tournament.
+
+    Blocks are keyed as the engine keys them (`strategies/roundrobin.rs`): the
+    rounds sharing a pairing *and* a start_round.
+    """
+    started = set(
+        division.round_pairings_set.exclude(status=RoundPairings.DRAFT)
+        .values_list("round", flat=True)
+    )
+    if not started:
+        return set()
+    blocks = defaultdict(set)
+    for rp in pd.round_pairings:
+        if str(rp.pairing) in _FIXED_FIELD_STRATEGIES:
+            blocks[(str(rp.pairing), rp.start_round)].add(rp.round)
+    return {
+        round_num
+        for rounds in blocks.values()
+        if rounds & started
+        for round_num in rounds
+    }
+
+
+def commit_withdrawn_to_field(pd, committed):
+    """Restore withdrawn entrants to the field for ``committed`` rounds.
+
+    Two edits to the engine input, no engine change (the rules here are
+    Baxter's, not the pairer's):
+
+    * the withdrawal is lifted, so the round-robin template is cut for the field
+      that started the block and every other player's fixtures stay put;
+    * the entrant is marked *inactive* in every round outside those blocks,
+      which is the engine's existing "no game, no bye, not withdrawn" — exactly
+      what a withdrawal means to an ordinary round, and what playoffs already
+      use to pair around reserved players.
+
+    Returns the keys restored, which are the ones whose fixtures the caller has
+    to dissolve on the way back.
+    """
+    if not committed:
+        return set()
+    restored = {e.player.key for e in pd.entrants if e.dropped}
+    if not restored:
+        return set()
+    for entrant in pd.entrants:
+        if entrant.player.key in restored:
+            entrant.dropped = False
+    for rp in pd.round_pairings:
+        if rp.round not in committed:
+            pd.inactive_players.setdefault(rp.round, [])
+            pd.inactive_players[rp.round] = list(
+                dict.fromkeys([*pd.inactive_players[rp.round], *sorted(restored)])
+            )
+    return restored
+
+
+def _absence_row(division, round_pairings, entrant, *, forfeit):
+    """One bye-shaped row: a bye when ``forfeit`` is false, else a forfeit."""
+    return Pairing.objects.create(
+        division=division,
+        round=round_pairings.round,
+        round_pairings=round_pairings,
+        first=entrant,
+        second=division.bye_entrant(),
+        table=0,
+        forfeit=forfeit,
+    )
 
 
 def _is_bye_key(key):
@@ -317,6 +425,11 @@ def regenerate_pairings(division):
         division.pairings.filter(round_pairings__isnull=True).delete()
         return
     _ensure_cop_config(division, pd)
+    # A round-robin block already under way keeps the field that started it; the
+    # withdrawn player's remaining fixtures are dissolved below rather than
+    # re-cut out of the template.
+    committed = committed_field_rounds(division, pd)
+    committed_keys = commit_withdrawn_to_field(pd, committed)
     engine_rounds = dict(pair_with_engine(pd)) if pd.round_pairings else {}
     playoff_games = bracket.scheduled_by_round() if bracket is not None else {}
     if bracket is not None and playoff.timing == Playoff.POSTSCRIPT:
@@ -438,13 +551,35 @@ def regenerate_pairings(division):
         # get no table and don't participate in the board-ordering sort.
         resolved = []
         bye_pairings = []
+        # Fixtures the withdrawn player's absence dissolves in a committed
+        # round-robin round: the opponent takes the bye, the absentee a forfeit.
+        # Same shape as every other absence, so nothing downstream can tell a
+        # dissolved fixture from a withdrawal that predated the pairing.
+        dissolved = []
         for p in engine_rounds.get(round_num, []):
             first_entrant = resolve_entrant(p.first.key)
             second_entrant = resolve_entrant(p.second.key)
             if not first_entrant or not second_entrant:
                 continue
             if _is_bye_key(p.first.key) or _is_bye_key(p.second.key):
+                if p.first.key in committed_keys or p.second.key in committed_keys:
+                    # The template handed the withdrawn player the round's bye.
+                    # It is theirs to forfeit; nobody else gains one.
+                    absent = (
+                        first_entrant
+                        if p.first.key in committed_keys
+                        else second_entrant
+                    )
+                    dissolved.append((absent, None))
+                    continue
                 bye_pairings.append((p, first_entrant, second_entrant))
+                continue
+            if p.first.key in committed_keys or p.second.key in committed_keys:
+                if p.first.key in committed_keys:
+                    absent, opponent = first_entrant, second_entrant
+                else:
+                    absent, opponent = second_entrant, first_entrant
+                dissolved.append((absent, opponent))
                 continue
             ranks = (rank[p.first.key], rank[p.second.key])
             effective = effective_fixed_table(
@@ -534,22 +669,25 @@ def regenerate_pairings(division):
                 table=0,
             )
 
+        # A dissolved fixture: the opponent's bye, then the absentee's forfeit
+        # (only if this division records absences at all).
+        record_absence = withdrawal_policy(division) == DivisionSettings.FORFEIT
+        for absent, opponent in dissolved:
+            if opponent is not None:
+                _absence_row(division, rp_obj, opponent, forfeit=False)
+            if record_absence:
+                _absence_row(division, rp_obj, absent, forfeit=True)
+
         # A withdrawn entrant whose absence is recorded as forfeits gets the same
         # shape, flagged. These are added *on top* of what the engine returned
         # rather than mixed into it: the engine never saw the withdrawn entrant
         # (``dropped`` removes them from the pairable field), so the odd-field
         # bye above was computed on the remaining players and adding these
-        # cannot disturb its parity.
-        for entrant in forfeiting:
-            Pairing.objects.create(
-                division=division,
-                round=round_num,
-                round_pairings=rp_obj,
-                first=entrant,
-                second=division.bye_entrant(),
-                table=0,
-                forfeit=True,
-            )
+        # cannot disturb its parity. A committed round has already dealt with
+        # them just above, so it is skipped here.
+        if round_num not in committed:
+            for entrant in forfeiting:
+                _absence_row(division, rp_obj, entrant, forfeit=True)
 
     if bracket is not None:
         # Published rounds are not rebuilt above, so a correction that retired

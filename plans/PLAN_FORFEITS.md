@@ -105,6 +105,46 @@ leaving after round 5, and a lenient exit are different calls in one event. An
 override on top of this default can be added when someone asks; starting
 per-entrant and adding a default later leaves both to maintain.
 
+### 3a. A committed block keeps the field that started it
+
+A round robin is a rotation over a fixed field; a quad block is a grouping into
+fours. Both lay out several rounds at once, so the schedule is decided when the
+block begins and belongs to the players who began it. Losing one of them partway
+through must not re-cut the template — everyone else's remaining fixtures are
+already promised.
+
+**Handled in Baxter, not the engine.** The engine is handed the field that
+*started* the block and pairs it exactly as it always would; `regenerate_pairings`
+dissolves the withdrawn player's fixtures when the pairings come back, into the
+same bye-and-forfeit pair every other absence produces. Two edits to the engine
+input, both Baxter's rules rather than the pairer's
+(`committed_field_rounds` / `commit_withdrawn_to_field`):
+
+- the withdrawal is lifted for those rounds, so the template is cut whole;
+- the entrant is listed in `inactive_players` for every round *outside* those
+  blocks — the engine's existing "no game, no bye, not withdrawn", which is what
+  a withdrawal already means to an ordinary round, and what playoffs use to pair
+  around reserved players.
+
+A block that has **not** started is not committed to anybody and is simply
+solved for whoever is left, which is the better tournament.
+
+The strategies this covers are exactly the ones calling
+`guard_no_dropped_in_block` in the engine — round robin, double round robin,
+Charlottesville, the three quad variants and sixes. That guard is the list to
+check `_FIXED_FIELD_STRATEGIES` against, and it is now effectively unreachable
+from Baxter: a block with results in it is by definition committed, so the
+engine is never asked to re-pair around a withdrawal. It stays as the engine's
+own safety net.
+
+Two consequences worth knowing:
+
+- **An odd field can carry two byes in a round** — the rotation's own, plus the
+  one the absence creates. That is correct; what must not happen is a player
+  appearing twice or not at all.
+- **When the rotation hands the bye to the withdrawn player**, it is theirs to
+  forfeit. Nobody else gains one, or the round would be a game short.
+
 ### 4. The corner case — the pairing is split, and the split is recorded
 
 The case the issue raises: X is paired against Y in round 5, round 5 is
@@ -377,14 +417,14 @@ round, and a game that already has a result is refused outright.
 reaches the log and a replay rebuilds it. Absent keys leave the fields alone,
 so every payload written before they existed replays unchanged.
 
-**The round-robin hazard turned out to be much smaller than §4 feared.**
-`published_pairings`' two uses never collide, because a round robin that loses a
-player mid-block *refuses to re-solve at all* — `guard_no_dropped_in_block`
-already errors rather than re-pairing around a withdrawal. The one real
-interaction was that the guard counted forfeit slips as games played inside the
-block, so a round-robin block scheduled to start after a withdrawal locked up
-the moment its first round went live; the guard now skips bye-shaped slips. No
-separation of the two uses was needed.
+**The round-robin hazard §4 feared never materialised**, and the real problem
+turned out to be a different one. `published_pairings`' two uses never collide,
+because a round robin that loses a player mid-block did not re-solve wrongly —
+it refused to solve at all, leaving the division unpairable until the director
+rewrote the schedule. Two fixes, neither of them a separation of those uses:
+`guard_no_dropped_in_block` no longer counts bye-shaped slips as games played in
+the block, and §3a keeps the field whole so the guard is not reached in the
+first place.
 
 *Verified* (`tournaments/tests/test_forfeit_commands.py`): the printed game is
 split into a bye and a forfeit with the right scores and starts; the opponent
