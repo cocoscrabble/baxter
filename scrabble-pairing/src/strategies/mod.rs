@@ -18,7 +18,7 @@ use rand_core::RngCore;
 use crate::matching::max_weight_matching_pairs;
 use crate::model::{CopConfig, PlayerData, ResultSlipData, SwissConfig};
 use crate::round_pairing::RoundPairing;
-use crate::standings::{standings_after_round, Pairing, Pairings, Player, Repeats};
+use crate::standings::{standings_after_round, Pairing, Pairings, Player, Repeats, BYE_NAME};
 
 /// Fixed-point scale for the random tiebreak in `pair_no_repeats_blossom`. The
 /// matching takes `i128` weights, so a fractional random tiebreak is expressed as
@@ -77,6 +77,23 @@ pub fn guard_no_dropped_in_block(
     }
     for s in ctx.slips {
         if !block_rounds.contains(&s.round) {
+            continue;
+        }
+        // A bye or forfeit is not a fixture. The guard is looking for evidence
+        // that the schedule is already committed to this player -- games they
+        // actually played inside the block -- and a slip against the bye is
+        // evidence of the opposite: they sat the round out.
+        //
+        // Skipping them is what makes this error's own advice work. A division
+        // that records withdrawals as forfeits materializes one such slip per
+        // round at publish, so counting them meant a round-robin block starting
+        // *after* a withdrawal pinned itself shut the moment its first round
+        // went live -- "enter forfeits" produced the very error it was offered
+        // as the way out of.
+        if [&s.winner_name, &s.loser_name]
+            .iter()
+            .any(|n| n.eq_ignore_ascii_case(BYE_NAME))
+        {
             continue;
         }
         for name in [&s.winner_name, &s.loser_name] {
