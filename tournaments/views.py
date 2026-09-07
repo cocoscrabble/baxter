@@ -32,6 +32,7 @@ from .live_ratings import project_ratings
 from .player_source import get_player_source
 from datastar_py.django import read_signals
 from .forms import (
+    AbsenceSettingsForm,
     CopConfigForm,
     FakeTournamentForm,
     GuestForm,
@@ -78,6 +79,13 @@ from .commands import (
     update_playoff,
     update_tournament,
 )
+from .forfeits import (
+    ForfeitError,
+    forfeit_game,
+    rejoin_entrant,
+    save_absence_settings,
+    withdraw_entrant,
+)
 from .grids import BoardTableMapGrid, EntrantsGrid, FixedPairingsGrid, FixedTablesGrid, ResultsGrid
 from coco_ratings.identity import canonical_player_number
 from .models import (
@@ -120,7 +128,12 @@ from . import wespa_sync
 from .wespa_api import wespa_endpoint_configured
 from .wespa_ratings import link_player, unlink_player
 from users.models import User
-from .generate_pairings import publish_rounds, regenerate_pairings, unpublish_rounds
+from .generate_pairings import (
+    publish_rounds,
+    regenerate_pairings,
+    unpublish_rounds,
+    withdrawal_policy,
+)
 from .pairing.base import PairingData, PairingError, standings_after_round
 from .pairing.round_pairing import STRATEGY_TYPES
 from .pairings_view import PairingsPresenter, PublishedPairingsPresenter
@@ -797,6 +810,93 @@ class DivisionRefreshRatingsView(LoginRequiredMixin, CanEditDivisionMixin, View)
             f"{moved} rating(s) changed.",
         )
         return back
+
+
+class _EntrantAbsenceView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    """Shared plumbing for the two withdrawal controls on the entrants page."""
+
+    def post(self, request, *args, **kwargs):
+        division = self.get_division()
+        back = redirect(
+            "division_entrants", division.tournament.slug, division.slug
+        )
+        key = request.POST.get("player", "")
+        entrant = division.entrants.filter(
+            player__player_number=key
+        ).select_related("player").first()
+        if entrant is None:
+            messages.error(request, "No such entrant in this division.")
+            return back
+        try:
+            self.apply(division, request, entrant)
+        except ForfeitError as exc:
+            messages.error(request, str(exc))
+        return back
+
+
+class DivisionWithdrawEntrantView(_EntrantAbsenceView):
+    """Withdraw an entrant: no more pairings, and — if the division records
+    absences — a forfeit for every round from here on."""
+
+    def apply(self, division, request, entrant):
+        withdraw_entrant(
+            division.tournament, request.user,
+            {"division": division.name, "player": entrant.key},
+        )
+        if withdrawal_policy(division) == DivisionSettings.FORFEIT:
+            messages.success(
+                request,
+                f"{entrant.name} withdrew; the rounds they miss from here on "
+                "will be recorded as forfeits.",
+            )
+        else:
+            messages.success(
+                request,
+                f"{entrant.name} withdrew. This division leaves the rounds they "
+                "miss blank — change that under Settings if you want forfeits.",
+            )
+
+
+class DivisionRejoinEntrantView(_EntrantAbsenceView):
+    """Put a withdrawn entrant back in the field. The rounds they missed keep
+    whatever was recorded while they were out."""
+
+    def apply(self, division, request, entrant):
+        rejoin_entrant(
+            division.tournament, request.user,
+            {"division": division.name, "player": entrant.key},
+        )
+        messages.success(
+            request,
+            f"{entrant.name} rejoined. The rounds they missed are unchanged.",
+        )
+
+
+class ForfeitGameView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    """One player forfeits one printed game. Their opponent takes a bye, so
+    neither game is rated and the round can still finish."""
+
+    def post(self, request, *args, **kwargs):
+        division = self.get_division()
+        data = (read_signals(request) or {}) if is_datastar(request) else request.POST
+        round_num, bad_round = _read_int(data, "round")
+        if bad_round:
+            return bad_round
+        error = None
+        try:
+            forfeit_game(
+                division.tournament, request.user,
+                {"division": division.name, "round": round_num,
+                 "player": data.get("player", "")},
+            )
+        except (ForfeitError, Entrant.DoesNotExist) as exc:
+            # Surfaced as a banner on the pairings body, like a PairingError:
+            # a forfeit that cannot be applied (the game is played, the player
+            # is double-booked) is the director's to resolve, not a 500.
+            error = str(exc) or "That entrant is not in this division."
+        return _pairings_body_response(
+            request, division, select_round=round_num, error=error
+        )
 
 
 @method_decorator(xframe_options_exempt, name="dispatch")
@@ -1509,6 +1609,22 @@ class DivisionSettingsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
 
     def post(self, request, *args, **kwargs):
         division = self.get_division()
+        # Two independent forms on one page, told apart by the submit button's
+        # name so neither validates the other's fields.
+        if "absence" in request.POST:
+            absence = AbsenceSettingsForm.for_division(division, request.POST)
+            if absence.is_valid():
+                save_absence_settings(
+                    division.tournament, request.user,
+                    {"division": division.name, **absence.cleaned_data},
+                )
+                messages.success(request, "Absence settings saved.")
+                return redirect("division_settings", **division.slug_kwargs())
+            return render(
+                request, self.template_name,
+                self._context(division, CopConfigForm(initial=self._cop_config(division)),
+                              absence=absence),
+            )
         form = CopConfigForm(request.POST)
         if form.is_valid():
             save_cop_config(
@@ -1532,12 +1648,13 @@ class DivisionSettingsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
             return False
         return any(rp.get("pairing") == str(RP.COP) for rp in rps)
 
-    def _context(self, division, form) -> dict:
+    def _context(self, division, form, absence=None) -> dict:
         return {
             "division": division,
             "active_tab": "settings",
             "can_edit": True,
             "form": form,
+            "absence_form": absence or AbsenceSettingsForm.for_division(division),
             "uses_cop": self._uses_cop(division),
         }
 

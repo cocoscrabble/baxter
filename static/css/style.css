@@ -1082,6 +1082,44 @@ dd {
     vertical-align: middle;
 }
 
+/* A pairing row that is not a game. A bye and a forfeit are the same shape --
+   one real entrant against the bye entrant -- so the label is what tells a
+   director which they are looking at (plans/PLAN_FORFEITS.md). */
+.tag-bye,
+.tag-forfeit {
+    display: inline-block;
+    font-size: 0.75em;
+    font-weight: bold;
+    padding: 1px 6px;
+    border-radius: var(--radius-sm);
+    vertical-align: middle;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.tag-bye {
+    background-color: var(--color-muted-bg);
+    color: #fff;
+}
+
+.tag-forfeit {
+    background-color: var(--color-danger);
+    color: #fff;
+}
+
+/* Per-player forfeit buttons on a published round's unplayed games. */
+.btn-forfeit {
+    font-size: 0.8rem;
+    padding: 4px 10px;
+    margin-right: 4px;
+}
+
+/* Compact action button inside a table row (Withdraw / Rejoin). */
+.btn-small {
+    font-size: 0.8rem;
+    padding: 3px 10px;
+}
+
 /* Marker for a withdrawn (dropped) entrant in standings/entrant lists. */
 .tag-dropped {
     display: inline-block;

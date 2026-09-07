@@ -156,6 +156,27 @@ def _invalidate_drafts(division):
     division.round_pairings_set.filter(status=RoundPairings.DRAFT).delete()
 
 
+@records_event("division_absence_settings_saved")
+def save_absence_settings(tournament, actor, payload):
+    """payload: {division, withdrawal, bye_spread} — how absences are scored.
+
+    Its own command rather than a corner of ``division_settings_saved``, which
+    is the *schedule's* writer: changing how a withdrawal is scored should not
+    require sending a whole block list, and a block list is not something a
+    settings form should be able to get wrong.
+    """
+    division = _division(tournament, payload["division"])
+    settings_obj, _ = DivisionSettings.objects.get_or_create(division=division)
+    settings_obj.withdrawal = payload["withdrawal"]
+    settings_obj.bye_spread = payload["bye_spread"]
+    settings_obj.save(update_fields=["withdrawal", "bye_spread"])
+    # Draft rounds were laid out under the old rule, so they are stale — a
+    # division switching to FORFEIT wants its forfeit rows, and one switching
+    # away wants them gone.
+    _invalidate_drafts(division)
+    return EventResult(payload=payload, division=division, result=settings_obj)
+
+
 @records_event("entrant_withdrawn")
 def withdraw_entrant(tournament, actor, payload):
     """payload: {division, player} — the entrant withdraws from here on.

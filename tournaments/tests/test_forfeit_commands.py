@@ -7,11 +7,13 @@ land on the same shape.
 """
 
 from django.test import TestCase
+from django.urls import reverse
 
 from tournaments.forfeits import (
     ForfeitError,
     forfeit_game,
     rejoin_entrant,
+    save_absence_settings,
     withdraw_entrant,
 )
 from tournaments.generate_pairings import publish_rounds, regenerate_pairings
@@ -279,6 +281,9 @@ class ForfeitReplayTests(TestCase):
         save_settings(tournament, user, {
             "division": "D",
             "blocks": [{"pairing": "KotH", "rounds": 4, "pair_from": 1}],
+        })
+        save_absence_settings(tournament, user, {
+            "division": "D",
             "withdrawal": DivisionSettings.FORFEIT,
             "bye_spread": 100,
         })
@@ -304,3 +309,116 @@ class ForfeitReplayTests(TestCase):
         self.assertEqual(division_digest(rebuilt), expected)
         self.assertEqual(rebuilt.settings.bye_spread, 100)
         self.assertEqual(rebuilt.settings.withdrawal, DivisionSettings.FORFEIT)
+
+
+class ForfeitSurfaceTests(PrintedRoundBase):
+    """The pages that expose all this (PLAN_FORFEITS phase 4)."""
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.user)
+        self.slugs = (self.division.tournament.slug, self.division.slug)
+
+    def entrants_page(self):
+        return self.client.get(reverse("division_entrants", args=self.slugs))
+
+    def test_withdraw_and_rejoin_from_the_entrants_page(self):
+        entrant = self.division.entrants.order_by("number").first()
+        withdraw_url = reverse("division_withdraw_entrant", args=self.slugs)
+        self.assertContains(self.entrants_page(), withdraw_url)
+
+        response = self.client.post(withdraw_url, {"player": entrant.key})
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(self.division.entrants.get(pk=entrant.pk).dropped)
+
+        # The row now offers the way back instead.
+        page = self.entrants_page()
+        self.assertContains(page, reverse("division_rejoin_entrant", args=self.slugs))
+        self.client.post(
+            reverse("division_rejoin_entrant", args=self.slugs),
+            {"player": entrant.key},
+        )
+        self.assertFalse(self.division.entrants.get(pk=entrant.pk).dropped)
+
+    def test_the_public_embed_offers_no_withdraw_control(self):
+        # The partial is shared, so this is the check that keeps a director's
+        # action off a page anyone can iframe.
+        response = self.client.get(
+            reverse("division_entrants_embed", args=self.slugs)
+        )
+        self.assertNotContains(
+            response, reverse("division_withdraw_entrant", args=self.slugs)
+        )
+
+    def test_a_forfeit_button_appears_on_a_published_game(self):
+        self.publish(1)
+        response = self.client.get(
+            reverse("round_pairings_tab", args=(*self.slugs, 1))
+        )
+        self.assertContains(response, "forfeits")
+        self.assertContains(response, reverse("forfeit_game", args=self.slugs))
+
+    def test_forfeiting_through_the_view(self):
+        self.publish(1)
+        pairing = self.rows(1).exclude(second__player__is_bye=True).first()
+        absentee, opponent = pairing.first, pairing.second
+        response = self.client.post(
+            reverse("forfeit_game", args=self.slugs),
+            {"round": 1, "player": absentee.key},
+        )
+        # No-JS post: the shared helper flashes and redirects rather than
+        # swapping the pairings body.
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(self.bye_shaped(1, absentee).forfeit)
+        self.assertFalse(self.bye_shaped(1, opponent).forfeit)
+
+    def test_a_forfeit_row_says_forfeit_not_bye(self):
+        self.publish(1)
+        pairing = self.rows(1).exclude(second__player__is_bye=True).first()
+        self.client.post(
+            reverse("forfeit_game", args=self.slugs),
+            {"round": 1, "player": pairing.first.key},
+        )
+        body = self.client.get(
+            reverse("round_pairings_tab", args=(*self.slugs, 1))
+        ).content.decode()
+        self.assertIn("tag-forfeit", body)
+        self.assertIn("tag-bye", body)
+
+    def test_the_public_pairings_page_offers_no_slip_for_an_absence(self):
+        self.publish(1)
+        pairing = self.rows(1).exclude(second__player__is_bye=True).first()
+        self.client.post(
+            reverse("forfeit_game", args=self.slugs),
+            {"round": 1, "player": pairing.first.key},
+        )
+        body = self.client.get(
+            reverse("division_pairings", args=self.slugs)
+        ).content.decode()
+        self.assertIn("tag-forfeit", body)
+
+    def test_the_settings_page_saves_the_absence_rule(self):
+        url = reverse("division_settings", args=self.slugs)
+        self.assertContains(self.client.get(url), "bye_spread")
+        response = self.client.post(
+            url,
+            {"absence": "1", "withdrawal": DivisionSettings.OMIT, "bye_spread": 100},
+        )
+        self.assertEqual(response.status_code, 302)
+        settings = self.division.settings
+        settings.refresh_from_db()
+        self.assertEqual(settings.withdrawal, DivisionSettings.OMIT)
+        self.assertEqual(settings.bye_spread, 100)
+
+    def test_saving_the_absence_rule_does_not_touch_the_schedule(self):
+        # Its own command precisely so a settings form never has to send a
+        # block list it could get wrong.
+        before = self.division.settings.pairing_blocks
+        self.client.post(
+            reverse("division_settings", args=self.slugs),
+            {"absence": "1", "withdrawal": DivisionSettings.FORFEIT,
+             "bye_spread": 75},
+        )
+        settings = self.division.settings
+        settings.refresh_from_db()
+        self.assertEqual(settings.pairing_blocks, before)

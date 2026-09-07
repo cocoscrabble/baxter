@@ -93,8 +93,11 @@ Current plans:
   The withdrawal policy and the jurisdictional bye spread are per-division
   settings, not per-entrant flags. **Phase 3 done**: the withdrawal,
   rejoin and single-game-forfeit commands in `tournaments/forfeits.py`, which
-  split an already-printed game into a bye and a forfeit; phases 4–5 (the UI,
-  and entering either by hand in the results grid) not started.
+  split an already-printed game into a bye and a forfeit. **Phase 4 done**:
+  Withdraw/Rejoin on the entrants page, a named forfeit button per side of a
+  printed game, bye/forfeit labelling, and a settings section for the policy and
+  the jurisdictional bye spread; phase 5 (entering either by hand in the results
+  grid) not started.
 - `PLAN_PASSWORD_RESET.md` — self-service password reset by email. Gated on a
   **phase 0 go/no-go**: publish the domain's missing SPF and DKIM records,
   then prove the production host can send mail as `cocoscrabble.org` and have
