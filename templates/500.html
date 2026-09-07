@@ -1,0 +1,40 @@
+{% comment %}
+Standalone on purpose — this one must not extend base.html.
+
+Django renders 500.html with an empty Context: no request, no context
+processors. base.html reads `user`, which would hit the database from
+inside the error handler, and a 500 caused by the database going away is
+exactly when that happens. A page that fails to render leaves the visitor
+with the bare WSGI error instead. So: no template inheritance, no context,
+no queries, and inline styles so it works even if the static files are the
+thing that broke.
+
+Nothing here says what went wrong. The traceback goes to the logs
+(settings.LOGGING sends django.request to stdout — see
+gotcha_dokku_logs_need_stdout); a visitor gets no detail by design.
+{% endcomment %}<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Something went wrong - Baxter</title>
+    <style>
+        body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+               margin: 0; padding: 3rem 1.5rem; color: #222; background: #fff; }
+        .wrap { max-width: 34rem; margin: 0 auto; }
+        h1 { font-size: 1.6rem; margin: 0 0 1rem; }
+        p { line-height: 1.5; }
+        a { color: #531882; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <h1>Something went wrong</h1>
+        <p>Baxter hit an error handling that request. Nothing you did caused
+        it, and it has been recorded.</p>
+        <p>Try again in a moment. If it keeps happening, tell the tournament
+        organiser what you were doing when it broke.</p>
+        <p><a href="/tournaments/">Back to tournaments</a></p>
+    </div>
+</body>
+</html>
