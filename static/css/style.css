@@ -1339,6 +1339,94 @@ dd {
     margin: var(--space-md) 0;
 }
 
+/* ── Settings page ────────────────────────────────────────── */
+
+/* Label, control and help text on one line each, in aligned columns.
+   `.settings-field` is `display: contents` so its three cells join this grid
+   directly — otherwise each field is its own block and the columns cannot line
+   up across rows. The default form styling stacks all three (`label` is
+   `display: block` with a margin, and `form p` adds 15px), which cost about
+   three lines per field.
+
+   **A grid here, flex in `.register-form .field-row` — same three parts, and
+   the difference is deliberate.** A settings page is a long list of short
+   values, so aligning the controls into a column is what makes it scannable.
+   The registration form is mixed-width data entry (a name, a rating, a note)
+   where a shared column would either crush the name field or strand the rating
+   in a wide one, so its rows size independently and wrap. Do not merge them
+   without deciding which of the two the merged form should be. */
+/* The prose above each group. A plain <p> carries 16px top and bottom; the
+   heading above it already provides the separation, so only the bottom is
+   wanted. */
+.settings-intro {
+    margin: 0 0 var(--space-md);
+    max-width: 62rem;
+}
+
+.settings-fields {
+    display: grid;
+    /* The third column caps the help text's measure; nothing else is capped,
+       so it gets the width rather than being squeezed by a wrapper. */
+    grid-template-columns: max-content max-content minmax(12rem, 44rem);
+    gap: var(--space-xs) var(--space-md);
+    align-items: baseline;
+    margin-bottom: var(--space-md);
+}
+
+.settings-field {
+    display: contents;
+}
+
+.settings-fields label {
+    display: block;
+    margin: 0;
+    white-space: nowrap;
+}
+
+.settings-field-control {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-sm);
+}
+
+/* Every setting on this page is a short number or a short choice, so sizing to
+   content keeps the help column beside the control rather than pushed off to
+   the right of a box wide enough for a sentence. */
+.settings-fields input[type="number"] {
+    width: 6em;
+}
+
+.settings-fields select {
+    width: auto;
+}
+
+.settings-field-help {
+    margin: 0;
+    color: var(--color-muted);
+    font-size: 0.9em;
+    line-height: 1.35;
+}
+
+.settings-field-control ul.errorlist {
+    margin: 0;
+    padding-left: var(--space-md);
+    color: var(--color-error-text);
+}
+
+.settings-advanced {
+    margin: 0 0 var(--space-md);
+}
+
+.settings-advanced > summary {
+    cursor: pointer;
+    font-weight: 600;
+    padding: var(--space-xs) 0;
+}
+
+.settings-advanced[open] > summary {
+    margin-bottom: var(--space-sm);
+}
+
 /* The 404/403 pages. Narrow measure so the explanation reads as prose rather
    than stretching the full width of a wide screen. */
 .error-page {
@@ -1620,7 +1708,11 @@ dd {
    "add as guest" row below the fold on a laptop; here a row is one flex line of
    label + control + help. Scoped to .register-form so no other form moves.
    Everything wraps rather than overflowing, so a narrow window stacks instead
-   of scrolling sideways. */
+   of scrolling sideways.
+
+   The settings page does the same job with a grid (`.settings-fields`) because
+   it wants the controls aligned in a column; this form wants each row to size
+   to its own fields. See the note there. */
 .register-form .field-row {
     display: flex;
     flex-wrap: wrap;

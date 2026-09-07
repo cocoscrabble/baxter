@@ -3180,14 +3180,17 @@ class DivisionSettingsCopConfigTests(TestCase):
         self.assertContains(response, 'name="gibson_spread" value="500"')
 
     def test_basic_fields_above_advanced_box(self):
+        # The box is a <details> now rather than a <fieldset> — the six tuning
+        # knobs were most of the page's height, so they fold away. The ordering
+        # this asserts is unchanged.
         html = self.client.get(self.url).content.decode()
-        self.assertIn('<fieldset class="advanced-settings">', html)
+        self.assertIn('<details class="settings-advanced"', html)
         self.assertIn("Advanced settings", html)
         # Place prizes and disallow-repeat-byes sit above the box; the tuning
         # fields sit inside it.
         prizes = html.index("Number of place prizes")
         byes = html.index("Disallow repeat byes")
-        box = html.index('<fieldset class="advanced-settings">')
+        box = html.index('<details class="settings-advanced"')
         gibson = html.index("Gibson spread")
         self.assertLess(prizes, byes)
         self.assertLess(byes, box)
@@ -3240,3 +3243,33 @@ class DivisionSettingsCopConfigTests(TestCase):
         from tournaments.pairing.base import PairingData
 
         self.assertIsNone(PairingData.for_division(self.division).cop_config)
+
+
+@tag("slow")
+class SettingsPageLayoutTests(TestCase):
+    """The settings page folds its advanced half away (it was most of the page's
+    height). The fold has to spring open on a rejected save, or the director
+    gets the form back unchanged with the reason hidden inside it."""
+
+    def setUp(self):
+        setUpTournament(self)
+        self.url = reverse("division_settings", kwargs=self.division.slug_kwargs())
+        self.client.login(username="owner", password="testpass123")
+
+    def test_advanced_settings_are_folded_by_default(self):
+        body = self.client.get(self.url).content.decode()
+        self.assertIn("<summary>Advanced settings</summary>", body)
+        self.assertNotIn("<details class=\"settings-advanced\" open>", body)
+
+    def test_an_error_in_the_advanced_half_opens_the_fold(self):
+        from tournaments.forms import CopConfigForm
+
+        form = CopConfigForm({"place_prizes": 3, "gibson_spread": -1})
+        self.assertFalse(form.is_valid())
+        self.assertTrue(form.advanced_has_errors())
+
+        response = self.client.post(
+            self.url, {"place_prizes": 3, "gibson_spread": -1}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('class="settings-advanced" open', response.content.decode())

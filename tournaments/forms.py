@@ -396,6 +396,15 @@ class CopConfigForm(forms.Form):
     def advanced_fields(self):
         return [self[name] for name in self._ADVANCED]
 
+    def advanced_has_errors(self):
+        """Whether the folded-away half of the form rejected anything.
+
+        The settings page keeps the advanced fields inside a closed
+        ``<details>``; a rejected save has to spring it open, or the director
+        sees the form come back unchanged with the reason hidden.
+        """
+        return any(self[name].errors for name in self._ADVANCED)
+
     def to_config(self) -> dict:
         """The cleaned config dict (the shape stored in cop_config)."""
         return {f: self.cleaned_data[f] for f in self._BASIC + self._ADVANCED}

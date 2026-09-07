@@ -15,14 +15,9 @@
     </p>
     <form method="post">
         {% csrf_token %}
-        {% for field in absence_form %}
-        <p>
-            {{ field.label_tag }}
-            {{ field }}
-            {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
-            {{ field.errors }}
-        </p>
-        {% endfor %}
+        <div class="settings-fields">
+            {% for field in absence_form %}{% include "tournaments/_settings_field.html" %}{% endfor %}
+        </div>
         <button type="submit" name="absence" value="1">Save absence settings</button>
     </form>
 </section>
@@ -42,26 +37,21 @@
 
     <form method="post">
         {% csrf_token %}
-        {% for field in form.basic_fields %}
-        <p>
-            {{ field.label_tag }}
-            {{ field }}
-            {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
-            {{ field.errors }}
-        </p>
-        {% endfor %}
-        <fieldset class="advanced-settings">
-            <legend>Advanced settings</legend>
-            {% for field in form.advanced_fields %}
-            <p>
-                {{ field.label_tag }}
-                {{ field }}
-                {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
-                {{ field.errors }}
-            </p>
-            {% endfor %}
-        </fieldset>
-        <button type="submit" class="btn-save">Save COP settings</button>
+        <div class="settings-fields">
+            {% for field in form.basic_fields %}{% include "tournaments/_settings_field.html" %}{% endfor %}
+        </div>
+        {% comment %}
+        Folded shut by default: six tuning knobs nobody adjusts per tournament,
+        which were half the height of this page. Open if any of them has an
+        error, so a rejected save is never hidden behind a closed disclosure.
+        {% endcomment %}
+        <details class="settings-advanced"{% if form.advanced_has_errors %} open{% endif %}>
+            <summary>Advanced settings</summary>
+            <div class="settings-fields">
+                {% for field in form.advanced_fields %}{% include "tournaments/_settings_field.html" %}{% endfor %}
+            </div>
+        </details>
+        <button type="submit">Save COP settings</button>
     </form>
 </section>
 {% endblock %}
