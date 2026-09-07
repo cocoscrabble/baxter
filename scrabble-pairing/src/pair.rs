@@ -571,6 +571,58 @@ mod tests {
         }
     }
 
+    /// A round-robin block plus one withdrawn player, whose only mark inside the
+    /// block is the slip named by `slip`.
+    fn round_robin_with_withdrawal(slip: &str) -> Vec<RoundResult> {
+        let json = format!(
+            r#"{{
+                "players": [
+                    {{"name": "A", "rating": 1900}},
+                    {{"name": "B", "rating": 1800}},
+                    {{"name": "C", "rating": 1700}},
+                    {{"name": "D", "rating": 1600}},
+                    {{"name": "E", "rating": 1500, "dropped": true}}
+                ],
+                "round_pairings": [
+                    {{"round": 1, "start_round": 0, "pairing": "RoundRobin"}},
+                    {{"round": 2, "start_round": 1, "pairing": "RoundRobin"}},
+                    {{"round": 3, "start_round": 2, "pairing": "RoundRobin"}}
+                ],
+                "result_slips": [{slip}]
+            }}"#
+        );
+        pair(&input(&json))
+    }
+
+    #[test]
+    fn a_forfeit_does_not_pin_a_round_robin_block_shut() {
+        // A division that records withdrawals as forfeits writes one slip per
+        // round at publish. Counting those as games-played meant a round-robin
+        // block starting after a withdrawal locked up the moment its first
+        // round went live -- and "enter forfeits" is the advice the guard's own
+        // error message gives.
+        let out = round_robin_with_withdrawal(
+            r#"{"round": 1, "winner_name": "Bye", "loser_name": "E", "winner_score": 50, "loser_score": 0, "winner_started": true}"#,
+        );
+        for round in 2..=3 {
+            let r = out.iter().find(|r| r.round == round).expect("round missing");
+            assert!(r.error.is_none(), "round {round}: {r:?}");
+        }
+    }
+
+    #[test]
+    fn a_real_game_still_pins_a_round_robin_block_shut() {
+        // The guard's actual purpose, and the regression against loosening it
+        // too far: once the withdrawn player has *played* inside the block, the
+        // template is committed to a field that no longer exists.
+        let out = round_robin_with_withdrawal(
+            r#"{"round": 1, "winner_name": "A", "loser_name": "E", "winner_score": 400, "loser_score": 350, "winner_started": true}"#,
+        );
+        let r2 = out.iter().find(|r| r.round == 2).expect("round 2 missing");
+        let err = r2.error.as_ref().expect("expected the withdrawal guard to fire");
+        assert!(err.contains("withdrew mid-round-robin"), "{err}");
+    }
+
     #[test]
     fn swiss_initial_is_top_vs_bottom_half() {
         let inp = input(
