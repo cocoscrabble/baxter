@@ -336,10 +336,7 @@ class DivisionSettings(models.Model):
     # Re-rolled only by an explicit reshuffle action.
     pairing_seed = models.BigIntegerField(default=random_pairing_seed)
     # Prize + tuning config for the COP pairing strategy. Empty unless a round
-    # uses COP. Scalar-valued (place_prizes, gibson_spread, hopefulness,
-    # control_loss_threshold, control_loss_activation_round, simulations,
-    # always_wins_simulations, disallow_repeat_byes); the engine adapter expands
-    # the per-round-array fields. See tournaments/pairing/engine.py.
+    # uses COP.
     cop_config = models.JSONField(default=dict)
     # Tuning for the Swiss family (swiss_weight, max_distance, spr_split). Empty
     # means the engine's built-in defaults, which are DEFAULT_SWISS_CONFIG.
@@ -354,7 +351,7 @@ class DivisionSettings(models.Model):
 # collide with canonical registry numbers, and it makes them non-numeric, so
 # canonical_player_number leaves them alone. The registry never receives them:
 # a tournament export blocks until an admin has assigned real numbers centrally
-# and Baxter has pulled them (see plans/PLAN_COCO_PROGRAM.md).
+# and Baxter has pulled them.
 TEMP_NUMBER_PREFIX = "T-"
 
 
@@ -377,10 +374,6 @@ def next_temp_player_number():
 
 # The singleton bye player's name and reserved number. The engine recognises a
 # bye by name (Player.is_bye → name == "bye"), so this name must stay "Bye".
-#
-# BYE_PLAYER_NUMBER is reserved: once player_number is the engine key
-# (plans/PLAN_PLAYER_IDENTITY.md), a real player holding "BYE" would be paired
-# as the bye. It is non-numeric, so canonicalization leaves it untouched.
 BYE_PLAYER_NAME = "Bye"
 BYE_PLAYER_NUMBER = "BYE"
 
@@ -402,13 +395,9 @@ def effective_rating(rating, wespa_rating):
     method because two things need it and only one of them is a model:
     ``Player.effective_rating`` below, and ``player_source.PlayerRecord``, which
     describes a player some other source is offering and holds no model at all.
-    That second one used to re-derive the cascade line for line under a
-    docstring saying nothing may — which is how a rule ends up with two versions
-    and one of them wrong.
 
-    A CoCo rating of 0 means "no CoCo rating" — Baxter's long-standing spelling
-    of it — so it falls through. A WESPA rating of 0 does not: NULL is how that
-    one says "not known" (plans/PLAN_ENTRANTS.md decision 2).
+    A CoCo rating of 0 means "no CoCo rating", so it falls through. A WESPA
+    rating of 0 does not: NULL is how WESPA says "not known".
     """
     if rating:
         return rating, Entrant.COCO
@@ -420,10 +409,7 @@ def effective_rating(rating, wespa_rating):
 class Player(models.Model):
     """A tournament player.
 
-    ``player_number`` is the identity — not ``name``. Names are not unique in
-    the real world, and everything outside the database (the pairing engine,
-    event payloads, the digest, the interchange with the central player
-    database) keys on the number. See plans/PLAN_PLAYER_IDENTITY.md.
+    ``player_number`` is the identity, since names need not be unique.
     """
 
     name = models.CharField(max_length=200)
@@ -432,9 +418,7 @@ class Player(models.Model):
     # "T-" placeholders for players the central database has not numbered yet.
     player_number = models.CharField(max_length=16)
     # The CoCo rating, and what the central roster pull writes. 0 means "no CoCo
-    # rating" — the sole test for it (see plans/PLAN_ENTRANTS.md decision 2).
-    # Deliberately not renamed to coco_rating: every existing payload key,
-    # export field, grid DTO and replay path uses this name.
+    # rating".
     rating = models.IntegerField()
     # The WESPA rating, which is nobody else's business: it never syncs to the
     # central database and is only consulted when there is no CoCo rating.
@@ -444,18 +428,12 @@ class Player(models.Model):
     # when a guest is minted from a WESPA row (a human picked it) or when a
     # name is unique on both sides; left NULL when it would be a guess. Once
     # set it is what a pull matches on, so a player who is spelled differently
-    # in the two lists keeps working. See plans/PLAN_WESPA.md decision 3.
+    # in the two lists keeps working.
     wespa_id = models.IntegerField(null=True, blank=True, unique=True)
 
     # The rest of the rating seed, mirrored from the central roster alongside
-    # ``rating``. The live rating projection needs all four: the calculator
-    # damps by career games, and deviation grows with time since last_played.
-    #
-    # These live here rather than only on Entrant because an entrant *freezes*
-    # them at registration (plans/PLAN_COCO_PROGRAM.md decision 6) — so they
-    # need a place to sit between a roster pull and the next person entered.
-    # NULL means the roster has never told us, which the calculator reads as an
-    # unrated player.
+    # ``rating``. Used by the live rating projection. NULL means the roster
+    # has never told us, which the calculator reads as an unrated player.
     deviation = models.FloatField(null=True, blank=True)
     career_games = models.IntegerField(default=0)
     last_played = models.DateField(null=True, blank=True)
@@ -601,13 +579,8 @@ class Entrant(models.Model):
         on_delete=models.CASCADE,
         related_name="entries",
     )
-    # The entrant's number *for this tournament* — a seeding, not a physical
-    # seat or board. It is derived from the pinned rating (highest rated is 1)
-    # while the division is still in draft, and frozen once a round has been
-    # published, so a late entrant is appended rather than reshuffling everyone
-    # else's. Nothing pairs off it: the engine keys on rating, and this is what
-    # breaks a tie between equal ratings and what the standings show in
-    # brackets. See ``reseed`` below.
+    # The entrant's number for this tournament (based on seeding, except for
+    # late entrants).
     number = models.IntegerField()
     # A dropped (withdrawn) entrant is excluded from all future pairing but keeps
     # their played results, which still count for everyone else's standings,
@@ -615,36 +588,28 @@ class Entrant(models.Model):
     # enough — we never need to know *when* they withdrew.
     dropped = models.BooleanField(default=False)
 
-    # -- the pinned rating (decision 3) ------------------------------------
-    #
-    # Snapshotted at entry, never re-derived. Seeding, display and replay read
-    # this, so Player.rating and Player.wespa_rating are free to drift under a
-    # running tournament without reshuffling anyone's pairings — which is also
-    # what lets a global rating refresh stay an unlogged action.
+    # -- pinned ratings -----------------------------------------------------
+
+    # Pinned rating, snapshotted at entry, and never re-derived. Seeding,
+    # display and replay read this, so a running tournament is isolated from
+    # Player.rating and Player.wespa_rating
     rating = models.IntegerField(default=0)
     rating_source = models.CharField(
         max_length=8, choices=RATING_SOURCES, default=NONE
     )
-    # The rest of the rating seed, frozen with the rating. The live rating
-    # projection needs all four: the calculator damps by career games, and
-    # deviation grows with time since last_played. Zero/null until the central
-    # roster pull exists, which the calculator reads as an unrated player.
+    # The rest of the rating seed, frozen with the rating, for live ratings.
     deviation = models.FloatField(default=0.0)
     career_games = models.IntegerField(default=0)
     last_played = models.DateField(null=True, blank=True)
 
     # -- registration state -------------------------------------------------
-    #
-    # tentative: entered but not confirmed (issue #42). Its own field rather
-    # than a derivation of `paid`, because an organizer may confirm an unpaid
-    # entrant or hold a paid one.
+
+    # tentative: entered but not confirmed.
     tentative = models.BooleanField(default=False)
+    # Payment information is editor-only, never rendered publicly.
     paid = models.BooleanField(default=False)
-    # Editor-only, never rendered publicly. Free text on purpose: no amounts, no
-    # methods, no fee schedule (decision 6).
     payment_note = models.TextField(blank=True, default="")
-    # Playing above their rating band — a judgement call an organizer ticks, not
-    # something derived from a band on the division (decision 7).
+    # Playing above their rating band (set manually, not automated)
     playing_up = models.BooleanField(default=False)
 
     objects = RealEntrantManager()
@@ -703,8 +668,8 @@ class Entrant(models.Model):
 
         Highest rating is 1. Ties break on the player number, because a tie has
         to break on *something* and the number is the identity everywhere else
-        outside the database (PLAN_PLAYER_IDENTITY.md). Anything less
-        deterministic would make a replay's numbering depend on row order.
+        outside the database. Anything less deterministic would make a replay's
+        numbering depend on row order.
 
         Withdrawn entrants are numbered along with everyone else: they keep
         their place in the field they entered, and their results still count.
@@ -1069,10 +1034,7 @@ class Playoff(models.Model):
 
     Holds only the director's *intent*: which round qualifies, how many
     qualifiers, the timing mode, the length of each series, and the confirmed
-    seed snapshot. The bracket itself — who meets whom, series scores, which
-    games still need playing, final placements — is derived from this plus the
-    division's results by ``tournaments/playoff.py``, never stored. See
-    ``plans/PLAN_PLAYOFFS.md``.
+    seed snapshot. The brackets are then derived automatically.
     """
 
     POSTSCRIPT = "postscript"
@@ -1233,8 +1195,6 @@ class RosterSync(models.Model):
 
     Kept as a history rather than a single row so "it broke on Tuesday" is
     answerable. It is four rows a day against a table nothing joins to.
-
-    See ``plans/PLAN_COCO_PROGRAM.md`` (W4, the pull half).
     """
 
     SCHEDULED = "scheduled"
@@ -1306,14 +1266,6 @@ class RosterSync(models.Model):
 class WespaPlayer(models.Model):
     """One row of the WESPA rating list, mirrored locally.
 
-    Baxter holds the whole list — some 9,200 players — rather than only applying
-    it to players it already knows, because the players it does *not* know are
-    the point. An overseas visitor at a CoCo event has no CoCo number and no CoCo
-    rating; their WESPA rating is the only number anyone has for them, and until
-    now a director typed it in at the registration desk from a website. Mirroring
-    the list is what turns that into a search, and it is what lets the search
-    work at a venue with no connection (plans/PLAN_WESPA.md decision 1).
-
     **Nothing here is a Baxter player.** A row becomes a :class:`Player` when a
     director enters one, and not before (decision 2). The link, once anyone has
     asserted it, lives on ``Player.wespa_id``.
@@ -1328,9 +1280,7 @@ class WespaPlayer(models.Model):
     country = models.CharField(max_length=8, blank=True)
     # NULL means the list carried no rating for them — the same convention as
     # ``Player.wespa_rating``, and distinct from a rating of 0. Every row has one
-    # today; a row that stops having one stays searchable rather than vanishing,
-    # since the name alone is still worth more than nothing at a registration
-    # desk.
+    # today; a row that stops having one stays searchable rather than vanishing.
     rating = models.IntegerField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 

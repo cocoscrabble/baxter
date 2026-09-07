@@ -428,7 +428,6 @@ class RegistrationForm(forms.Form):
         # Marking someone paid confirms them by default; an organizer who means
         # to hold a paid entrant re-ticks the box, and that override survives
         # because it is applied here rather than as a model side effect
-        # (plans/PLAN_ENTRANTS.md decision 5).
         if cleaned.get("paid") and not self.data.get(self.add_prefix("tentative")):
             cleaned["tentative"] = False
         return cleaned
@@ -448,19 +447,9 @@ class RegistrationForm(forms.Form):
 
 
 class GuestForm(forms.Form):
-    """The one field a guest needs beyond the registration fieldset: a name.
+    """Register a guest player by name.
 
-    A guest is not a new kind of player — just one with no CoCo number and no
-    CoCo rating (decision 4) — so this mints a ``T-`` number and nothing else
-    about them is special.
-
-    **No WESPA rating box.** There used to be one, back when the only way to get
-    a WESPA rating into Baxter was for somebody to read it off a website and
-    type it. The WESPA list is mirrored now (``plans/PLAN_WESPA.md``) and the
-    search offers it directly, so a rating typed here would be a number nobody
-    can source. What a director types instead is the ordinary rating override
-    beside it — which pins as ``manual``, meaning "this is what I judge them to
-    be worth", which is exactly what it is.
+    A guest is a player with no CoCo number, so this mints a ``T-`` number.
     """
 
     name = forms.CharField(max_length=200, label="Name")
