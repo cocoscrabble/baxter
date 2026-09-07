@@ -31,9 +31,27 @@ from .playoff import (
     sync_series,
 )
 
-# A bye is scored as a win with a fixed +50 spread (50–0), no game played.
+# The spread a bye or forfeit is scored at, when a division has no settings row
+# to say otherwise. Jurisdictional rather than universal — see
+# ``DivisionSettings.bye_spread``, which is what every live path reads.
 BYE_WINNER_SCORE = 50
 BYE_LOSER_SCORE = 0
+
+
+def absence_spread(division):
+    """Points awarded for a bye and charged for a forfeit in this division."""
+    try:
+        return division.settings.bye_spread
+    except DivisionSettings.DoesNotExist:
+        return BYE_WINNER_SCORE
+
+
+def withdrawal_policy(division):
+    """How this division records the rounds a withdrawn entrant misses."""
+    try:
+        return division.settings.withdrawal
+    except DivisionSettings.DoesNotExist:
+        return DivisionSettings.OMIT
 
 
 def _is_bye_key(key):
@@ -50,8 +68,8 @@ def materialize_absences(division, round_num):
     result yet are touched.
 
     A bye and a forfeit are the same row with the winner the other way round.
-    The byed player wins at a fixed spread; the *absent* player loses by it, to
-    the bye entrant. Which one this is comes from ``Pairing.forfeit``, recorded
+    The byed player wins by the division's ``bye_spread``; the *absent* player
+    loses by it, to the bye entrant. Which one this is comes from ``Pairing.forfeit``, recorded
     when the round was paired — not from the entrant's current ``dropped``
     state, which a rejoin moves out from under an already-published round.
 
@@ -59,6 +77,7 @@ def materialize_absences(division, round_num):
     player is charged a start: ``winner_started`` is true exactly when the bye
     is the winner.
     """
+    spread = absence_spread(division)
     absences = (
         division.pairings.filter(round=round_num, result__isnull=True)
         .filter(Q(first__player__is_bye=True) | Q(second__player__is_bye=True))
@@ -81,7 +100,7 @@ def materialize_absences(division, round_num):
                 round=round_num,
                 pairing=p,
                 winner=winner,
-                winner_score=BYE_WINNER_SCORE,
+                winner_score=spread,
                 loser=loser,
                 loser_score=BYE_LOSER_SCORE,
                 winner_started=winner.player.is_bye,
@@ -309,10 +328,15 @@ def regenerate_pairings(division):
         e.player.player_number: e
         for e in division.entrants.select_related("player")
     }
-    # Withdrawn entrants whose absence is recorded rather than merely omitted.
-    # ``forfeits`` only means anything alongside ``dropped``: an entrant still
-    # being paired plays their games, and has nothing to forfeit.
-    forfeiting = list(division.entrants.filter(dropped=True, forfeits=True))
+    # Withdrawn entrants whose absence this division records rather than omits.
+    # The policy is the division's, not the entrant's (``DivisionSettings.
+    # withdrawal``); ``dropped`` is the per-entrant half — an entrant still
+    # being paired plays their games and has nothing to forfeit.
+    forfeiting = (
+        list(division.entrants.filter(dropped=True))
+        if withdrawal_policy(division) == DivisionSettings.FORFEIT
+        else []
+    )
     # Lazily resolve the bye opponent (created on first odd round) and map its
     # engine key to the division's bye entrant.
     bye_entrant = None

@@ -363,13 +363,8 @@ class EntrantsGrid(EditGrid):
         # edit it: a director who corrects a rating and then publishes would
         # otherwise get a round paired off the *old* one, silently. The fuzzer
         # found exactly that — a bye handed to the wrong player.
-        # ``forfeits`` rides along with ``dropped``: turning an existing
-        # withdrawal into a forfeiting one changes what the draft rounds should
-        # hold (a forfeit row per round) without touching anything else here.
         return frozenset(
-            division.entrants.values_list(
-                "player_id", "dropped", "forfeits", "rating"
-            )
+            division.entrants.values_list("player_id", "dropped", "rating")
         )
 
     def persist(self, division, prepared):
