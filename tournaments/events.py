@@ -58,6 +58,9 @@ EVENT_TYPES = frozenset(
         "rounds_published",
         "round_published",
         "round_unpublished",
+        "entrant_withdrawn",
+        "entrant_rejoined",
+        "game_forfeited",
         "pairing_seed_rerolled",
         "match_simulated",
         "round_simulated",
@@ -595,6 +598,11 @@ def describe_event(event) -> str:
         n = len(p.get("rows", [])) if n is None else n
         return f"{n} row{'s' if n != 1 else ''}"
 
+    def resolved():
+        """" (N round(s) repaired)" — what a withdrawal did to printed rounds."""
+        n = len(p.get("resolved", []))
+        return f" ({n} printed round{'s' if n != 1 else ''} repaired)" if n else ""
+
     def who(*fields):
         """Names for the players a payload's ``fields`` refer to.
 
@@ -648,6 +656,13 @@ def describe_event(event) -> str:
         "rounds_published": lambda: f"Published rounds {p.get('rounds', '')} in {div}",
         "round_published": lambda: f"Published round {p.get('round', '')} in {div}",
         "round_unpublished": lambda: f"Unpublished round {p.get('round', '')} in {div}",
+        "entrant_withdrawn": lambda: "{} withdrew from {}{}".format(
+            *who("player"), div, resolved()
+        ),
+        "entrant_rejoined": lambda: "{} rejoined {}".format(*who("player"), div),
+        "game_forfeited": lambda: "{} forfeited round {} in {}".format(
+            *who("player"), p.get("round", ""), div
+        ),
         "playoff_created": lambda: f"Created a {p.get('qualifier_count', '')}-player playoff in {div}",
         "playoff_updated": lambda: f"Reconfigured the playoff in {div}",
         "playoff_deleted": lambda: f"Removed the playoff in {div}",

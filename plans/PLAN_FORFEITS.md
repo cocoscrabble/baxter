@@ -1,6 +1,6 @@
 # Plan: Forfeits and dropouts
 
-**Status: phases 1–2 done**, phases 3–5 not started. Design drafted 2026-09-07 for
+**Status: phases 1–3 done**, phases 4–5 not started. Design drafted 2026-09-07 for
 [issue #57](https://github.com/cocoscrabble/baxter/issues/57); code references
 pinned at commit `e3ad086`.
 
@@ -340,41 +340,60 @@ replay to read it from — a division set by hand today replays as `omit`.
 Nothing existing is affected, since the default *is* `omit`. Phase 3 adds the
 command and owns the end-to-end `replay --verify`.
 
-### Phase 3 — splitting a paired game, and single-game forfeits
+### Phase 3 — splitting a paired game, and single-game forfeits — **done**
 
-Three commands, the first a genuine primitive the other two compose:
+`tournaments/forfeits.py`. Three commands, over one shared plain function:
 
-- `pairing_unpaired` — dissolve one pairing in a published round, leaving both
-  players unpaired for it. Payload `{division, round, players}`, name-keyed like
-  every other. TSH's `UnPairPlayer` is the same primitive, and having it separate
-  is what lets the log say plainly what happened (§4).
-- `entrant_withdrawn` — sets `dropped`/`forfeits`, then for every
-  PUBLISHED/IN_PROGRESS round in which the entrant has no result yet: unpair
-  their game if they have one, then give both players their bye-shaped pairing
-  and slip. A round where they were never paired skips straight to the second
-  half — which is the phase-2 shape, unchanged.
-- `game_forfeited` — issue #57 scenario 1: one named player forfeits one game,
-  no withdrawal. `entrant_withdrawn`'s per-round body, called once.
+- `entrant_withdrawn` — sets `dropped`, repairs every PUBLISHED/IN_PROGRESS
+  round the entrant is no longer going to play, and drops the draft rounds so
+  they re-pair around the smaller field.
+- `entrant_rejoined` — clears `dropped` and drops the drafts. Undoes nothing:
+  the rounds missed keep the rows written while the entrant was out.
+- `game_forfeited` — issue #57 scenario 1. Independent of the division's
+  `withdrawal` setting, which governs what a *withdrawal* records; this is a
+  director saying outright that this player forfeited this game.
 
-Copy `floss`'s defensive check: it verifies the opponent's own record names the
-forfeiting player before assigning them the forfeit win, and warns (`enfwop`,
-"your .t file is corrupt") rather than proceeding on inconsistent data.
+**The unpair is recorded in the payload, not as its own event.** Nesting two
+`@records_event` commands would double-apply on replay: replay re-invokes the
+outer command, which would perform the inner one again *and* re-record it, on
+top of the inner event the log already carries. So `entrant_withdrawn` adds a
+`resolved` list — the rounds it repaired and against whom — exactly as
+`result_starts_corrected` records the corrections it made. Replay recomputes it
+from the same state rather than reading it back, so the log stays a record of
+what happened rather than an instruction that could apply twice.
 
-**The round-robin split has to be resolved here** (§4). `published_pairings`
-currently serves two masters — Swiss repeat/start avoidance, and round-robin
-schedule completion — and a forfeited fixture must read as *met* to the second
-and *not met* to the first. Expect to separate them rather than pick one.
+**`OMIT` still resolves the opponent's game.** A withdrawal from a printed round
+dissolves the pairing under either policy — otherwise the round waits forever on
+a game nobody will play — and the opponent takes their bye. The policy decides
+only whether the *absentee* gets a row: under `FORFEIT` a forfeit, under `OMIT`
+nothing at all, which is the honest reading of "leave the rounds blank".
 
-Every mutating view added here goes through a command, per CLAUDE.md, and the
-completeness test enforces it.
+`floss`'s defensive check has an analogue: Baxter keeps both players on one
+`Pairing`, so they cannot disagree the way TSH's two-sided record can, but
+`game_in_round` refuses to guess when a player appears in two games in one
+round, and a game that already has a result is refused outright.
 
-*Verify:* publish round 5, withdraw a paired entrant; confirm the X–Y pairing is
-gone, both players hold a bye-shaped pairing, X's slip is 0–50 and Y's 50–0, and
-that Y now counts as having had a bye for `disallow_repeat_byes`. Confirm the
-ratings export and `tournament_export` omit both. Confirm a withdrawal before
-pairing and one after produce byte-identical round state. `replay --verify`
-green; a fuzzer run with withdrawals enabled reproduces digests. A round-robin
-division must still refuse to re-pair the forfeited fixture.
+`save_settings` grew optional `withdrawal` and `bye_spread` keys, so the policy
+reaches the log and a replay rebuilds it. Absent keys leave the fields alone,
+so every payload written before they existed replays unchanged.
+
+**The round-robin hazard turned out to be much smaller than §4 feared.**
+`published_pairings`' two uses never collide, because a round robin that loses a
+player mid-block *refuses to re-solve at all* — `guard_no_dropped_in_block`
+already errors rather than re-pairing around a withdrawal. The one real
+interaction was that the guard counted forfeit slips as games played inside the
+block, so a round-robin block scheduled to start after a withdrawal locked up
+the moment its first round went live; the guard now skips bye-shaped slips. No
+separation of the two uses was needed.
+
+*Verified* (`tournaments/tests/test_forfeit_commands.py`): the printed game is
+split into a bye and a forfeit with the right scores and starts; the opponent
+now reads as having had a bye in `published_pairings`, which is what bye
+avoidance consumes; **a withdrawal before pairing and one after produce an
+identical row and slip**; the round still reaches FINISHED; a played game and a
+double-booked player are refused; rejoining leaves the printed rounds untouched;
+`OMIT` gives the opponent their bye and the absentee nothing; and a log carrying
+a withdrawal replays under `verify=True` to the same digest, settings included.
 
 ### Phase 4 — the surfaces
 
