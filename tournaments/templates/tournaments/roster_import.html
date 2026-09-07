@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Pull Roster - Baxter{% endblock %}
+{% block title %}PlayerDB Sync - Baxter{% endblock %}
 
 {% block breadcrumbs %}
 <span class="nav-sep">/</span>
@@ -10,17 +10,16 @@
 {% block page_class %}page--narrow{% endblock %}
 
 {% block content %}
-<h1>Pull the central roster</h1>
+<h1>PlayerDB Sync</h1>
 
-<p>Upload a roster snapshot from the CoCo player database to refresh names,
-ratings and rating history. Once this has run, Baxter can run a whole tournament
-with no connection to the central database.</p>
+<p>Snapshots the CoCo player database to refresh names, ratings and rating
+history. Once this has run, Baxter can run a whole tournament with no
+connection to the central database.</p>
 
 <p>Players are matched on their player number, never on name. Nothing is deleted:
-a player the roster has never heard of — a guest on a temporary number — is left
-exactly as they are.</p>
+guest players are left unchanged pending a manual confirmation. </p>
 
-<p>This roster holds {{ player_count }} player{{ player_count|pluralize }},
+<p>Current list: {{ player_count }} player{{ player_count|pluralize }},
 {{ provisional_count }} of them still on a temporary number.</p>
 
 {% comment %}
@@ -43,17 +42,14 @@ Player data is as of the last successful pull.</p>
 
 {% if endpoint_configured %}
 <h2>Pull from the central database</h2>
-<p>Fetches the current roster from <code>{{ endpoint_url }}</code>. This also
-runs on its own every six hours, so a pull here is for when you need a change
-sooner than that. Either way Baxter never needs the connection once an event is
-running.</p>
+<p>Fetches the current roster from <code>{{ endpoint_url }}</code> immediately.</p>
 <form method="post">
     {% csrf_token %}
     <input type="hidden" name="source" value="fetch">
     <button type="submit">Pull now</button>
 </form>
 
-<h2>Or upload a snapshot</h2>
+<h2>Upload a snapshot</h2>
 <p>For an event with no connection: download the file from the central
 database's <code>/manage/roster/</code> page and upload it here. It is the same
 document the pull above fetches.</p>
@@ -81,13 +77,9 @@ human has to confirm — and nothing was written for them, so declining costs
 nothing.
 {% endcomment %}
 <h2>Needs confirming ({{ pending|length }})</h2>
-<p>The roster has a player number for someone Baxter knows only as a guest.
-These were matched <em>by name</em>, which is a guess, so nothing has been
-changed for them yet. Confirming keeps the guest's entrants and results and
-moves them onto the real number.</p>
-
-<p>These may have come from a scheduled pull rather than from anything you did:
-it holds them back for exactly this reason, and leaves them here.</p>
+<p>After the PlayerDB sync, some guest players were matched <em>by name</em>.
+This is a guess, so nothing has been changed for them yet. Confirming keeps the
+guest's entrants and results and moves them onto the real number.</p>
 
 <table>
     <thead>
@@ -112,12 +104,7 @@ it holds them back for exactly this reason, and leaves them here.</p>
         {% endfor %}
     </tbody>
 </table>
-
-<p class="settings-intro">Not the same person? Leave it — pulling again will
-offer it again, and adding them to Baxter under their real number instead makes
-the match go away.</p>
 {% endif %}
 
-<p>WESPA ratings are not part of this — the central database does not hold them.
-<a href="{% url 'wespa_import' %}">Import those separately</a>.</p>
+<p>Note: To sync the WESPA database, <a href="{% url 'wespa_import' %}">go here</a>.</p>
 {% endblock %}
