@@ -87,8 +87,8 @@ Current plans:
   forfeit *as the result of the printed game* rather than splitting the pairing,
   which would unprint a published board. Also fixes a pre-existing asymmetry:
   most bye filters are written `loser__player__is_bye`, so they mis-handle a slip
-  with the bye on the winning side. **Not started**; 5 phases, phase 1 is a
-  prerequisite.
+  with the bye on the winning side. **Phase 1 done** (the two flags and the
+  `played()` predicate); phases 2–5 not started.
 - `PLAN_PASSWORD_RESET.md` — self-service password reset by email. Gated on a
   **phase 0 go/no-go**: publish the domain's missing SPF and DKIM records,
   then prove the production host can send mail as `cocoscrabble.org` and have

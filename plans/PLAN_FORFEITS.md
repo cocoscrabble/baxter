@@ -1,6 +1,6 @@
 # Plan: Forfeits and dropouts
 
-**Status: not started.** Design drafted 2026-09-07 for
+**Status: phase 1 done**, phases 2–5 not started. Design drafted 2026-09-07 for
 [issue #57](https://github.com/cocoscrabble/baxter/issues/57); code references
 pinned at commit `e3ad086`.
 
@@ -151,14 +151,25 @@ everything else, not a tidy-up.
 
 ## Phases
 
-### Phase 1 — the predicate
+### Phase 1 — the predicate — **done**
 
-`ResultSlip.forfeit` and `Entrant.forfeits` (one migration, both default
-`False`), a `ResultSlipQuerySet.played()`, and the six call sites in §6 moved
-onto it. No behaviour change yet: nothing sets either flag.
+`ResultSlip.forfeit` and `Entrant.forfeits` (migration `0045_forfeit_flags`,
+both default `False`), `ResultSlipQuerySet.played()` / `.not_played()` with
+`ResultSlip.is_played` beside them, and the six call sites in §6 moved onto
+them. Nothing sets either flag yet.
 
-*Verify:* existing suite green; a hand-built bye-as-winner slip no longer flips
-`update_status` to IN_PROGRESS or blocks `unpublish_rounds`.
+Two notes for the phases that follow:
+
+- The two sites that already tested both sides (the results CSV and the live
+  rating calculator) were moved onto `is_played` as well, so the definition
+  lives once.
+- The digest backfill migration had to be renumbered to stay last, as its own
+  comment requires. **Any further schema migration in this plan must do the
+  same** — that is now `0046_backfill_event_digests`, and it is a no-op on a
+  database that already ran it.
+
+*Verified:* suite green (1071); the new tests in `NotPlayedPredicateTests` fail
+against the old filters at four of the six sites.
 
 ### Phase 2 — derive forfeits at pair and publish
 
