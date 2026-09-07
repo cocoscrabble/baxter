@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% comment %}
+Django picks this up from TEMPLATES DIRS automatically, and only when
+DEBUG is False — with DEBUG on you get the debug page instead, so this
+is exercised by the tests rather than by looking at it in dev.
+
+Extending base.html is safe here: a 404 is rendered with a RequestContext,
+so the navbar's `user` and `messages` are populated as usual. `500.html`
+deliberately does not extend it, for the reason given there.
+{% endcomment %}
+
+{% block title %}Page not found - Baxter{% endblock %}
+
+{% block content %}
+<div class="error-page">
+    <h1>Page not found</h1>
+    <p>There is nothing at this address:</p>
+    <p class="error-path"><code>{{ request.path }}</code></p>
+    {% comment %}
+    Worth saying, because it is the likely cause and it is not obvious: a
+    tournament or division that gets *renamed* keeps its old links working
+    (TournamentSlugAlias / DivisionSlugAlias redirect them), so a dead
+    tournament link almost always means it was deleted rather than moved.
+    {% endcomment %}
+    <p>If this was a tournament or division, it has probably been deleted —
+    renaming one keeps its old links working, so they do not go dead on their
+    own. Otherwise, check the address for a typo.</p>
+    <p><a href="{% url 'tournament_list' %}" class="btn-primary">Back to tournaments</a></p>
+</div>
+{% endblock %}

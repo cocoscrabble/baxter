@@ -1339,6 +1339,29 @@ dd {
     margin: var(--space-md) 0;
 }
 
+/* The 404/403 pages. Narrow measure so the explanation reads as prose rather
+   than stretching the full width of a wide screen. */
+.error-page {
+    max-width: 34rem;
+}
+
+.error-page h1 {
+    margin-top: 0;
+}
+
+/* The dead address, on its own line. `anywhere` rather than `break-all` so a
+   path only splits when it actually has to, instead of wherever the line
+   happens to end. */
+.error-page .error-path {
+    overflow-wrap: anywhere;
+}
+
+.error-page code {
+    background: var(--color-bg-subtle);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+}
+
 /* "Someone else is editing this" warning shown on the edit grids. */
 .presence-banner {
     margin: 0 0 var(--space-md);
