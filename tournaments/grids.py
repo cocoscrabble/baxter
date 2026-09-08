@@ -177,26 +177,20 @@ class EntrantsGrid(EditGrid):
         # source column beside it is read-only so the two cannot disagree.
         Column("rating", "Rating", kind="number", min=0, width=100),
         Column("source", "Source", kind="display", width=90),
-        Column(
-            "tentative", "Tent.", kind="choice",
-            values={False: "", True: "Tentative"}, value_type="bool",
-            new_row=False, width=110,
-        ),
-        Column(
-            "paid", "Paid", kind="choice",
-            values={False: "", True: "Paid"}, value_type="bool",
-            new_row=False, width=90,
-        ),
-        Column(
-            "playing_up", "Up", kind="choice",
-            values={False: "", True: "Playing up"}, value_type="bool",
-            new_row=False, width=110,
-        ),
-        Column(
-            "dropped", "Dropped", kind="choice",
-            values={False: "", True: "Dropped"}, value_type="bool",
-            new_row=False, width=110,
-        ),
+        Column("tentative", "Tent.", kind="flag", value_type="bool",
+               new_row=False, width=80),
+        Column("paid", "Paid", kind="flag", value_type="bool",
+               new_row=False, width=80),
+        Column("playing_up", "Up", kind="flag", value_type="bool",
+               new_row=False, width=70),
+        # Shown, not set. Withdrawing is more than a flag: it also has to
+        # resolve the round already on the boards — dissolve the printed game,
+        # give the opponent their bye, record the absence per the division's
+        # rule — which is what ``forfeits.withdraw_entrant`` does and this grid
+        # does not. Ticking it here used to set the flag alone and leave a
+        # printed game nobody could play. Use Withdraw on the entrants page.
+        Column("dropped", "Out", kind="flag", value_type="bool",
+               new_row=False, width=70, editable=False),
     ]
 
     def queryset(self, division):

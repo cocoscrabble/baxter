@@ -3273,3 +3273,49 @@ class SettingsPageLayoutTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertIn('class="settings-advanced" open', response.content.decode())
+
+
+@tag("slow")
+class EntrantsGridFlagColumnsTests(TestCase):
+    """The entrant grid's on/off columns are checkboxes, and Out is read-only.
+
+    The column spec is what the client builds Tabulator from (``asdict`` in
+    ``editgrid.views``), so asserting the spec is asserting the rendered grid.
+    """
+
+    def setUp(self):
+        setUpTournament(self)
+        self.client.login(username="owner", password="testpass123")
+        self.url = reverse(
+            "division_entrants_edit", kwargs=self.division.slug_kwargs()
+        )
+
+    def columns(self):
+        grid = self.client.get(self.url).context["grid"]
+        return {c["field"]: c for c in grid.columns}
+
+    def test_the_registration_flags_are_checkboxes(self):
+        cols = self.columns()
+        for field in ("tentative", "paid", "playing_up"):
+            self.assertEqual(cols[field]["kind"], "flag", field)
+            self.assertEqual(cols[field]["value_type"], "bool", field)
+            self.assertTrue(cols[field]["editable"], field)
+
+    def test_dropped_is_shown_but_not_editable(self):
+        # Withdrawing has to resolve the round already on the boards, which is
+        # forfeits.withdraw_entrant's job and not this grid's. Ticking it here
+        # set the flag alone and left a printed game nobody could play.
+        out = self.columns()["dropped"]
+        self.assertEqual(out["kind"], "flag")
+        self.assertFalse(out["editable"])
+
+    def test_started_stays_a_named_choice_not_a_checkbox(self):
+        # "Winner" and "Opponent" are alternatives, not on and off; a tick in a
+        # column headed "Started" would not say who started.
+        from tournaments.grids import ResultsGrid
+
+        started = next(
+            c for c in ResultsGrid().columns if c.field == "winner_started"
+        )
+        self.assertEqual(started.kind, "choice")
+        self.assertEqual(started.values, {True: "Winner", False: "Opponent"})

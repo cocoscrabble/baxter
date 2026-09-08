@@ -1339,6 +1339,12 @@ dd {
     margin: var(--space-md) 0;
 }
 
+/* An editable checkbox column in an edit grid: the whole cell is the target,
+   so it should look clickable. */
+.editgrid-flag {
+    cursor: pointer;
+}
+
 /* The sandbox groups (test tournaments, what-if imports) listed under the real
    ones. Separated so the eye can stop at the end of the first table. */
 .sandbox-list {

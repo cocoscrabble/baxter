@@ -25,6 +25,14 @@ class Column:
       - ``choice``  — list editor over a value->label map: either ``lookup``
         (a key into the grid's ``lookups``) or a static ``values`` map;
         ``autocomplete`` for large sets.
+      - ``flag``    — a checkbox (use ``value_type="bool"``). For a plain on/off
+        value: a dropdown of two options makes the reader parse a word to learn
+        a yes/no, and takes two clicks to set. Use ``choice`` when the two
+        values are *named alternatives* rather than on and off — the results
+        grid's "Started" column is Winner-or-Opponent, not a tick.
+
+    ``editable=False`` drops the editor while keeping the display, for a value
+    that is shown here but set somewhere else.
     """
 
     field: str
@@ -41,6 +49,7 @@ class Column:
     auto_increment: bool = False  # new rows get max(field) + 1
     new_row: object = None  # default value for this field in a new row
     hidden: bool = False  # kept in row data + serialized, but not shown
+    editable: bool = True  # False renders the value but offers no editor
 
 
 def parse_rows(dto_cls, rows, *validate_args):

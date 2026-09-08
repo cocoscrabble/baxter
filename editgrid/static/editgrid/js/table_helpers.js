@@ -343,8 +343,41 @@ function columnFromSpec(c, cfg) {
         col.editorParams = { values: map, autocomplete: c.autocomplete, listOnEmpty: true };
         col.formatter = cell => map[cell.getValue()] ?? "";
         if (!col.minWidth) col.minWidth = 150;
+    } else if (c.kind === "flag") {
+        // A real checkbox, always visible, toggled by one click on the cell.
+        //
+        // Not Tabulator's `tickCross` editor: that draws a tick and only turns
+        // into a checkbox once the cell is being edited, so setting a flag
+        // costs two clicks and the column reads as glyphs rather than as
+        // controls. Not a bare `tickCross` formatter either, for the same
+        // reason.
+        //
+        // The toggle goes through `cell.setValue`, which fires `cellEdited` and
+        // `dataChanged` — so the row's dirty decoration, the Save button's
+        // dirty state and undo/redo all keep working, which a hand-rolled
+        // checkbox that wrote to the row data would not.
+        const editable = c.editable !== false;
+        col.hozAlign = col.hozAlign || "center";
+        col.formatter = cell => {
+            const box = document.createElement("input");
+            box.type = "checkbox";
+            box.checked = cell.getValue() === true;
+            box.disabled = !editable;
+            // The cell handles the click, not the box: letting the input take
+            // it too would toggle twice and fight the re-render.
+            box.style.pointerEvents = "none";
+            box.tabIndex = -1;
+            return box;
+        };
+        if (editable) {
+            col.cssClass = "editgrid-flag";
+            col.cellClick = (e, cell) => cell.setValue(cell.getValue() !== true);
+        }
     }
-    // kind "display": no editor — read-only text.
+    // kind "display": no editor — read-only text. `editable: false` also drops
+    // whatever editor its kind would have given it (the flag kind hands out no
+    // editor at all, so this only matters to the others).
+    if (c.editable === false) delete col.editor;
     return col;
 }
 
