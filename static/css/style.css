@@ -1339,6 +1339,16 @@ dd {
     margin: var(--space-md) 0;
 }
 
+/* The what-if sandboxes, listed under the real tournaments. Separated so the
+   eye can stop at the end of the first table. */
+.whatif-list {
+    margin-top: var(--space-lg);
+}
+
+.whatif-list h2 {
+    margin-bottom: var(--space-xs);
+}
+
 /* ── Settings page ────────────────────────────────────────── */
 
 /* Label, control and help text on one line each, in aligned columns.

@@ -46,6 +46,29 @@ def record_slug_alias(alias_model, *, scope, old_slug, new_slug, owner):
     alias_model.objects.update_or_create(**scope, slug=old_slug, defaults=owner)
 
 
+class TournamentQuerySet(models.QuerySet):
+    def with_whatif_flag(self):
+        """Annotate each row with ``is_whatif``.
+
+        **Both sandbox kinds set ``is_fake``**, so that flag alone cannot tell a
+        what-if import from a tournament made by the fake-tournament tool. What
+        separates them is the divisions: ``import_division`` forces every
+        imported division ``is_test``, while ``fake_tournament`` deliberately
+        does not (a fake tournament is meant to be fully visible; ``is_test`` is
+        what hides a division from logged-out users).
+
+        Annotated rather than a per-row property, so a list of tournaments costs
+        one query instead of one per row.
+        """
+        return self.annotate(
+            is_whatif=models.Exists(
+                Division.all_objects.filter(
+                    tournament=models.OuterRef("pk"), is_test=True
+                )
+            )
+        )
+
+
 class Tournament(models.Model):
     """A scrabble tournament."""
 
@@ -69,6 +92,8 @@ class Tournament(models.Model):
     is_fake = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    objects = TournamentQuerySet.as_manager()
 
     class Meta:
         ordering = ["-start_date"]
@@ -113,14 +138,18 @@ class Tournament(models.Model):
         from users.models import User
         if user.has_role_at_least(User.Role.SUPERVISOR):
             return True
-        return user == self.owner or self.editors.filter(pk=user.pk).exists()
+        # ``owner_id``, not ``owner``: comparing the objects dereferences the FK,
+        # which is a query per row anywhere this is asked about a list.
+        return user.pk == self.owner_id or self.editors.filter(pk=user.pk).exists()
 
     def can_delete(self, user):
         """Who may delete this tournament. The owner always may; admins may delete
         fake tournaments (the cleanup path), but not real ones."""
         if not user.is_authenticated:
             return False
-        if user == self.owner:
+        # ``owner_id`` rather than ``owner``: the tournament list asks this once
+        # per row, and comparing the objects fetched the owner each time.
+        if user.pk == self.owner_id:
             return True
         if not self.is_fake:
             return False
