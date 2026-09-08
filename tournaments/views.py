@@ -165,6 +165,9 @@ class TournamentListView(ListView):
     template_name = "tournaments/tournament_list.html"
     context_object_name = "tournaments"
 
+    def get_queryset(self):
+        return super().get_queryset().with_whatif_flag()
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         # Drives the per-row delete link, shown only for fake tournaments the
@@ -172,6 +175,25 @@ class TournamentListView(ListView):
         user = self.request.user
         for tournament in context["tournaments"]:
             tournament.user_can_delete = tournament.can_delete(user)
+        # What-if sandboxes list separately, below the real events. They are
+        # imports of finished tournaments kept for experimenting on, so they are
+        # not part of the club's schedule and reading past them to find a real
+        # one is the whole problem.
+        #
+        # Shown only to someone who can open them. Their divisions are
+        # ``is_test``, which ``_ensure_visible_division`` hides behind
+        # ``can_edit``, so listing them to anyone else is a row that 404s when
+        # clicked. They were already in the old single table for everybody; the
+        # split is what made that worth fixing rather than perpetuating.
+        whatif, rest = [], []
+        for tournament in context["tournaments"]:
+            if tournament.is_whatif:
+                if tournament.can_edit(user):
+                    whatif.append(tournament)
+            else:
+                rest.append(tournament)
+        context["whatif_tournaments"] = whatif
+        context["tournaments"] = rest
         return context
 
 

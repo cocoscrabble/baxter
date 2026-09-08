@@ -40,7 +40,48 @@
         {% endfor %}
     </tbody>
 </table>
-{% else %}
+{% elif not whatif_tournaments %}
 {% include "tournaments/_empty_state.html" with message="No tournaments yet." %}
+{% endif %}
+
+{% if whatif_tournaments %}
+{% comment %}
+Below the real events, in their own table: a what-if sandbox is an import of a
+finished tournament kept for experimenting on, not part of anybody's schedule,
+and reading past a pile of them to find a live event is the problem this splits.
+
+No Location column — every one of them says "What-if sandbox", which is a column
+that only repeats what the heading already said.
+{% endcomment %}
+<section class="whatif-list">
+    <h2>What-if sandboxes</h2>
+    <p class="settings-intro">
+        Imported copies of finished tournaments, for trying out pairings without
+        touching the real thing. Listed only for people who can edit them —
+        their divisions are hidden from everyone else.
+    </p>
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Imported</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for tournament in whatif_tournaments %}
+            <tr>
+                <td><a href="{% url 'tournament_detail' tournament.slug %}">{{ tournament.name }}</a></td>
+                <td>{{ tournament.created_at|date:"M j, Y" }}</td>
+                <td>
+                    {% if tournament.user_can_delete %}
+                    <a href="{% url 'tournament_delete' tournament.slug %}">Delete</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
 {% endif %}
 {% endblock %}

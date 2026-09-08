@@ -2,10 +2,12 @@
 
 import json
 
-from django.test import TestCase
+from datetime import date
+
+from django.test import TestCase, tag
 from django.urls import reverse
 
-from tournaments.models import Player, Tournament
+from tournaments.models import Division, Player, Tournament
 from users.models import User
 
 
@@ -103,3 +105,102 @@ class WhatIfImportViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Paste or upload")
         self.assertFalse(Tournament.objects.exists())
+
+
+@tag("slow")
+class TournamentListSplitsWhatIfTests(TestCase):
+    """What-if sandboxes list in their own table under the real tournaments.
+
+    Both sandbox kinds set ``is_fake``, so the split keys on the divisions
+    instead: a what-if import forces every division ``is_test``, a fake
+    tournament deliberately does not.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="lister", password="p")
+        self.real = Tournament.objects.create(
+            name="Real Open", location="Toronto",
+            start_date=date(2026, 5, 1), owner=self.user,
+        )
+        Division.objects.create(tournament=self.real, name="Division 1")
+
+        self.fake = Tournament.objects.create(
+            name="Fake Cup", location="nowhere",
+            start_date=date(2026, 5, 2), owner=self.user, is_fake=True,
+        )
+        Division.objects.create(tournament=self.fake, name="Division 1")
+
+        self.whatif = Tournament.objects.create(
+            name="Sandbox Cup", location="What-if sandbox",
+            start_date=date(2026, 5, 3), owner=self.user, is_fake=True,
+        )
+        Division.objects.create(
+            tournament=self.whatif, name="Division 1", is_test=True
+        )
+
+    def context(self):
+        self.client.force_login(self.user)
+        return self.client.get(reverse("tournament_list")).context
+
+    def test_only_the_whatif_import_moves_to_the_second_table(self):
+        ctx = self.context()
+        main = [t.name for t in ctx["tournaments"]]
+        whatif = [t.name for t in ctx["whatif_tournaments"]]
+        self.assertEqual(whatif, ["Sandbox Cup"])
+        # A fake tournament is a sandbox too but stays in the main table: its
+        # divisions are not is_test, because it is meant to be fully visible.
+        self.assertIn("Fake Cup", main)
+        self.assertIn("Real Open", main)
+        self.assertNotIn("Sandbox Cup", main)
+
+    def test_the_second_table_appears_below_the_first(self):
+        self.client.force_login(self.user)
+        html = self.client.get(reverse("tournament_list")).content.decode()
+        self.assertLess(html.index("Real Open"), html.index("What-if sandboxes"))
+        self.assertLess(html.index("What-if sandboxes"), html.index("Sandbox Cup"))
+
+    def test_a_visitor_who_cannot_open_them_is_not_shown_them(self):
+        # Their divisions are is_test, which 404s for anyone who cannot edit the
+        # tournament, so listing them to a stranger is a row that dies on click.
+        self.client.logout()
+        html = self.client.get(reverse("tournament_list")).content.decode()
+        self.assertNotIn("Sandbox Cup", html)
+        self.assertNotIn("What-if sandboxes", html)
+        # The real tournaments are still public.
+        self.assertIn("Real Open", html)
+
+    def test_the_empty_state_only_shows_when_both_are_empty(self):
+        # A division with nothing but sandboxes should not claim there are no
+        # tournaments while listing some.
+        self.real.delete()
+        self.fake.delete()
+        self.client.force_login(self.user)
+        html = self.client.get(reverse("tournament_list")).content.decode()
+        self.assertNotIn("No tournaments yet", html)
+        self.assertIn("Sandbox Cup", html)
+
+    def test_the_flag_does_not_cost_a_query_per_row(self):
+        """``with_whatif_flag`` annotates, so the split is one EXISTS subquery
+        in the list query rather than a lookup per tournament."""
+        from django.test.utils import CaptureQueriesContext
+        from django.db import connection
+
+        def load():
+            with CaptureQueriesContext(connection) as ctx:
+                self.client.get(reverse("tournament_list"))
+            return [q["sql"] for q in ctx.captured_queries]
+
+        self.client.force_login(self.user)
+        few = load()
+        for i in range(20):
+            t = Tournament.objects.create(
+                name=f"Extra {i}", location="x",
+                start_date=date(2026, 4, 1), owner=self.user,
+            )
+            Division.objects.create(tournament=t, name="Division 1")
+        many = load()
+        # The only mention of the division table is the EXISTS inside the list
+        # query itself, so 20 more tournaments cost no extra queries at all.
+        standalone = [q for q in many if q.lstrip().startswith('SELECT "tournaments_division"')]
+        self.assertEqual(standalone, [])
+        self.assertEqual(len(many), len(few), f"{len(few)} -> {len(many)}")
