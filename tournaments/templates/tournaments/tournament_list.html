@@ -15,73 +15,39 @@
 </p>
 {% endif %}
 
+{% comment %}
+Three groups, real events first and alone: the club's actual schedule is what
+somebody comes to this page for, and having to read past sandboxes to find it is
+the problem. The two sandbox kinds each get their own table below, labelled for
+what they are — they were previously mixed in unlabelled, which was worse than
+either.
+{% endcomment %}
 {% if tournaments %}
-<table>
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>Location</th>
-            <th>Date</th>
-            <th></th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for tournament in tournaments %}
-        <tr>
-            <td><a href="{% url 'tournament_detail' tournament.slug %}">{{ tournament.name }}</a></td>
-            <td>{{ tournament.location }}</td>
-            <td>{{ tournament.start_date }}</td>
-            <td>
-                {% if tournament.is_fake and tournament.user_can_delete %}
-                <a href="{% url 'tournament_delete' tournament.slug %}">Delete</a>
-                {% endif %}
-            </td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
-{% elif not whatif_tournaments %}
+{% include "tournaments/_tournament_table.html" with tournaments=tournaments date_label="Date" show_location=True %}
+{% elif not test_tournaments and not whatif_tournaments %}
 {% include "tournaments/_empty_state.html" with message="No tournaments yet." %}
 {% endif %}
 
-{% if whatif_tournaments %}
-{% comment %}
-Below the real events, in their own table: a what-if sandbox is an import of a
-finished tournament kept for experimenting on, not part of anybody's schedule,
-and reading past a pile of them to find a live event is the problem this splits.
+{% if test_tournaments %}
+<section class="sandbox-list">
+    <h2>Test tournaments</h2>
+    <p class="settings-intro">
+        Generated with random players and simulated results, for trying things
+        out. Safe to delete.
+    </p>
+    {% include "tournaments/_tournament_table.html" with tournaments=test_tournaments date_label="Created" show_location=False %}
+</section>
+{% endif %}
 
-No Location column — every one of them says "What-if sandbox", which is a column
-that only repeats what the heading already said.
-{% endcomment %}
-<section class="whatif-list">
+{% if whatif_tournaments %}
+<section class="sandbox-list">
     <h2>What-if sandboxes</h2>
     <p class="settings-intro">
         Imported copies of finished tournaments, for trying out pairings without
         touching the real thing. Listed only for people who can edit them —
         their divisions are hidden from everyone else.
     </p>
-    <table>
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Imported</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for tournament in whatif_tournaments %}
-            <tr>
-                <td><a href="{% url 'tournament_detail' tournament.slug %}">{{ tournament.name }}</a></td>
-                <td>{{ tournament.created_at|date:"M j, Y" }}</td>
-                <td>
-                    {% if tournament.user_can_delete %}
-                    <a href="{% url 'tournament_delete' tournament.slug %}">Delete</a>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    {% include "tournaments/_tournament_table.html" with tournaments=whatif_tournaments date_label="Imported" show_location=False %}
 </section>
 {% endif %}
 {% endblock %}

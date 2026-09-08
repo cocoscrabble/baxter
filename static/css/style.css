@@ -1339,13 +1339,13 @@ dd {
     margin: var(--space-md) 0;
 }
 
-/* The what-if sandboxes, listed under the real tournaments. Separated so the
-   eye can stop at the end of the first table. */
-.whatif-list {
+/* The sandbox groups (test tournaments, what-if imports) listed under the real
+   ones. Separated so the eye can stop at the end of the first table. */
+.sandbox-list {
     margin-top: var(--space-lg);
 }
 
-.whatif-list h2 {
+.sandbox-list h2 {
     margin-bottom: var(--space-xs);
 }
 

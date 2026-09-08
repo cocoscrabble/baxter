@@ -142,21 +142,24 @@ class TournamentListSplitsWhatIfTests(TestCase):
         self.client.force_login(self.user)
         return self.client.get(reverse("tournament_list")).context
 
-    def test_only_the_whatif_import_moves_to_the_second_table(self):
-        ctx = self.context()
-        main = [t.name for t in ctx["tournaments"]]
-        whatif = [t.name for t in ctx["whatif_tournaments"]]
-        self.assertEqual(whatif, ["Sandbox Cup"])
-        # A fake tournament is a sandbox too but stays in the main table: its
-        # divisions are not is_test, because it is meant to be fully visible.
-        self.assertIn("Fake Cup", main)
-        self.assertIn("Real Open", main)
-        self.assertNotIn("Sandbox Cup", main)
+    def test_the_three_groups_are_separated(self):
+        """The main table is real events only; each sandbox kind gets its own.
 
-    def test_the_second_table_appears_below_the_first(self):
+        ``is_fake`` alone cannot do this — both kinds set it. The what-if is
+        told apart by its ``is_test`` divisions, which a fake tournament
+        deliberately does not have.
+        """
+        ctx = self.context()
+        self.assertEqual([t.name for t in ctx["tournaments"]], ["Real Open"])
+        self.assertEqual([t.name for t in ctx["test_tournaments"]], ["Fake Cup"])
+        self.assertEqual([t.name for t in ctx["whatif_tournaments"]], ["Sandbox Cup"])
+
+    def test_the_sandbox_tables_appear_below_the_real_one(self):
         self.client.force_login(self.user)
         html = self.client.get(reverse("tournament_list")).content.decode()
-        self.assertLess(html.index("Real Open"), html.index("What-if sandboxes"))
+        self.assertLess(html.index("Real Open"), html.index("Test tournaments"))
+        self.assertLess(html.index("Test tournaments"), html.index("Fake Cup"))
+        self.assertLess(html.index("Fake Cup"), html.index("What-if sandboxes"))
         self.assertLess(html.index("What-if sandboxes"), html.index("Sandbox Cup"))
 
     def test_a_visitor_who_cannot_open_them_is_not_shown_them(self):
@@ -166,18 +169,25 @@ class TournamentListSplitsWhatIfTests(TestCase):
         html = self.client.get(reverse("tournament_list")).content.decode()
         self.assertNotIn("Sandbox Cup", html)
         self.assertNotIn("What-if sandboxes", html)
-        # The real tournaments are still public.
+        # The real tournaments are still public, and so are the test ones —
+        # fake_tournament leaves their divisions visible on purpose.
         self.assertIn("Real Open", html)
+        self.assertIn("Fake Cup", html)
 
-    def test_the_empty_state_only_shows_when_both_are_empty(self):
-        # A division with nothing but sandboxes should not claim there are no
-        # tournaments while listing some.
+    def test_the_empty_state_only_shows_when_every_group_is_empty(self):
+        # Nothing but sandboxes must not claim there are no tournaments while
+        # listing some.
         self.real.delete()
-        self.fake.delete()
         self.client.force_login(self.user)
         html = self.client.get(reverse("tournament_list")).content.decode()
         self.assertNotIn("No tournaments yet", html)
+        self.assertIn("Fake Cup", html)
         self.assertIn("Sandbox Cup", html)
+
+        self.fake.delete()
+        self.whatif.delete()
+        html = self.client.get(reverse("tournament_list")).content.decode()
+        self.assertIn("No tournaments yet", html)
 
     def test_the_flag_does_not_cost_a_query_per_row(self):
         """``with_whatif_flag`` annotates, so the split is one EXISTS subquery
@@ -204,3 +214,16 @@ class TournamentListSplitsWhatIfTests(TestCase):
         standalone = [q for q in many if q.lstrip().startswith('SELECT "tournaments_division"')]
         self.assertEqual(standalone, [])
         self.assertEqual(len(many), len(few), f"{len(few)} -> {len(many)}")
+
+    def test_a_real_tournament_offers_no_delete_link_in_the_list(self):
+        """``can_delete`` lets an owner delete a real tournament, but this list
+        has never offered that. Factoring the three tables into one partial
+        dropped the ``is_fake`` half of the guard and put a Delete link on every
+        real row; this is the pin for it."""
+        self.client.force_login(self.user)
+        html = self.client.get(reverse("tournament_list")).content.decode()
+        real_delete = reverse("tournament_delete", args=[self.real.slug])
+        self.assertNotIn(real_delete, html)
+        # The sandboxes still offer it.
+        self.assertIn(reverse("tournament_delete", args=[self.fake.slug]), html)
+        self.assertIn(reverse("tournament_delete", args=[self.whatif.slug]), html)
