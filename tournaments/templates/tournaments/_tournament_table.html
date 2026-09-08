@@ -1,0 +1,45 @@
+{% comment %}
+One table of tournaments, used for all three groups on the list page (real,
+test, what-if) so the row markup lives once.
+
+Parameters:
+  tournaments    the rows
+  date_label     header over the date column ("Date", "Created", "Imported")
+  show_location  real tournaments only — a test tournament's location is always
+                 "Test Location" and a what-if's is always "What-if sandbox", so
+                 for those it is a column that repeats the heading
+
+The date is always ``start_date``: for a real tournament that is when it is
+played, and both sandbox kinds set it to the day they were made.
+{% endcomment %}
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            {% if show_location %}<th>Location</th>{% endif %}
+            <th>{{ date_label }}</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for tournament in tournaments %}
+        <tr>
+            <td><a href="{% url 'tournament_detail' tournament.slug %}">{{ tournament.name }}</a></td>
+            {% if show_location %}<td>{{ tournament.location }}</td>{% endif %}
+            <td>{{ tournament.start_date }}</td>
+            <td>
+                {% comment %}
+                Both halves matter. ``can_delete`` lets an owner delete a real
+                tournament, but this list has never offered that — deleting a
+                club event is not a thing to put one click from a directory —
+                so the link is for sandboxes only. Every row in the two tables
+                below is is_fake, so the guard only bites on the real table.
+                {% endcomment %}
+                {% if tournament.is_fake and tournament.user_can_delete %}
+                <a href="{% url 'tournament_delete' tournament.slug %}">Delete</a>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>

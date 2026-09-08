@@ -175,25 +175,28 @@ class TournamentListView(ListView):
         user = self.request.user
         for tournament in context["tournaments"]:
             tournament.user_can_delete = tournament.can_delete(user)
-        # What-if sandboxes list separately, below the real events. They are
-        # imports of finished tournaments kept for experimenting on, so they are
-        # not part of the club's schedule and reading past them to find a real
-        # one is the whole problem.
+        # Three groups, so the first table is only the club's actual schedule.
+        # Both sandbox kinds set ``is_fake``; ``is_whatif`` (annotated by
+        # ``with_whatif_flag``) is what separates an import from a
+        # fake-tournament-tool one.
         #
-        # Shown only to someone who can open them. Their divisions are
+        # A what-if is listed only to someone who can open it: its divisions are
         # ``is_test``, which ``_ensure_visible_division`` hides behind
-        # ``can_edit``, so listing them to anyone else is a row that 404s when
-        # clicked. They were already in the old single table for everybody; the
-        # split is what made that worth fixing rather than perpetuating.
-        whatif, rest = [], []
+        # ``can_edit``, so a row anybody else clicks is a 404. A test tournament
+        # has no such restriction — ``fake_tournament`` deliberately leaves its
+        # divisions visible — so it is listed for everyone.
+        real, test, whatif = [], [], []
         for tournament in context["tournaments"]:
             if tournament.is_whatif:
                 if tournament.can_edit(user):
                     whatif.append(tournament)
+            elif tournament.is_fake:
+                test.append(tournament)
             else:
-                rest.append(tournament)
+                real.append(tournament)
+        context["tournaments"] = real
+        context["test_tournaments"] = test
         context["whatif_tournaments"] = whatif
-        context["tournaments"] = rest
         return context
 
 
