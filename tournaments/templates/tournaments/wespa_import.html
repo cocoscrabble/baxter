@@ -31,7 +31,7 @@ that has been failing since the source moved has nowhere else to say so.
 {% endcomment %}
 {% if last_sync %}
 {% if last_sync.ok %}
-<p class="settings-intro">Last pull {{ last_sync.created_at|timesince }} ago
+<p class="note">Last pull {{ last_sync.created_at|timesince }} ago
 ({{ last_sync.get_source_display|lower }}): {{ last_sync.summary }}</p>
 {% else %}
 <p class="error">The last pull {{ last_sync.created_at|timesince }} ago
@@ -39,7 +39,7 @@ that has been failing since the source moved has nowhere else to say so.
 Ratings are as of the last successful pull.</p>
 {% endif %}
 {% else %}
-<p class="settings-intro">No pull has run yet.</p>
+<p class="note">No pull has run yet.</p>
 {% endif %}
 
 {% if endpoint_configured %}
@@ -60,7 +60,7 @@ document the pull above fetches.</p>
 {% else %}
 <h2>Upload the list</h2>
 <p>Save the WESPA list as a JSON file and upload it here.</p>
-<p class="settings-intro">No WESPA endpoint is configured, so this is the only
+<p class="note">No WESPA endpoint is configured, so this is the only
 way in. Setting <code>WESPA_API_URL</code> adds a one-click pull.</p>
 {% endif %}
 
@@ -149,7 +149,7 @@ right is the usual reason a pull could not match them.</p>
     </tbody>
 </table>
 {% elif search_query %}
-<p class="settings-intro">Nobody in the WESPA list matches “{{ search_query }}”.
+<p class="note">Nobody in the WESPA list matches “{{ search_query }}”.
 {% if not mirror_count %}The list is empty — pull it first.{% endif %}</p>
 {% endif %}
 <p><a href="{% url 'wespa_import' %}">Done</a></p>
@@ -200,7 +200,7 @@ two lists.</p>
     </tbody>
 </table>
 {% if guests_truncated %}
-<p class="settings-intro">Showing the first {{ guests|length }} of
+<p class="note">Showing the first {{ guests|length }} of
 {{ guest_total }}, unlinked first.</p>
 {% endif %}
 {% endif %}

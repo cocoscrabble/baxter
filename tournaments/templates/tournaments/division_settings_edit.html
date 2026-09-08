@@ -5,9 +5,9 @@
 {% block content %}
 <h1>Settings: {{ division.name }}</h1>
 
-<section class="settings-section">
+<section class="page-section">
     <h2>Byes and withdrawals</h2>
-    <p class="settings-intro">
+    <p class="note">
         How this division scores a bye, and what happens to the rounds a
         withdrawn player no longer plays. Rounds already played are never
         affected, and neither are the rounds someone missed before you change
@@ -22,9 +22,9 @@
     </form>
 </section>
 
-<section class="settings-section">
+<section class="page-section">
     <h2>COP pairing</h2>
-    <p class="settings-intro">
+    <p class="note">
         Prize and tuning settings for the COP (Cost-Optimized Pairing) strategy.
         These only take effect for rounds set to <strong>COP</strong> in the
         <a href="{% url 'division_round_pairings' division.tournament.slug division.slug %}">round pairings</a>.

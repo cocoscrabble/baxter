@@ -29,7 +29,7 @@ pull that has been failing since a token rotation has nowhere else to say so.
 {% endcomment %}
 {% if last_sync %}
 {% if last_sync.ok %}
-<p class="settings-intro">Last pull {{ last_sync.created_at|timesince }} ago
+<p class="note">Last pull {{ last_sync.created_at|timesince }} ago
 ({{ last_sync.get_source_display|lower }}): {{ last_sync.summary }}</p>
 {% else %}
 <p class="error">The last pull {{ last_sync.created_at|timesince }} ago
@@ -37,7 +37,7 @@ pull that has been failing since a token rotation has nowhere else to say so.
 Player data is as of the last successful pull.</p>
 {% endif %}
 {% else %}
-<p class="settings-intro">No pull has run yet.</p>
+<p class="note">No pull has run yet.</p>
 {% endif %}
 
 {% if endpoint_configured %}
@@ -58,7 +58,7 @@ document the pull above fetches.</p>
 <p>Download the file from the CoCo player database's
 <code>/manage/roster/</code> page and upload it here. It is a
 <code>coco.roster/1</code> document.</p>
-<p class="settings-intro">No roster endpoint is configured, so this is the only
+<p class="note">No roster endpoint is configured, so this is the only
 way in. Setting <code>ROSTER_API_URL</code> and <code>ROSTER_API_TOKEN</code>
 adds a one-click pull.</p>
 {% endif %}

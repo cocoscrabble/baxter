@@ -977,26 +977,6 @@ td a:hover {
     }
 }
 
-/* Settings formset: size the table to its content instead of stretching the
-   full container width (which leaves large gaps between the few columns). */
-#settings-formset table {
-    width: auto;
-}
-
-#settings-formset th,
-#settings-formset td {
-    padding-right: var(--space-lg);
-}
-
-/* Round-number inputs hold a single value; keep them narrow so the columns
-   (and the controls row above) stay tight instead of spreading. */
-#settings-formset input[type="text"],
-#settings-formset input[type="number"],
-.settings-controls input[type="text"],
-.settings-controls input[type="number"] {
-    width: 5em;
-}
-
 /* Tournament detail: divisions beside a metadata card. */
 .tournament-divisions h2 {
     margin-top: 0;
@@ -1032,14 +1012,6 @@ dd {
 
 .division-deleted {
     background-color: var(--color-deleted-bg);
-}
-
-.settings-controls {
-    display: flex;
-    gap: var(--space-lg);
-    align-items: baseline;
-    flex-wrap: wrap;
-    margin-bottom: var(--space-md);
 }
 
 .division-toolbar {
@@ -1371,12 +1343,33 @@ dd {
    where a shared column would either crush the name field or strand the rating
    in a wide one, so its rows size independently and wrap. Do not merge them
    without deciding which of the two the merged form should be. */
-/* The prose above each group. A plain <p> carries 16px top and bottom; the
-   heading above it already provides the separation, so only the bottom is
-   wanted. */
-.settings-intro {
-    margin: 0 0 var(--space-md);
+/* `.page-section` (was `.settings-section`) has no rule of its own — it is a
+   semantic hook for a titled block of a page, on the settings, playoff-setup,
+   registration and round-pairings pages. Named for what it is because giving it
+   a rule would restyle all four at once, which is exactly how `.note` below
+   caught me out. */
+
+/* A short explanatory paragraph in a secondary voice. Used three ways — the
+   prose under a section heading, a footnote under a table, and the "last pull
+   N ago" status line beside its `.error` counterpart — so the name says what it
+   is rather than where it started (it was `.settings-intro`, in twenty-two
+   templates and only two of them settings).
+ 
+   Capping the measure is right everywhere: none of these is a heading and none
+   should run the full width of a wide screen. */
+.note {
     max-width: 62rem;
+}
+
+/* Tightened only when the note actually introduces something. A plain <p>
+   carries 16px top and bottom, and a heading already provides the separation —
+   but a footnote under a table or a status line mid-page needs that top margin
+   to keep off what precedes it. Scoping it to the adjacency gets both without a
+   second class or a per-template decision. */
+h1 + .note,
+h2 + .note,
+h3 + .note {
+    margin-top: 0;
 }
 
 .settings-fields {

@@ -5,7 +5,7 @@
 {% block content %}
 <h1>Register: {{ division.name }}</h1>
 
-<p class="settings-intro">
+<p class="note">
   Add entrants one at a time, or
   <a href="{% url 'division_entrants_edit' division.tournament.slug division.slug %}">edit them all in the grid</a>.
   Payment details are shown to editors only and never appear on the public list.
@@ -38,7 +38,7 @@ nobody has a rating for, that box *is* their rating — which is what its help
 text says, in the one place somebody filling it in is looking.
 {% endcomment %}
 
-<section class="settings-section register-form">
+<section class="page-section register-form">
   <h2>{% if editing %}Edit {{ editing.display_name }}{% else %}Add a player{% endif %}</h2>
 
   {% if not editing %}
@@ -157,7 +157,7 @@ text says, in the one place somebody filling it in is looking.
   </form>
 </section>
 
-<section class="settings-section">
+<section class="page-section">
   {% comment %}
   A director's working list: who is in so far, spelled out in words, with the
   way back into the form beside each row. `_entrants_table.html` shows the same

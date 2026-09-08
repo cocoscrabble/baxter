@@ -6,7 +6,7 @@
 <h1>Playoff: {{ division.name }}</h1>
 
 {% if playoff %}
-<p class="settings-intro">
+<p class="note">
   This division already has a playoff.
   <a href="{% url 'division_playoff' division.tournament.slug division.slug %}">View the bracket</a>.
   {% if has_results %}
@@ -24,7 +24,7 @@
 <form method="post">
   {% csrf_token %}
 
-  <section class="settings-section">
+  <section class="page-section">
     <h2>Qualification</h2>
     {% comment %}
     The same label/control grid the settings page uses. These are hand-written
@@ -72,9 +72,9 @@
     {% endif %}
   </section>
 
-  <section class="settings-section">
+  <section class="page-section">
     <h2>Series lengths</h2>
-    <p class="settings-intro">
+    <p class="note">
       Each series is an odd number of games; a series ends as soon as one player
       has more than half of them, so its last games may never be played. Set an
       optional series to 0 to leave it out. Note that a concurrent playoff has to play
@@ -100,9 +100,9 @@
     </table>
   </section>
 
-  <section class="settings-section">
+  <section class="page-section">
     <h2>Qualifiers</h2>
-    <p class="settings-intro">
+    <p class="note">
       Taken from the standings after round {{ form.qualification_round }}. Change
       a row to override it — worth doing when two players are exactly level,
       since the order confirmed here is the one the bracket keeps for good.

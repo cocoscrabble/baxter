@@ -39,7 +39,7 @@ which is why they can sit in a table this form does not wrap.
 
 {% include "tournaments/_entrants_table.html" %}
 {% if can_edit %}
-<p class="settings-intro">
+<p class="note">
     Payment is shown to editors only — it never appears on the public list or in
     the <a href="{% url 'division_entrants_embed' division.tournament.slug division.slug %}">embeddable version</a>.
 </p>

@@ -12,7 +12,7 @@
   {% endif %}
 {% else %}
 
-<p class="settings-intro">
+<p class="note">
   Top {{ playoff.qualifier_count }} after round {{ playoff.qualification_round }},
   {% if playoff.timing == "postscript" %}
     played after the main tournament ends.
@@ -96,7 +96,7 @@
 
 <section class="playoff-placements">
   <h2>Final placements</h2>
-  <p class="settings-intro">
+  <p class="note">
     The top {{ playoff.qualifier_count }} places come from the bracket, not from
     win-loss records: a runner-up can finish the playoff with a worse record than
     the player who came third. Every playoff game still counts towards records
@@ -125,7 +125,7 @@
 
 <section class="playoff-seeds">
   <h2>Qualifiers</h2>
-  <p class="settings-intro">
+  <p class="note">
     The standings snapshot taken after round {{ playoff.qualification_round }},
     as confirmed when the playoff was created.
   </p>
