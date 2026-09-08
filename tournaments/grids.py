@@ -177,12 +177,14 @@ class EntrantsGrid(EditGrid):
         # source column beside it is read-only so the two cannot disagree.
         Column("rating", "Rating", kind="number", min=0, width=100),
         Column("source", "Source", kind="display", width=90),
+        # Widths leave room for the header plus Tabulator's sort arrow, which
+        # eats about 20px — too tight and the title truncates to "O…".
         Column("tentative", "Tent.", kind="flag", value_type="bool",
-               new_row=False, width=80),
+               new_row=False, width=90),
         Column("paid", "Paid", kind="flag", value_type="bool",
-               new_row=False, width=80),
+               new_row=False, width=85),
         Column("playing_up", "Up", kind="flag", value_type="bool",
-               new_row=False, width=70),
+               new_row=False, width=75),
         # Shown, not set. Withdrawing is more than a flag: it also has to
         # resolve the round already on the boards — dissolve the printed game,
         # give the opponent their bye, record the absence per the division's
@@ -190,7 +192,7 @@ class EntrantsGrid(EditGrid):
         # does not. Ticking it here used to set the flag alone and leave a
         # printed game nobody could play. Use Withdraw on the entrants page.
         Column("dropped", "Out", kind="flag", value_type="bool",
-               new_row=False, width=70, editable=False),
+               new_row=False, width=85, editable=False),
     ]
 
     def queryset(self, division):

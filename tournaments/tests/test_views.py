@@ -3319,3 +3319,13 @@ class EntrantsGridFlagColumnsTests(TestCase):
         )
         self.assertEqual(started.kind, "choice")
         self.assertEqual(started.values, {True: "Winner", False: "Opponent"})
+
+    def test_the_grid_points_at_the_withdraw_button(self):
+        # The Out column is read-only, so the page has to say where the switch
+        # is — otherwise it reads as broken.
+        body = self.client.get(self.url).content.decode()
+        entrants = reverse(
+            "division_entrants", kwargs=self.division.slug_kwargs()
+        )
+        self.assertIn(entrants, body)
+        self.assertIn("To withdraw a player", body)

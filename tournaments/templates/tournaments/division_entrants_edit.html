@@ -6,6 +6,18 @@
 {% block content %}
 <h1>Edit Entrants: {{ division.name }}</h1>
 
+{% comment %}
+The Out column is read-only, so say here where the switch actually is. Without
+this the column reads as broken rather than as deliberate, and the obvious
+guess — tick it and save — is the thing that used to leave a printed game
+nobody could play.
+{% endcomment %}
+<p class="settings-intro">
+    To withdraw a player, use <strong>Withdraw</strong> from the
+    <a href="{% url 'division_entrants' division.tournament.slug division.slug %}">Entrants</a>
+    tab. Withdrawn state is read-only in the <strong>Out</strong> column here.
+</p>
+
 {% include "tournaments/_tabulator_head.html" %}
 {% editgrid_presence grid %}
 
