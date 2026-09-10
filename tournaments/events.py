@@ -13,6 +13,7 @@ import functools
 import hashlib
 import json
 import logging
+import re
 
 from django.db import models, transaction
 
@@ -589,8 +590,12 @@ def snapshot_existing(tournament) -> "object | None":
     return record_event(tournament, "state_snapshot", build_snapshot(tournament))
 
 
-def describe_event(event) -> str:
-    """A short human-readable description of an event, for the Activity page."""
+def describe_event(event, names=None) -> str:
+    """A short human-readable description of an event, for the Activity page.
+
+    ``names`` is the page's already-resolved {identifier: name} map; without it
+    the lookup below runs per event, which is one query per row.
+    """
     p = event.payload or {}
     div = event.division.name if event.division else p.get("division", "")
     t = event.event_type
@@ -623,14 +628,16 @@ def describe_event(event) -> str:
         Anything that does not resolve is shown as-is — which for a v1 payload
         is already the name, so old log lines still read correctly.
         """
-        from tournaments.models import Player
-
         values = [p.get(f) or "" for f in fields]
-        found = dict(
-            Player.objects.filter(
-                player_number__in=[v for v in values if v]
-            ).values_list("player_number", "name")
-        )
+        found = names
+        if found is None:
+            from tournaments.models import Player
+
+            found = dict(
+                Player.objects.filter(
+                    player_number__in=[v for v in values if v]
+                ).values_list("player_number", "name")
+            )
         return [found.get(v, v) for v in values]
 
     templates = {
@@ -719,6 +726,9 @@ def describe_event(event) -> str:
 # it and points at the download rather than pasting the lot into the page.
 MAX_PAYLOAD_CHARS = 4000
 
+# A compact line's ceiling. Past this a payload is not being skimmed any more.
+MAX_LINE_CHARS = 300
+
 # How many rows of one event's delta the page will render. Almost nothing
 # reaches it — a results save is a handful of slips, a registration edit two or
 # three — but the save that enters a 200-player field is one event with 200 rows
@@ -793,11 +803,10 @@ def _name_people(value, names):
     it is what a replay acts on, and two players can share a name.
     """
     if isinstance(value, str):
-        if value not in names:
-            return value
-        name = names[value]
-        # The bye's identifier *is* its name, and "Bye (BYE)" says it twice.
-        return name if name.casefold() == value.casefold() else f"{name} ({value})"
+        # The name alone. The number is what the log recorded and what the
+        # download carries; on the page it is noise, and in a result line the
+        # brackets already mean scores.
+        return names.get(value, value)
     if isinstance(value, list):
         return [_name_people(item, names) for item in value]
     if isinstance(value, dict):
@@ -815,41 +824,46 @@ def _render_value(value):
     return str(value)
 
 
-def _row_fields(grid, row, names, skip_identity=True):
-    """``[(field, value)]`` for a whole row, people rendered as names."""
-    return [
-        (field, _render_value(names.get(value, value)
-                              if field in grid.portable_player_fields else value))
-        for field, value in row.items()
-        if not (skip_identity and field in grid.portable_identity_fields)
-    ]
+def _compact_value(value, names):
+    """A payload value on one line, with no JSON punctuation.
 
-
-def _changed_fields(grid, before, after, names):
-    """``[(field, from, to)]`` for the values that actually moved.
-
-    Identity fields are *not* skipped: a results row keeps its key when a
-    director corrects who won, and "winner: Alice → Bob" is the whole point of
-    the entry.
+    The page is read by a person looking quickly for what happened, so a list is
+    a comma-separated run and a mapping is ``key=value`` pairs. The downloaded
+    log is the machine-readable copy; nothing here has to parse.
     """
-    fields = []
-    for field, new in after.items():
-        old = before.get(field)
-        if old == new:
-            continue
-        if field in grid.portable_player_fields:
-            old, new = names.get(old, old), names.get(new, new)
-        fields.append((field, _render_value(old), _render_value(new)))
-    return fields
+    if isinstance(value, dict):
+        return " ".join(
+            f"{key}={_compact_value(item, names)}"
+            for key, item in sorted(value.items())
+            if item not in (None, "", [], {})
+        )
+    if isinstance(value, list):
+        return ", ".join(_compact_value(item, names) for item in value)
+    return _render_value(_name_people(value, names))
 
 
-def event_details(events) -> list:
-    """``event_detail`` for a page of events, resolving every person they name in
-    one query instead of one per event.
+def _already_said(value, summary) -> bool:
+    """Is this value already in the line above it?
 
-    The page is the unit because that is where the cost was: a hundred rows each
-    looking up its own handful of players is a hundred queries for a table that
-    fits in one.
+    "Published round 2 in Division 1" does not need "round 2" underneath. Word
+    bounded, so a round 2 is not swallowed by a round 12.
+    """
+    if isinstance(value, (list, dict)) or value in (None, ""):
+        return False
+    return re.search(rf"\b{re.escape(str(value))}\b", summary) is not None
+
+
+def _field_label(key) -> str:
+    return key.replace("_", " ")
+
+
+def describe_events(events) -> list:
+    """``(description, detail)`` for a page of events.
+
+    One pass, one query for the people: the page is the unit because that is
+    where the cost was — a hundred rows each looking up its own handful of
+    players is a hundred queries for a table that fits in one. The description is
+    handed to the detail so it can leave out what the line above already said.
     """
     from tournaments.grids import GRID_BY_EVENT
 
@@ -864,10 +878,14 @@ def event_details(events) -> list:
             # string in it is a candidate. Cheap: they all ride the one query.
             numbers |= set(_payload_strings(payload))
     names = _player_names(numbers)
-    return [event_detail(event, names) for event in events]
+    described = []
+    for event in events:
+        summary = describe_event(event, names)
+        described.append((summary, event_detail(event, names, summary)))
+    return described
 
 
-def event_detail(event, names=None) -> dict:
+def event_detail(event, names=None, summary="") -> dict:
     """What one event *did*, for the activity page to render under its summary.
 
     Two shapes. A grid save carries a delta, and is rendered row by row in the
@@ -881,48 +899,68 @@ def event_detail(event, names=None) -> dict:
 
     payload = event.payload or {}
     grid = GRID_BY_EVENT.get(event.event_type)
+    if grid is not None and "rows" in payload:
+        # A grid save from before deltas: the whole collection, so there is no
+        # movement to show — just what it held, in the same compact lines.
+        if names is None:
+            names = _player_names(
+                row.get(field)
+                for row in payload["rows"]
+                for field in grid.portable_player_fields
+            )
+        rows = payload["rows"][:MAX_DETAIL_ROWS]
+        lines = [
+            (
+                "",
+                "",
+                grid.portable_summary(row, names)
+                or grid.portable_label(row, names)
+                or "",
+            )
+            for row in rows
+        ]
+        return {"lines": lines, "more": len(payload["rows"]) - len(rows)}
     if grid is None or not _is_delta(payload):
-        # Not a delta: a command payload, or a grid save recorded before deltas
-        # (or by a grid whose rows have no identity), which is the whole
-        # collection. Either way it is shown as what was recorded, with the
-        # people in it named.
-        return _recorded_detail(payload, names)
+        # A command payload: one compact line of what it recorded.
+        return _recorded_detail(payload, names, summary, event.event_type)
     if names is None:
         names = _player_names(_grid_numbers(grid, payload))
 
-    def label(row):
-        return grid.portable_label(row, names) or ""
+    def summary_of(row):
+        return (
+            grid.portable_summary(row, names)
+            or grid.portable_label(row, names)
+            or ""
+        )
 
-    # One budget across the three sections, spent in the order the page renders
+    def change_of(before, after):
+        # A grid with no compact form of its own says what it was and what it
+        # became, on one line.
+        return grid.portable_change(before, after, names) or (
+            f"{summary_of(before)} → {summary_of(after)}"
+        )
+
+    # One budget across the three kinds, spent in the order the page renders
     # them, so what a reader sees first is what survives the cap.
     budget = MAX_DETAIL_ROWS
-    changed, added, removed = [], [], []
-    for change in payload.get("changed", []):
+    lines = []
+    for item in payload.get("changed", []):
         if budget <= 0:
             break
-        changed.append({
-            "label": label(change["to"]),
-            "changes": _changed_fields(grid, change["from"], change["to"], names),
-        })
+        lines.append(("changed", "~", change_of(item["from"], item["to"])))
         budget -= 1
     for row in payload.get("added", []):
         if budget <= 0:
             break
-        added.append({"label": label(row), "fields": _row_fields(grid, row, names)})
+        lines.append(("added", "+", summary_of(row)))
         budget -= 1
     for row in payload.get("removed", []):
         if budget <= 0:
             break
-        removed.append({"label": label(row)})
+        lines.append(("removed", "\u2212", summary_of(row)))
         budget -= 1
-    shown = len(changed) + len(added) + len(removed)
     total = sum(len(payload.get(key, [])) for key in ("added", "removed", "changed"))
-    return {
-        "added": added,
-        "removed": removed,
-        "changed": changed,
-        "more": total - shown,
-    }
+    return {"lines": lines, "more": total - len(lines)}
 
 
 def _readable(payload) -> bool:
@@ -936,52 +974,93 @@ def _readable(payload) -> bool:
     return len(json.dumps(payload, default=str)) <= MAX_PAYLOAD_CHARS
 
 
-def _recorded_detail(payload, names=None) -> dict:
-    """A command payload, rendered as what it recorded.
+def _recorded_detail(payload, names=None, summary="", event_type="") -> dict:
+    """A command payload as one compact line, or nothing when the line above
+    already said it.
 
-    Flat values become the same field list a grid delta's rows use, so the two
-    kinds of log entry read alike. Anything structured — a list of refreshed
-    entrants, a seeding, the corrections a start rewrite made — keeps its shape
-    underneath as JSON, which is the honest rendering of a value that *is* a
-    structure. Both halves have their people named.
+    No JSON on the page. A director skimming the log wants "round 3 · winner
+    Emmanuel Egbele", not a brace-and-quote rendering of a dict they have to read
+    like code. The downloaded log stays the raw replay payload, which is what a
+    machine — or a person reconstructing an event — reads instead.
 
-    ``division`` is dropped: the summary line above already says which one.
+    ``division`` goes, and so does anything the summary already said: an event
+    described as "Published round 2 in Division 1" has nothing left to unfold.
     """
     if not _readable(payload):
-        # ensure_ascii=False: a name is not more readable as \u00f6, and the
-        # template escapes on output anyway.
-        text = json.dumps(
-            payload, indent=2, sort_keys=True, default=str, ensure_ascii=False
-        )
-        return {
-            "payload": (
-                text[:MAX_PAYLOAD_CHARS]
-                + f"\n… truncated at {MAX_PAYLOAD_CHARS} characters — "
-                "download the log for the rest."
-            )
-        }
+        # A whole-tournament snapshot. Rendering that compactly is no service to
+        # anybody; say what it holds and point at the file.
+        return {"note": _snapshot_note(payload)}
     if names is None:
         names = _player_names(_payload_strings(payload))
-    named = _name_people(payload, names)
-    fields, structured = [], {}
-    for key in sorted(named):
-        if key == "division":
+    compact = _COMPACT_COMMANDS.get(event_type)
+    if compact:
+        line = compact(payload, names)
+        if line:
+            return {"lines": [("", "", line)]}
+    parts = []
+    # The payload's own key order, not sorted: a command records its arguments
+    # in the order they are said, and alphabetical scatters them.
+    for key, value in payload.items():
+        if key == "division" or value in (None, "", [], {}):
             continue
-        value = named[key]
-        if isinstance(value, (list, dict)):
-            structured[key] = value
-        else:
-            fields.append((key, _render_value(value)))
-    return {
-        "fields": fields,
-        "payload": (
-            json.dumps(
-                structured, indent=2, sort_keys=True, default=str, ensure_ascii=False
-            )
-            if structured else ""
-        ),
-    }
+        text = _compact_value(value, names)
+        # Against the *rendered* text, so a player already named in the summary
+        # drops out even though the payload holds their number.
+        if not text or _already_said(text, summary):
+            continue
+        parts.append(f"{_field_label(key)} {text}")
+    line = " · ".join(parts)
+    if len(line) > MAX_LINE_CHARS:
+        line = line[:MAX_LINE_CHARS].rsplit(" ", 1)[0] + " …"
+    return {"lines": [("", "", line)]} if line else {}
 
+
+def _one_result_line(payload, names) -> str:
+    """``result_added`` / ``result_edited`` as a result rather than as the form
+    that entered it: "R1  Emmanuel Egbele (300) – Cheryl Melvin (500) ✓".
+
+    The single-result form is the commonest thing a director does, so its log
+    entry is worth saying in the shape the results grid says one. Rendered *by*
+    the grid, from the same row shape it saves, so the two cannot drift: the
+    payload names the two sides of the board directly, which is what
+    ``winner_started`` means.
+    """
+    from tournaments.grids import GRID_BY_EVENT
+
+    winner = payload.get("winner_player")
+    first, second = payload.get("first_player"), payload.get("second_player")
+    loser = second if winner == first else first
+    if not (winner and loser):
+        return ""
+    return GRID_BY_EVENT["results_saved"].portable_summary(
+        {
+            "round": payload.get("round"),
+            "winner": winner,
+            "loser": loser,
+            "winner_score": payload.get("winner_score"),
+            "loser_score": payload.get("loser_score"),
+            "winner_started": winner == first,
+        },
+        names,
+    )
+
+
+_COMPACT_COMMANDS = {
+    "result_added": _one_result_line,
+    "result_edited": _one_result_line,
+}
+
+
+def _snapshot_note(payload) -> str:
+    """One line for a payload too big to show: what it holds, and where to read
+    it."""
+    divisions = payload.get("divisions") or []
+    entrants = sum(len(d.get("entrants") or []) for d in divisions)
+    results = sum(len(d.get("results") or []) for d in divisions)
+    return (
+        f"A snapshot of the whole tournament — {len(divisions)} division(s), "
+        f"{entrants} entrant(s), {results} result(s). Download the log to read it."
+    )
 
 # ---------------------------------------------------------------------------
 # Development write guard

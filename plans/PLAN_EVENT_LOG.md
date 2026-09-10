@@ -247,9 +247,8 @@ make this rare.
   noticed. The fix is not to denormalise names back into payloads to make the log
   nicer to read — that bloats every event and goes stale on the first rename.
   It is that the *display* resolves them: every string in a payload is offered to
-  the player table, and the ones that are somebody come back as "Emmanuel Egbele
-  (0112)", the number kept because it is what was recorded and what a replay acts
-  on.
+  the player table, and the ones that are somebody come back as their name. The
+  number stays in the download, which is the raw replay log and stays that way.
 
   Deliberately a value-scan rather than a table of which key holds a person for
   each of three dozen event types: the people are often nested — inside
@@ -261,16 +260,32 @@ make this rare.
   it would open every event's log to every account. A supervisor asked what
   happened at somebody else's tournament needs the log, and that is the case the
   role check is for.
-- **Every row unfolds into what the event did** (`events.event_detail`). A grid
-  save carries a delta, so it renders row by row in the grid's own vocabulary —
-  "Round 3: Alice beat Bob", then `winner_score 500 → 502` — with the people
-  named rather than numbered (`portable_label` / `portable_player_fields` on the
-  grid). Anything else — a command, or a grid save from before deltas — shows
-  what it recorded: flat values as the same field list the delta rows use,
-  structured ones as JSON underneath, both with their people named. A
-  `state_snapshot` is the exception, dumped and truncated with a pointer to the
-  download: it is a whole tournament, and its entrants carry their names already.
-  A native `<details>`, so none of this needs JS.
+- **Every row unfolds into what the event did, one compact line per row**
+  (`events.event_detail`). The page is read by a director skimming for the one
+  thing that happened, so a row is a line in the vocabulary they use, marked
+  `+` / `−` / `~`:
+
+  ```
+  ▾ Saved results for Division 1 (1 added, 2 removed)
+    +  R1  Femi Awowade (500) ✓ – Dean Saldanha (442)
+    −  R1  Femi Awowade (0) – Bye (50) ✓
+  ```
+
+  **A result reads as the board had it**: the player who went first is on the
+  left (`winner_started` says which), and the tick sits on the winner's own side
+  so it says who won whichever end they were. A bye or forfeit has no board, so
+  its real player reads first — the convention the pairing itself is stored
+  under. A corrected score moves inline, `(500→502)`; a corrected *winner* says
+  "winner was X", because an arrow would claim a score moved when what moved was
+  the score's owner. `ResultsGrid._board_order` / `_side` are the whole
+  rendering, and `result_added` renders through them too rather than growing its
+  own format.
+
+  Nothing on the page is JSON. A command payload is one line of `key value`
+  pairs with the people named, minus anything the summary already said — an
+  event described as "Published round 2 in Division 1" unfolds to nothing at
+  all, and does not get a twisty. A `state_snapshot` says what it holds and
+  points at the download. A native `<details>`, so none of this needs JS.
 - **Filters and paging**: by division and by event type, both offered from what
   the log actually holds rather than from the catalog, and carried on the pager
   links so a filtered log is a link one director can send another.

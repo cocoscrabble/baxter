@@ -289,6 +289,49 @@ class EntrantsGrid(EditGrid):
     def portable_label(self, row, names):
         return names.get(row.get("player")) or row.get("name") or row.get("player")
 
+    # Payload key -> what a director calls it.
+    _WORDS = {
+        "number": "seed",
+        "entrant_rating": "rating",
+        "rating_source": "source",
+        "playing_up": "playing up",
+        "dropped": "withdrawn",
+        "tentative": "tentative",
+        "paid": "paid",
+    }
+
+    def portable_summary(self, row, names):
+        """"Femi Awowade  #3 · 1804 coco · paid" — the registration at a glance,
+        with only the flags that are actually set."""
+        bits = []
+        if row.get("number"):
+            bits.append(f"#{row['number']}")
+        rating = row.get("entrant_rating") or row.get("rating")
+        if rating:
+            bits.append(f"{rating} {row.get('rating_source', '')}".strip())
+        bits += [
+            self._WORDS[flag]
+            for flag in ("paid", "tentative", "playing_up", "dropped")
+            if row.get(flag)
+        ]
+        label = self.portable_label(row, names)
+        return f"{label}  {' · '.join(bits)}".strip() if bits else label
+
+    def portable_change(self, before, after, names):
+        """"Femi Awowade  paid · rating 1128 → 1804" — a flag that went on is
+        just its word, and one that went off is negated."""
+        moves = []
+        for key, word in self._WORDS.items():
+            old, new = before.get(key), after.get(key)
+            if old == new:
+                continue
+            if isinstance(new, bool):
+                moves.append(word if new else f"not {word}")
+            else:
+                moves.append(f"{word} {old} → {new}")
+        label = self.portable_label(after, names)
+        return f"{label}  {' · '.join(moves)}" if moves else label
+
     def from_portable(self, rows, division):
         # A v1 row's "player" is a name and carries no "name" key; a v2 row's is
         # a number. No schema upgrader is registered for this event because the
@@ -500,6 +543,11 @@ class FixedPairingsGrid(EditGrid):
         second = names.get(row.get("entrant2"), row.get("entrant2"))
         return f"Round {row.get('round_number')}: {first} vs {second}"
 
+    def portable_summary(self, row, names):
+        first = names.get(row.get("entrant1"), row.get("entrant1"))
+        second = names.get(row.get("entrant2"), row.get("entrant2"))
+        return f"R{row.get('round_number')}  {first} vs {second}"
+
     def from_portable(self, rows, division):
         pks = _entrant_pk_by_key(division)
         return [
@@ -564,6 +612,17 @@ class FixedTablesGrid(EditGrid):
     def portable_label(self, row, names):
         who = names.get(row.get("entrant"), row.get("entrant"))
         return f"Round {row.get('round_number')}: {who}"
+
+    def portable_summary(self, row, names):
+        who = names.get(row.get("entrant"), row.get("entrant"))
+        return f"R{row.get('round_number')}  {who} · table {row.get('table_label')}"
+
+    def portable_change(self, before, after, names):
+        who = names.get(after.get("entrant"), after.get("entrant"))
+        return (
+            f"R{after.get('round_number')}  {who} · table "
+            f"{before.get('table_label')} → {after.get('table_label')}"
+        )
 
     def from_portable(self, rows, division):
         pks = _entrant_pk_by_key(division)
@@ -677,6 +736,85 @@ class ResultsGrid(EditGrid):
         winner = names.get(row.get("winner"), row.get("winner"))
         loser = names.get(row.get("loser"), row.get("loser"))
         return f"Round {row.get('round')}: {winner} beat {loser}"
+
+    @staticmethod
+    def _side(name, score, *, was=None, won=False):
+        """One player's half of a result line.
+
+        "Femi Awowade (500) ✓" — the tick sits on the winner's own side, so it
+        says who won whichever end of the board they were. A moved score reads
+        "(500→502)". A blank score (the cell a director leaves empty on a bye
+        row, before the division's spread fills it in) gets no brackets rather
+        than "(None)".
+        """
+        if was is not None and was != score:
+            text = f"{name} ({was}→{score})"
+        elif score is not None:
+            text = f"{name} ({score})"
+        else:
+            text = name
+        return f"{text} ✓" if won else text
+
+    @staticmethod
+    def _board_order(row):
+        """``((first, score), (second, score), winner)`` — the sides as the board
+        had them.
+
+        A result line reads the way the pairing was printed and the slip was
+        filled in: the player who went first is on the left, which
+        ``winner_started`` is what decides.
+
+        A bye or a forfeit has no board, so its real player reads first — the
+        same convention the pairing itself is stored under, and the reason
+        ``PairingData.for_division`` has to flip those back for the ledger.
+        """
+        winner, loser = row.get("winner"), row.get("loser")
+        high = (winner, row.get("winner_score"))
+        low = (loser, row.get("loser_score"))
+        if is_reserved_player_number(winner):
+            return low, high, winner
+        if is_reserved_player_number(loser) or row.get("winner_started"):
+            return high, low, winner
+        return low, high, winner
+
+    def _line(self, round_num, first, second, winner, names, was=(None, None)):
+        def side(pair, previous):
+            key, score = pair
+            return self._side(
+                names.get(key, key), score, was=previous, won=key == winner
+            )
+
+        return (
+            f"R{round_num}  {side(first, was[0])} – {side(second, was[1])}"
+        )
+
+    def portable_summary(self, row, names):
+        """A result as the board had it: "R3  Dean Saldanha (442) – Femi Awowade
+        (500) ✓"."""
+        first, second, winner = self._board_order(row)
+        return self._line(row.get("round"), first, second, winner, names)
+
+    def portable_change(self, before, after, names):
+        """The corrected result, with the movement shown where it happened.
+
+        A score correction is the common case and reads inline —
+        "Femi Awowade (500→502)". A corrected *winner* moves the scores between
+        two people, so an inline arrow would be a lie about what happened; that
+        says so in words instead.
+        """
+        first, second, winner = self._board_order(after)
+        line = self._line(after.get("round"), first, second, winner, names)
+        if before.get("winner") != after.get("winner"):
+            was = names.get(before.get("winner"), before.get("winner"))
+            return f"{line} · winner was {was}"
+        was_first, was_second, _ = self._board_order(before)
+        if was_first[0] != first[0]:
+            # Same result, opposite ends: the start moved.
+            return f"{line} · {names.get(first[0], first[0])} started"
+        return self._line(
+            after.get("round"), first, second, winner, names,
+            was=(was_first[1], was_second[1]),
+        )
 
     def from_portable(self, rows, division):
         pks = {e.player.player_number: e.pk for e in _result_entrants(division)}

@@ -567,7 +567,7 @@ class TournamentActivityView(TournamentURLMixin, LoginRequiredMixin, CanReadTour
     def get_context_data(self, **kwargs):
         from django.core.paginator import Paginator
 
-        from tournaments.events import describe_event, event_details
+        from tournaments.events import describe_events
 
         context = super().get_context_data(**kwargs)
         events = self.object.events.order_by("-seq").select_related(
@@ -601,15 +601,14 @@ class TournamentActivityView(TournamentURLMixin, LoginRequiredMixin, CanReadTour
             events = events.filter(division__name=selected_division)
         page = Paginator(events, self.per_page).get_page(self.request.GET.get("page"))
         context["page_obj"] = page
-        # ``event_details`` for the whole page, not ``event_detail`` per row:
-        # every person the page names is resolved in one query.
-        context["events"] = list(
-            zip(
-                page.object_list,
-                [describe_event(e) for e in page.object_list],
-                event_details(page.object_list),
+        # One pass over the page rather than a description and a detail per
+        # row: every person the page names is resolved in a single query.
+        context["events"] = [
+            (event, description, detail)
+            for event, (description, detail) in zip(
+                page.object_list, describe_events(page.object_list)
             )
-        )
+        ]
         context["selected_type"] = selected_type
         context["selected_division"] = selected_division
         # Carried on the pager links so paging does not drop the filters.
