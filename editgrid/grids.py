@@ -260,6 +260,23 @@ class EditGrid:
         """
         return None
 
+    def portable_summary(self, row, names):
+        """One compact line saying what a row *is*, for a reader skimming the
+        log: "R3  Femi Awowade (500) – Dean Saldanha (442)".
+
+        The audit page is read by a person looking for the one thing that
+        happened, so a row is a line, not a record laid out in fields. None falls
+        back to the label.
+        """
+        return None
+
+    def portable_change(self, before, after, names):
+        """One compact line saying how a row changed — the same shape as
+        ``portable_summary`` with the movement shown inside it, rather than a
+        list of field names and arrows. None falls back to before/after lines.
+        """
+        return None
+
     def save_payload(self, parent, rows, before):
         """The event payload for one save, or None when nothing changed.
 

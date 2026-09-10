@@ -60,7 +60,8 @@ Activity
         {% for event, description, detail in events %}
         <tr>
             <td class="num">{{ event.seq }}</td>
-            <td>{{ event.created_at }}</td>
+            {# Compact: the default format wraps to three lines in this table. #}
+            <td class="log-when">{{ event.created_at|date:"j M Y, H:i" }}</td>
             <td>
                 {% if event.actor %}{{ event.actor.username }}
                 {% elif event.actor_session %}<span title="anonymous submitter">guest·{{ event.actor_session|slice:":6" }}</span>
@@ -73,62 +74,22 @@ Activity
                 that is single-line, and the tag name inside this one would be
                 parsed as markup.
                 {% endcomment %}
+                {% if detail.lines or detail.note or detail.more %}
                 <details class="log-entry">
                     <summary>{{ description }}</summary>
-                    {% if detail.fields or detail.payload %}
-                    {% if detail.fields %}
-                    <dl class="log-changes log-recorded">
-                        {% for field, value in detail.fields %}
-                        <dt>{{ field }}</dt>
-                        <dd>{{ value }}</dd>
-                        {% endfor %}
-                    </dl>
-                    {% endif %}
-                    {% if detail.payload %}
-                    <pre class="log-payload">{{ detail.payload }}</pre>
-                    {% endif %}
-                    {% else %}
-                    {% if detail.changed %}
-                    <p class="log-section">Changed</p>
-                    {% for row in detail.changed %}
-                    <div class="log-row">
-                        <span class="log-row-label">{{ row.label }}</span>
-                        <dl class="log-changes">
-                            {% for field, before, after in row.changes %}
-                            <dt>{{ field }}</dt>
-                            <dd>{{ before }} <span class="log-arrow">→</span> {{ after }}</dd>
-                            {% endfor %}
-                        </dl>
-                    </div>
+                    {% for kind, mark, text in detail.lines %}
+                    <div class="log-line"><span class="log-mark log-mark-{{ kind }}">{{ mark }}</span>{{ text }}</div>
                     {% endfor %}
-                    {% endif %}
-                    {% if detail.added %}
-                    <p class="log-section">Added</p>
-                    {% for row in detail.added %}
-                    <div class="log-row">
-                        <span class="log-row-label">{{ row.label }}</span>
-                        <dl class="log-changes">
-                            {% for field, value in row.fields %}
-                            <dt>{{ field }}</dt>
-                            <dd>{{ value }}</dd>
-                            {% endfor %}
-                        </dl>
-                    </div>
-                    {% endfor %}
-                    {% endif %}
-                    {% if detail.removed %}
-                    <p class="log-section">Removed</p>
-                    {% for row in detail.removed %}
-                    <div class="log-row"><span class="log-row-label">{{ row.label }}</span></div>
-                    {% endfor %}
-                    {% endif %}
+                    {% if detail.note %}<p class="log-more">{{ detail.note }}</p>{% endif %}
                     {% if detail.more %}
                     <p class="log-more">… and {{ detail.more }} more row{{ detail.more|pluralize }}. The
                         <a href="{% url 'tournament_event_log_export' tournament.slug %}">downloaded log</a>
                         has all of them.</p>
                     {% endif %}
-                    {% endif %}
                 </details>
+                {% else %}
+                {{ description }}
+                {% endif %}
             </td>
         </tr>
         {% endfor %}
