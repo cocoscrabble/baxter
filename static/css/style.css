@@ -1788,3 +1788,83 @@ h3 + .note {
 .register-duplicate p {
     margin-top: 0;
 }
+
+/* The activity log's per-event detail. The log line is a <summary>, so what an
+   event changed unfolds under it with no JS; everything below is inside the
+   Action cell, which is why the type is sized down from the row around it. */
+.log-filters {
+    display: flex;
+    align-items: end;
+    gap: var(--space-md);
+    margin-bottom: var(--space-md);
+    flex-wrap: wrap;
+}
+
+.log-entry > summary {
+    cursor: pointer;
+}
+
+.log-section {
+    margin: var(--space-sm) 0 var(--space-xs);
+    font-weight: 600;
+    font-size: 0.85em;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.log-row {
+    margin-bottom: var(--space-xs);
+    padding-left: var(--space-sm);
+    border-left: 2px solid var(--color-border);
+}
+
+.log-row-label {
+    font-weight: 600;
+}
+
+/* field / value pairs, one per line: a two-column grid keeps the values in a
+   column of their own without the fields dictating how wide it gets. */
+.log-changes {
+    display: grid;
+    grid-template-columns: minmax(6rem, max-content) 1fr;
+    gap: 0 var(--space-sm);
+    margin: 0;
+    font-size: 0.9em;
+}
+
+/* The field name is a quiet label, not a heading: undo the global dt, whose
+   bold and 10px top margin push it out of line with its own value. */
+.log-changes dt {
+    color: var(--color-muted);
+    font-weight: normal;
+    margin: 0;
+}
+
+.log-changes dd {
+    margin: 0;
+}
+
+.log-arrow {
+    color: var(--color-muted);
+    padding: 0 2px;
+}
+
+.log-payload {
+    margin: var(--space-xs) 0 0;
+    padding: var(--space-sm);
+    background: var(--color-bg-subtle);
+    border-radius: var(--radius);
+    font-size: 0.85em;
+    max-height: 24rem;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.log-pager {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    margin-top: var(--space-md);
+}

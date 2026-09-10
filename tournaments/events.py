@@ -703,10 +703,139 @@ def describe_event(event) -> str:
         "player_number_changed": lambda: (
             f"Changed a player number from {p.get('old', '')} to {p.get('new', '')}"
         ),
-        "state_snapshot": lambda: f"Recorded a state snapshot for {div}",
+        # A snapshot is the whole tournament, so it names no division — and
+        # "…snapshot for " with nothing after it is what that used to read as.
+        "state_snapshot": lambda: (
+            f"Recorded a state snapshot for {div}" if div
+            else "Recorded a state snapshot of the tournament"
+        ),
     }
     render = templates.get(t)
     return render() if render else t.replace("_", " ").capitalize()
+
+
+# The payload of a ``state_snapshot`` is a whole tournament, and a big
+# tournament's runs to hundreds of kilobytes. The activity page shows the head of
+# it and points at the download rather than pasting the lot into the page.
+MAX_PAYLOAD_CHARS = 4000
+
+
+def _player_names(numbers) -> dict:
+    """``{player number: name}`` for the identifiers a payload mentions."""
+    from tournaments.models import Player
+
+    wanted = {n for n in numbers if isinstance(n, str) and n}
+    if not wanted:
+        return {}
+    return dict(
+        Player.objects.filter(player_number__in=wanted).values_list(
+            "player_number", "name"
+        )
+    )
+
+
+def _grid_names(grid, rows) -> dict:
+    """Resolve every person a grid delta's rows refer to, in one query."""
+    return _player_names(
+        row.get(field)
+        for row in rows
+        for field in grid.portable_player_fields
+    )
+
+
+def _render_value(value):
+    """A payload value as the page should show it. Booleans read as yes/no —
+    ``paid: False`` is a checkbox, and "no" is what the director unticked."""
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    if value is None or value == "":
+        return "—"
+    return str(value)
+
+
+def _row_fields(grid, row, names, skip_identity=True):
+    """``[(field, value)]`` for a whole row, people rendered as names."""
+    return [
+        (field, _render_value(names.get(value, value)
+                              if field in grid.portable_player_fields else value))
+        for field, value in row.items()
+        if not (skip_identity and field in grid.portable_identity_fields)
+    ]
+
+
+def _changed_fields(grid, before, after, names):
+    """``[(field, from, to)]`` for the values that actually moved.
+
+    Identity fields are *not* skipped: a results row keeps its key when a
+    director corrects who won, and "winner: Alice → Bob" is the whole point of
+    the entry.
+    """
+    fields = []
+    for field, new in after.items():
+        old = before.get(field)
+        if old == new:
+            continue
+        if field in grid.portable_player_fields:
+            old, new = names.get(old, old), names.get(new, new)
+        fields.append((field, _render_value(old), _render_value(new)))
+    return fields
+
+
+def event_detail(event) -> dict:
+    """What one event *did*, for the activity page to render under its summary.
+
+    Two shapes. A grid save carries a delta, and is rendered row by row in the
+    grid's own vocabulary — the entrant, the match — with the people named
+    rather than numbered and, for an edited row, the fields that moved. Anything
+    else is shown as its recorded payload: the summary line already says what the
+    command was, and the payload is short and readable for every command that
+    isn't a grid save.
+    """
+    from tournaments.grids import GRID_BY_EVENT
+
+    payload = event.payload or {}
+    grid = GRID_BY_EVENT.get(event.event_type)
+    if grid is None or "rows" in payload or "added" not in payload:
+        # Not a delta: a command payload, or a grid save recorded before deltas
+        # (or by a grid whose rows have no identity), which is the whole
+        # collection and belongs in the raw view.
+        return {"payload": _payload_text(payload)}
+    rows = [
+        *payload.get("added", []),
+        *payload.get("removed", []),
+        *[c["to"] for c in payload.get("changed", [])],
+        *[c["from"] for c in payload.get("changed", [])],
+    ]
+    names = _grid_names(grid, rows)
+
+    def label(row):
+        return grid.portable_label(row, names) or ""
+
+    return {
+        "added": [
+            {"label": label(row), "fields": _row_fields(grid, row, names)}
+            for row in payload.get("added", [])
+        ],
+        "removed": [{"label": label(row)} for row in payload.get("removed", [])],
+        "changed": [
+            {
+                "label": label(change["to"]),
+                "changes": _changed_fields(grid, change["from"], change["to"], names),
+            }
+            for change in payload.get("changed", [])
+        ],
+    }
+
+
+def _payload_text(payload) -> str:
+    text = json.dumps(payload, indent=2, sort_keys=True, default=str)
+    if len(text) > MAX_PAYLOAD_CHARS:
+        return (
+            text[:MAX_PAYLOAD_CHARS]
+            + f"\n… truncated at {MAX_PAYLOAD_CHARS} characters — "
+            "download the log for the rest."
+        )
+    return text
 
 
 # ---------------------------------------------------------------------------

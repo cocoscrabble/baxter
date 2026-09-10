@@ -242,6 +242,24 @@ class EditGrid:
             keyed[key] = row
         return list(keyed.values())
 
+    # Portable-row vocabulary for the audit surface. ``portable_player_fields``
+    # names the fields holding a person's identifier, so a log reader sees a name
+    # where the payload holds a number; ``portable_identity_fields`` names the
+    # ones ``portable_label`` already says out loud, so an added row is not
+    # listed twice over. Both are empty on a grid that has not opted in, which
+    # falls back to showing the row as it was recorded.
+    portable_player_fields: tuple[str, ...] = ()
+    portable_identity_fields: tuple[str, ...] = ()
+
+    def portable_label(self, row, names):
+        """One line naming what a portable row is *about* — the entrant, the
+        match — with ``names`` ({identifier: name}) resolving its people.
+
+        None falls back to the row itself, which is what a grid that has not
+        opted in gets.
+        """
+        return None
+
     def save_payload(self, parent, rows, before):
         """The event payload for one save, or None when nothing changed.
 

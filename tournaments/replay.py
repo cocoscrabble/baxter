@@ -17,13 +17,7 @@ import json
 from django.contrib.auth import get_user_model
 
 from tournaments.events import COMMAND_REGISTRY, command_context, division_digest
-from tournaments.grids import (
-    BoardTableMapGrid,
-    EntrantsGrid,
-    FixedPairingsGrid,
-    FixedTablesGrid,
-    ResultsGrid,
-)
+from tournaments.grids import GRID_BY_EVENT
 
 User = get_user_model()
 
@@ -32,14 +26,8 @@ class ReplayError(Exception):
     pass
 
 
-# Grid-save events aren't @records_event commands; replay re-drives the grid.
-GRID_BY_EVENT = {
-    "entrants_saved": EntrantsGrid(),
-    "results_saved": ResultsGrid(),
-    "fixed_pairings_saved": FixedPairingsGrid(),
-    "fixed_tables_saved": FixedTablesGrid(),
-    "board_tables_saved": BoardTableMapGrid(),
-}
+# Grid-save events aren't @records_event commands; replay re-drives the grid
+# (``GRID_BY_EVENT`` lives in grids.py — the activity page reads it too).
 
 # Events that consume draft pairings; regenerate the division first so the draft
 # they act on exists (reproducing the lazy Pair-Rounds render the director did).

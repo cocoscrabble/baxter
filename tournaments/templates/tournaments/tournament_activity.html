@@ -17,6 +17,34 @@ Activity
     </div>
 </div>
 
+{% if event_types %}
+{# GET, so a filtered log is a link a director can send to somebody. #}
+<form method="get" class="log-filters">
+    {% if divisions %}
+    <label>Division
+        <select name="division">
+            <option value="">All</option>
+            {% for name in divisions %}
+            <option value="{{ name }}"{% if name == selected_division %} selected{% endif %}>{{ name }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    {% endif %}
+    <label>Action
+        <select name="type">
+            <option value="">All</option>
+            {% for event_type in event_types %}
+            <option value="{{ event_type }}"{% if event_type == selected_type %} selected{% endif %}>{{ event_type }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <button type="submit">Filter</button>
+    {% if selected_type or selected_division %}
+    <a href="{% url 'tournament_activity' tournament.slug %}">Clear</a>
+    {% endif %}
+</form>
+{% endif %}
+
 {% if events %}
 <div class="table-scroll">
 <table>
@@ -29,7 +57,7 @@ Activity
         </tr>
     </thead>
     <tbody>
-        {% for event, description in events %}
+        {% for event, description, detail in events %}
         <tr>
             <td class="num">{{ event.seq }}</td>
             <td>{{ event.created_at }}</td>
@@ -38,12 +66,72 @@ Activity
                 {% elif event.actor_session %}<span title="anonymous submitter">guest·{{ event.actor_session|slice:":6" }}</span>
                 {% else %}—{% endif %}
             </td>
-            <td>{{ description }}</td>
+            <td>
+                {% comment %}
+                A native details element: the summary is the log line, and what
+                the event did unfolds under it with no JS. Not a {# #} comment —
+                that is single-line, and the tag name inside this one would be
+                parsed as markup.
+                {% endcomment %}
+                <details class="log-entry">
+                    <summary>{{ description }}</summary>
+                    {% if detail.payload %}
+                    <pre class="log-payload">{{ detail.payload }}</pre>
+                    {% else %}
+                    {% if detail.changed %}
+                    <p class="log-section">Changed</p>
+                    {% for row in detail.changed %}
+                    <div class="log-row">
+                        <span class="log-row-label">{{ row.label }}</span>
+                        <dl class="log-changes">
+                            {% for field, before, after in row.changes %}
+                            <dt>{{ field }}</dt>
+                            <dd>{{ before }} <span class="log-arrow">→</span> {{ after }}</dd>
+                            {% endfor %}
+                        </dl>
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+                    {% if detail.added %}
+                    <p class="log-section">Added</p>
+                    {% for row in detail.added %}
+                    <div class="log-row">
+                        <span class="log-row-label">{{ row.label }}</span>
+                        <dl class="log-changes">
+                            {% for field, value in row.fields %}
+                            <dt>{{ field }}</dt>
+                            <dd>{{ value }}</dd>
+                            {% endfor %}
+                        </dl>
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+                    {% if detail.removed %}
+                    <p class="log-section">Removed</p>
+                    {% for row in detail.removed %}
+                    <div class="log-row"><span class="log-row-label">{{ row.label }}</span></div>
+                    {% endfor %}
+                    {% endif %}
+                    {% endif %}
+                </details>
+            </td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
 </div>
+
+{% if page_obj.has_other_pages %}
+<nav class="log-pager">
+    {% if page_obj.has_previous %}
+    <a href="?page={{ page_obj.previous_page_number }}{% if filter_query %}&amp;{{ filter_query }}{% endif %}">Newer</a>
+    {% endif %}
+    <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+    <a href="?page={{ page_obj.next_page_number }}{% if filter_query %}&amp;{{ filter_query }}{% endif %}">Older</a>
+    {% endif %}
+</nav>
+{% endif %}
 {% else %}
 {% include "tournaments/_empty_state.html" with message="No activity recorded yet." %}
 {% endif %}
