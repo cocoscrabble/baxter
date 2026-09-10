@@ -919,12 +919,46 @@ def finished_rounds(division) -> set[int]:
     )
 
 
+def printed_participant_games(division, rounds, participants) -> dict:
+    """``{round: {player key}}`` — bracket participants who already have an
+    ordinary game on a printed board in one of ``rounds``.
+
+    A playoff's rounds have to be the bracket's to give out. Postscript rounds
+    hold playoff games and nothing else, and a concurrent playoff holds its
+    participants out of ordinary pairing for the window
+    (``Bracket.reserved_keys_by_round``) — but both of those happen when a round
+    is *paired*, and ``regenerate_pairings`` re-pairs only draft rounds. A round
+    that was published before the playoff existed therefore keeps the ordinary
+    game it was published with, and the bracket's game is added beside it,
+    leaving the player in two games in the same round.
+    """
+    from tournaments.models import RoundPairings
+
+    rounds = list(rounds)
+    if not rounds:
+        return {}
+    printed = {}
+    pairings = division.pairings.filter(
+        round__in=rounds,
+        series__isnull=True,  # a playoff game of this bracket is not a clash
+        round_pairings__status__in=(
+            RoundPairings.PUBLISHED, RoundPairings.IN_PROGRESS, RoundPairings.FINISHED
+        ),
+    ).select_related("first__player", "second__player")
+    for pairing in pairings:
+        for entrant in (pairing.first, pairing.second):
+            if entrant.player.player_number in participants:
+                printed.setdefault(pairing.round, set()).add(entrant.player.name)
+    return printed
+
+
 def schedule_conflicts(division, config: PlayoffConfig) -> list[str]:
     """Problems between a playoff configuration and the division's schedule.
 
     ``validate_config`` checks the playoff on its own terms; this adds the
     checks that need the division: that the qualification round exists and is
-    complete, and that the reserved rounds line up with the configured schedule.
+    complete, that the reserved rounds line up with the configured schedule, and
+    that none of them is already on the boards.
     """
     from tournaments.pairing.round_pairing import RP
 
@@ -960,6 +994,14 @@ def schedule_conflicts(division, config: PlayoffConfig) -> list[str]:
             "A concurrent playoff needs the main schedule to cover its rounds: "
             f"the bracket runs to round {playoff_rounds[-1]} but the schedule "
             f"ends at round {last_configured}."
+        )
+    printed = printed_participant_games(division, playoff_rounds, set(config.seeds))
+    for round_num in sorted(printed):
+        names = ", ".join(sorted(printed[round_num]))
+        errors.append(
+            f"Round {round_num} is already published, with {names} paired in "
+            "it. A playoff cannot take a round that is on the boards — "
+            f"unpublish round {round_num} first."
         )
     if config.timing == Timing.CONCURRENT and playoff_rounds:
         try:

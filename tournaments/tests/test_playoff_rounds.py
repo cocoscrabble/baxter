@@ -585,6 +585,89 @@ class QualificationRoundChoiceTests(PlayoffRoundsTestCase):
         self.assertEqual(playoff.qualification_round, 12)
 
 
+class PrintedRoundTests(PlayoffRoundsTestCase):
+    """A playoff may not take a round that is already on the boards.
+
+    Found by the fuzzer (seed 17): a schedule shortened *after* a round beyond
+    it was published leaves that round paired and printed, and nothing in the
+    configured schedule mentions it any more — so a postscript playoff qualifies
+    on the new last round and lands its bracket right on top of it. Only draft
+    rounds are re-paired, so the ordinary game stayed and the bracket's game was
+    added beside it, leaving a player in two games in the same round.
+    """
+
+    main_rounds = 4
+    played_rounds = 3
+
+    def shorten_schedule(self, rounds):
+        from tournaments.commands import save_settings
+
+        save_settings(self.tournament, self.user, {
+            "division": self.division.name,
+            "blocks": [{"pairing": "Swiss", "rounds": rounds, "pair_from": 1}],
+        })
+
+    def test_a_playoff_over_a_published_round_is_refused(self):
+        publish_rounds(self.division, [4])
+        printed = self.names_in(4)
+        self.shorten_schedule(3)
+
+        with self.assertRaises(ValueError) as caught:
+            self.make_playoff(count=4, qualification_round=3)
+
+        self.assertIn("already published", str(caught.exception))
+        self.assertIn("unpublish round 4", str(caught.exception))
+        # And the boards it would have landed on are untouched.
+        self.assertIsNone(playoff_for(self.division))
+        self.assertEqual(self.names_in(4), printed)
+
+    def test_the_setup_page_says_so_rather_than_500ing(self):
+        publish_rounds(self.division, [4])
+        self.shorten_schedule(3)
+        self.client.force_login(self.user)
+        seeds = qualification_seeds(self.division, 3, 4)
+        response = self.client.post(
+            reverse("division_playoff_setup", kwargs=self.division.slug_kwargs()),
+            {
+                "action": "confirm",
+                "qualification_round": 3,
+                "qualifier_count": 4,
+                "timing": Playoff.POSTSCRIPT,
+                f"games_{CHAMPIONSHIP}": 1,
+                f"games_{SEMIFINAL}": 1,
+                f"games_{THIRD_PLACE}": 1,
+                "seed": [s["key"] for s in seeds],
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "already published")
+        self.assertIsNone(playoff_for(self.division))
+
+    def test_unpublishing_the_round_clears_the_way(self):
+        publish_rounds(self.division, [4])
+        self.shorten_schedule(3)
+        self.division.round_pairings_set.filter(round=4).delete()
+
+        playoff = self.make_playoff(count=4, qualification_round=3)
+
+        self.assertEqual(playoff.qualification_round, 3)
+        for pairing in self.pairings_in(4):
+            self.assertIsNotNone(pairing.series, "round 4 should be the bracket's")
+
+    def test_the_playoffs_own_games_are_not_a_clash(self):
+        # Re-validating a playoff whose window is already published — the update
+        # path — must not read its own games as somebody else's.
+        from tournaments.playoff import printed_participant_games
+
+        self.shorten_schedule(3)
+        playoff = self.make_playoff(count=4, qualification_round=3)
+        publish_rounds(self.division, [4])
+        config = playoff.config()
+        self.assertEqual(
+            printed_participant_games(self.division, [4], set(config.seeds)), {}
+        )
+
+
 class PlayoffViewTests(PlayoffRoundsTestCase):
     def setUp(self):
         super().setUp()

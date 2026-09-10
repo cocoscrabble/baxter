@@ -404,11 +404,25 @@ Details:
   applies to ordinary games.
 - **Repeats**: a best-of-N legitimately repeats a pairing; `Pairing.repeats`
   carries the running count, which the display already shows.
-- **Validation** (form-level, so the director sees it before confirming):
+- **Validation** (`schedule_conflicts`, checked by the setup form so the director
+  sees it before confirming *and* by the command so a replay is held to it):
   postscript requires `qualification_round == last configured round`; concurrent
   requires the configured schedule to extend through the last playoff round, and
   requires every placement series in the template to be enabled (so no reserved
   player is left without a series while the rest of the room plays).
+- **A window round that is already published is refused.** Both of the mechanisms
+  that keep the bracket's rounds to itself — postscript dropping the engine's
+  rounds, concurrent reserving participants through `inactive_players` — act when
+  a round is *paired*, and `regenerate_pairings` re-pairs only draft rounds. A
+  round published before the playoff existed therefore keeps the ordinary game it
+  was printed with, and the bracket's game is added beside it: the participant is
+  in two games in the same round. The reachable route is not exotic — shorten the
+  schedule after publishing a round beyond it, and that round vanishes from
+  `configured_round_numbers` while staying on the boards, so a postscript playoff
+  qualifying on the new last round lands right on top of it. Found by the fuzzer
+  (seed 17, 40 steps) via its no-double-pairing invariant; the check is
+  `printed_participant_games`, and the fix a director makes is to unpublish the
+  round.
 
 ### Engine change (concurrent mode only)
 
