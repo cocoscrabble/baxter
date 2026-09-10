@@ -57,8 +57,10 @@ in words. Two views of the same data, not a duplicate to be merged.
                 <label class="drift">
                     <input type="checkbox" name="entrants" value="{{ entrant.drift.key }}" form="refresh-ratings" checked>
                     {% if entrant.drift.rating_changed %}{{ entrant.drift.new_rating }}{% else %}
-                    {# The seed moved but the number did not: more games played, or
-                       a newer last-played date. Worth taking, not worth an arrow. #}
+                    {% comment %}
+                    The seed moved but the number did not: more games played, or
+                    a newer last-played date. Worth taking, not worth an arrow.
+                    {% endcomment %}
                     <span class="drift-quiet">seed only</span>{% endif %}
                 </label>
                 {% endif %}

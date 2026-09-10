@@ -1,7 +1,9 @@
 <div id="standings-content">
 {% if division.playoff %}
-{# With a playoff, these standings compare players who have played different
-   numbers of games, and they are not the finishing order — the bracket is. #}
+{% comment %}
+With a playoff, these standings compare players who have played different
+numbers of games, and they are not the finishing order — the bracket is.
+{% endcomment %}
 <p class="note">
     Final placement comes from the
     <a href="{% url 'division_playoff' division.tournament.slug division.slug %}">playoff bracket</a>,
