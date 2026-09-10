@@ -355,6 +355,180 @@ class HandEnteredAbsenceTests(TestCase):
         self.assertEqual(self.division.pairings.filter(round=1).count(), before)
 
 
+class HandEnteredGameTests(TestCase):
+    """Entering a result for a match nobody paired.
+
+    The case this exists for is reversing a forfeit: two players are recorded
+    absent, then it turns out they sat down and played each other. There is no
+    pairing between them, so the row has to bring one with it — and the two
+    bye-shaped boards it replaces have to go, or both players are in two games
+    at once.
+    """
+
+    def setUp(self):
+        from tournaments.grids import ResultsGrid
+
+        self.user = User.objects.create_user(username="g", password="p")
+        # Even field, so every bye-shaped row here is a forfeit.
+        self.division = make_division(self.user, 6, 4)
+        self.division.entrants.update(rating=1500, rating_source=Entrant.COCO)
+        settings = self.division.settings
+        settings.withdrawal = DivisionSettings.FORFEIT
+        settings.save(update_fields=["withdrawal"])
+        self.grid = ResultsGrid()
+        self.bye = self.division.bye_entrant()
+        # Two players withdrawn before round 1 is published, so publishing
+        # records a forfeit for each.
+        self.a, self.b = list(self.division.entrants.order_by("number")[:2])
+        self.division.entrants.filter(pk__in=[self.a.pk, self.b.pk]).update(dropped=True)
+        regenerate_pairings(self.division)
+        publish_rounds(self.division, [1])
+
+    def rows(self):
+        return [self.grid.serialize_row(s) for s in self.grid.queryset(self.division)]
+
+    def save(self, rows):
+        validated, errors = self.grid.validate(rows, self.division)
+        if errors:
+            return errors
+        prepared, errors = self.grid.prepare(self.division, validated)
+        if errors:
+            return errors
+        self.grid.persist(self.division, prepared)
+        self.grid.after_save(self.division)
+        return []
+
+    def game_row(self, **overrides):
+        row = {
+            "round": 1,
+            "winner": self.a.pk,
+            "winner_score": 500,
+            "loser": self.b.pk,
+            "loser_score": 442,
+            "winner_started": True,
+        }
+        return {**row, **overrides}
+
+    def without_forfeits(self):
+        """The grid's rows with the two forfeit rows taken out, as the director
+        deletes them before typing the game they actually played."""
+        absent = {self.a.pk, self.b.pk}
+        return [r for r in self.rows() if not absent & {r["winner"], r["loser"]}]
+
+    def reverse_the_forfeits(self, **overrides):
+        return self.save(self.without_forfeits() + [self.game_row(**overrides)])
+
+    def test_the_game_is_recorded_and_the_forfeits_are_gone(self):
+        self.assertEqual(self.reverse_the_forfeits(), [])
+        slip = self.division.result_slips.get(winner=self.a)
+        self.assertEqual((slip.winner_score, slip.loser_score), (500, 442))
+        self.assertEqual(slip.loser_id, self.b.pk)
+        self.assertFalse(
+            self.division.result_slips.filter(round=1, winner__player__is_bye=True)
+            .exists()
+        )
+
+    def test_the_row_brings_its_own_pairing(self):
+        self.assertEqual(self.reverse_the_forfeits(), [])
+        pairing = self.division.result_slips.get(winner=self.a).pairing
+        self.assertIsNotNone(pairing)
+        self.assertEqual(pairing.round, 1)
+        self.assertEqual(pairing.round_pairings, self.division.round_pairings_set.get(round=1))
+        # The board says what the row said about who went first, or
+        # correct_result_starts would rewrite the result to match it.
+        self.assertEqual(pairing.first_id, self.a.pk)
+        self.assertEqual(pairing.second_id, self.b.pk)
+
+    def test_the_start_follows_the_row_the_other_way_round_too(self):
+        from tournaments.starts import start_conflicts
+
+        self.assertEqual(self.reverse_the_forfeits(winner_started=False), [])
+        pairing = self.division.result_slips.get(winner=self.a).pairing
+        self.assertEqual(pairing.first_id, self.b.pk)
+        self.assertEqual(start_conflicts(self.division), [])
+
+    def test_the_boards_it_replaces_are_dissolved(self):
+        self.assertEqual(self.reverse_the_forfeits(), [])
+        for entrant in (self.a, self.b):
+            self.assertEqual(
+                self.division.pairings.filter(
+                    models.Q(first=entrant) | models.Q(second=entrant), round=1
+                ).count(),
+                1,
+                f"{entrant.player.name} should have exactly one game in round 1",
+            )
+
+    def real_board(self):
+        """A round-1 board between two players, i.e. not a forfeit."""
+        return self.division.pairings.filter(round=1).exclude(
+            models.Q(first__player__is_bye=True)
+            | models.Q(second__player__is_bye=True)
+        ).first()
+
+    def test_a_player_in_two_games_in_a_round_is_refused(self):
+        # The result of the game a third player was paired for, plus a
+        # hand-entered row putting them in a second game the same round.
+        board = self.real_board()
+        played = {
+            "round": 1, "winner": board.first_id, "winner_score": 420,
+            "loser": board.second_id, "loser_score": 380, "winner_started": True,
+        }
+        errors = self.save(
+            self.without_forfeits() + [played, self.game_row(loser=board.first_id)]
+        )
+        self.assertTrue(errors)
+        self.assertIn("two games in round 1", errors[0])
+        self.assertIn(board.first.player.name, errors[0])
+
+    def test_replacing_a_real_board_leaves_its_other_player_free(self):
+        # Not a bye for the stranded player and not an error: the director says
+        # what they did by entering their row too.
+        board = self.real_board()
+        stranded = board.second
+        self.assertEqual(self.reverse_the_forfeits(loser=board.first_id), [])
+        self.assertFalse(self.division.pairings.filter(pk=board.pk).exists())
+        self.assertFalse(
+            self.division.pairings.filter(
+                models.Q(first=stranded) | models.Q(second=stranded), round=1
+            ).exists()
+        )
+
+    def test_an_unpaired_round_is_refused_clearly(self):
+        errors = self.save(self.without_forfeits() + [self.game_row(round=4)])
+        self.assertTrue(errors)
+        self.assertIn("has not been paired", errors[0])
+
+    def test_nothing_is_written_when_a_later_row_fails(self):
+        before = self.division.pairings.filter(round=1).count()
+        errors = self.save(
+            self.without_forfeits()
+            + [self.game_row()]
+            + [self.game_row(round=4, winner=self.a.pk, loser=self.b.pk)]
+        )
+        self.assertTrue(errors)
+        self.assertEqual(self.division.pairings.filter(round=1).count(), before)
+
+    def test_the_standings_show_the_game_rather_than_the_forfeits(self):
+        self.assertEqual(self.reverse_the_forfeits(), [])
+        pd = PairingData.for_division(self.division)
+        standings = {
+            p.key: p for p in standings_after_round(pd, 1, include_dropped=True)
+        }
+        winner = standings[self.a.key]
+        self.assertEqual((winner.wins, winner.losses, winner.spread), (1, 0, 58))
+        loser = standings[self.b.key]
+        self.assertEqual((loser.wins, loser.losses, loser.spread), (0, 1, -58))
+
+    def test_the_round_status_follows_the_new_board(self):
+        # Two forfeit boards out, one played game in: three boards, one result.
+        self.assertEqual(self.reverse_the_forfeits(), [])
+        self.assertEqual(self.division.pairings.filter(round=1).count(), 3)
+        self.assertEqual(
+            self.division.round_pairings_set.get(round=1).status,
+            RoundPairings.IN_PROGRESS,
+        )
+
+
 class HandEnteredAbsenceReplayTests(TestCase):
     """A hand-entered absence lands a *pairing* in a published round, which
     ``division_digest`` covers — so a replay has to rebuild it from the logged
@@ -428,6 +602,79 @@ class HandEnteredAbsenceReplayTests(TestCase):
         forfeit = rebuilt.pairings.get(round=1, forfeit=True)
         self.assertEqual(forfeit.first.player.player_number, absentee.key)
         self.assertEqual(forfeit.result.winner_score, 50)
+
+
+class HandEnteredGameReplayTests(TestCase):
+    """A hand-entered game lands a *pairing* in a published round, which
+    ``division_digest`` covers — table number and orientation included — so a
+    replay has to rebuild it, and dissolve the same boards, from the logged rows
+    alone."""
+
+    def test_the_grid_save_replays_to_the_same_digest(self):
+        import json
+
+        from django.urls import reverse
+
+        from tournaments.commands import (
+            add_entrant, create_division, create_tournament, publish_round,
+            save_settings,
+        )
+        from tournaments.forfeits import withdraw_entrant
+        from tournaments.events import division_digest, export_jsonl
+        from tournaments.grids import ResultsGrid
+        from tournaments.models import Player, Tournament
+        from tournaments.replay import parse_jsonl, replay
+
+        user = User.objects.create_user(username="hg", password="p")
+        tournament = create_tournament(None, user, {
+            "name": "Game Replay", "location": "x", "start_date": "2026-03-15",
+        })
+        create_division(tournament, user, {"name": "D"})
+        for i in range(1, 7):
+            Player.objects.create(name=f"H{i}", player_number=f"9{i:02d}",
+                                  rating=1600 - i)
+            add_entrant(tournament, user, {"division": "D", "player": f"9{i:02d}"})
+        save_settings(tournament, user, {
+            "division": "D",
+            "blocks": [{"pairing": "KotH", "rounds": 3, "pair_from": 1}],
+        })
+        division = tournament.divisions.get(name="D")
+        regenerate_pairings(division)
+        publish_round(tournament, user, {"division": "D", "round": 1})
+
+        # Two entrants left unpaired in the published round, the way a
+        # withdrawal really does it — then they turn out to have played each
+        # other, which is a match no pairing exists for.
+        first, second = list(division.entrants.order_by("number")[:2])
+        for entrant in (first, second):
+            withdraw_entrant(
+                tournament, user, {"division": "D", "player": entrant.key}
+            )
+
+        grid = ResultsGrid()
+        rows = [grid.serialize_row(s) for s in grid.queryset(division)]
+        rows.append({
+            "round": 1, "winner": first.pk, "winner_score": 500,
+            "loser": second.pk, "loser_score": 442, "winner_started": True,
+        })
+        self.client.force_login(user)
+        response = self.client.post(
+            reverse("division_edit_results", kwargs=division.slug_kwargs()),
+            json.dumps({"rows": rows}), content_type="application/json",
+        )
+        self.assertTrue(response.json().get("ok"), response.json())
+        pairing = division.result_slips.get(winner=first).pairing
+        self.assertEqual((pairing.first_id, pairing.second_id), (first.pk, second.pk))
+        expected = division_digest(division)
+
+        jsonl = export_jsonl(tournament)
+        Tournament.objects.all().delete()
+        _header, events = parse_jsonl(jsonl)
+        rebuilt = replay(events, verify=True).tournament.divisions.get(name="D")
+        self.assertEqual(division_digest(rebuilt), expected)
+        slip = rebuilt.result_slips.get(winner_score=500)
+        self.assertEqual(slip.winner.player.player_number, first.key)
+        self.assertEqual(slip.pairing.first.player.player_number, first.key)
 
 
 class OverridingOneAbsenceSpreadTests(TestCase):

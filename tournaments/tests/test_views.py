@@ -1992,28 +1992,65 @@ class DivisionEditResultsViewTests(TestCase):
         self.assertEqual(slip.round, 2)
         self.assertEqual(slip.winner, self.entrant2)
 
-    def test_post_rejects_result_without_pairing(self):
-        self.client.login(username="owner", password="testpass123")
-        payload = {
-            "rows": [
-                {
-                    "round": 1,
-                    "winner": self.entrant1.pk,
-                    "winner_score": 450,
-                    "loser": self.entrant2.pk,
-                    "loser_score": 380,
-                    "winner_started": True,
-                },
-            ]
+    def _game_row(self, **overrides):
+        row = {
+            "round": 1,
+            "winner": self.entrant1.pk,
+            "winner_score": 450,
+            "loser": self.entrant2.pk,
+            "loser_score": 380,
+            "winner_started": True,
         }
+        return {**row, **overrides}
+
+    def test_post_rejects_result_for_an_unpaired_round(self):
+        # A match with no pairing brings its own; a *round* with no pairings has
+        # nowhere to put it.
+        self.client.login(username="owner", password="testpass123")
         response = self.client.post(
             self.url,
-            json.dumps(payload),
+            json.dumps({"rows": [self._game_row()]}),
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 400)
         body = response.json()
-        self.assertTrue(any("no pairing" in e for e in body["errors"]))
+        self.assertTrue(any("has not been paired" in e for e in body["errors"]))
+        self.assertEqual(self.division.result_slips.count(), 0)
+
+    def test_post_creates_the_pairing_for_a_match_nobody_paired(self):
+        rp = RoundPairings.objects.create(
+            division=self.division, round=1, status=RoundPairings.PUBLISHED
+        )
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.post(
+            self.url,
+            json.dumps({"rows": [self._game_row()]}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        slip = self.division.result_slips.get()
+        self.assertEqual(slip.pairing.round_pairings, rp)
+        # Oriented by the row's Started column, which the board then owns.
+        self.assertEqual(slip.pairing.first, self.entrant1)
+
+    def test_post_rejects_a_player_in_two_games_in_one_round(self):
+        RoundPairings.objects.create(
+            division=self.division, round=1, status=RoundPairings.PUBLISHED
+        )
+        player3 = Player.objects.create(name="Cara", player_number="003", rating=1400)
+        entrant3 = Entrant.objects.create(
+            division=self.division, player=player3, number=3
+        )
+        self.client.login(username="owner", password="testpass123")
+        response = self.client.post(
+            self.url,
+            json.dumps({"rows": [self._game_row(), self._game_row(loser=entrant3.pk)]}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(
+            any("two games in round 1" in e for e in response.json()["errors"])
+        )
         self.assertEqual(self.division.result_slips.count(), 0)
 
     def test_post_same_winner_loser_returns_error(self):

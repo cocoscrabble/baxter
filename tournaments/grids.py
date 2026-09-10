@@ -9,6 +9,7 @@ from .models import (
     Entrant,
     FixedPairing,
     FixedTable,
+    Pairing,
     Player,
     ResultSlip,
     RoundPairings,
@@ -110,6 +111,33 @@ def _result_entrants(division):
     # The bye sorts last rather than under "B": it is not a competitor, and a
     # picker that files it among the players invites picking it by accident.
     return real + [e for e in entrants if e.player.is_bye]
+
+
+def _double_booking_errors(validated, names, bye_pk):
+    """Rows that put one player in two games in the same round.
+
+    The one invariant the results grid enforces across rows, and the whole
+    condition on entering a result for a match nobody paired: a round is a set
+    of simultaneous games, so a player is in at most one of them. Everything
+    else about a hand-entered row — which board it lands on, what it dissolves —
+    follows from the rows being consistent in this sense.
+
+    The bye is exempt. It is every absent player's opponent, so it legitimately
+    appears once per bye and forfeit in the round.
+    """
+    errors = []
+    seen = {}
+    for i, slip in enumerate(validated):
+        for pk in (slip.winner, slip.loser):
+            if pk == bye_pk:
+                continue
+            first = seen.setdefault((slip.round, pk), i)
+            if first != i:
+                errors.append(
+                    f"Row {i + 1}: {names.get(pk, 'that player')} is in two games "
+                    f"in round {slip.round} (also row {first + 1})."
+                )
+    return errors
 
 
 def resolve_player(key, name=None, rating=0, wespa_rating=None):
@@ -535,11 +563,17 @@ class ResultsGrid(EditGrid):
     dom_id = "results-table"
     event_type = "results_saved"
     template_name = "tournaments/division_edit_results.html"
-    # Reconcile on the pairing so an edited row keeps its pk and, crucially, its
-    # created_at (auto_now_add) — the results export uses it as submitted_on.
-    # A row whose match changed resolves to a different pairing, i.e. delete +
-    # create, which is correct.
-    key_fields = ("pairing_id",)
+    # Reconcile on the match — the round and the two entrants — so an edited row
+    # keeps its pk and, crucially, its created_at (auto_now_add), which the
+    # results export uses as submitted_on. A row whose match changed resolves to
+    # a different key, i.e. delete + create, which is correct.
+    #
+    # Not on the pairing, which is what this keyed on while every row had to have
+    # one: a hand-entered row has no pairing until ``persist`` builds it, so all
+    # of them would key on None and collide with each other. The match is what
+    # the director is editing in any case; the pairing follows from it, which is
+    # why ``pairing_id`` is an updatable field rather than the identity.
+    key_fields = ("round", "winner_id", "loser_id")
     update_fields = (
         "round",
         "winner_id",
@@ -547,6 +581,7 @@ class ResultsGrid(EditGrid):
         "loser_id",
         "loser_score",
         "winner_started",
+        "pairing_id",
     )
     columns = [
         Column("round", "Round", kind="number", min=1, width=100, auto_increment=True),
@@ -615,12 +650,28 @@ class ResultsGrid(EditGrid):
         return super().validate(_fill_absence_scores(rows, division), division)
 
     def prepare(self, division, validated):
-        # Every row must correspond to an existing Pairing — results for
-        # unpaired matches are not allowed via this flow.
+        """Build the slips, and the pairings for any match nobody paired.
+
+        A row does not have to name a pairing the pairer generated. Directors
+        correct the board as well as the scores — the case this exists for is
+        reversing a forfeit, where the absence rows come out and the game the
+        players actually sat down and played goes in — and a game that was
+        played is a fact about the tournament whether or not it was scheduled.
+
+        What has to hold is the thing a round *is*: when the save has landed, no
+        player is in two games in the same round. That is checked across the
+        rows here; a row naming a match with no pairing gets one built for it in
+        ``persist``, and the boards it collides with — which by then can carry no
+        result, or the check above would have rejected the payload — are
+        dissolved there too.
+        """
         pairing_lookup = division.pairings_by_round_pair()
-        bye_pk = next(
-            (e.pk for e in _result_entrants(division) if e.player.is_bye), None
-        )
+        entrants = _result_entrants(division)
+        bye_pk = next((e.pk for e in entrants if e.player.is_bye), None)
+        names = {e.pk: e.player.name for e in entrants}
+        errors = _double_booking_errors(validated, names, bye_pk)
+        if errors:
+            return [], errors
         round_containers = {
             rp.round: rp for rp in division.round_pairings_set.all()
         }
@@ -634,16 +685,25 @@ class ResultsGrid(EditGrid):
             )
             for pk in (first, second)
         }
+        # The same, for playoff games only. A playoff game is derived from the
+        # bracket rather than recorded, so dissolving one does not stick: the
+        # next regeneration builds it again and the player is in two games after
+        # all. A hand-entered row that would supersede one is refused instead.
+        in_playoff = {
+            (round_num, pk)
+            for round_num, first, second in division.pairings.filter(
+                series__isnull=False
+            ).values_list("round", "first_id", "second_id")
+            for pk in (first, second)
+        }
         instances, errors = [], []
         for i, slip in enumerate(validated):
-            pairing = pairing_lookup.get((slip.round, frozenset({slip.winner, slip.loser})))
-            if pairing is None and bye_pk not in (slip.winner, slip.loser):
-                errors.append(
-                    f"Row {i + 1}: no pairing for that match in round {slip.round}."
-                )
-                continue
+            pairing = pairing_lookup.get(
+                (slip.round, frozenset({slip.winner, slip.loser}))
+            )
             kwargs = slip.to_db_kwargs()
-            if bye_pk in (slip.winner, slip.loser):
+            is_absence = bye_pk in (slip.winner, slip.loser)
+            if is_absence:
                 # The Started column is not a free choice on a bye or forfeit
                 # row: the bye is the notional starter, so the real player is
                 # charged no start. ``winner_started`` orients the pairing the
@@ -654,39 +714,51 @@ class ResultsGrid(EditGrid):
                 # nothing downstream would put it back. Derive it instead, as
                 # every other write path does.
                 kwargs["winner_started"] = slip.winner == bye_pk
-            if pairing is None and bye_pk in (slip.winner, slip.loser):
-                # A bye or forfeit entered by hand for a round that never paired
-                # it. The row *is* the pairing — there is no game it stands in
-                # for — so one is built, but in ``persist``: ``prepare`` runs
-                # before the save transaction, and a pairing created here would
-                # outlive an error further down the list.
-                rp = round_containers.get(slip.round)
-                if rp is None:
+            if pairing is not None:
+                instances.append(
+                    ResultSlip(division=division, pairing=pairing, **kwargs)
+                )
+                continue
+            # A match with no pairing: the row *is* the pairing, and one is built
+            # for it in ``persist`` — ``prepare`` runs before the save
+            # transaction, and a pairing created here would outlive an error
+            # raised further down the list.
+            rp = round_containers.get(slip.round)
+            if rp is None:
+                if is_absence:
                     errors.append(
                         f"Row {i + 1}: round {slip.round} has no pairings yet, "
                         "so there is nothing to record a bye or forfeit against."
                     )
-                    continue
-                real_pk = slip.loser if slip.winner == bye_pk else slip.winner
-                if (slip.round, real_pk) in already_playing:
-                    # They are already in a game that round, so this row would
-                    # be their second. Moving a bye from one player to another
-                    # is a change to the printed board, not to the results —
-                    # unpublish the round, or forfeit the game they do have.
+                else:
                     errors.append(
-                        f"Row {i + 1}: that player already has a game in round "
-                        f"{slip.round}. Who gets a bye is set when the round is "
-                        "paired, not here."
+                        f"Row {i + 1}: round {slip.round} has not been paired, "
+                        "so there is no round to record that game in."
                     )
-                    continue
-                instance = ResultSlip(division=division, **kwargs)
-                instance._absence_round_pairings = rp
-                instance._absence_is_forfeit = slip.winner == bye_pk
-                instances.append(instance)
                 continue
-            instances.append(
-                ResultSlip(division=division, pairing=pairing, **kwargs)
-            )
+            real = [pk for pk in (slip.winner, slip.loser) if pk != bye_pk]
+            if is_absence and (slip.round, real[0]) in already_playing:
+                # They are already in a game that round, so this row would be
+                # their second. Moving a bye from one player to another is a
+                # change to the printed board, not to the results — unpublish
+                # the round, or forfeit the game they do have.
+                errors.append(
+                    f"Row {i + 1}: that player already has a game in round "
+                    f"{slip.round}. Who gets a bye is set when the round is "
+                    "paired, not here."
+                )
+                continue
+            clashes = [pk for pk in real if (slip.round, pk) in in_playoff]
+            if clashes:
+                errors.append(
+                    f"Row {i + 1}: {names.get(clashes[0], 'that player')} has a "
+                    f"playoff game in round {slip.round}, and the bracket "
+                    "decides those — this row would be a second game."
+                )
+                continue
+            instance = ResultSlip(division=division, **kwargs)
+            instance._new_pairing_in = rp
+            instances.append(instance)
         if errors:
             return [], errors
         # The grid replaces the division's whole result set, so it *is* the
@@ -715,25 +787,49 @@ class ResultsGrid(EditGrid):
         return instances, self.reconcile_errors(division, instances)
 
     def persist(self, division, prepared):
-        """Build any hand-entered absence row's pairing, then reconcile.
+        """Build the pairing for every row that has none, dissolve whatever that
+        supersedes, then reconcile.
 
         Here rather than in ``prepare`` because this runs inside the save
         transaction: a pairing created during validation would survive an error
-        raised further down, leaving a bye-shaped game with no result.
+        raised further down, leaving a game with no result.
         """
         from tournaments.generate_pairings import absence_row
 
         bye_pk = next(
             (e.pk for e in _result_entrants(division) if e.player.is_bye), None
         )
-        for slip in prepared:
-            rp = getattr(slip, "_absence_round_pairings", None)
-            if rp is not None:
+        unpaired = [s for s in prepared if getattr(s, "_new_pairing_in", None)]
+        self._dissolve_superseded(division, prepared, unpaired, bye_pk)
+        tables = self._last_tables(division)
+        for slip in unpaired:
+            rp = slip._new_pairing_in
+            if bye_pk in (slip.winner_id, slip.loser_id):
                 real = slip.winner if slip.loser_id == bye_pk else slip.loser
                 slip.pairing = absence_row(
-                    division, rp, real, forfeit=slip._absence_is_forfeit
+                    division, rp, real, forfeit=slip.winner_id == bye_pk
                 )
                 continue
+            # The board this creates has to agree with the row about who went
+            # first. It counts as published from the moment it exists, and a
+            # published board owns the start (``tournaments/starts.py``): keyed
+            # the other way round it would have the result rewritten to charge a
+            # start nobody took.
+            first, second = (
+                (slip.winner, slip.loser)
+                if slip.winner_started
+                else (slip.loser, slip.winner)
+            )
+            tables[slip.round] = tables.get(slip.round, 0) + 1
+            slip.pairing = Pairing.objects.create(
+                division=division,
+                round=slip.round,
+                round_pairings=rp,
+                first=first,
+                second=second,
+                table=tables[slip.round],
+            )
+        for slip in prepared:
             # An existing bye-shaped row whose direction the director changed:
             # the flag follows the score, or the board would keep saying "bye"
             # over a forfeit's result. This is the one way to convert one into
@@ -748,6 +844,53 @@ class ResultsGrid(EditGrid):
                 pairing.forfeit = forfeit
                 pairing.save(update_fields=["forfeit"])
         super().persist(division, prepared)
+
+    def _dissolve_superseded(self, division, prepared, unpaired, bye_pk):
+        """Delete the boards the hand-entered rows replace.
+
+        A player named in a row with no pairing may already have one for that
+        round — the forfeit being reversed, or the game they were scheduled for
+        and did not play. Once this save lands it carries no result (``prepare``
+        rejects a player with two results in a round), so it is a board that was
+        never played, and leaving it would put the player in two games at once.
+
+        Their *opponent* is left with no game that round, which is the honest
+        state rather than something to invent a bye for: the director says what
+        that player did by entering their row too.
+        """
+        claimed = {
+            (slip.round, pk)
+            for slip in unpaired
+            for pk in (slip.winner_id, slip.loser_id)
+            if pk != bye_pk
+        }
+        if not claimed:
+            return
+        kept = {
+            (slip.round, frozenset({slip.winner_id, slip.loser_id}))
+            for slip in prepared
+        }
+        for pairing in division.pairings.filter(
+            round__in={round_num for round_num, _ in claimed}
+        ):
+            match = (pairing.round, frozenset({pairing.first_id, pairing.second_id}))
+            if match in kept:
+                continue
+            if any(
+                (pairing.round, pk) in claimed
+                for pk in (pairing.first_id, pairing.second_id)
+            ):
+                pairing.delete()
+
+    def _last_tables(self, division):
+        """{round -> highest table number in use}, so a hand-entered game lands
+        after the boards that were printed rather than on top of one."""
+        from django.db.models import Max
+
+        return {
+            row["round"]: row["top"] or 0
+            for row in division.pairings.values("round").annotate(top=Max("table"))
+        }
 
     def after_save(self, division):
         # Recreating the slips can change which rounds have results; refresh the

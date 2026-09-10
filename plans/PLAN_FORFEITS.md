@@ -1,6 +1,7 @@
 # Plan: Forfeits and dropouts
 
-**Status: implemented** (all five phases). Design drafted 2026-09-07 for
+**Status: implemented** (all five phases, plus phase 6 below). Design drafted
+2026-09-07 for
 [issue #57](https://github.com/cocoscrabble/baxter/issues/57); code references
 pinned at commit `e3ad086`.
 
@@ -580,3 +581,53 @@ own setup: it deleted a pairing directly to leave a player unpaired, which is a
 state no log can reach. Driving it the way the app does — a withdrawal under
 `OMIT`, which dissolves the printed game and records nothing for the absentee —
 both replays and is the case a director would actually hit.
+
+### Phase 6 — entering a game nobody paired — **done**
+
+Phase 5 let a director record an absence the pairer never scheduled. The mirror
+of it is the one a director asked for next: **reversing** a forfeit. Two players
+are marked absent, then it turns out they sat down and played each other. There
+is no pairing between them — the withdrawal dissolved both their games — so the
+row had nowhere to hang, and the grid answered "no pairing for that match in
+round N".
+
+So the results grid no longer requires a row to name a generated pairing. Any
+row may name any two entrants, and the condition is the one a round actually
+imposes:
+
+- **No player is in two games in the same round.** Checked across the whole
+  payload before anything is written (`_double_booking_errors`), naming the
+  player and both rows. The bye is exempt: it is every absent player's opponent,
+  so it appears once per absence in the round.
+- **A row with no pairing brings one with it**, built in `persist` for the same
+  reason phase 5 builds an absence there — `prepare` runs before the save
+  transaction, so a pairing created there would outlive an error further down.
+  It is oriented by the row's Started column, because a board owns the start
+  (`tournaments/starts.py`) and one keyed the other way would have
+  `correct_result_starts` rewrite the result to match it.
+- **What it collides with is dissolved.** A player named in such a row may
+  already have a board that round — the forfeit being reversed, or the game they
+  were scheduled for and did not play. By then it can carry no result (the check
+  above would have rejected the payload), so it is a board nobody played, and
+  keeping it would put the player in two games at once. Their opponent is left
+  with no game for the round, which is the honest state: the director says what
+  *they* did by entering their row too.
+- **Two things are still refused**, both because the row would not stick: a
+  round with no `RoundPairings` at all (there is no round to record the game
+  in — pair it first), and a player whose game that round is a **playoff** game,
+  which is derived from the bracket and would simply be rebuilt.
+
+The grid also stopped keying its reconcile on the pairing. A hand-entered row
+has no pairing until `persist` builds one, so every such row would have keyed on
+`None` and collided with the others. The key is now the match — the round and
+the two entrants, order-free — which is what the director is editing in any
+case; `pairing_id` became an updatable field instead of the identity.
+
+*Verified* (`HandEnteredGameTests`, `HandEnteredGameReplayTests`): two forfeits
+come out and the game the players actually played goes in, with its own pairing
+in the round's container and both bye-shaped boards dissolved; the pairing is
+oriented by the Started column in both directions and leaves `start_conflicts`
+empty; the standings show the game rather than the forfeits; a player in two
+games in one round is refused by name; an unpaired round is refused; nothing is
+written when a later row fails; and the save replays under `verify=True` to the
+same digest, synthesized pairing, table number and orientation included.
