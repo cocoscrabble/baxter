@@ -332,15 +332,62 @@ class EventDetailTests(TestCase):
 
     def test_a_command_payload_is_shown_as_recorded(self):
         detail = self.detail("round_published", {"division": "Open", "round": 2})
-        self.assertIn('"round": 2', detail["payload"])
+        # The division is in the summary line above, so it is not repeated here.
+        self.assertEqual(detail["fields"], [("round", "2")])
+
+    def test_a_command_payload_names_the_people_in_it(self):
+        # The payload identifies people the way replay needs them; the page says
+        # who they are, and keeps the identifier that was recorded.
+        detail = self.detail("result_added", {
+            "division": self.division.name, "round": 3,
+            "first_player": self.alice, "second_player": self.bob,
+            "winner_player": self.bob, "winner_score": 500, "loser_score": 442,
+        })
+        fields = dict(detail["fields"])
+        self.assertEqual(fields["winner_player"], f"Bob ({self.bob})")
+        self.assertEqual(fields["first_player"], f"Alice ({self.alice})")
+        self.assertEqual(fields["winner_score"], "500")
+
+    def test_people_nested_inside_a_payload_are_named_too(self):
+        # entrant_ratings_refreshed keeps its people inside a list of entrants,
+        # and entrants_reseeded inside a list of pairs. A per-key rule would
+        # miss both.
+        detail = self.detail("entrant_ratings_refreshed", {
+            "division": self.division.name,
+            "entrants": [{"player": self.alice, "rating": 1605,
+                          "rating_source": "wespa"}],
+        })
+        self.assertIn(f"Alice ({self.alice})", detail["payload"])
+        self.assertEqual(detail["fields"], [])
+
+    def test_a_value_that_is_nobody_is_left_alone(self):
+        detail = self.detail("division_renamed", {
+            "old_name": "Open", "new_name": "Division 1",
+        })
+        self.assertEqual(
+            sorted(detail["fields"]),
+            [("new_name", "Division 1"), ("old_name", "Open")],
+        )
 
     def test_a_whole_collection_payload_is_shown_as_recorded(self):
-        # A grid save from before deltas: there is no diff to render.
+        # A grid save from before deltas: there is no diff to render, so the
+        # rows are shown as they were recorded — with their people named.
         detail = self.detail("entrants_saved", {
             "division": self.division.name,
             "rows": [{"number": 1, "player": self.alice}],
         })
         self.assertIn('"rows"', detail["payload"])
+        self.assertIn(f"Alice ({self.alice})", detail["payload"])
+
+    def test_a_name_is_not_escaped_into_json_gibberish(self):
+        from tournaments.models import Player
+
+        Player.objects.filter(pk=self.player1.pk).update(name="Alec Sjöholm")
+        detail = self.detail("entrants_reseeded", {
+            "division": self.division.name,
+            "seeding": [[self.alice, 1], [self.bob, 2]],
+        })
+        self.assertIn("Alec Sjöholm", detail["payload"])
 
     def test_a_huge_payload_is_truncated_rather_than_pasted_in(self):
         from tournaments.events import MAX_PAYLOAD_CHARS

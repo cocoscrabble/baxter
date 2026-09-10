@@ -1874,3 +1874,10 @@ h3 + .note {
     font-size: 0.9em;
     color: var(--color-muted);
 }
+
+/* A command payload's field list. Wider first column than a delta's: these are
+   payload keys (winner_player, qualification_round), not grid columns. */
+.log-recorded {
+    grid-template-columns: minmax(9rem, max-content) 1fr;
+    margin-top: var(--space-xs);
+}

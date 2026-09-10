@@ -236,7 +236,25 @@ make this rare.
 
 - Per-tournament "Activity" page: human-readable event list (actor, time,
   description rendered from type + payload), newest first, with a JSONL download
-  link. Payloads are name-based, so rendering is straightforward.
+  link.
+- **The payload is written for replay; the page translates it.** These are not
+  the same job, and neither should bend toward the other. Replay needs an
+  identifier that survives a rename and resolves into a fresh database, so a v2
+  payload says `"winner_player": "0112"` — this bullet used to read "payloads are
+  name-based, so rendering is straightforward", which stopped being true when
+  identity moved from the name to the number
+  (`plans/PLAN_PLAYER_IDENTITY.md`), and the audit page was the thing that
+  noticed. The fix is not to denormalise names back into payloads to make the log
+  nicer to read — that bloats every event and goes stale on the first rename.
+  It is that the *display* resolves them: every string in a payload is offered to
+  the player table, and the ones that are somebody come back as "Emmanuel Egbele
+  (0112)", the number kept because it is what was recorded and what a replay acts
+  on.
+
+  Deliberately a value-scan rather than a table of which key holds a person for
+  each of three dozen event types: the people are often nested — inside
+  `entrant_ratings_refreshed`'s list of entrants, inside `entrants_reseeded`'s
+  list of pairs — and a per-key rule misses exactly those.
 - **Who may read it** (`CanReadTournamentLogMixin`, page and export alike): the
   tournament's owner and editors, plus anyone holding Supervisor or Admin. Not
   every Director — Director is the default role every account holds, so gating on
@@ -247,9 +265,12 @@ make this rare.
   save carries a delta, so it renders row by row in the grid's own vocabulary —
   "Round 3: Alice beat Bob", then `winner_score 500 → 502` — with the people
   named rather than numbered (`portable_label` / `portable_player_fields` on the
-  grid). Anything else shows its recorded payload, which is short and readable
-  for every command; a `state_snapshot` is truncated with a pointer to the
-  download. A native `<details>`, so none of this needs JS.
+  grid). Anything else — a command, or a grid save from before deltas — shows
+  what it recorded: flat values as the same field list the delta rows use,
+  structured ones as JSON underneath, both with their people named. A
+  `state_snapshot` is the exception, dumped and truncated with a pointer to the
+  download: it is a whole tournament, and its entrants carry their names already.
+  A native `<details>`, so none of this needs JS.
 - **Filters and paging**: by division and by event type, both offered from what
   the log actually holds rather than from the catalog, and carried on the pager
   links so a filtered log is a link one director can send another.

@@ -766,6 +766,45 @@ def _grid_numbers(grid, payload):
     }
 
 
+def _payload_strings(value):
+    """Every string a payload holds, at any depth — the candidates for a name.
+
+    A payload identifies people the way replay needs them: by the identifier
+    that survives a rename and resolves in a fresh database. A reader needs the
+    name. Rather than teach the page which key holds a person for each of three
+    dozen event types — and miss the nested ones, where the people are inside a
+    list of refreshed entrants or a seeding of pairs — every string is offered to
+    the player table and the ones that are somebody come back named.
+    """
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, list):
+        for item in value:
+            yield from _payload_strings(item)
+    elif isinstance(value, dict):
+        for item in value.values():
+            yield from _payload_strings(item)
+
+
+def _name_people(value, names):
+    """``value`` with every string that is a player number named.
+
+    The number is kept alongside the name: it is what the log actually recorded,
+    it is what a replay acts on, and two players can share a name.
+    """
+    if isinstance(value, str):
+        if value not in names:
+            return value
+        name = names[value]
+        # The bye's identifier *is* its name, and "Bye (BYE)" says it twice.
+        return name if name.casefold() == value.casefold() else f"{name} ({value})"
+    if isinstance(value, list):
+        return [_name_people(item, names) for item in value]
+    if isinstance(value, dict):
+        return {key: _name_people(item, names) for key, item in value.items()}
+    return value
+
+
 def _render_value(value):
     """A payload value as the page should show it. Booleans read as yes/no —
     ``paid: False`` is a checkbox, and "no" is what the director unticked."""
@@ -820,6 +859,10 @@ def event_details(events) -> list:
         payload = event.payload or {}
         if grid is not None and _is_delta(payload):
             numbers |= _grid_numbers(grid, payload)
+        elif _readable(payload):
+            # A command payload names its people wherever it likes, so every
+            # string in it is a candidate. Cheap: they all ride the one query.
+            numbers |= set(_payload_strings(payload))
     names = _player_names(numbers)
     return [event_detail(event, names) for event in events]
 
@@ -841,8 +884,9 @@ def event_detail(event, names=None) -> dict:
     if grid is None or not _is_delta(payload):
         # Not a delta: a command payload, or a grid save recorded before deltas
         # (or by a grid whose rows have no identity), which is the whole
-        # collection and belongs in the raw view.
-        return {"payload": _payload_text(payload)}
+        # collection. Either way it is shown as what was recorded, with the
+        # people in it named.
+        return _recorded_detail(payload, names)
     if names is None:
         names = _player_names(_grid_numbers(grid, payload))
 
@@ -881,15 +925,62 @@ def event_detail(event, names=None) -> dict:
     }
 
 
-def _payload_text(payload) -> str:
-    text = json.dumps(payload, indent=2, sort_keys=True, default=str)
-    if len(text) > MAX_PAYLOAD_CHARS:
-        return (
-            text[:MAX_PAYLOAD_CHARS]
-            + f"\n… truncated at {MAX_PAYLOAD_CHARS} characters — "
-            "download the log for the rest."
+def _readable(payload) -> bool:
+    """Small enough to render for a person rather than dump.
+
+    The one payload that is not is ``state_snapshot`` — a whole tournament,
+    hundreds of kilobytes of it. Walking that to name its people would cost more
+    than it is worth on a page where the snapshot is one row of a hundred, and
+    its entrants carry their names already.
+    """
+    return len(json.dumps(payload, default=str)) <= MAX_PAYLOAD_CHARS
+
+
+def _recorded_detail(payload, names=None) -> dict:
+    """A command payload, rendered as what it recorded.
+
+    Flat values become the same field list a grid delta's rows use, so the two
+    kinds of log entry read alike. Anything structured — a list of refreshed
+    entrants, a seeding, the corrections a start rewrite made — keeps its shape
+    underneath as JSON, which is the honest rendering of a value that *is* a
+    structure. Both halves have their people named.
+
+    ``division`` is dropped: the summary line above already says which one.
+    """
+    if not _readable(payload):
+        # ensure_ascii=False: a name is not more readable as \u00f6, and the
+        # template escapes on output anyway.
+        text = json.dumps(
+            payload, indent=2, sort_keys=True, default=str, ensure_ascii=False
         )
-    return text
+        return {
+            "payload": (
+                text[:MAX_PAYLOAD_CHARS]
+                + f"\n… truncated at {MAX_PAYLOAD_CHARS} characters — "
+                "download the log for the rest."
+            )
+        }
+    if names is None:
+        names = _player_names(_payload_strings(payload))
+    named = _name_people(payload, names)
+    fields, structured = [], {}
+    for key in sorted(named):
+        if key == "division":
+            continue
+        value = named[key]
+        if isinstance(value, (list, dict)):
+            structured[key] = value
+        else:
+            fields.append((key, _render_value(value)))
+    return {
+        "fields": fields,
+        "payload": (
+            json.dumps(
+                structured, indent=2, sort_keys=True, default=str, ensure_ascii=False
+            )
+            if structured else ""
+        ),
+    }
 
 
 # ---------------------------------------------------------------------------

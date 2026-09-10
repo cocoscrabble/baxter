@@ -75,8 +75,18 @@ Activity
                 {% endcomment %}
                 <details class="log-entry">
                     <summary>{{ description }}</summary>
+                    {% if detail.fields or detail.payload %}
+                    {% if detail.fields %}
+                    <dl class="log-changes log-recorded">
+                        {% for field, value in detail.fields %}
+                        <dt>{{ field }}</dt>
+                        <dd>{{ value }}</dd>
+                        {% endfor %}
+                    </dl>
+                    {% endif %}
                     {% if detail.payload %}
                     <pre class="log-payload">{{ detail.payload }}</pre>
+                    {% endif %}
                     {% else %}
                     {% if detail.changed %}
                     <p class="log-section">Changed</p>
