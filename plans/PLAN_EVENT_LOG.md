@@ -234,10 +234,25 @@ make this rare.
 
 ### Audit surface
 
-- Per-tournament "Activity" page (owner/editors only): human-readable event
-  list (actor, time, description rendered from type + payload), newest first,
-  with a JSONL download link. Payloads are name-based, so rendering is
-  straightforward.
+- Per-tournament "Activity" page: human-readable event list (actor, time,
+  description rendered from type + payload), newest first, with a JSONL download
+  link. Payloads are name-based, so rendering is straightforward.
+- **Who may read it** (`CanReadTournamentLogMixin`, page and export alike): the
+  tournament's owner and editors, plus anyone holding Supervisor or Admin. Not
+  every Director — Director is the default role every account holds, so gating on
+  it would open every event's log to every account. A supervisor asked what
+  happened at somebody else's tournament needs the log, and that is the case the
+  role check is for.
+- **Every row unfolds into what the event did** (`events.event_detail`). A grid
+  save carries a delta, so it renders row by row in the grid's own vocabulary —
+  "Round 3: Alice beat Bob", then `winner_score 500 → 502` — with the people
+  named rather than numbered (`portable_label` / `portable_player_fields` on the
+  grid). Anything else shows its recorded payload, which is short and readable
+  for every command; a `state_snapshot` is truncated with a pointer to the
+  download. A native `<details>`, so none of this needs JS.
+- **Filters and paging**: by division and by event type, both offered from what
+  the log actually holds rather than from the catalog, and carried on the pager
+  links so a filtered log is a link one director can send another.
 - Anonymous actions (e.g. `ResultSlipCreateView` today) log with
   `actor=null` + hashed session key — this log **is** the audit trail that
   PLAN.md Phase 4's anonymous-edit hardening wants; implement recording

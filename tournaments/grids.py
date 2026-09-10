@@ -281,6 +281,14 @@ class EntrantsGrid(EditGrid):
         the row is theirs however its number or flags change."""
         return row.get("player")
 
+    portable_player_fields = ("player",)
+    # "name" rides along for a replay into a fresh database; in the log it is
+    # the label, not a column of its own.
+    portable_identity_fields = ("player", "name")
+
+    def portable_label(self, row, names):
+        return names.get(row.get("player")) or row.get("name") or row.get("player")
+
     def from_portable(self, rows, division):
         # A v1 row's "player" is a name and carries no "name" key; a v2 row's is
         # a number. No schema upgrader is registered for this event because the
@@ -484,6 +492,14 @@ class FixedPairingsGrid(EditGrid):
             return None
         return (row["round_number"], *sorted([row["entrant1"], row["entrant2"]]))
 
+    portable_player_fields = ("entrant1", "entrant2")
+    portable_identity_fields = ("round_number", "entrant1", "entrant2")
+
+    def portable_label(self, row, names):
+        first = names.get(row.get("entrant1"), row.get("entrant1"))
+        second = names.get(row.get("entrant2"), row.get("entrant2"))
+        return f"Round {row.get('round_number')}: {first} vs {second}"
+
     def from_portable(self, rows, division):
         pks = _entrant_pk_by_key(division)
         return [
@@ -541,6 +557,13 @@ class FixedTablesGrid(EditGrid):
         if row.get("entrant") is None:
             return None
         return (row["round_number"], row["entrant"])
+
+    portable_player_fields = ("entrant",)
+    portable_identity_fields = ("round_number", "entrant")
+
+    def portable_label(self, row, names):
+        who = names.get(row.get("entrant"), row.get("entrant"))
+        return f"Round {row.get('round_number')}: {who}"
 
     def from_portable(self, rows, division):
         pks = _entrant_pk_by_key(division)
@@ -644,6 +667,16 @@ class ResultsGrid(EditGrid):
         if row.get("winner") is None or row.get("loser") is None:
             return None
         return (row["round"], *sorted([row["winner"], row["loser"]]))
+
+    portable_player_fields = ("winner", "loser")
+    # Winner and loser are the label *and* a pair of fields that can swap when a
+    # director corrects who won, so they stay listed: the change is the point.
+    portable_identity_fields = ("round", "winner", "loser")
+
+    def portable_label(self, row, names):
+        winner = names.get(row.get("winner"), row.get("winner"))
+        loser = names.get(row.get("loser"), row.get("loser"))
+        return f"Round {row.get('round')}: {winner} beat {loser}"
 
     def from_portable(self, rows, division):
         pks = {e.player.player_number: e.pk for e in _result_entrants(division)}
@@ -974,3 +1007,15 @@ class BoardTableMapGrid(JsonBlobGrid):
             validated.append({"board": board, "table": table, "label": label})
         validated.sort(key=lambda r: r["board"])
         return validated, errors
+
+
+# Which grid a grid-save event belongs to. Here rather than in ``replay`` because
+# it has two readers now: replay drives the grid to apply the event, and the
+# activity page asks it how to read the event's payload back to a human.
+GRID_BY_EVENT = {
+    "entrants_saved": EntrantsGrid(),
+    "results_saved": ResultsGrid(),
+    "fixed_pairings_saved": FixedPairingsGrid(),
+    "fixed_tables_saved": FixedTablesGrid(),
+    "board_tables_saved": BoardTableMapGrid(),
+}

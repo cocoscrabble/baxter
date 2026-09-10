@@ -1,5 +1,6 @@
 import json
 from collections import defaultdict
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
@@ -536,26 +537,77 @@ class TournamentUpdateView(TournamentURLMixin, LoginRequiredMixin, CanEditTourna
         return self.object.get_absolute_url()
 
 
-class TournamentActivityView(TournamentURLMixin, LoginRequiredMixin, CanEditTournamentMixin, DetailView):
-    """The tournament's event log, newest first (owners/editors only)."""
+class CanReadTournamentLogMixin(UserPassesTestMixin):
+    """Who may read a tournament's event log.
+
+    The people running the event, plus the roles that oversee every event: a
+    Supervisor asked what happened at somebody else's tournament has to be able
+    to look, and the log is the answer. A plain Director sees the log of a
+    tournament they run — which is the one they were asking about — and not a
+    stranger's, since Director is the default role every account holds.
+    """
+
+    def test_func(self):
+        user = self.request.user
+        if not user.is_authenticated:
+            return False
+        return self.get_object().can_edit(user) or user.has_role_at_least(
+            User.Role.SUPERVISOR
+        )
+
+
+class TournamentActivityView(TournamentURLMixin, LoginRequiredMixin, CanReadTournamentLogMixin, DetailView):
+    """The tournament's event log, newest first, with what each event changed."""
 
     model = Tournament
     template_name = "tournaments/tournament_activity.html"
     context_object_name = "tournament"
+    per_page = 100
 
     def get_context_data(self, **kwargs):
-        from tournaments.events import describe_event
+        from django.core.paginator import Paginator
+
+        from tournaments.events import describe_event, event_detail
 
         context = super().get_context_data(**kwargs)
         events = self.object.events.order_by("-seq").select_related(
             "actor", "division"
         )
-        context["events"] = [(e, describe_event(e)) for e in events]
+        # The filters come from the log itself rather than from the catalog: a
+        # list of every event type Baxter can record would offer dozens that
+        # this tournament has never produced.
+        context["event_types"] = sorted(
+            set(events.values_list("event_type", flat=True))
+        )
+        context["divisions"] = sorted(
+            {e.division.name for e in events if e.division_id}
+        )
+        selected_type = self.request.GET.get("type", "")
+        selected_division = self.request.GET.get("division", "")
+        if selected_type:
+            events = events.filter(event_type=selected_type)
+        if selected_division:
+            events = events.filter(division__name=selected_division)
+        page = Paginator(events, self.per_page).get_page(self.request.GET.get("page"))
+        context["page_obj"] = page
+        context["events"] = [
+            (e, describe_event(e), event_detail(e)) for e in page.object_list
+        ]
+        context["selected_type"] = selected_type
+        context["selected_division"] = selected_division
+        # Carried on the pager links so paging does not drop the filters.
+        context["filter_query"] = urlencode(
+            {
+                k: v
+                for k, v in (("type", selected_type), ("division", selected_division))
+                if v
+            }
+        )
         return context
 
 
-class TournamentEventLogExportView(TournamentURLMixin, LoginRequiredMixin, CanEditTournamentMixin, View):
-    """Download the tournament's event log as JSONL (owners/editors only)."""
+class TournamentEventLogExportView(TournamentURLMixin, LoginRequiredMixin, CanReadTournamentLogMixin, View):
+    """Download the tournament's event log as JSONL (same readers as the page)."""
 
     def get_object(self, queryset=None):
         return self.tournament

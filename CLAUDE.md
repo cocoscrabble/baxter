@@ -94,7 +94,10 @@ the log replays into a fresh DB. Key pieces:
 - `tournaments/fuzz.py` + `fuzz_tournament` command + `test_fuzz` — seeded
   fuzzer whose meta-invariant is that replay reproduces the digest.
 - Activity page + `export_event_log` (JSONL); `snapshot_tournaments` backfills
-  pre-log tournaments.
+  pre-log tournaments. Both are gated on `CanReadTournamentLogMixin` — the
+  tournament's editors, **plus Supervisor and above**, since Director is the
+  default role and would let every account read every log. Each row unfolds into
+  what the event changed (`events.event_detail`).
 
 **A new mutating POST view must route through a command** (or be added to the
 exempt set in `test_event_completeness.py`, which fails CI otherwise).
