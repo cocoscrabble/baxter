@@ -214,9 +214,10 @@ class PublishedStartCorrectionTests(LoggedTournamentMixin, TestCase):
         )
         # The save event keeps what was actually entered, so the log shows the
         # wrong start and then its correction rather than quietly rewriting
-        # history.
+        # history. The payload is read back from storage, so this holds only
+        # because the correction runs *after* the save is recorded.
         saved = tournament.events.filter(event_type="results_saved").last()
-        self.assertEqual(saved.payload["rows"][0]["winner_started"], False)
+        self.assertEqual(saved.payload["added"][0]["winner_started"], False)
 
     def test_a_start_that_matches_the_board_logs_no_correction(self):
         tournament, division = self._build_logged_tournament()
@@ -276,6 +277,72 @@ class PublishedStartCorrectionTests(LoggedTournamentMixin, TestCase):
 
 
 @tag("slow")
+@tag("slow")
+class GridDeltaReplayTests(LoggedTournamentMixin, TestCase):
+    """A grid save logged as a delta replays by expanding it back into the whole
+    collection, against the state the events before it built."""
+
+    def test_a_sequence_of_edits_replays_to_the_same_state(self):
+        tournament, division = self._build_logged_tournament()
+        # Three more saves over the same grid: an edit, a removal, and the same
+        # rows again (which records nothing at all).
+        rows = [
+            {"number": i + 1, "player": p.pk, "dropped": False, "paid": i == 0}
+            for i, p in enumerate(self.players)
+        ]
+        self._post_json("division_entrants_edit", division, {"rows": rows})
+        self._post_json("division_entrants_edit", division, {"rows": rows[:-1]})
+        before = tournament.events.count()
+        self._post_json("division_entrants_edit", division, {"rows": rows[:-1]})
+        self.assertEqual(tournament.events.count(), before, "a no-op save logged")
+        recorded = division_digest(division)
+
+        ctx = replay(events_from_tournament(tournament), verify=True)
+
+        self.assertEqual(division_digest(ctx.tournament.divisions.get()), recorded)
+
+    def test_a_whole_collection_payload_still_replays(self):
+        """Every grid save recorded before deltas carries ``rows``, and has to go
+        on replaying exactly as it did."""
+        tournament, division = self._build_logged_tournament()
+        recorded = division_digest(division)
+        events = events_from_tournament(tournament)
+        rewritten = []
+        for event in events:
+            payload = event["payload"]
+            if event["event_type"] == "entrants_saved" and "added" in payload:
+                payload = {
+                    "division": payload["division"],
+                    "rows": payload["added"],  # the whole grid, as it once was
+                }
+            rewritten.append({**event, "payload": payload})
+        self.assertTrue(any("rows" in e["payload"] for e in rewritten))
+
+        ctx = replay(rewritten, verify=True)
+
+        self.assertEqual(division_digest(ctx.tournament.divisions.get()), recorded)
+
+    def test_a_delta_that_does_not_fit_stops_the_replay(self):
+        """Drift is reported at the event that disagrees, not as a digest
+        mismatch at the end with nothing to point at."""
+        from tournaments.replay import ReplayError
+
+        tournament, division = self._build_logged_tournament()
+        events = events_from_tournament(tournament)
+        drifted = []
+        for event in events:
+            payload = event["payload"]
+            if event["event_type"] == "entrants_saved":
+                payload = {
+                    **payload,
+                    "removed": [{**payload["added"][0], "player": "999"}],
+                }
+            drifted.append({**event, "payload": payload})
+
+        with self.assertRaisesMessage(ReplayError, "not there to remove"):
+            replay(drifted)
+
+
 class V1PayloadUpgradeTests(TestCase):
     """A log written before player numbers were the identity still replays.
 

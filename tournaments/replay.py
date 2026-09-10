@@ -2,7 +2,9 @@
 
 Each event is applied through the same command functions that recorded it
 (registered in ``events.COMMAND_REGISTRY``), or, for the grid-save events, by
-re-driving the grid's persist from the portable payload. Derived state
+re-driving the grid's persist from the portable payload — expanding a delta
+payload back into the whole collection first, so every write path still sees the
+same thing it always did. Derived state
 (generated pairings, materialized byes) is *not* in the log — it is recomputed
 here at the points where the live app would have, which is what makes replay a
 faithful reconstruction and, with ``--verify``, a test.
@@ -192,9 +194,32 @@ def _upgrade(event):
     return event
 
 
+def _grid_rows(grid, event_type, division, payload):
+    """The full portable row set a grid-save payload describes.
+
+    A payload carrying ``rows`` *is* that set: the shape every grid save was
+    logged in before deltas, and the shape a grid whose rows have no identity is
+    still logged in. A delta instead says only what changed, and is expanded
+    against the division as it stands at this point in the replay — which is
+    where the events before it have already put it.
+
+    Strictness is the point of the failure mode here: an expansion that does not
+    fit reports the event it disagreed with, rather than replaying something
+    plausible and failing the digest comparison at the end with nothing to say
+    about where it went wrong.
+    """
+    if "rows" in payload:
+        return payload["rows"]
+    current = grid.to_portable(grid.rows_for(division), division)
+    try:
+        return grid.apply_delta(current, payload)
+    except ValueError as exc:
+        raise ReplayError(f"{event_type}: {exc}") from exc
+
+
 def _replay_grid(division, event_type, payload):
     grid = GRID_BY_EVENT[event_type]
-    rows = grid.from_portable(payload["rows"], division)
+    rows = grid.from_portable(_grid_rows(grid, event_type, division, payload), division)
     validated, errors = grid.validate(rows, division)
     if errors:
         raise ReplayError(f"{event_type}: {errors}")

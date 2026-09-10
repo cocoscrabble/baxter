@@ -146,6 +146,118 @@ class EditGrid:
         Default passes them through."""
         return rows
 
+    def portable_key(self, row):
+        """A hashable identity for one *portable* row, or None.
+
+        This is what lets a save be logged as a delta — which rows went in, came
+        out, or changed — instead of the whole collection. It is the portable
+        vocabulary rather than ``key_fields``: the log names people by their own
+        identifiers, not by pk, and the two are different sentences about the
+        same identity.
+
+        Returning None for any row opts the whole grid out and keeps the
+        whole-collection payload, which is the right answer for a grid whose
+        rows have no identity of their own.
+        """
+        return None
+
+    def _keyed(self, rows):
+        """``{portable key: row}``, or None if the rows cannot be keyed.
+
+        A duplicate key is treated as unkeyable rather than silently collapsed:
+        a delta over rows that cannot be told apart is not a delta.
+        """
+        keyed = {}
+        for row in rows:
+            key = self.portable_key(row)
+            if key is None or key in keyed:
+                return None
+            keyed[key] = row
+        return keyed
+
+    def delta(self, before, after):
+        """What changed between two portable snapshots of this collection.
+
+        ``{"added": [...], "removed": [...], "changed": [{"from":…, "to":…}]}``,
+        or None when the rows have no identity to diff on.
+
+        Both sides are read back from storage rather than taken from the
+        client's payload, so a value the grid derives during the save — a filled
+        in bye score, a re-pinned rating — reads as what it became, not as a
+        change nobody made. A row that keeps its key and changes its contents is
+        one ``changed`` entry rather than a removal and an addition, so an audit
+        can see what the director actually did to it.
+        """
+        keyed_before = self._keyed(before)
+        keyed_after = self._keyed(after)
+        if keyed_before is None or keyed_after is None:
+            return None
+        return {
+            "added": [
+                row for key, row in keyed_after.items() if key not in keyed_before
+            ],
+            "removed": [
+                row for key, row in keyed_before.items() if key not in keyed_after
+            ],
+            "changed": [
+                {"from": keyed_before[key], "to": row}
+                for key, row in keyed_after.items()
+                if key in keyed_before and keyed_before[key] != row
+            ],
+        }
+
+    def apply_delta(self, current, delta):
+        """Rebuild the full portable row set a delta describes, over ``current``.
+
+        The inverse of ``delta``, for replay: the payload says what changed, and
+        the collection as it stands supplies everything that did not. Every
+        write path still receives the whole collection, so nothing downstream
+        has to learn what a delta is.
+
+        Strict on purpose. A removal names a row that has to be there, a change
+        carries the value it is replacing, and an addition must not already
+        exist — so a replay that has drifted fails here, at the event that first
+        disagrees, instead of surviving to a digest mismatch at the end with
+        nothing to point at. Raises ``ValueError`` when a precondition fails.
+        """
+        keyed = self._keyed(current)
+        if keyed is None:
+            raise ValueError("these rows have no identity to apply a delta to")
+        for row in delta.get("removed", []):
+            key = self.portable_key(row)
+            if key not in keyed:
+                raise ValueError(f"row {key!r} is not there to remove")
+            del keyed[key]
+        for change in delta.get("changed", []):
+            key = self.portable_key(change["from"])
+            if key not in keyed:
+                raise ValueError(f"row {key!r} is not there to change")
+            if keyed[key] != change["from"]:
+                raise ValueError(f"row {key!r} is not what the change was recorded over")
+            keyed[key] = change["to"]
+        for row in delta.get("added", []):
+            key = self.portable_key(row)
+            if key in keyed:
+                raise ValueError(f"row {key!r} is already there")
+            keyed[key] = row
+        return list(keyed.values())
+
+    def save_payload(self, parent, rows, before):
+        """The event payload for one save, or None when nothing changed.
+
+        A delta where the rows can be keyed, the whole collection where they
+        cannot. ``before`` is the portable snapshot taken before the write;
+        ``rows`` is what the client sent, which is what the whole-collection
+        payload has always carried.
+        """
+        after = self.to_portable(self.rows_for(parent), parent)
+        delta = self.delta(before, after)
+        if delta is None:
+            return {"rows": self.to_portable(rows, parent)}
+        if not any(delta.values()):
+            return None
+        return delta
+
     # Reconciling-save configuration. Empty ``key_fields`` keeps the legacy
     # wipe-and-recreate behaviour, so grids that don't opt in are unaffected.
     key_fields: tuple[str, ...] = ()        # model attrs forming row identity

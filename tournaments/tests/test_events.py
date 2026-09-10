@@ -258,15 +258,90 @@ class GridEventTests(TestCase):
         self.assertEqual(event.event_type, "entrants_saved")
         self.assertEqual(event.division, self.division)
         self.assertEqual(event.actor, self.owner)
+        # Two entrants into an empty division: the save is logged as what it
+        # changed, so both are additions.
+        added = event.payload["added"]
+        self.assertEqual((len(added), event.payload["changed"], event.payload["removed"]),
+                         (2, [], []))
         # Players are recorded by number, not pk — and the name rides along so
         # a replay into a fresh database can create them.
-        players = {row["player"] for row in event.payload["rows"]}
         self.assertEqual(
-            players, {self.player1.player_number, self.player2.player_number}
+            {row["player"] for row in added},
+            {self.player1.player_number, self.player2.player_number},
         )
-        self.assertEqual(
-            {row["name"] for row in event.payload["rows"]}, {"Alice", "Bob"}
+        self.assertEqual({row["name"] for row in added}, {"Alice", "Bob"})
+
+
+class GridDeltaEventTests(TestCase):
+    """A grid save is logged as what it changed, not as the whole grid.
+
+    The log is an audit trail before it is a replay input: "Cheryl's score went
+    from 420 to 402" is the line a director needs, and it was buried in a
+    payload that repeated every result in the division on every save.
+    """
+
+    def setUp(self):
+        setUpTournament(self)
+        # Start empty, so the first save is the two additions and every save
+        # after it is a real edit.
+        self.division.entrants.all().delete()
+        self.url = reverse("division_entrants_edit", kwargs=self.division.slug_kwargs())
+        self.client.login(username="owner", password="testpass123")
+
+    def rows(self, edits=None):
+        """The grid's two rows, with ``edits`` ({player pk: {field: value}})
+        applied — one director's edit to one row."""
+        edits = edits or {}
+        rows = [
+            {"number": 1, "player": self.player1.pk, "dropped": False,
+             "rating": 1600, "tentative": False, "paid": False, "playing_up": False},
+            {"number": 2, "player": self.player2.pk, "dropped": False,
+             "rating": 1500, "tentative": False, "paid": False, "playing_up": False},
+        ]
+        return [{**r, **edits.get(r["player"], {})} for r in rows]
+
+    def save(self, rows):
+        import json
+
+        response = self.client.post(
+            self.url, json.dumps({"rows": rows}), content_type="application/json"
         )
+        self.assertEqual(response.status_code, 200, response.content)
+
+    def saves(self):
+        return self.tournament.events.filter(event_type="entrants_saved")
+
+    def test_a_save_that_changes_nothing_records_nothing(self):
+        self.save(self.rows())
+        before = self.saves().count()
+        self.save(self.rows())
+        self.assertEqual(self.saves().count(), before)
+
+    def test_only_the_changed_row_is_recorded(self):
+        self.save(self.rows())
+        self.save(self.rows({self.player2.pk: {"paid": True}}))
+        payload = self.saves().last().payload
+        self.assertEqual((payload["added"], payload["removed"]), ([], []))
+        change = payload["changed"][0]
+        self.assertEqual(len(payload["changed"]), 1)
+        self.assertEqual(change["from"]["player"], self.player2.player_number)
+        self.assertEqual((change["from"]["paid"], change["to"]["paid"]), (False, True))
+
+    def test_a_removed_row_is_recorded_whole(self):
+        self.save(self.rows())
+        self.save([r for r in self.rows() if r["player"] != self.player2.pk])
+        payload = self.saves().last().payload
+        self.assertEqual([r["player"] for r in payload["removed"]],
+                         [self.player2.player_number])
+        self.assertEqual((payload["added"], payload["changed"]), ([], []))
+
+    def test_the_activity_line_says_what_changed(self):
+        from tournaments.events import describe_event
+
+        self.save(self.rows())
+        self.save(self.rows({self.player1.pk: {"paid": True}}))
+        self.assertIn("1 changed", describe_event(self.saves().last()))
+        self.assertIn("2 added", describe_event(self.saves().first()))
 
 
 class ActivityDescriptionTests(TestCase):

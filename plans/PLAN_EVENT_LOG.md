@@ -36,6 +36,39 @@ plan's replay phases after that seed lands** (cutover Phase 2). Before then,
 recording works fine but replays of Random-strategy rounds won't be
 bit-faithful.
 
+### A grid save records what it changed — **added after phase 6**
+
+The one place "intent, not effect" was awkward. A grid save's intent *is* a
+collection: the client posts the whole table, and `persist` reconciles it, so the
+payload was the whole table too. That replays perfectly and audits badly — a
+one-cell edit was logged as every result in the division, and finding what a
+director actually did meant diffing two payloads by eye.
+
+So a grid whose rows have an identity (`EditGrid.portable_key` — the player
+number, the match, the fixture) logs `{added, removed, changed:[{from, to}]}`
+instead, and a save that changed nothing logs **nothing at all**. Replay expands
+the delta back into the whole collection against the division as it stands at
+that point (`EditGrid.apply_delta`, called from `replay._grid_rows`) and drives
+the same `validate`/`prepare`/`persist` as before, so no write path knows a delta
+exists.
+
+Three things this rests on:
+
+- **Both sides of the diff are read back from storage**, before and after the
+  write — never taken from what the client posted. A grid derives values during
+  a save (a blank bye score becomes 50–0, a rating is re-pinned), and diffing the
+  posted rows would report changes nobody made and miss ones they did.
+- **Expansion is strict.** A removal names a row that must be there, a change
+  carries the value it replaces, an addition must not already exist. A
+  whole-collection payload was self-correcting — it rewrote the collection to the
+  recorded state, so a drifted replay silently snapped back; a delta cannot be,
+  so it fails at the event that first disagrees instead of at the digest
+  comparison at the end, with nothing to point at.
+- **Both shapes are read forever.** Every payload written before this carries
+  `rows`, and so does every save of a grid with no row identity (the board/table
+  map, whose rows are a JSON blob). `_grid_rows` branches on which key is
+  present — no upgrader, no rewriting of an append-only log.
+
 ### Identity: natural keys, never pks
 
 Payloads must survive replay into a fresh database, and editgrid's
