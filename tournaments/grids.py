@@ -240,7 +240,10 @@ class EntrantsGrid(EditGrid):
         """
         players = {
             p.pk: (p.player_number, p.name, p.rating, p.wespa_rating)
-            for p in Player.objects.all()
+            # The rows' players, not the whole roster: a save reads this twice
+            # (once for the before snapshot the delta is diffed against), and
+            # the roster is the central database's, thousands of rows deep.
+            for p in Player.objects.filter(pk__in={r["player"] for r in rows})
         }
         persisted = {
             e.player_id: e for e in division.entrants.select_related("player")
@@ -272,6 +275,11 @@ class EntrantsGrid(EditGrid):
             )
         return portable
 
+
+    def portable_key(self, row):
+        """The player. An entrant is one person's registration in a division, so
+        the row is theirs however its number or flags change."""
+        return row.get("player")
 
     def from_portable(self, rows, division):
         # A v1 row's "player" is a name and carries no "name" key; a v2 row's is
@@ -470,6 +478,12 @@ class FixedPairingsGrid(EditGrid):
             for r in rows
         ]
 
+    def portable_key(self, row):
+        """The round and the pair, in either order — the fixture itself."""
+        if row.get("entrant1") is None or row.get("entrant2") is None:
+            return None
+        return (row["round_number"], *sorted([row["entrant1"], row["entrant2"]]))
+
     def from_portable(self, rows, division):
         pks = _entrant_pk_by_key(division)
         return [
@@ -521,6 +535,12 @@ class FixedTablesGrid(EditGrid):
             }
             for r in rows
         ]
+
+    def portable_key(self, row):
+        """One player's pinned table for one round; the label is the value."""
+        if row.get("entrant") is None:
+            return None
+        return (row["round_number"], row["entrant"])
 
     def from_portable(self, rows, division):
         pks = _entrant_pk_by_key(division)
@@ -613,6 +633,17 @@ class ResultsGrid(EditGrid):
             }
             for r in rows
         ]
+
+    def portable_key(self, row):
+        """The match, the same identity ``_row_key`` uses in pks.
+
+        Order-free, so a director correcting who won edits the row that is there
+        rather than deleting one game and adding another — which is what the log
+        should say happened.
+        """
+        if row.get("winner") is None or row.get("loser") is None:
+            return None
+        return (row["round"], *sorted([row["winner"], row["loser"]]))
 
     def from_portable(self, rows, division):
         pks = {e.player.player_number: e.pk for e in _result_entrants(division)}

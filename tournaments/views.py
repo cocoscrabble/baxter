@@ -1843,18 +1843,25 @@ class DivisionEditGridView(LoginRequiredMixin, CanEditDivisionMixin, BaseEditGri
 
         return command_context()
 
-    def on_saved(self, division, rows):
+    def on_saved(self, division, rows, before):
         # Record a grid-save event (in the same transaction) with a pk-free,
-        # replay-safe payload. Grids without an event_type opt out.
+        # replay-safe payload: what the save changed where the grid's rows can
+        # be told apart, the whole collection where they cannot. Grids without
+        # an event_type opt out, and so does a save that changed nothing — an
+        # audit trail of no-ops is one nobody reads (the same call
+        # ``reseed_entrants`` makes).
         from tournaments.events import division_digest, record_event
 
         if not self.grid.event_type:
+            return
+        payload = self.grid.save_payload(division, rows, before)
+        if payload is None:
             return
         actor = self.request.user if self.request.user.is_authenticated else None
         record_event(
             division.tournament,
             self.grid.event_type,
-            {"division": division.name, "rows": self.grid.to_portable(rows, division)},
+            {"division": division.name, **payload},
             actor=actor,
             division=division,
             digest=division_digest(division),
@@ -1865,14 +1872,14 @@ class DivisionEntrantsEditView(DivisionEditGridView):
     grid = EntrantsGrid()
     active_tab = "edit_entrants"
 
-    def on_saved(self, division, rows):
+    def on_saved(self, division, rows, before):
         # The grid's "#" is an auto-increment for new rows, so a bulk add leaves
         # the field in entry order rather than rating order. Renumber it —
         # after the save event, so the log holds what was entered and then what
         # it was renumbered to, in that order, which is also the order a replay
         # applies them in. Recording it separately is what leaves every grid
         # save written before numbers were derived replaying exactly as it did.
-        super().on_saved(division, rows)
+        super().on_saved(division, rows, before)
         actor = self.request.user if self.request.user.is_authenticated else None
         reseed_entrants(division.tournament, actor, {"division": division.name})
 
@@ -2966,7 +2973,7 @@ class DivisionEditResultsView(DivisionEditGridView):
     grid = ResultsGrid()
     active_tab = "edit_results"
 
-    def on_saved(self, division, rows):
+    def on_saved(self, division, rows, before):
         # The grid takes the start from a column the director types, so it is the
         # one path that can contradict a published board. Correct it *after* the
         # save event, so the log holds what was entered and then what it was
@@ -2974,7 +2981,7 @@ class DivisionEditResultsView(DivisionEditGridView):
         # them in.
         from tournaments.starts import correct_result_starts
 
-        super().on_saved(division, rows)
+        super().on_saved(division, rows, before)
         actor = self.request.user if self.request.user.is_authenticated else None
         correct_result_starts(division.tournament, actor, {"division": division.name})
 

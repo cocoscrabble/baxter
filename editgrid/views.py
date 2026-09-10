@@ -93,6 +93,12 @@ class BaseEditGridView(View):
         with check_conflict(self.grid_key(parent), data.get("_version")) as guard:
             if guard.conflict:
                 return guard.conflict
+            # The collection as it stands, in the portable vocabulary, so
+            # ``on_saved`` can log what this save *changed*. Taken here rather
+            # than passed as raw rows because a grid's ``to_portable`` may read
+            # values back from storage, and after the write those are the new
+            # ones. Inside the version guard, so it cannot straddle another save.
+            before = self.grid.to_portable(self.grid.rows_for(parent), parent)
             # ``save_context`` lets the host wrap the write (e.g. an event-log
             # command context); ``on_saved`` lets it record an event — both
             # inside the version-bump transaction. Defaults are no-ops so the
@@ -100,14 +106,18 @@ class BaseEditGridView(View):
             with self.save_context():
                 self.grid.persist(parent, prepared)
                 self.grid.after_save(parent)
-                self.on_saved(parent, rows)
+                self.on_saved(parent, rows, before)
         return guard.response
 
     def save_context(self):
         return contextlib.nullcontext()
 
-    def on_saved(self, parent, rows):
-        """Hook called after a successful save, inside the transaction."""
+    def on_saved(self, parent, rows, before):
+        """Hook called after a successful save, inside the transaction.
+
+        ``rows`` is what the client sent; ``before`` is the portable snapshot of
+        the collection as it was before the write, for a host that logs the
+        difference (``EditGrid.save_payload``)."""
 
 
 class EditPresenceBaseView(View):

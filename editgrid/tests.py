@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from django.test import TestCase
 from django.utils import timezone
 
-from editgrid.grids import GridContext, parse_rows
+from editgrid.grids import EditGrid, GridContext, parse_rows
 from editgrid.models import PRESENCE_WINDOW, EditPresence, EditVersion
 from users.models import User
 
@@ -29,6 +29,68 @@ class ParseRowsTests(TestCase):
         validated, errors = parse_rows(_RowDTO, [{"n": 1}, {}, {"n": 9}], 5)
         self.assertEqual([d.n for d in validated], [1])
         self.assertEqual(errors, ["Row 2: all fields are required.", "Row 3: too big"])
+
+
+class _KeyedGrid(EditGrid):
+    """A grid whose portable rows are identified by ``id``."""
+
+    def portable_key(self, row):
+        return row.get("id")
+
+
+class GridDeltaTests(TestCase):
+    grid = _KeyedGrid()
+
+    def test_it_reports_additions_removals_and_changes(self):
+        before = [{"id": 1, "v": "a"}, {"id": 2, "v": "b"}, {"id": 3, "v": "c"}]
+        after = [{"id": 1, "v": "a"}, {"id": 2, "v": "B"}, {"id": 4, "v": "d"}]
+        self.assertEqual(
+            self.grid.delta(before, after),
+            {
+                "added": [{"id": 4, "v": "d"}],
+                "removed": [{"id": 3, "v": "c"}],
+                "changed": [{"from": {"id": 2, "v": "b"}, "to": {"id": 2, "v": "B"}}],
+            },
+        )
+
+    def test_an_unchanged_row_is_not_in_the_delta(self):
+        rows = [{"id": 1, "v": "a"}]
+        self.assertEqual(
+            self.grid.delta(rows, rows),
+            {"added": [], "removed": [], "changed": []},
+        )
+
+    def test_rows_with_no_identity_have_no_delta(self):
+        # The base grid keys nothing, which is how a grid opts out.
+        self.assertIsNone(EditGrid().delta([{"v": "a"}], [{"v": "b"}]))
+
+    def test_a_duplicate_key_is_treated_as_unkeyable(self):
+        dupes = [{"id": 1, "v": "a"}, {"id": 1, "v": "b"}]
+        self.assertIsNone(self.grid.delta(dupes, dupes))
+
+    def test_applying_a_delta_rebuilds_the_whole_collection(self):
+        before = [{"id": 1, "v": "a"}, {"id": 2, "v": "b"}, {"id": 3, "v": "c"}]
+        after = [{"id": 1, "v": "a"}, {"id": 2, "v": "B"}, {"id": 4, "v": "d"}]
+        rebuilt = self.grid.apply_delta(before, self.grid.delta(before, after))
+        self.assertEqual(sorted(rebuilt, key=lambda r: r["id"]), sorted(after, key=lambda r: r["id"]))
+
+    def test_removing_a_row_that_is_not_there_raises(self):
+        delta = {"added": [], "changed": [], "removed": [{"id": 9, "v": "x"}]}
+        with self.assertRaisesMessage(ValueError, "not there to remove"):
+            self.grid.apply_delta([{"id": 1, "v": "a"}], delta)
+
+    def test_changing_a_row_that_moved_underneath_raises(self):
+        delta = {
+            "added": [], "removed": [],
+            "changed": [{"from": {"id": 1, "v": "a"}, "to": {"id": 1, "v": "z"}}],
+        }
+        with self.assertRaisesMessage(ValueError, "not what the change was recorded over"):
+            self.grid.apply_delta([{"id": 1, "v": "drifted"}], delta)
+
+    def test_adding_a_row_that_is_already_there_raises(self):
+        delta = {"added": [{"id": 1, "v": "a"}], "changed": [], "removed": []}
+        with self.assertRaisesMessage(ValueError, "already there"):
+            self.grid.apply_delta([{"id": 1, "v": "a"}], delta)
 
 
 class GridContextTests(TestCase):

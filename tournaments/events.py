@@ -599,6 +599,18 @@ def describe_event(event) -> str:
         n = len(p.get("rows", [])) if n is None else n
         return f"{n} row{'s' if n != 1 else ''}"
 
+    def changes():
+        """What a grid save did: "2 added, 1 changed" for a delta payload, or
+        the row count for a whole-collection one (every payload written before
+        grid saves were logged as deltas, and the grids still logged that way).
+        """
+        if "rows" in p:
+            return rows()
+        counted = [
+            f"{len(p[k])} {k}" for k in ("added", "changed", "removed") if p.get(k)
+        ]
+        return ", ".join(counted) or "no changes"
+
     def resolved():
         """" (N round(s) repaired)" — what a withdrawal did to printed rounds."""
         n = len(p.get("resolved", []))
@@ -636,9 +648,9 @@ def describe_event(event) -> str:
             f"at {p.get('bye_spread', '')} points"
         ),
         "division_imported": lambda: f"Imported division “{p.get('name', '')}” from history",
-        "entrants_saved": lambda: f"Saved entrants for {div} ({rows()})",
+        "entrants_saved": lambda: f"Saved entrants for {div} ({changes()})",
         "entrants_bulk_imported": lambda: f"Imported entrants for {div}",
-        "results_saved": lambda: f"Saved results for {div} ({rows()})",
+        "results_saved": lambda: f"Saved results for {div} ({changes()})",
         "result_added": lambda: f"Entered a result in {div} round {p.get('round', '')}",
         "result_edited": lambda: f"Edited a result in {div} round {p.get('round', '')}",
         "result_starts_corrected": lambda: (
