@@ -1868,3 +1868,9 @@ h3 + .note {
     gap: var(--space-md);
     margin-top: var(--space-md);
 }
+
+.log-more {
+    margin: var(--space-xs) 0 0;
+    font-size: 0.9em;
+    color: var(--color-muted);
+}

@@ -112,6 +112,11 @@ Activity
                     <div class="log-row"><span class="log-row-label">{{ row.label }}</span></div>
                     {% endfor %}
                     {% endif %}
+                    {% if detail.more %}
+                    <p class="log-more">… and {{ detail.more }} more row{{ detail.more|pluralize }}. The
+                        <a href="{% url 'tournament_event_log_export' tournament.slug %}">downloaded log</a>
+                        has all of them.</p>
+                    {% endif %}
                     {% endif %}
                 </details>
             </td>

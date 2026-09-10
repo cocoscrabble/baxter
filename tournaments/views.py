@@ -567,7 +567,7 @@ class TournamentActivityView(TournamentURLMixin, LoginRequiredMixin, CanReadTour
     def get_context_data(self, **kwargs):
         from django.core.paginator import Paginator
 
-        from tournaments.events import describe_event, event_detail
+        from tournaments.events import describe_event, event_details
 
         context = super().get_context_data(**kwargs)
         events = self.object.events.order_by("-seq").select_related(
@@ -576,11 +576,22 @@ class TournamentActivityView(TournamentURLMixin, LoginRequiredMixin, CanReadTour
         # The filters come from the log itself rather than from the catalog: a
         # list of every event type Baxter can record would offer dozens that
         # this tournament has never produced.
+        #
+        # Distinct in the database, not in Python: collecting these from the
+        # event objects pulled the tournament's *whole* log into memory on every
+        # page view, which is the one thing paging is here to avoid.
+        # ``order_by()`` clears the ``-seq`` ordering first — Postgres rejects a
+        # SELECT DISTINCT ordered by a column it does not select, and SQLite
+        # does not, so leaving it on is a bug that would only appear in
+        # production.
         context["event_types"] = sorted(
-            set(events.values_list("event_type", flat=True))
+            events.order_by().values_list("event_type", flat=True).distinct()
         )
         context["divisions"] = sorted(
-            {e.division.name for e in events if e.division_id}
+            events.order_by()
+            .exclude(division=None)
+            .values_list("division__name", flat=True)
+            .distinct()
         )
         selected_type = self.request.GET.get("type", "")
         selected_division = self.request.GET.get("division", "")
@@ -590,9 +601,15 @@ class TournamentActivityView(TournamentURLMixin, LoginRequiredMixin, CanReadTour
             events = events.filter(division__name=selected_division)
         page = Paginator(events, self.per_page).get_page(self.request.GET.get("page"))
         context["page_obj"] = page
-        context["events"] = [
-            (e, describe_event(e), event_detail(e)) for e in page.object_list
-        ]
+        # ``event_details`` for the whole page, not ``event_detail`` per row:
+        # every person the page names is resolved in one query.
+        context["events"] = list(
+            zip(
+                page.object_list,
+                [describe_event(e) for e in page.object_list],
+                event_details(page.object_list),
+            )
+        )
         context["selected_type"] = selected_type
         context["selected_division"] = selected_division
         # Carried on the pager links so paging does not drop the filters.

@@ -719,6 +719,14 @@ def describe_event(event) -> str:
 # it and points at the download rather than pasting the lot into the page.
 MAX_PAYLOAD_CHARS = 4000
 
+# How many rows of one event's delta the page will render. Almost nothing
+# reaches it — a results save is a handful of slips, a registration edit two or
+# three — but the save that enters a 200-player field is one event with 200 rows
+# in it, and that one event would otherwise be most of the page's weight. The
+# rest is a count and a pointer to the download, which is the right tool for
+# reading 200 rows anyway.
+MAX_DETAIL_ROWS = 50
+
 
 def _player_names(numbers) -> dict:
     """``{player number: name}`` for the identifiers a payload mentions."""
@@ -734,13 +742,28 @@ def _player_names(numbers) -> dict:
     )
 
 
-def _grid_names(grid, rows) -> dict:
-    """Resolve every person a grid delta's rows refer to, in one query."""
-    return _player_names(
+def _delta_rows(payload) -> list:
+    """Every row a delta payload mentions, both sides of a change included."""
+    return [
+        *payload.get("added", []),
+        *payload.get("removed", []),
+        *[c["to"] for c in payload.get("changed", [])],
+        *[c["from"] for c in payload.get("changed", [])],
+    ]
+
+
+def _is_delta(payload) -> bool:
+    """A payload that says what changed, rather than carrying the collection."""
+    return "rows" not in payload and "added" in payload
+
+
+def _grid_numbers(grid, payload):
+    """The player identifiers one grid-save payload mentions."""
+    return {
         row.get(field)
-        for row in rows
+        for row in _delta_rows(payload)
         for field in grid.portable_player_fields
-    )
+    }
 
 
 def _render_value(value):
@@ -781,7 +804,27 @@ def _changed_fields(grid, before, after, names):
     return fields
 
 
-def event_detail(event) -> dict:
+def event_details(events) -> list:
+    """``event_detail`` for a page of events, resolving every person they name in
+    one query instead of one per event.
+
+    The page is the unit because that is where the cost was: a hundred rows each
+    looking up its own handful of players is a hundred queries for a table that
+    fits in one.
+    """
+    from tournaments.grids import GRID_BY_EVENT
+
+    numbers = set()
+    for event in events:
+        grid = GRID_BY_EVENT.get(event.event_type)
+        payload = event.payload or {}
+        if grid is not None and _is_delta(payload):
+            numbers |= _grid_numbers(grid, payload)
+    names = _player_names(numbers)
+    return [event_detail(event, names) for event in events]
+
+
+def event_detail(event, names=None) -> dict:
     """What one event *did*, for the activity page to render under its summary.
 
     Two shapes. A grid save carries a delta, and is rendered row by row in the
@@ -795,35 +838,46 @@ def event_detail(event) -> dict:
 
     payload = event.payload or {}
     grid = GRID_BY_EVENT.get(event.event_type)
-    if grid is None or "rows" in payload or "added" not in payload:
+    if grid is None or not _is_delta(payload):
         # Not a delta: a command payload, or a grid save recorded before deltas
         # (or by a grid whose rows have no identity), which is the whole
         # collection and belongs in the raw view.
         return {"payload": _payload_text(payload)}
-    rows = [
-        *payload.get("added", []),
-        *payload.get("removed", []),
-        *[c["to"] for c in payload.get("changed", [])],
-        *[c["from"] for c in payload.get("changed", [])],
-    ]
-    names = _grid_names(grid, rows)
+    if names is None:
+        names = _player_names(_grid_numbers(grid, payload))
 
     def label(row):
         return grid.portable_label(row, names) or ""
 
+    # One budget across the three sections, spent in the order the page renders
+    # them, so what a reader sees first is what survives the cap.
+    budget = MAX_DETAIL_ROWS
+    changed, added, removed = [], [], []
+    for change in payload.get("changed", []):
+        if budget <= 0:
+            break
+        changed.append({
+            "label": label(change["to"]),
+            "changes": _changed_fields(grid, change["from"], change["to"], names),
+        })
+        budget -= 1
+    for row in payload.get("added", []):
+        if budget <= 0:
+            break
+        added.append({"label": label(row), "fields": _row_fields(grid, row, names)})
+        budget -= 1
+    for row in payload.get("removed", []):
+        if budget <= 0:
+            break
+        removed.append({"label": label(row)})
+        budget -= 1
+    shown = len(changed) + len(added) + len(removed)
+    total = sum(len(payload.get(key, [])) for key in ("added", "removed", "changed"))
     return {
-        "added": [
-            {"label": label(row), "fields": _row_fields(grid, row, names)}
-            for row in payload.get("added", [])
-        ],
-        "removed": [{"label": label(row)} for row in payload.get("removed", [])],
-        "changed": [
-            {
-                "label": label(change["to"]),
-                "changes": _changed_fields(grid, change["from"], change["to"], names),
-            }
-            for change in payload.get("changed", [])
-        ],
+        "added": added,
+        "removed": removed,
+        "changed": changed,
+        "more": total - shown,
     }
 
 

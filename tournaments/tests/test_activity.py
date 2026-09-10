@@ -5,8 +5,17 @@ import json
 from django.test import TestCase
 from django.urls import reverse
 
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
+
 from tournaments.commands import create_division
-from tournaments.events import describe_event, event_detail, export_jsonl, record_event
+from tournaments.events import (
+    describe_event,
+    event_detail,
+    event_details,
+    export_jsonl,
+    record_event,
+)
 from tournaments.models import TournamentEvent
 from tournaments.tests.test_models import setUpTournament
 from users.models import User
@@ -141,6 +150,79 @@ class ActivityFilterTests(TestCase):
         self.assertContains(page1, "type=round_published")
 
 
+class ActivityCostTests(TestCase):
+    """The page's cost must not grow with the log.
+
+    Both halves of that were wrong when the detail view was written: every row
+    looked its own players up (one query per event), and the filter dropdowns
+    were built by pulling the tournament's whole log into memory — which is the
+    one thing paging is there to avoid.
+    """
+
+    def setUp(self):
+        setUpTournament(self)
+        self.client.login(username="owner", password="testpass123")
+
+    def url(self):
+        return reverse(
+            "tournament_activity", kwargs={"tournament_slug": self.tournament.slug}
+        )
+
+    def add_events(self, count):
+        for i in range(count):
+            record_event(self.tournament, "results_saved", {
+                "division": self.division.name,
+                "added": [{"round": i + 1, "winner": self.player1.player_number,
+                           "loser": self.player2.player_number,
+                           "winner_score": 450, "loser_score": 400,
+                           "winner_started": True}],
+                "removed": [], "changed": [],
+            }, division=self.division)
+
+    def query_count(self):
+        with CaptureQueriesContext(connection) as ctx:
+            self.client.get(self.url())
+        return len(ctx)
+
+    def test_a_page_of_events_resolves_its_people_in_one_query(self):
+        self.add_events(20)
+        events = list(self.tournament.events.all())
+        with self.assertNumQueries(1):
+            details = event_details(events)
+        self.assertEqual(details[0]["added"][0]["label"].split(":")[1].strip(),
+                         "Alice beat Bob")
+
+    def test_the_page_costs_the_same_with_ten_times_the_log(self):
+        self.add_events(20)
+        self.client.get(self.url())  # warm any per-process caches
+        small = self.query_count()
+        self.add_events(200)
+        self.assertEqual(self.query_count(), small)
+
+    def test_no_query_reads_more_of_the_log_than_the_page_shows(self):
+        """The query count alone does not catch this one.
+
+        Building the filter lists in Python is *one* query too — it just
+        happens to be a query that returns every event in the tournament. So
+        assert what actually matters: nothing selects whole event rows beyond
+        the page, and the columns the filters need come back already distinct.
+        """
+        self.add_events(120)
+        with CaptureQueriesContext(connection) as ctx:
+            response = self.client.get(self.url())
+        self.assertEqual(len(response.context["events"]), 100)
+        filter_queries = [
+            q["sql"] for q in ctx.captured_queries
+            if "tournaments_tournamentevent" in q["sql"] and "COUNT(*)" not in q["sql"]
+        ]
+        page_queries = [q for q in filter_queries if "LIMIT" in q]
+        self.assertEqual(len(page_queries), 1, "one query should fetch the page")
+        for sql in filter_queries:
+            if sql in page_queries:
+                continue
+            self.assertIn("DISTINCT", sql, f"reads the whole log: {sql[:120]}")
+
+
 class EventDetailTests(TestCase):
     """What an event did, rendered in the grid's own vocabulary."""
 
@@ -226,6 +308,27 @@ class EventDetailTests(TestCase):
             "removed": [{"number": 2, "player": self.bob, "name": "Bob"}],
         })
         self.assertEqual(detail["removed"], [{"label": "Bob"}])
+
+    def test_a_bulk_save_is_capped_and_says_how_much_it_held_back(self):
+        from tournaments.events import MAX_DETAIL_ROWS
+
+        count = MAX_DETAIL_ROWS + 150
+        detail = self.detail("entrants_saved", {
+            "division": self.division.name,
+            "removed": [], "changed": [],
+            "added": [{"number": i, "player": self.alice, "name": f"P{i}",
+                       "paid": False} for i in range(count)],
+        })
+        self.assertEqual(len(detail["added"]), MAX_DETAIL_ROWS)
+        self.assertEqual(detail["more"], 150)
+
+    def test_an_ordinary_save_holds_nothing_back(self):
+        detail = self.detail("entrants_saved", {
+            "division": self.division.name,
+            "removed": [], "changed": [],
+            "added": [{"number": 1, "player": self.alice, "name": "Alice"}],
+        })
+        self.assertEqual(detail["more"], 0)
 
     def test_a_command_payload_is_shown_as_recorded(self):
         detail = self.detail("round_published", {"division": "Open", "round": 2})

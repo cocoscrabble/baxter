@@ -253,6 +253,17 @@ make this rare.
 - **Filters and paging**: by division and by event type, both offered from what
   the log actually holds rather than from the catalog, and carried on the pager
   links so a filtered log is a link one director can send another.
+- **The page's cost does not grow with the log** — measured at 8,581 events: 8
+  queries, ~40 ms, flat. Three things make that true, and each was wrong first:
+  the people a page names are resolved in **one** query for the whole page
+  (`event_details`, not `event_detail` per row); the filter dropdowns are
+  `DISTINCT` in the database rather than a set comprehension over every event
+  the tournament ever recorded; and one event's delta renders at most
+  `MAX_DETAIL_ROWS` rows, so the save that enters a 200-player field says "and
+  150 more rows" and points at the download instead of being most of the page.
+  `ActivityCostTests` holds all three — including an assertion on the SQL, since
+  a query that reads the whole log costs exactly as many *queries* as one that
+  does not.
 - Anonymous actions (e.g. `ResultSlipCreateView` today) log with
   `actor=null` + hashed session key — this log **is** the audit trail that
   PLAN.md Phase 4's anonymous-edit hardening wants; implement recording
