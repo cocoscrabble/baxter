@@ -203,10 +203,13 @@ AUTHENTICATION_BACKENDS = [
 # address alone, one person's typos would lock out every director on the venue
 # wifi. The combination stops a guesser without handing out either lever.
 AXES_LOCKOUT_PARAMETERS = [["username", "ip_address"]]
-AXES_FAILURE_LIMIT = 5
+# Deliberately generous while we find out whether real directors trip it: a
+# guesser gets nowhere at 10 tries per 5 minutes, and a director who does get
+# locked out loses very little. Tighten once it has run through some events.
+AXES_FAILURE_LIMIT = 10
 # A cool-off rather than a permanent lock, so a locked-out director at an event
-# waits a quarter of an hour instead of needing an admin to be reachable.
-AXES_COOLOFF_TIME = timedelta(minutes=15)
+# waits a few minutes instead of needing an admin to be reachable.
+AXES_COOLOFF_TIME = timedelta(minutes=5)
 AXES_RESET_ON_SUCCESS = True
 AXES_LOCKOUT_TEMPLATE = "users/locked_out.html"
 # Failures are what the lockout needs; a row for every successful login is not.
