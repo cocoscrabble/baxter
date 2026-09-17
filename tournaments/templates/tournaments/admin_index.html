@@ -72,6 +72,10 @@ ago, {{ last_wespa_sync.get_source_display|lower }}) failed:
 <h2>Accounts and raw data</h2>
 
 <ul>
+    <li><a href="{% url 'user_list' %}">Users</a>: Every registered account,
+    with usernames and email addresses. Set a new password for a director who
+    is locked out.</li>
+
     <li><a href="{% url 'admin:index' %}">Django admin</a> — user accounts and
     roles, and direct access to every table. Gated separately, on Django's
     staff flag rather than on the Admin role, so an admin without it will be

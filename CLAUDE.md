@@ -121,6 +121,11 @@ confirmation, or a scheduled pull that has been failing, is flagged here.
 `/manage/` mirrors the sibling cocodb site's staff area; `/admin/` stays Django's
 own, which is gated on `is_staff` rather than on the role.
 
+`/manage/users/` lists every account and lets an admin set a new password on
+one ranked **strictly below** them (`can_set_password_for`): never their own,
+another admin's, a superuser's, or — unless they are staff — a staff account's,
+since resetting a password is taking the account over.
+
 ## Roster sync (the central player database)
 
 Baxter mirrors player identity and CoCo ratings from the central database
