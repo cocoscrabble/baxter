@@ -1705,7 +1705,7 @@ h3 + .note {
 
 .entrant-legend dt {
     display: inline;
-    font-weight: bold;
+    font-weight: normal;
 }
 
 .entrant-legend dd {
