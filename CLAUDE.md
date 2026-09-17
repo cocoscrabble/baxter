@@ -128,7 +128,8 @@ since resetting a password is taking the account over.
 
 ## Login throttling
 
-django-axes locks a login out after 5 failures for 15 minutes, keyed on
+django-axes locks a login out after 10 failures for 5 minutes (lenient on purpose
+until we know directors don't trip it), keyed on
 username **and** client address together (settings.py explains why neither alone
 is safe). The address is the *right-most* `X-Forwarded-For` entry — the one
 Dokku's nginx wrote — so a forged header cannot dodge it; `test_login_throttling`
