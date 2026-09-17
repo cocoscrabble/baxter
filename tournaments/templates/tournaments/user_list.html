@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Users - Baxter{% endblock %}
+
+{% block breadcrumbs %}
+<span class="nav-sep">/</span>
+<a href="{% url 'admin_index' %}">Admin</a>
+{% endblock %}
+
+{% block page_class %}page--narrow{% endblock %}
+
+{% block content %}
+<h1>Users</h1>
+
+<p>Every registered account. You can set a new password on any account ranked
+below your own; to change your own, use
+<a href="{% url 'password_change' %}">Change password</a>.</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Username</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for account in users %}
+        <tr>
+            <td>{{ account.username }}{% if not account.is_active %} (inactive){% endif %}</td>
+            <td>{{ account.email|default:"—" }}</td>
+            <td>{% if account.is_superuser %}Superuser{% else %}{{ account.get_role_display }}{% endif %}</td>
+            <td>
+                {% if account.can_set_password %}
+                <a href="{% url 'user_set_password' account.pk %}">Set password</a>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

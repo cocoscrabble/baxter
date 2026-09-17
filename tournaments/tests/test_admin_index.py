@@ -28,6 +28,10 @@ def admin_only_urls():
     for pattern in urls.urlpatterns:
         if not isinstance(pattern, URLPattern):
             continue
+        # A URL that needs arguments (one user's page) is reached from a listed
+        # page, not from here, and has no argument-free URL to look for.
+        if pattern.pattern.converters:
+            continue
         view_class = getattr(pattern.callback, "view_class", None)
         if view_class and issubclass(view_class, IsAdminMixin):
             found[pattern.name] = reverse(pattern.name)

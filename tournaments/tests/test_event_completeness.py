@@ -78,6 +78,8 @@ EXEMPT = {
     # Roster pull. Unlogged for the same reason: entrants freeze their seed at
     # registration, so a pull cannot move a tournament already under way.
     "RosterImportView",
+    # Setting another account's password. Accounts are not tournament state.
+    "UserSetPasswordView",
     # Dev tool that builds a whole fake tournament directly; rebuilt on commands
     # in event-log Phase 5.
     "FakeTournamentCreateView",

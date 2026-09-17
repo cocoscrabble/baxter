@@ -3,6 +3,7 @@ from collections import defaultdict
 from urllib.parse import urlencode
 
 from django.contrib import messages
+from django.contrib.auth.forms import SetPasswordForm
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import PermissionDenied
@@ -2314,6 +2315,74 @@ class AdminIndexView(LoginRequiredMixin, IsAdminMixin, TemplateView):
         context["wespa_pending_count"] = len(wespa_sync.pending_links())
         context["wespa_mirror_count"] = WespaPlayer.objects.count()
         return context
+
+
+def can_set_password_for(actor, target):
+    """May ``actor`` set a new password on ``target``'s account?
+
+    Only on an account ranked strictly below their own. Setting a password is
+    taking the account over, so an admin who could do it to another admin — or
+    to a superuser, or to a Django staff account, whose powers the Admin role
+    does not carry — could use this page to become something they are not. A
+    superuser outranks everything, so may reset anyone. Nobody resets their own
+    here; that is the ordinary change-password page, which asks for the old one.
+    """
+    if actor.pk == target.pk:
+        return False
+    if actor.is_superuser:
+        return True
+    if target.is_superuser or (target.is_staff and not actor.is_staff):
+        return False
+    return not target.has_role_at_least(actor.role)
+
+
+class UserListView(LoginRequiredMixin, IsAdminMixin, TemplateView):
+    """Every account, so an admin can help a director without Django's admin."""
+
+    template_name = "tournaments/user_list.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        actor = self.request.user
+        users = list(User.objects.order_by("username"))
+        for user in users:
+            user.can_set_password = can_set_password_for(actor, user)
+        context["users"] = users
+        return context
+
+
+class UserSetPasswordView(LoginRequiredMixin, IsAdminMixin, View):
+    """Set a new password on another account, e.g. for a director locked out.
+
+    Unlogged: accounts are not tournament state. Django rotates the session
+    auth hash with the password, so the account is signed out everywhere.
+    """
+
+    template_name = "tournaments/user_set_password.html"
+
+    def test_func(self):
+        # Admin first, so a non-admin cannot tell which account ids exist.
+        if not super().test_func():
+            return False
+        self.target = get_object_or_404(User, pk=self.kwargs["pk"])
+        return can_set_password_for(self.request.user, self.target)
+
+    def get(self, request, pk):
+        return self._render(SetPasswordForm(self.target))
+
+    def post(self, request, pk):
+        form = SetPasswordForm(self.target, request.POST)
+        if not form.is_valid():
+            return self._render(form)
+        form.save()
+        messages.success(request, f"Set a new password for {self.target.username}.")
+        return redirect("user_list")
+
+    def _render(self, form):
+        return render(self.request, self.template_name, {
+            "form": form,
+            "target": self.target,
+        })
 
 
 class PlayerImportView(LoginRequiredMixin, IsAdminMixin, View):
