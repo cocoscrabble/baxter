@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}Too Many Attempts - Baxter{% endblock %}
+
+{% block content %}
+<h1>Too many login attempts</h1>
+<p>There have been {{ failure_limit }} failed attempts to log in{% if username %} as
+<strong>{{ username }}</strong>{% endif %} from this connection, so logging in is
+paused{% if cooloff_timedelta %} for {% widthratio cooloff_timedelta.total_seconds 60 1 %} minutes{% endif %}.</p>
+<p>Try again after that. If you have forgotten your password, ask a Baxter admin
+to set a new one.</p>
+{% endblock %}

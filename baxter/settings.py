@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+from datetime import timedelta
 from pathlib import Path
 
 import environ
@@ -74,6 +75,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django_node_assets",
+    "axes",
     "editgrid",
     "tournaments",
     "users",
@@ -88,6 +90,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Last, as django-axes requires: it turns a lockout into the lockout page.
+    "axes.middleware.AxesMiddleware",
 ]
 
 ROOT_URLCONF = "baxter.urls"
@@ -188,11 +192,41 @@ LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/"
 
+# Login throttling (django-axes). Axes' backend goes first: it refuses a locked
+# out login before ModelBackend checks the password.
+AUTHENTICATION_BACKENDS = [
+    "axes.backends.AxesStandaloneBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
+# Locked out by username *and* address together. By username alone, anyone could
+# lock a director out mid-tournament by mistyping their name on purpose; by
+# address alone, one person's typos would lock out every director on the venue
+# wifi. The combination stops a guesser without handing out either lever.
+AXES_LOCKOUT_PARAMETERS = [["username", "ip_address"]]
+AXES_FAILURE_LIMIT = 5
+# A cool-off rather than a permanent lock, so a locked-out director at an event
+# waits a quarter of an hour instead of needing an admin to be reachable.
+AXES_COOLOFF_TIME = timedelta(minutes=15)
+AXES_RESET_ON_SUCCESS = True
+AXES_LOCKOUT_TEMPLATE = "users/locked_out.html"
+# Failures are what the lockout needs; a row for every successful login is not.
+AXES_DISABLE_ACCESS_LOG = True
+# The client address behind Dokku's nginx, which is the only proxy (the domain
+# resolves straight to the VPS). Right-most, because that is the entry nginx
+# wrote from the connection itself; anything to its left came from the client
+# and could be forged to dodge the lockout. Local runs have no header and fall
+# back to REMOTE_ADDR.
+AXES_IPWARE_META_PRECEDENCE_ORDER = ("HTTP_X_FORWARDED_FOR", "REMOTE_ADDR")
+AXES_IPWARE_PROXY_ORDER = "right-most"
+
 # Use fast password hasher in tests
 import sys
 
 if "test" in sys.argv:
     PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
+    # Axes needs a request to authenticate, which client.login() does not pass.
+    # The lockout tests turn it back on.
+    AXES_ENABLED = False
 
 # Logging: send everything to stdout so `dokku logs` (and any container log
 # collector) captures it. Django's default routes unhandled-exception (500)
