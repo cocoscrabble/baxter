@@ -126,6 +126,16 @@ one ranked **strictly below** them (`can_set_password_for`): never their own,
 another admin's, a superuser's, or — unless they are staff — a staff account's,
 since resetting a password is taking the account over.
 
+## Login throttling
+
+django-axes locks a login out after 5 failures for 15 minutes, keyed on
+username **and** client address together (settings.py explains why neither alone
+is safe). The address is the *right-most* `X-Forwarded-For` entry — the one
+Dokku's nginx wrote — so a forged header cannot dodge it; `test_login_throttling`
+fails if that is changed. Axes is disabled under `manage.py test` because
+`client.login()` passes no request; tests re-enable it with `override_settings`.
+To lift a lockout early: `manage.py axes_reset_username <username>`.
+
 ## Roster sync (the central player database)
 
 Baxter mirrors player identity and CoCo ratings from the central database
