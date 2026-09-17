@@ -995,6 +995,84 @@ def change_player_number(tournament, actor, payload):
     )
 
 
+@records_event("player_merged")
+def merge_player(tournament, actor, payload):
+    """payload: {guest, into} — fold a guest player into the CoCo player they are.
+
+    The case this exists for is the one ``change_player_number`` cannot reach: a
+    guest who has since been given a real number, where the roster pull has
+    *already* created that number as a separate player — which it does whenever
+    the name belongs to more than one guest, since picking between them is a
+    guess. Renumbering is then impossible (the number is taken), so the guest's
+    entrants move onto the real player and the guest is deleted.
+
+    For the digest this is the same event as a renumbering: entrants are keyed
+    by player number and keep their pinned ratings, so the only thing a division
+    can see change is ``guest`` becoming ``into``. That is also what makes the
+    replay work when ``into`` does not exist yet — a fresh database has never
+    seen the unlogged roster pull that created it — by renumbering instead.
+    """
+    from tournaments.models import canonical_player_number
+
+    guest_number = canonical_player_number(payload["guest"])
+    into_number = canonical_player_number(payload["into"])
+    return EventResult(
+        payload={"guest": guest_number, "into": into_number},
+        tournament=tournament,
+        result=apply_player_merge(guest_number, into_number),
+    )
+
+
+def apply_player_merge(guest_number, into_number):
+    """The merge itself, unlogged; ``merge_player`` is the logged way in.
+
+    Refused if both players are entered in the same division: that would be one
+    person entered twice, and which entry is the real one is a director's call.
+    Returns the surviving player.
+    """
+    from tournaments.models import Division, Entrant, Player
+
+    if guest_number == into_number:
+        raise ValueError("A player cannot be merged into themselves.")
+    guest = Player.objects.filter(player_number=guest_number).first()
+    into = Player.objects.filter(player_number=into_number).first()
+    if guest is None:
+        if into is not None:
+            # A second tournament's log replaying a merge the first one already
+            # applied: the state it describes is already here.
+            return into
+        raise ValueError(f"No player with number {guest_number!r}.")
+    if into is None:
+        guest.player_number = into_number
+        guest.is_provisional = False
+        guest.save(update_fields=["player_number", "is_provisional"])
+        return guest
+
+    clashes = Division.objects.filter(
+        pk__in=Entrant.all_objects.filter(player=guest).values("division")
+    ).filter(
+        pk__in=Entrant.all_objects.filter(player=into).values("division")
+    ).select_related("tournament")
+    if clashes:
+        where = ", ".join(f"{d.tournament.name} / {d.name}" for d in clashes)
+        raise ValueError(
+            f"{guest.name} ({guest_number}) and {into.name} ({into_number}) are "
+            f"both entered in {where}. Remove one of the entries first."
+        )
+
+    Entrant.all_objects.filter(player=guest).update(player=into)
+    # A WESPA link found for the guest is still true of the person. Cleared on
+    # the guest first: wespa_id is unique.
+    wespa_id, wespa_rating = guest.wespa_id, guest.wespa_rating
+    guest.delete()
+    if into.wespa_id is None:
+        into.wespa_id = wespa_id
+    if into.wespa_rating is None:
+        into.wespa_rating = wespa_rating
+    into.save(update_fields=["wespa_id", "wespa_rating"])
+    return into
+
+
 @records_event("fixed_pairings_removed")
 def remove_fixed_pairings_cmd(tournament, actor, payload):
     """payload: {division, kept: [[round, player1, player2], ...]} — the fixed

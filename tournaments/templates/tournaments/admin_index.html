@@ -34,6 +34,12 @@ ambiguous</strong>, requiring human resolution.
 <a href="{% url 'wespa_import' %}">Resolve {{ wespa_pending_count|pluralize:"it,them" }}</a>.</p>
 {% endif %}
 
+{% if merge_count %}
+<p class="error"><strong>{{ merge_count }} guest player{{ merge_count|pluralize }}
+share{{ merge_count|pluralize:"s," }} a name with a CoCo player</strong> and may be
+duplicates. <a href="{% url 'player_merge' %}">Review {{ merge_count|pluralize:"it,them" }}</a>.</p>
+{% endif %}
+
 {% if last_wespa_sync and not last_wespa_sync.ok %}
 <p class="error">The last WESPA pull ({{ last_wespa_sync.created_at|timesince }}
 ago, {{ last_wespa_sync.get_source_display|lower }}) failed:
@@ -53,6 +59,11 @@ ago, {{ last_wespa_sync.get_source_display|lower }}) failed:
     number.
     {% if last_sync and last_sync.ok %}Last pull
     {{ last_sync.created_at|timesince }} ago.{% endif %}</li>
+
+    <li><a href="{% url 'player_merge' %}">Merge guest players</a>: Folds a
+    guest into the CoCo player with the same name, moving their tournament
+    entries across. For the duplicates left when a player was entered as a
+    guest more than once before getting a CoCo number.</li>
 
     <li><a href="{% url 'player_import' %}">Import players from another Baxter</a>:
     Upload a JSON export from another instance of Baxter. Adds and updates,

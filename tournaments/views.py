@@ -119,6 +119,7 @@ from .pairing.methods import (
     PairingMethod,
     pairing_method_schedule,
 )
+from .player_merge import merge_candidates, merge_guest
 from .player_sync import import_players
 from .roster_import import (
     RosterParseError,
@@ -2314,6 +2315,7 @@ class AdminIndexView(LoginRequiredMixin, IsAdminMixin, TemplateView):
         context["last_wespa_sync"] = WespaSync.latest()
         context["wespa_pending_count"] = len(wespa_sync.pending_links())
         context["wespa_mirror_count"] = WespaPlayer.objects.count()
+        context["merge_count"] = len(merge_candidates())
         return context
 
 
@@ -2518,6 +2520,47 @@ class RosterImportView(LoginRequiredMixin, IsAdminMixin, View):
             f"keeping their entrants and results.",
         )
         return redirect("roster_import")
+
+
+class PlayerMergeView(LoginRequiredMixin, IsAdminMixin, View):
+    """Merge guest players into the CoCo players who share their name.
+
+    For the duplicates the roster pull leaves behind when a name belongs to more
+    than one guest (``player_merge``). Keyed on the guests: each is listed with
+    the CoCo player(s) it could be, and nothing merges until an admin says so.
+    """
+
+    template_name = "tournaments/player_merge.html"
+
+    def get(self, request):
+        return render(request, self.template_name, {
+            "candidates": merge_candidates(),
+        })
+
+    def post(self, request):
+        guest = Player.objects.filter(
+            player_number=request.POST.get("guest", ""), is_bye=False
+        ).first()
+        into = Player.objects.filter(
+            player_number=request.POST.get("into", ""), is_bye=False
+        ).first()
+        if guest is None or into is None:
+            messages.error(request, "That player is no longer there; nothing was merged.")
+            return redirect("player_merge")
+        if guest.name.casefold() != into.name.casefold():
+            messages.error(request, "Only players with the same name can be merged here.")
+            return redirect("player_merge")
+        try:
+            merge_guest(guest, into, actor=request.user)
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return redirect("player_merge")
+        messages.success(
+            request,
+            f"Merged guest {guest.player_number} into {into.name} "
+            f"(#{into.player_number}), keeping their entrants and results.",
+        )
+        return redirect("player_merge")
 
 
 class WespaImportView(LoginRequiredMixin, IsAdminMixin, View):

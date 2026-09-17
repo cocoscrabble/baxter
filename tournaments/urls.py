@@ -60,6 +60,7 @@ from .views import (
     TournamentEventLogExportView,
     TournamentListView,
     TournamentUpdateView,
+    PlayerMergeView,
     UserListView,
     UserSetPasswordView,
     WhatIfImportView,
@@ -88,6 +89,7 @@ urlpatterns = [
     path("players/import/", PlayerImportView.as_view(), name="player_import"),
     path("players/wespa/", WespaImportView.as_view(), name="wespa_import"),
     path("players/roster/", RosterImportView.as_view(), name="roster_import"),
+    path("players/merge/", PlayerMergeView.as_view(), name="player_merge"),
 
     path("<slug:tournament_slug>/", TournamentDetailView.as_view(), name="tournament_detail"),
     path("<slug:tournament_slug>/edit/", TournamentUpdateView.as_view(), name="tournament_edit"),

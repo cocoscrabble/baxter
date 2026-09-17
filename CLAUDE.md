@@ -160,6 +160,14 @@ A pull cannot disturb a running event: entrants freeze their whole rating seed
 at registration (`plans/PLAN_ENTRANTS.md` decision 3), which is what makes an
 unattended pull safe at any hour.
 
+**Two guests with one name are not held back** — picking between them is the
+guess — so the pull creates the real player as a third row, and renumbering is
+then impossible. `/players/merge/` (`player_merge.py`, the `player_merged`
+command) offers every guest whose name matches a CoCo player's, and moves the
+guest's entrants onto that player. It is logged in every tournament the guest
+played; replayed into a database without the CoCo player, it renumbers instead,
+which leaves the same digest.
+
 ## WESPA ratings (the other rating list)
 
 Baxter keeps a **local mirror of the whole WESPA rating list** — `WespaPlayer`,
