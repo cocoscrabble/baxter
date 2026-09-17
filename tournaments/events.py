@@ -43,6 +43,7 @@ EVENT_TYPES = frozenset(
         "entrants_bulk_imported",
         "player_created",
         "player_number_changed",
+        "player_merged",
         "entrant_added",
         "entrant_updated",
         "entrant_ratings_refreshed",
@@ -709,6 +710,9 @@ def describe_event(event, names=None) -> str:
         ),
         "player_number_changed": lambda: (
             f"Changed a player number from {p.get('old', '')} to {p.get('new', '')}"
+        ),
+        "player_merged": lambda: (
+            f"Merged guest player {p.get('guest', '')} into {p.get('into', '')}"
         ),
         # A snapshot is the whole tournament, so it names no division — and
         # "…snapshot for " with nothing after it is what that used to read as.

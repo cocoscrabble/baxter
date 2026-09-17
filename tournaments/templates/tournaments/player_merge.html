@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Merge Guest Players - Baxter{% endblock %}
+
+{% block breadcrumbs %}
+<span class="nav-sep">/</span>
+<a href="{% url 'admin_index' %}">Admin</a>
+{% endblock %}
+
+{% block page_class %}page--narrow{% endblock %}
+
+{% block content %}
+<h1>Merge Guest Players</h1>
+
+<p>These guest players have the same name as a player with a CoCo number. Usually
+that is one person, entered as a guest before their number came through.
+Merging moves the guest's tournament entries and results onto the CoCo player
+and deletes the guest. It is recorded in the activity log of every tournament
+the guest played in, and cannot be undone from here.</p>
+
+<p>The match is by name only, so check it is the same person first. A merge is
+refused if both players are entered in the same division.</p>
+
+{% if candidates %}
+<table>
+    <thead>
+        <tr><th>Guest</th><th>Played in</th><th>Merge into</th></tr>
+    </thead>
+    <tbody>
+        {% for candidate in candidates %}
+        <tr>
+            <td>{{ candidate.guest.name }} <code>{{ candidate.guest.player_number }}</code></td>
+            <td>
+                {% for tournament in candidate.tournaments %}
+                <a href="{% url 'tournament_detail' tournament.slug %}">{{ tournament.name }}</a>{% if not forloop.last %}, {% endif %}
+                {% empty %}
+                No tournaments
+                {% endfor %}
+            </td>
+            <td>
+                {% for target in candidate.targets %}
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="guest" value="{{ candidate.guest.player_number }}">
+                    <input type="hidden" name="into" value="{{ target.player_number }}">
+                    <button type="submit">Merge into #{{ target.player_number }}</button>
+                    {% if target.rating %}({{ target.rating }}){% else %}(unrated){% endif %}
+                </form>
+                {% endfor %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No guest player shares a name with a CoCo player.</p>
+{% endif %}
+{% endblock %}

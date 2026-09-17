@@ -64,6 +64,7 @@ COMMAND_BACKED = {
     "DivisionRefreshRatingsView",
     "SimulateRoundView",
     "PlayoffSetupView",
+    "PlayerMergeView",
 }
 
 # POST views that don't mutate logged tournament state.
