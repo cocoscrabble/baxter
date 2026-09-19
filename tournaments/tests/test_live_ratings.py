@@ -303,6 +303,16 @@ class LiveRatingsViewTests(ProjectionTestCase):
         response = self.client.get(self._url())
         self.assertContains(response, "Provisional")
 
+    def test_column_labels_describe_the_rating_values(self):
+        ann = self.enter(self.player("Ann"))
+        bea = self.enter(self.player("Bea"))
+        self.game(1, ann, bea)
+        response = self.client.get(self._url())
+        self.assertContains(response, '<th class="num">W-L</th>')
+        self.assertContains(response, '<th class="num">Initial rating</th>')
+        self.assertNotContains(response, '<th class="num">Record</th>')
+        self.assertNotContains(response, '<th class="num">Before</th>')
+
     def test_a_newly_rated_player_shows_no_before_and_no_change(self):
         rated = self.enter(self.player("Rated", rating=1600))
         self.enter(self.player("Unrated", rating=0))

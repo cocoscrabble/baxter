@@ -41,7 +41,7 @@ in words. Two views of the same data, not a duplicate to be merged.
     <tbody>
         {% for entrant in entrants %}
         <tr{% if entrant.dropped %} class="row-dropped"{% endif %}>
-            <td class="num">{{ entrant.number }}</td>
+            <td class="num entrant-number">{{ entrant.number }}.</td>
             <td>
                 {{ entrant.display_name }}{% if entrant.tentative %}*{% endif %}{% if entrant.playing_up %}^{% endif %}
                 {% if entrant.tentative %}<span class="visually-hidden">(tentative)</span>{% endif %}

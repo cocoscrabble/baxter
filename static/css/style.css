@@ -520,6 +520,32 @@ h3 { font-size: 1.02rem; margin: var(--space-md) 0 var(--space-sm); }
     vertical-align: middle;
 }
 
+/* Breadcrumbs can be longer than a phone screen. Let the left side take the
+   available room and wrap within it, while keeping the account links separate
+   and visible on the right. */
+@media (max-width: 600px) {
+    .nav-top {
+        align-items: flex-start;
+        gap: var(--space-sm);
+    }
+
+    .nav-left {
+        flex: 1 1 auto;
+        min-width: 0;
+        flex-wrap: wrap;
+        row-gap: 2px;
+        white-space: normal;
+    }
+
+    .nav-left a {
+        overflow-wrap: anywhere;
+    }
+
+    .nav-right {
+        flex: 0 0 auto;
+    }
+}
+
 /* ── Messages ─────────────────────────────────────────────── */
 .messages {
     list-style: none;
@@ -894,7 +920,15 @@ td a:hover {
 
     .standings-table th,
     .standings-table td {
-        padding: 4px clamp(1px, 0.35vw, 4px);
+        padding: 4px clamp(3px, 1.1vw, 5px);
+    }
+}
+
+/* The editor-only Firsts column makes 320px the one genuinely tight case. */
+@media (max-width: 340px) {
+    .standings-table th,
+    .standings-table td {
+        padding-inline: 2px;
     }
 }
 
