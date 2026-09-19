@@ -1555,6 +1555,10 @@ class DivisionPairingsRoundContentTests(TestCase):
         self.assertEqual(response.context["current_round"], 2)
         self.assertContains(response, 'class="round-tabs"')
         self.assertContains(response, "pairRound: 2")
+        self.assertContains(response, 'class="published-pairings-table"')
+        self.assertContains(response, 'class="pairing-table-number"')
+        self.assertContains(response, 'class="pairing-player pairing-first"')
+        self.assertContains(response, 'class="pairing-player pairing-second"')
 
     def test_played_pairing_shows_score_instead_of_submit_button(self):
         _, pairings = self._create_round(
@@ -1572,6 +1576,7 @@ class DivisionPairingsRoundContentTests(TestCase):
         self.assertNotContains(response, f'?pairing={pairings[0].pk}"')
         # Unplayed pairing: submit link still present.
         self.assertContains(response, f'?pairing={pairings[1].pk}"')
+        self.assertContains(response, ">Submit result</a>")
 
     def test_published_round_not_regenerated_and_future_round_left_alone(self):
         _, pairings = self._create_round(

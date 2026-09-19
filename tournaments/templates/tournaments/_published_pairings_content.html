@@ -21,7 +21,7 @@
 {% for round_num, round_pairings in pairings %}
 <section class="round-section" id="round-{{ round_num }}" data-show="$pairRound == {{ round_num }}">
 <h2>Round {{ round_num }}</h2>
-<table>
+<table class="published-pairings-table">
     <thead>
         <tr>
             <th>Table</th>
@@ -33,16 +33,16 @@
     <tbody>
         {% for entry in round_pairings %}
         <tr>
-            <td>{{ entry.pairing.table_label|default:entry.pairing.table }}</td>
-            <td>{{ entry.pairing.first.display_name }} (#{{ entry.pairing.first.number }})</td>
-            <td>{% if entry.absence %}<span class="tag tag-{{ entry.absence }}">{{ entry.absence }}</span>{% else %}{{ entry.pairing.second.display_name }} (#{{ entry.pairing.second.number }}){% endif %}</td>
+            <td class="pairing-table-number">{{ entry.pairing.table_label|default:entry.pairing.table }}</td>
+            <td class="pairing-player pairing-first">{{ entry.pairing.first.display_name }} (#{{ entry.pairing.first.number }})</td>
+            <td class="pairing-player pairing-second">{% if entry.absence %}<span class="tag tag-{{ entry.absence }}">{{ entry.absence }}</span>{% else %}{{ entry.pairing.second.display_name }} (#{{ entry.pairing.second.number }}){% endif %}</td>
             {% if entry.result %}
-            <td class="num">{{ entry.result }}</td>
+            <td class="pairing-action num">{{ entry.result }}</td>
             {% elif entry.absence %}
             {# Nothing to submit: a bye and a forfeit are recorded at publish. #}
-            <td class="no-print"></td>
+            <td class="pairing-action no-print"></td>
             {% else %}
-            <td class="no-print"><a class="btn-primary" href="{% url 'resultslip_create' division.tournament.slug division.slug %}?pairing={{ entry.pairing.pk }}">Submit results</a></td>
+            <td class="pairing-action no-print"><a class="btn-primary" href="{% url 'resultslip_create' division.tournament.slug division.slug %}?pairing={{ entry.pairing.pk }}">Submit result</a></td>
             {% endif %}
         </tr>
         {% endfor %}
