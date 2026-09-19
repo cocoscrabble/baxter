@@ -181,6 +181,98 @@ h3 { font-size: 1.02rem; margin: var(--space-md) 0 var(--space-sm); }
     width: 12rem;
 }
 
+/* A phone cannot give four table columns enough room to stay readable. Turn
+   each public pairing into a compact card instead: table/result form the card
+   heading, while the two players get full-width labelled rows. The desktop
+   table and print layout remain unchanged. */
+@media screen and (max-width: 600px) {
+    .published-pairings-table {
+        table-layout: auto;
+    }
+
+    .published-pairings-table thead {
+        display: none;
+    }
+
+    .published-pairings-table tbody,
+    .published-pairings-table tr,
+    .published-pairings-table td {
+        display: block;
+    }
+
+    .published-pairings-table tr {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "table action"
+            "first first"
+            "second second";
+        gap: var(--space-xs) var(--space-sm);
+        margin-bottom: var(--space-sm);
+        padding: 10px 12px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        background: var(--surface-raised);
+    }
+
+    .published-pairings-table td {
+        min-width: 0;
+        padding: 0;
+        border: 0;
+    }
+
+    .published-pairings-table .pairing-table-number {
+        grid-area: table;
+        align-self: center;
+        color: var(--color-muted);
+        font-weight: 600;
+    }
+
+    .published-pairings-table .pairing-table-number::before {
+        content: "Table ";
+        font-weight: 400;
+    }
+
+    .published-pairings-table .pairing-first {
+        grid-area: first;
+    }
+
+    .published-pairings-table .pairing-second {
+        grid-area: second;
+    }
+
+    .published-pairings-table .pairing-player {
+        overflow-wrap: anywhere;
+    }
+
+    .published-pairings-table .pairing-player::before {
+        display: inline-block;
+        width: 2.5em;
+        color: var(--color-muted);
+        font-size: 0.85em;
+        font-weight: 600;
+    }
+
+    .published-pairings-table .pairing-first::before {
+        content: "1st";
+    }
+
+    .published-pairings-table .pairing-second::before {
+        content: "2nd";
+    }
+
+    .published-pairings-table .pairing-action {
+        grid-area: action;
+        align-self: center;
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .published-pairings-table .pairing-action:empty {
+        display: none;
+    }
+}
+
 /* Keep the round heading visible while scrolling that round's table.
    Scoped to the embed page: the in-nav tab has its own sticky app header
    that this would slide behind. */
