@@ -309,7 +309,7 @@ class LiveRatingsViewTests(ProjectionTestCase):
         self.game(1, ann, bea)
         response = self.client.get(self._url())
         self.assertContains(response, '<th class="num">W-L</th>')
-        self.assertContains(response, '<th class="num">Initial rating</th>')
+        self.assertContains(response, '<th class="num">Initial Rating</th>')
         self.assertNotContains(response, '<th class="num">Record</th>')
         self.assertNotContains(response, '<th class="num">Before</th>')
 
