@@ -810,6 +810,7 @@ class DivisionStandingsViewTests(TestCase):
         self.assertContains(
             response, '<span class="standings-player-number">(#2)</span>'
         )
+        self.assertContains(response, '<td class="num standings-rank">1.</td>')
 
     def test_firsts_column_shown_only_to_editor(self):
         # Alice started (winner_started=True and Alice won), Bob did not.
@@ -2683,6 +2684,21 @@ class DivisionEntrantsViewTests(TestCase):
         response = self.client.get(self.url)
         rows = [(e.number, e.player.name) for e in response.context["entrants"]]
         self.assertEqual(rows, [(1, "Alice"), (2, "Bob"), (3, "Zoe Ace")])
+        self.assertContains(response, '<td class="num entrant-number">1.</td>')
+
+    def test_public_navigation_keeps_common_pages_together(self):
+        response = self.client.get(self.url)
+        content = response.content.decode()
+        urls = [
+            reverse("division_entrants", kwargs=self.division.slug_kwargs()),
+            reverse("division_standings", kwargs=self.division.slug_kwargs()),
+            reverse("division_pairings", kwargs=self.division.slug_kwargs()),
+            reverse("division_all_results", kwargs=self.division.slug_kwargs()),
+            reverse("division_live_ratings", kwargs=self.division.slug_kwargs()),
+        ]
+        positions = [content.index(f'href="{url}"') for url in urls]
+        self.assertEqual(positions, sorted(positions))
+        self.assertNotContains(response, ">Add Result</a>")
 
 
 class DivisionEntrantsEditViewTests(TestCase):
