@@ -19,9 +19,9 @@ The mapping, and where it is lossy:
   liwords records no start, so every slip says the loser went first.
 - **Byes** (a player paired with themselves) score as liwords scores them: a
   positive score is a win by that spread, a negative one a loss by it, and zero
-  is *nothing* — no game, no result. The first two become slips against the
-  engine's ``"Bye"``; zero writes no slip, which is exact for standings but
-  leaves that player with a round missing on Baxter's side (reported).
+  a *draw* — liwords derives a record from rounds played, so a round with
+  neither a win nor a loss counts half. All three become slips against the
+  engine's ``"Bye"`` (the zero one 0–0).
 - **The round to pair** is the first without results. A last round that is
   already partly paired (``-1`` for the unpaired) pins its existing games as
   ``fixed_pairings``, which is how liwords treats them (prepaired players).
@@ -37,10 +37,17 @@ The mapping, and where it is lossy:
   Baxter runs exactly the count it is given; that difference is the port's, not
   the converter's.
 
+- **Seed.** liwords seeds COP from ``seed``, or when that is 0 from a 64-bit
+  FNV-1 hash of the concatenated names plus the number of rounds in
+  ``divisionPairings``. The engine seeds a COP round from ``seed + round - 1``,
+  so the converter writes upstream's seed minus that offset: the round then
+  runs on exactly upstream's seed.
+
 **Not expressible** in the engine, and reported as warnings so a comparison can
 mark the case rather than blame the port: class prizes with anyone in a class
-(Baxter defers them), ``topDownByes``, ``factor``, ``initialNonperfRounds``, and
-any pairing method other than COP.
+(Baxter defers them), ``topDownByes``, and any pairing method other than COP.
+(``factor`` and ``initialNonperfRounds`` only steer upstream's non-COP methods,
+so a COP request carrying them is still comparable.)
 """
 
 import json
@@ -68,8 +75,6 @@ class Conversion:
 def _config(req, warnings):
     unsupported = {
         "topDownByes": "top-down byes",
-        "factor": "a pairing factor override",
-        "initialNonperfRounds": "initial non-performance rounds",
     }
     for key, what in unsupported.items():
         if req.get(key):
@@ -122,15 +127,13 @@ def convert(req):
                 continue
             if opp == i:
                 score = scores[i]
-                if score > 0:
+                if i in removed:
+                    # liwords parks a withdrawn player on themselves each round.
+                    continue
+                if score >= 0:
                     slips.append(_slip(round_idx + 1, names[i], BYE, score, 0))
-                elif score < 0:
+                else:
                     slips.append(_slip(round_idx + 1, BYE, names[i], -score, 0))
-                elif i not in removed:
-                    warnings.append(
-                        f"round {round_idx + 1}: {names[i]} has a zero bye, which "
-                        f"liwords scores as nothing and the engine as a missing round"
-                    )
                 continue
             if i < opp:
                 a, b = scores[i], scores[opp]
@@ -169,12 +172,30 @@ def convert(req):
         ],
         "cop_config": _config(req, warnings),
         "fixed_pairings": fixed,
-        # liwords' seed is an int64 (and 0 means "derive one"); the engine's RNG
-        # is a different generator anyway, so this only keeps Baxter's run
-        # reproducible, not matched.
-        "seed": int(req.get("seed") or 0) & 0xFFFF_FFFF_FFFF_FFFF,
+        "seed": (upstream_seed(req) - (to_pair - 1)) & _U64,
     }
     return Conversion(engine_input, to_pair, names, warnings)
+
+
+_U64 = 0xFFFF_FFFF_FFFF_FFFF
+
+
+def upstream_seed(req):
+    """The seed liwords' COPPair runs on, as the uint64 its PCG is seeded with.
+
+    ``seed`` when set (an int64 in the request; negative wraps); otherwise Go's
+    ``fnv.New64`` (FNV-1, not 1a) over the names back to back, plus the number
+    of rounds in ``divisionPairings`` — cop.go's ``COPPair``.
+    """
+    seed = int(req.get("seed") or 0)
+    if seed:
+        return seed & _U64
+    h = 0xCBF29CE484222325
+    for name in req.get("playerNames") or []:
+        for byte in name.encode():
+            h = (h * 0x100000001B3) & _U64
+            h ^= byte
+    return (h + len(req.get("divisionPairings") or [])) & _U64
 
 
 def _slip(round, winner, loser, winner_score, loser_score):

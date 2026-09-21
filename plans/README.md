@@ -29,8 +29,8 @@ Current plans:
   (Perl, `jvc56/tournament_pairing_algorithms`) into the `scrabble-pairing` Rust
   crate as a new `COP` strategy: Monte Carlo contender simulation + weighted
   min-cost matching, plus new `DivisionSettings` fields (prizes, gibson spread,
-  hopefulness, control-loss, sim counts). **Not started**; 5 phases, class prizes
-  deferred.
+  hopefulness, control-loss, sim counts). Phases 1–4 implemented; being
+  replaced by the Go re-port below.
 - `PLAN_COP_GO_PORT.md` — re-port COP from liwords' Go implementation (the new
   upstream), verified stage by stage for exact parity against the Go oracle
 - `PLAN_PLAYOFFS.md` — configurable 2/4/8-player championship playoffs with
