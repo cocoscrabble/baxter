@@ -5,6 +5,7 @@
     ... --out DIR     # per case: both engines' pairings, the converted input, COP's log
     ... --json        # one JSON object per case instead of the table
     ... --strict      # exit 1 if any comparable case is worse than upstream
+    ... --stages      # the Go re-port's intermediates vs the oracle's log, stage by stage
 
 Each request is converted (``convert.py``), paired by ``cop-go-oracle`` (built
 here, so it is never stale) and by ``scrabble_pairing_py.pair_json``, and the two
@@ -294,6 +295,117 @@ def write_case(out_dir, case):
     }, indent=2))
 
 
+# ---------------------------------------------------------------------------
+# --stages: the Go re-port (scrabble-pairing/src/strategies/cop_go) against the
+# oracle's log, one intermediate at a time. The port runs upstream's own
+# PairRequest (no converter), so every stage should match exactly unless the
+# oracle's run was clock-bound. See plans/PLAN_COP_GO_PORT.md.
+# ---------------------------------------------------------------------------
+
+CRATE = HERE.parent.parent / "scrabble-pairing"
+TRACE = CRATE / "target" / "release" / "examples" / "cop_trace"
+
+
+def build_trace():
+    subprocess.run(
+        ["cargo", "build", "--release", "--quiet", "--example", "cop_trace"],
+        cwd=CRATE, check=True,
+    )
+
+
+def run_trace(request_text):
+    done = subprocess.run(
+        [str(TRACE)], input=request_text, capture_output=True, text=True, check=True
+    )
+    return json.loads(done.stdout)
+
+
+def _table_after(log, title_pattern, table_title="Totals"):
+    """Rows of the ``table_title`` table that follows the section whose title
+    matches ``title_pattern``, as lists of cell strings. None if absent."""
+    m = re.search(title_pattern, log)
+    if not m:
+        return None, None
+    rest = log[m.end():]
+    t = re.search(rf"\*\* {table_title} \*\*\n\*+\n\n(.*?)\n-+\n(.*?)\n\n", rest, re.S)
+    if not t:
+        return m, None
+    rows = [[c.strip() for c in line.split("|")] for line in t.group(2).splitlines()]
+    return m, rows
+
+
+def logged_sims(log, title):
+    """A logged sim-results section: ``{factor, players, final_ranks, total_sims}``."""
+    m, rows = _table_after(log, rf"\*\* {title} \(factor ceiling of (\d+)\) \*\*")
+    if rows is None:
+        return None
+    total = re.search(r"^Total Sims: (\d+)$", log[m.end():], re.M)
+    return {
+        "factor": int(m.group(1)),
+        "players": [int(r[1]) - 1 for r in rows],
+        "final_ranks": [[int(c) for c in r[5:]] for r in rows],
+        "total_sims": int(total.group(1)) if total else None,
+    }
+
+
+def _diff_sims(name, ours, theirs):
+    if theirs is None and ours is None:
+        return []
+    if theirs is None or ours is None:
+        return [f"{name}: {'only Rust' if theirs is None else 'only Go'} ran it"]
+    out = []
+    for key in ("factor", "players", "total_sims"):
+        if ours[key] != theirs[key]:
+            out.append(f"{name} {key}: Rust {ours[key]} vs Go {theirs[key]}")
+    if ours["final_ranks"] != theirs["final_ranks"]:
+        bad = [i for i, (a, b) in enumerate(zip(ours["final_ranks"], theirs["final_ranks"])) if a != b]
+        out.append(f"{name} final_ranks differ at starting rank(s) {bad[:5]}")
+    return out
+
+
+def compare_stages(path, workers):
+    request_text = path.read_text()
+    oracle = run_oracle(request_text, workers)
+    log = oracle["response"].get("log", "")
+    trace = run_trace(request_text)
+    code = oracle["response"]["errorCode"]
+    if code != "SUCCESS" or trace.get("error"):
+        ours = (trace.get("error") or {}).get("code", "SUCCESS")
+        verdict = [] if ours == code else [f"Rust {ours} vs Go {code}"]
+        return {"case": path.stem, "timeLimited": False, "stages": {"verify": verdict}}
+    stages = {
+        "sims": _diff_sims("initial", trace["initial"], logged_sims(log, "Initial Sim Results"))
+        + _diff_sims("improved", trace["improved"], logged_sims(log, "Improved Factor Sim Results")),
+    }
+    return {
+        "case": path.stem,
+        "timeLimited": oracle["oracle"]["maybeTimeLimited"],
+        "stages": stages,
+    }
+
+
+def stages_main(args):
+    requests = args.requests or sorted((HERE / "fixtures").glob("*.json"))
+    build_oracle()
+    build_trace()
+    failing = 0
+    for path in requests:
+        case = compare_stages(path, args.workers)
+        cells = []
+        for stage, problems in case["stages"].items():
+            cells.append(f"{stage}:{'ok' if not problems else 'DIFF'}")
+        star = " (clock-bound)" if case["timeLimited"] else ""
+        print(f"{' '.join(cells):12} {case['case']}{star}")
+        for stage, problems in case["stages"].items():
+            for p in problems[:4]:
+                print(f"    {stage}: {p}")
+        if any(case["stages"].values()) and not case["timeLimited"]:
+            failing += 1
+    print(f"\n{failing} non-clock-bound case(s) differ")
+    if args.strict and failing:
+        sys.exit(1)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("requests", nargs="*", type=Path,
@@ -303,7 +415,11 @@ def main():
     ap.add_argument("--json", action="store_true", help="one JSON object per case")
     ap.add_argument("--strict", action="store_true",
                     help="exit 1 if any comparable case is worse than upstream")
+    ap.add_argument("--stages", action="store_true",
+                    help="compare the Go re-port's intermediates with the oracle's log")
     args = ap.parse_args()
+    if args.stages:
+        return stages_main(args)
 
     requests = args.requests or sorted((HERE / "fixtures").glob("*.json"))
     build_oracle()
