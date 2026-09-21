@@ -361,9 +361,9 @@ class CopConfigForm(forms.Form):
         "specific top pairing (0–1).",
     )
     control_loss_activation_round = forms.IntegerField(
-        min_value=0, label="Control-loss activation round",
-        help_text="0-indexed round at/after which control loss is enforced "
-        "(0 = from the start).",
+        min_value=0, required=False, label="Control-loss activation round",
+        help_text="Completed rounds after which control loss is enforced (0 = "
+        "from the start). Leave blank for the last 4 rounds.",
     )
     simulations = forms.IntegerField(
         min_value=1, label="Simulations",

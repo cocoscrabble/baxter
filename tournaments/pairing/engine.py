@@ -35,7 +35,11 @@ def _cop_config_to_input(c: dict | None) -> dict | None:
         ),
         "hopefulness": arr(c.get("hopefulness", 0.05)),
         "control_loss_thresholds": arr(c.get("control_loss_threshold", 0.25)),
-        "control_loss_activation_round": int(c.get("control_loss_activation_round", 0)),
+        # None: the engine's default, control loss in the last few rounds.
+        "control_loss_activation_round": (
+            None if c.get("control_loss_activation_round") is None
+            else int(c["control_loss_activation_round"])
+        ),
         "simulations": int(c.get("simulations", 1000)),
         "always_wins_simulations": int(c.get("always_wins_simulations", 1000)),
         "disallow_repeat_byes": bool(c.get("disallow_repeat_byes", False)),

@@ -152,9 +152,10 @@ well inside the 30s request even on a slower server.
   leader nobody the constraint allows.
 
 **Open for Baxter:**
-- `control_loss_activation_round` defaults to 0, so control loss applies from
-  the first round, which makes the conflict above reachable in a small
-  division. Upstream's own fixtures activate it in roughly the last quarter.
+- ~~`control_loss_activation_round` defaults to 0~~ — resolved: it now defaults
+  to blank, meaning control loss in the last 4 rounds of whatever the schedule
+  is (`CONTROL_LOSS_DEFAULT_ROUNDS_LEFT`), where upstream's own fixtures most
+  often put it. Configs saved before this keep the 0 they were seeded with.
 - Class prizes are ported but inert until divisions have classes
   (`PLAN_COP.md` Phase 5).
 - `max_simulations` is config-only (no form field); `top_down_byes` is on the

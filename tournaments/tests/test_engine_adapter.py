@@ -183,6 +183,12 @@ class CopConfigTests(TestCase):
             },
         )
 
+    def test_a_blank_activation_round_leaves_it_to_the_engine(self):
+        # None is the engine's default (control loss in the last few rounds),
+        # not round 0, which would switch it on from the start.
+        d = pairing_data_to_input(_cop_pd({**_COP_CONFIG, "control_loss_activation_round": None}))
+        self.assertIsNone(d["cop_config"]["control_loss_activation_round"])
+
     def test_partial_config_uses_application_gibson_default(self):
         d = pairing_data_to_input(_cop_pd({"place_prizes": 3}))
         self.assertEqual(d["cop_config"]["gibson_spreads"], [500])
