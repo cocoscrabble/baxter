@@ -331,7 +331,9 @@ DEFAULT_COP_CONFIG = {
     "gibson_spread": 500,
     "hopefulness": 0.02,
     "control_loss_threshold": 0.30,
-    "control_loss_activation_round": 0,
+    # None: control loss in the last few rounds, however long the schedule
+    # (scrabble-pairing's CONTROL_LOSS_DEFAULT_ROUNDS_LEFT).
+    "control_loss_activation_round": None,
     "simulations": 10000,
     "always_wins_simulations": 1000,
     "disallow_repeat_byes": True,

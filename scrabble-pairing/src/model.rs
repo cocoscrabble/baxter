@@ -48,9 +48,11 @@ pub struct CopConfig {
     /// Control-loss thresholds.
     #[serde(default)]
     pub control_loss_thresholds: Vec<f64>,
-    /// Completed rounds from which control loss (destiny control) applies.
+    /// Completed rounds from which control loss (destiny control) applies;
+    /// `None` for the default, the last `cop_go::CONTROL_LOSS_DEFAULT_ROUNDS_LEFT`
+    /// rounds of the schedule.
     #[serde(default)]
-    pub control_loss_activation_round: i32,
+    pub control_loss_activation_round: Option<i32>,
     /// Division simulations (upstream's `divisionSims`): the initial count,
     /// re-simulated in batches until the contention picture is confident.
     #[serde(default)]

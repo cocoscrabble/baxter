@@ -27,7 +27,9 @@
 //! - **Fixed pairings** become upstream's partly paired round: its prepaired
 //!   games, placed as given.
 //! - **Config** values are per rounds remaining, picked upstream's way; place
-//!   prizes are clamped to the field so a small division is not refused.
+//!   prizes are clamped to the field so a small division is not refused; control
+//!   loss applies in the last `CONTROL_LOSS_DEFAULT_ROUNDS_LEFT` rounds unless
+//!   the division sets its own activation round.
 //! - **Seed**: `PairingInput::seed + round - 1`, so rounds differ and replay is
 //!   stable.
 
@@ -70,6 +72,16 @@ pub fn default_max_sims(valid_players: i32, rounds_remaining: i32, division_sims
 fn is_bye(name: &str) -> bool {
     name.eq_ignore_ascii_case(BYE_NAME)
 }
+
+/// Rounds left when control loss switches on, unless the config says otherwise.
+///
+/// Control loss from the first round is expensive and rarely fires — with more
+/// than four rounds left it needs a perfect vs-1st record — and early on it can
+/// collide with the forced contender bye (the leader's only allowed opponent
+/// must also take the bye), which upstream fails as overconstrained. Where
+/// upstream's own fixtures enable it at all, it is with 3–8 rounds left, most
+/// often 4 — also the threshold its control-loss rules use internally.
+pub const CONTROL_LOSS_DEFAULT_ROUNDS_LEFT: i32 = 4;
 
 /// The value for this round from a per-rounds-remaining array (index 0 is the
 /// final round; the last entry repeats).
@@ -221,7 +233,9 @@ pub fn build_request(ctx: &Ctx, rp: &RoundPairing, cfg: &CopConfig) -> Result<(R
         place_prizes: cfg.place_prizes.min(valid).max(1),
         division_sims: cfg.simulations as i32,
         control_loss_sims: cfg.always_wins_simulations as i32,
-        control_loss_activation_round: cfg.control_loss_activation_round,
+        control_loss_activation_round: cfg
+            .control_loss_activation_round
+            .unwrap_or((total_rounds - CONTROL_LOSS_DEFAULT_ROUNDS_LEFT).max(0)),
         allow_repeat_byes: !cfg.disallow_repeat_byes,
         removed_players: removed,
         seed: ctx.seed.wrapping_add((round - 1) as u64) as i64,
@@ -407,7 +421,7 @@ mod tests {
         // Upstream's control loss can bar the leader from the only opponent the
         // pins leave them (it does not look at prepaired games), which fails
         // the round as overconstrained; keep it out of a test about pins.
-        inp.cop_config.as_mut().unwrap().control_loss_activation_round = 99;
+        inp.cop_config.as_mut().unwrap().control_loss_activation_round = Some(99);
         let g = games(&inp, 2);
         for pin in [("P1", "P6"), ("Bye", "P2"), ("Bye", "P4")] {
             assert!(g.contains(&(pin.0.to_string(), pin.1.to_string())), "{pin:?} broken: {g:?}");
@@ -437,7 +451,7 @@ mod tests {
         // and forced contender bye (P6 must take the bye) collide, and upstream
         // fails the round as overconstrained — checked against the oracle with
         // the cop_request example. Not what this test is about.
-        inp.cop_config.as_mut().unwrap().control_loss_activation_round = 99;
+        inp.cop_config.as_mut().unwrap().control_loss_activation_round = Some(99);
         let g = games(&inp, 2);
         let seen = paired_once(&g);
         assert!(seen.contains("P7"), "{g:?}");
@@ -449,6 +463,22 @@ mod tests {
         let mut inp = input(4, 3, &R1[..2], "");
         inp.cop_config.as_mut().unwrap().place_prizes = 8;
         assert_eq!(paired_once(&games(&inp, 2)).len(), 4);
+    }
+
+    fn activation_round(inp: &PairingInput, round: i32) -> i64 {
+        let req: serde_json::Value =
+            serde_json::from_str(&super::request_json(inp, round).unwrap()).unwrap();
+        req["controlLossActivationRound"].as_i64().unwrap()
+    }
+
+    #[test]
+    fn control_loss_defaults_to_the_last_four_rounds() {
+        let mut inp = input(6, 12, &R1, "");
+        assert_eq!(activation_round(&inp, 2), 8);
+        inp.cop_config.as_mut().unwrap().control_loss_activation_round = Some(0);
+        assert_eq!(activation_round(&inp, 2), 0);
+        // A schedule shorter than the default window starts it at once.
+        assert_eq!(activation_round(&input(6, 3, &R1, ""), 2), 0);
     }
 
     #[test]
