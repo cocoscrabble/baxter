@@ -335,6 +335,7 @@ DEFAULT_COP_CONFIG = {
     "simulations": 10000,
     "always_wins_simulations": 1000,
     "disallow_repeat_byes": True,
+    "top_down_byes": False,
 }
 
 # What every COP seed wrote before seeds were recorded in the log. cop_config is
