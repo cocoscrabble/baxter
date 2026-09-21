@@ -303,6 +303,8 @@ def write_case(out_dir, case):
 # ---------------------------------------------------------------------------
 
 CRATE = HERE.parent.parent / "scrabble-pairing"
+# Well past anything upstream reaches in its 6s budget.
+STAGES_MAX_SIMS = 5_000_000
 TRACE = CRATE / "target" / "release" / "examples" / "cop_trace"
 
 
@@ -348,6 +350,65 @@ def logged_sims(log, title):
     }
 
 
+def _table_at(log, title):
+    """``(header, rows)`` of the table right under ``** title **``, or None."""
+    m = re.search(
+        rf"\*\* {re.escape(title)} \*\*\n\*+\n\n(.*?)\n-+\n(.*?)\n\n", log, re.S
+    )
+    if not m:
+        return None
+    header = [c.strip() for c in m.group(1).split("|")]
+    rows = [[c.strip() for c in line.split("|")] for line in m.group(2).splitlines()]
+    return header, rows
+
+
+def logged_precomp(log, names):
+    """The "Precomp Data" table and the logged destiny's child, as the trace
+    shapes them: by rank, 0-based, vs1st/vsFactor keyed by rank."""
+    table = _table_at(log, "Precomp Data")
+    if table is None:
+        return None
+    header, rows = table
+    col = {name: i for i, name in enumerate(header)}
+    out = {
+        "gibsonized": [r[col["Gb"]] == "Yes" for r in rows],
+        "gibson_groups": [int(r[col["Gr"]]) - 1 for r in rows],
+        "highest_rank_hopefully": [int(r[col["H"]]) - 1 for r in rows],
+        "highest_rank_absolutely": [int(r[col["A"]]) - 1 for r in rows],
+        "vs_first": None,
+        "vs_factor": None,
+    }
+    if "vs1st" in col:
+        out["vs_first"] = {
+            str(rank): int(r[col["vs1st"]]) for rank, r in enumerate(rows) if r[col["vs1st"]]
+        }
+        out["vs_factor"] = {
+            str(rank): int(r[col["vsFactor"]]) for rank, r in enumerate(rows) if r[col["vsFactor"]]
+        }
+    child = re.search(r"^Destinys Child: (.*)$", log, re.M)
+    out["destinys_child"] = (
+        names.index(child.group(1)) if child and child.group(1) != "(none)" else None
+    )
+    return out
+
+
+def _diff_precomp(ours, theirs):
+    if theirs is None:
+        return ["no Precomp Data table in the Go log"]
+    # In an odd field upstream's gibsonized/gibson-group arrays keep an entry for
+    # the sim's dummy bye player (the policies read it for the bye node); the
+    # log prints one row per real player, so compare those rows.
+    rows = len(theirs["highest_rank_hopefully"])
+    out = []
+    for key, want in theirs.items():
+        got = ours.get(key)
+        if isinstance(want, list) and isinstance(got, list):
+            got = got[:rows]
+        if got != want:
+            out.append(f"{key}: Rust {got} vs Go {want}")
+    return out
+
+
 def _diff_sims(name, ours, theirs):
     if theirs is None and ours is None:
         return []
@@ -367,15 +428,19 @@ def compare_stages(path, workers):
     request_text = path.read_text()
     oracle = run_oracle(request_text, workers)
     log = oracle["response"].get("log", "")
-    trace = run_trace(request_text)
+    # Raise the port's sim cap so only upstream's clock can make the two differ;
+    # the production cap is sized separately (PLAN_COP_GO_PORT.md, stage 5).
+    trace = run_trace(json.dumps({**json.loads(request_text), "maxSims": STAGES_MAX_SIMS}))
     code = oracle["response"]["errorCode"]
     if code != "SUCCESS" or trace.get("error"):
         ours = (trace.get("error") or {}).get("code", "SUCCESS")
         verdict = [] if ours == code else [f"Rust {ours} vs Go {code}"]
         return {"case": path.stem, "timeLimited": False, "stages": {"verify": verdict}}
+    names = json.loads(request_text).get("playerNames") or []
     stages = {
         "sims": _diff_sims("initial", trace["initial"], logged_sims(log, "Initial Sim Results"))
         + _diff_sims("improved", trace["improved"], logged_sims(log, "Improved Factor Sim Results")),
+        "precomp": _diff_precomp(trace["precomp"], logged_precomp(log, names)),
     }
     return {
         "case": path.stem,
@@ -395,7 +460,7 @@ def stages_main(args):
         for stage, problems in case["stages"].items():
             cells.append(f"{stage}:{'ok' if not problems else 'DIFF'}")
         star = " (clock-bound)" if case["timeLimited"] else ""
-        print(f"{' '.join(cells):12} {case['case']}{star}")
+        print(f"{' '.join(cells):24} {case['case']}{star}")
         for stage, problems in case["stages"].items():
             for p in problems[:4]:
                 print(f"    {stage}: {p}")
