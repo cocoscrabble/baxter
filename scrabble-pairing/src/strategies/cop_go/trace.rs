@@ -4,7 +4,7 @@
 
 use serde::Serialize;
 
-use super::precomp::baseline_sims;
+use super::precomp::{get_precomp_data, PrecompData};
 use super::rand::Rand;
 use super::request::Request;
 use super::standings::{SimResults, Standings};
@@ -20,6 +20,20 @@ pub struct SimTrace {
     pub total_sims: usize,
 }
 
+/// The "Precomp Data" table, by rank.
+#[derive(Serialize)]
+pub struct PrecompTrace {
+    pub gibsonized: Vec<bool>,
+    pub gibson_groups: Vec<i32>,
+    pub highest_rank_hopefully: Vec<usize>,
+    pub highest_rank_absolutely: Vec<usize>,
+    /// Present when the control-loss search ran (keyed by rank).
+    pub vs_first: Option<std::collections::BTreeMap<usize, usize>>,
+    pub vs_factor: Option<std::collections::BTreeMap<usize, usize>>,
+    /// Player index, or null.
+    pub destinys_child: Option<usize>,
+}
+
 #[derive(Serialize, Default)]
 pub struct Trace {
     pub seed: u64,
@@ -27,6 +41,20 @@ pub struct Trace {
     pub error: Option<PairError>,
     pub initial: Option<SimTrace>,
     pub improved: Option<SimTrace>,
+    pub precomp: Option<PrecompTrace>,
+}
+
+fn precomp_trace(pd: &PrecompData) -> PrecompTrace {
+    PrecompTrace {
+        gibsonized: pd.gibsonized_players.clone(),
+        gibson_groups: pd.gibson_groups.clone(),
+        highest_rank_hopefully: pd.highest_rank_hopefully.clone(),
+        highest_rank_absolutely: pd.highest_rank_absolutely.clone(),
+        vs_first: pd.vs_first_wins.clone(),
+        vs_factor: pd.all_control_losses.clone(),
+        destinys_child: (pd.destinys_child >= 0)
+            .then(|| pd.standings.player_index(pd.destinys_child as usize)),
+    }
 }
 
 fn sim_trace(factor: i32, standings: &Standings, sims: &SimResults) -> SimTrace {
@@ -44,13 +72,14 @@ pub fn trace(req: &Request) -> Trace {
         return Trace { seed, error: Some(e), ..Default::default() };
     }
     let mut rng = Rand::new(seed);
-    let mut standings = Standings::from_request(req);
-    let base = baseline_sims(req, &mut standings, &mut rng);
+    let pd = get_precomp_data(req, &mut rng);
+    let base = &pd.baseline;
     Trace {
         seed,
         error: None,
-        initial: Some(sim_trace(base.initial_factor, &standings, &base.initial)),
-        improved: base.improved.as_ref().map(|s| sim_trace(base.max_factor, &standings, s)),
+        initial: Some(sim_trace(base.initial_factor, &pd.standings, &base.initial)),
+        improved: base.improved.as_ref().map(|s| sim_trace(base.max_factor, &pd.standings, s)),
+        precomp: Some(precomp_trace(&pd)),
     }
 }
 
