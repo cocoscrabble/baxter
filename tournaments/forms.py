@@ -367,8 +367,9 @@ class CopConfigForm(forms.Form):
     )
     simulations = forms.IntegerField(
         min_value=1, label="Simulations",
-        help_text="Monte Carlo runs used to identify contenders. Higher is more "
-        "accurate but slower.",
+        help_text="Initial Monte Carlo runs used to identify contenders. COP then "
+        "re-simulates in batches until the contenders are clear, within a fixed "
+        "budget, so this mostly sets the minimum.",
     )
     always_wins_simulations = forms.IntegerField(
         min_value=1, label="Control-loss simulations",
@@ -379,6 +380,11 @@ class CopConfigForm(forms.Form):
     disallow_repeat_byes = forms.BooleanField(
         required=False, label="Disallow repeat byes",
     )
+    top_down_byes = forms.BooleanField(
+        required=False, label="Top-down byes",
+        help_text="Give the bye to the highest-ranked player who has had the "
+        "fewest byes, instead of letting COP choose.",
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -387,7 +393,7 @@ class CopConfigForm(forms.Form):
 
     # Field grouping for the settings page: the basic fields show at the top, the
     # rest inside the "Advanced settings" box.
-    _BASIC = ["place_prizes", "disallow_repeat_byes"]
+    _BASIC = ["place_prizes", "disallow_repeat_byes", "top_down_byes"]
     _ADVANCED = [
         "gibson_spread", "hopefulness", "control_loss_threshold",
         "control_loss_activation_round", "simulations", "always_wins_simulations",
