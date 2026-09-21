@@ -1,0 +1,1892 @@
+{
+ "players": [
+  {
+   "name": "Joey Krafchick",
+   "rating": 24,
+   "dropped": false
+  },
+  {
+   "name": "Christopher Sykes",
+   "rating": 23,
+   "dropped": false
+  },
+  {
+   "name": "Andy Hoang",
+   "rating": 22,
+   "dropped": false
+  },
+  {
+   "name": "Robin Pollock Daniel",
+   "rating": 21,
+   "dropped": false
+  },
+  {
+   "name": "Zachary Ansell",
+   "rating": 20,
+   "dropped": false
+  },
+  {
+   "name": "Billy Nakamura",
+   "rating": 19,
+   "dropped": false
+  },
+  {
+   "name": "David Spargo",
+   "rating": 18,
+   "dropped": false
+  },
+  {
+   "name": "Wes Eddings",
+   "rating": 17,
+   "dropped": false
+  },
+  {
+   "name": "Wallace Schultz",
+   "rating": 16,
+   "dropped": false
+  },
+  {
+   "name": "Eric Goldstein",
+   "rating": 15,
+   "dropped": false
+  },
+  {
+   "name": "Jonathan Lindh",
+   "rating": 14,
+   "dropped": false
+  },
+  {
+   "name": "Chris Kulig",
+   "rating": 13,
+   "dropped": true
+  },
+  {
+   "name": "Annette Obrestad",
+   "rating": 12,
+   "dropped": false
+  },
+  {
+   "name": "Joel Horn",
+   "rating": 11,
+   "dropped": false
+  },
+  {
+   "name": "Michael Ecsedy",
+   "rating": 10,
+   "dropped": false
+  },
+  {
+   "name": "Richard Popper",
+   "rating": 9,
+   "dropped": false
+  },
+  {
+   "name": "Edwin Roth",
+   "rating": 8,
+   "dropped": false
+  },
+  {
+   "name": "Michael Fleck",
+   "rating": 7,
+   "dropped": false
+  },
+  {
+   "name": "David Firstman",
+   "rating": 6,
+   "dropped": false
+  },
+  {
+   "name": "Noah Kalus",
+   "rating": 5,
+   "dropped": false
+  },
+  {
+   "name": "Noah Goldstein",
+   "rating": 4,
+   "dropped": false
+  },
+  {
+   "name": "Carol McDonald",
+   "rating": 3,
+   "dropped": false
+  },
+  {
+   "name": "David Postal",
+   "rating": 2,
+   "dropped": false
+  },
+  {
+   "name": "Vera Bigall",
+   "rating": 1,
+   "dropped": false
+  }
+ ],
+ "result_slips": [
+  {
+   "round": 1,
+   "winner_name": "Joey Krafchick",
+   "loser_name": "Vera Bigall",
+   "winner_score": 471,
+   "loser_score": 284,
+   "winner_started": false
+  },
+  {
+   "round": 1,
+   "winner_name": "Christopher Sykes",
+   "loser_name": "Andy Hoang",
+   "winner_score": 394,
+   "loser_score": 302,
+   "winner_started": false
+  },
+  {
+   "round": 1,
+   "winner_name": "Zachary Ansell",
+   "loser_name": "Robin Pollock Daniel",
+   "winner_score": 411,
+   "loser_score": 395,
+   "winner_started": false
+  },
+  {
+   "round": 1,
+   "winner_name": "David Spargo",
+   "loser_name": "Billy Nakamura",
+   "winner_score": 477,
+   "loser_score": 428,
+   "winner_started": false
+  },
+  {
+   "round": 1,
+   "winner_name": "Wallace Schultz",
+   "loser_name": "Wes Eddings",
+   "winner_score": 476,
+   "loser_score": 354,
+   "winner_started": false
+  },
+  {
+   "round": 1,
+   "winner_name": "Jonathan Lindh",
+   "loser_name": "Eric Goldstein",
+   "winner_score": 536,
+   "loser_score": 359,
+   "winner_started": false
+  },
+  {
+   "round": 1,
+   "winner_name": "Annette Obrestad",
+   "loser_name": "Chris Kulig",
+   "winner_score": 432,
+   "loser_score": 392,
+   "winner_started": false
+  },
+  {
+   "round": 1,
+   "winner_name": "Joel Horn",
+   "loser_name": "Michael Ecsedy",
+   "winner_score": 396,
+   "loser_score": 351,
+   "winner_started": false
+  },
+  {
+   "round": 1,
+   "winner_name": "Edwin Roth",
+   "loser_name": "Richard Popper",
+   "winner_score": 461,
+   "loser_score": 332,
+   "winner_started": false
+  },
+  {
+   "round": 1,
+   "winner_name": "Michael Fleck",
+   "loser_name": "David Firstman",
+   "winner_score": 414,
+   "loser_score": 404,
+   "winner_started": false
+  },
+  {
+   "round": 1,
+   "winner_name": "Noah Goldstein",
+   "loser_name": "Noah Kalus",
+   "winner_score": 418,
+   "loser_score": 271,
+   "winner_started": false
+  },
+  {
+   "round": 1,
+   "winner_name": "Carol McDonald",
+   "loser_name": "David Postal",
+   "winner_score": 428,
+   "loser_score": 358,
+   "winner_started": false
+  },
+  {
+   "round": 2,
+   "winner_name": "Joey Krafchick",
+   "loser_name": "David Postal",
+   "winner_score": 501,
+   "loser_score": 269,
+   "winner_started": false
+  },
+  {
+   "round": 2,
+   "winner_name": "Christopher Sykes",
+   "loser_name": "Robin Pollock Daniel",
+   "winner_score": 451,
+   "loser_score": 431,
+   "winner_started": false
+  },
+  {
+   "round": 2,
+   "winner_name": "Andy Hoang",
+   "loser_name": "Billy Nakamura",
+   "winner_score": 504,
+   "loser_score": 360,
+   "winner_started": false
+  },
+  {
+   "round": 2,
+   "winner_name": "Zachary Ansell",
+   "loser_name": "Wes Eddings",
+   "winner_score": 442,
+   "loser_score": 354,
+   "winner_started": false
+  },
+  {
+   "round": 2,
+   "winner_name": "Eric Goldstein",
+   "loser_name": "David Spargo",
+   "winner_score": 465,
+   "loser_score": 361,
+   "winner_started": false
+  },
+  {
+   "round": 2,
+   "winner_name": "Wallace Schultz",
+   "loser_name": "Chris Kulig",
+   "winner_score": 387,
+   "loser_score": 362,
+   "winner_started": false
+  },
+  {
+   "round": 2,
+   "winner_name": "Jonathan Lindh",
+   "loser_name": "Joel Horn",
+   "winner_score": 410,
+   "loser_score": 399,
+   "winner_started": false
+  },
+  {
+   "round": 2,
+   "winner_name": "Annette Obrestad",
+   "loser_name": "Richard Popper",
+   "winner_score": 434,
+   "loser_score": 412,
+   "winner_started": false
+  },
+  {
+   "round": 2,
+   "winner_name": "Michael Ecsedy",
+   "loser_name": "Michael Fleck",
+   "winner_score": 503,
+   "loser_score": 356,
+   "winner_started": false
+  },
+  {
+   "round": 2,
+   "winner_name": "Edwin Roth",
+   "loser_name": "Noah Kalus",
+   "winner_score": 536,
+   "loser_score": 305,
+   "winner_started": false
+  },
+  {
+   "round": 2,
+   "winner_name": "Carol McDonald",
+   "loser_name": "David Firstman",
+   "winner_score": 429,
+   "loser_score": 368,
+   "winner_started": false
+  },
+  {
+   "round": 2,
+   "winner_name": "Vera Bigall",
+   "loser_name": "Noah Goldstein",
+   "winner_score": 410,
+   "loser_score": 374,
+   "winner_started": false
+  },
+  {
+   "round": 3,
+   "winner_name": "Joey Krafchick",
+   "loser_name": "Carol McDonald",
+   "winner_score": 428,
+   "loser_score": 307,
+   "winner_started": false
+  },
+  {
+   "round": 3,
+   "winner_name": "Christopher Sykes",
+   "loser_name": "David Spargo",
+   "winner_score": 418,
+   "loser_score": 339,
+   "winner_started": false
+  },
+  {
+   "round": 3,
+   "winner_name": "Zachary Ansell",
+   "loser_name": "Andy Hoang",
+   "winner_score": 511,
+   "loser_score": 405,
+   "winner_started": false
+  },
+  {
+   "round": 3,
+   "winner_name": "Wallace Schultz",
+   "loser_name": "Robin Pollock Daniel",
+   "winner_score": 445,
+   "loser_score": 435,
+   "winner_started": false
+  },
+  {
+   "round": 3,
+   "winner_name": "Billy Nakamura",
+   "loser_name": "Jonathan Lindh",
+   "winner_score": 378,
+   "loser_score": 360,
+   "winner_started": false
+  },
+  {
+   "round": 3,
+   "winner_name": "Annette Obrestad",
+   "loser_name": "Wes Eddings",
+   "winner_score": 392,
+   "loser_score": 382,
+   "winner_started": false
+  },
+  {
+   "round": 3,
+   "winner_name": "Eric Goldstein",
+   "loser_name": "Michael Ecsedy",
+   "winner_score": 434,
+   "loser_score": 349,
+   "winner_started": false
+  },
+  {
+   "round": 3,
+   "winner_name": "Edwin Roth",
+   "loser_name": "Chris Kulig",
+   "winner_score": 411,
+   "loser_score": 400,
+   "winner_started": false
+  },
+  {
+   "round": 3,
+   "winner_name": "David Firstman",
+   "loser_name": "Joel Horn",
+   "winner_score": 444,
+   "loser_score": 414,
+   "winner_started": false
+  },
+  {
+   "round": 3,
+   "winner_name": "Richard Popper",
+   "loser_name": "Noah Goldstein",
+   "winner_score": 428,
+   "loser_score": 359,
+   "winner_started": false
+  },
+  {
+   "round": 3,
+   "winner_name": "Michael Fleck",
+   "loser_name": "David Postal",
+   "winner_score": 569,
+   "loser_score": 290,
+   "winner_started": false
+  },
+  {
+   "round": 3,
+   "winner_name": "Noah Kalus",
+   "loser_name": "Vera Bigall",
+   "winner_score": 398,
+   "loser_score": 306,
+   "winner_started": false
+  },
+  {
+   "round": 4,
+   "winner_name": "Joey Krafchick",
+   "loser_name": "Noah Goldstein",
+   "winner_score": 382,
+   "loser_score": 337,
+   "winner_started": false
+  },
+  {
+   "round": 4,
+   "winner_name": "Christopher Sykes",
+   "loser_name": "Wes Eddings",
+   "winner_score": 443,
+   "loser_score": 313,
+   "winner_started": false
+  },
+  {
+   "round": 4,
+   "winner_name": "Andy Hoang",
+   "loser_name": "Eric Goldstein",
+   "winner_score": 374,
+   "loser_score": 367,
+   "winner_started": false
+  },
+  {
+   "round": 4,
+   "winner_name": "Billy Nakamura",
+   "loser_name": "Robin Pollock Daniel",
+   "winner_score": 431,
+   "loser_score": 390,
+   "winner_started": false
+  },
+  {
+   "round": 4,
+   "winner_name": "Zachary Ansell",
+   "loser_name": "Chris Kulig",
+   "winner_score": 558,
+   "loser_score": 365,
+   "winner_started": false
+  },
+  {
+   "round": 4,
+   "winner_name": "David Spargo",
+   "loser_name": "Joel Horn",
+   "winner_score": 410,
+   "loser_score": 290,
+   "winner_started": false
+  },
+  {
+   "round": 4,
+   "winner_name": "Richard Popper",
+   "loser_name": "Wallace Schultz",
+   "winner_score": 436,
+   "loser_score": 421,
+   "winner_started": false
+  },
+  {
+   "round": 4,
+   "winner_name": "Jonathan Lindh",
+   "loser_name": "Michael Fleck",
+   "winner_score": 393,
+   "loser_score": 280,
+   "winner_started": false
+  },
+  {
+   "round": 4,
+   "winner_name": "Annette Obrestad",
+   "loser_name": "Noah Kalus",
+   "winner_score": 447,
+   "loser_score": 303,
+   "winner_started": false
+  },
+  {
+   "round": 4,
+   "winner_name": "Michael Ecsedy",
+   "loser_name": "Carol McDonald",
+   "winner_score": 388,
+   "loser_score": 316,
+   "winner_started": false
+  },
+  {
+   "round": 4,
+   "winner_name": "Edwin Roth",
+   "loser_name": "Vera Bigall",
+   "winner_score": 402,
+   "loser_score": 378,
+   "winner_started": false
+  },
+  {
+   "round": 4,
+   "winner_name": "David Firstman",
+   "loser_name": "David Postal",
+   "winner_score": 433,
+   "loser_score": 349,
+   "winner_started": false
+  },
+  {
+   "round": 5,
+   "winner_name": "Joey Krafchick",
+   "loser_name": "Noah Kalus",
+   "winner_score": 527,
+   "loser_score": 327,
+   "winner_started": false
+  },
+  {
+   "round": 5,
+   "winner_name": "Christopher Sykes",
+   "loser_name": "Jonathan Lindh",
+   "winner_score": 452,
+   "loser_score": 378,
+   "winner_started": false
+  },
+  {
+   "round": 5,
+   "winner_name": "Wallace Schultz",
+   "loser_name": "Andy Hoang",
+   "winner_score": 416,
+   "loser_score": 374,
+   "winner_started": false
+  },
+  {
+   "round": 5,
+   "winner_name": "Robin Pollock Daniel",
+   "loser_name": "Annette Obrestad",
+   "winner_score": 471,
+   "loser_score": 380,
+   "winner_started": false
+  },
+  {
+   "round": 5,
+   "winner_name": "Zachary Ansell",
+   "loser_name": "David Spargo",
+   "winner_score": 412,
+   "loser_score": 374,
+   "winner_started": false
+  },
+  {
+   "round": 5,
+   "winner_name": "Michael Ecsedy",
+   "loser_name": "Billy Nakamura",
+   "winner_score": 462,
+   "loser_score": 361,
+   "winner_started": false
+  },
+  {
+   "round": 5,
+   "winner_name": "Wes Eddings",
+   "loser_name": "Edwin Roth",
+   "winner_score": 470,
+   "loser_score": 405,
+   "winner_started": false
+  },
+  {
+   "round": 5,
+   "winner_name": "Eric Goldstein",
+   "loser_name": "David Firstman",
+   "winner_score": 448,
+   "loser_score": 356,
+   "winner_started": false
+  },
+  {
+   "round": 5,
+   "winner_name": "Noah Goldstein",
+   "loser_name": "Chris Kulig",
+   "winner_score": 491,
+   "loser_score": 344,
+   "winner_started": false
+  },
+  {
+   "round": 5,
+   "winner_name": "David Postal",
+   "loser_name": "Joel Horn",
+   "winner_score": 423,
+   "loser_score": 339,
+   "winner_started": false
+  },
+  {
+   "round": 5,
+   "winner_name": "Richard Popper",
+   "loser_name": "Vera Bigall",
+   "winner_score": 404,
+   "loser_score": 401,
+   "winner_started": false
+  },
+  {
+   "round": 5,
+   "winner_name": "Michael Fleck",
+   "loser_name": "Carol McDonald",
+   "winner_score": 385,
+   "loser_score": 369,
+   "winner_started": false
+  },
+  {
+   "round": 6,
+   "winner_name": "Joey Krafchick",
+   "loser_name": "David Firstman",
+   "winner_score": 428,
+   "loser_score": 399,
+   "winner_started": false
+  },
+  {
+   "round": 6,
+   "winner_name": "Christopher Sykes",
+   "loser_name": "Chris Kulig",
+   "winner_score": 475,
+   "loser_score": 319,
+   "winner_started": false
+  },
+  {
+   "round": 6,
+   "winner_name": "Andy Hoang",
+   "loser_name": "Joel Horn",
+   "winner_score": 495,
+   "loser_score": 311,
+   "winner_started": false
+  },
+  {
+   "round": 6,
+   "winner_name": "Robin Pollock Daniel",
+   "loser_name": "Eric Goldstein",
+   "winner_score": 459,
+   "loser_score": 411,
+   "winner_started": false
+  },
+  {
+   "round": 6,
+   "winner_name": "Zachary Ansell",
+   "loser_name": "Richard Popper",
+   "winner_score": 470,
+   "loser_score": 341,
+   "winner_started": false
+  },
+  {
+   "round": 6,
+   "winner_name": "Billy Nakamura",
+   "loser_name": "Wes Eddings",
+   "winner_score": 432,
+   "loser_score": 432,
+   "winner_started": false
+  },
+  {
+   "round": 6,
+   "winner_name": "David Spargo",
+   "loser_name": "Michael Fleck",
+   "winner_score": 416,
+   "loser_score": 336,
+   "winner_started": false
+  },
+  {
+   "round": 6,
+   "winner_name": "Noah Kalus",
+   "loser_name": "Wallace Schultz",
+   "winner_score": 439,
+   "loser_score": 395,
+   "winner_started": false
+  },
+  {
+   "round": 6,
+   "winner_name": "Jonathan Lindh",
+   "loser_name": "Carol McDonald",
+   "winner_score": 438,
+   "loser_score": 332,
+   "winner_started": false
+  },
+  {
+   "round": 6,
+   "winner_name": "Vera Bigall",
+   "loser_name": "Annette Obrestad",
+   "winner_score": 446,
+   "loser_score": 384,
+   "winner_started": false
+  },
+  {
+   "round": 6,
+   "winner_name": "Michael Ecsedy",
+   "loser_name": "David Postal",
+   "winner_score": 447,
+   "loser_score": 273,
+   "winner_started": false
+  },
+  {
+   "round": 6,
+   "winner_name": "Noah Goldstein",
+   "loser_name": "Edwin Roth",
+   "winner_score": 380,
+   "loser_score": 358,
+   "winner_started": false
+  },
+  {
+   "round": 7,
+   "winner_name": "Joey Krafchick",
+   "loser_name": "Michael Fleck",
+   "winner_score": 460,
+   "loser_score": 283,
+   "winner_started": false
+  },
+  {
+   "round": 7,
+   "winner_name": "Christopher Sykes",
+   "loser_name": "Michael Ecsedy",
+   "winner_score": 527,
+   "loser_score": 331,
+   "winner_started": false
+  },
+  {
+   "round": 7,
+   "winner_name": "Annette Obrestad",
+   "loser_name": "Andy Hoang",
+   "winner_score": 422,
+   "loser_score": 381,
+   "winner_started": false
+  },
+  {
+   "round": 7,
+   "winner_name": "Robin Pollock Daniel",
+   "loser_name": "Edwin Roth",
+   "winner_score": 422,
+   "loser_score": 363,
+   "winner_started": false
+  },
+  {
+   "round": 7,
+   "winner_name": "Zachary Ansell",
+   "loser_name": "Jonathan Lindh",
+   "winner_score": 376,
+   "loser_score": 374,
+   "winner_started": false
+  },
+  {
+   "round": 7,
+   "winner_name": "Billy Nakamura",
+   "loser_name": "David Firstman",
+   "winner_score": 347,
+   "loser_score": 328,
+   "winner_started": false
+  },
+  {
+   "round": 7,
+   "winner_name": "David Spargo",
+   "loser_name": "Wallace Schultz",
+   "winner_score": 453,
+   "loser_score": 349,
+   "winner_started": false
+  },
+  {
+   "round": 7,
+   "winner_name": "Noah Goldstein",
+   "loser_name": "Wes Eddings",
+   "winner_score": 444,
+   "loser_score": 278,
+   "winner_started": false
+  },
+  {
+   "round": 7,
+   "winner_name": "Eric Goldstein",
+   "loser_name": "David Postal",
+   "winner_score": 422,
+   "loser_score": 404,
+   "winner_started": false
+  },
+  {
+   "round": 7,
+   "winner_name": "Chris Kulig",
+   "loser_name": "Vera Bigall",
+   "winner_score": 435,
+   "loser_score": 352,
+   "winner_started": false
+  },
+  {
+   "round": 7,
+   "winner_name": "Carol McDonald",
+   "loser_name": "Joel Horn",
+   "winner_score": 464,
+   "loser_score": 400,
+   "winner_started": false
+  },
+  {
+   "round": 7,
+   "winner_name": "Richard Popper",
+   "loser_name": "Noah Kalus",
+   "winner_score": 430,
+   "loser_score": 412,
+   "winner_started": false
+  },
+  {
+   "round": 8,
+   "winner_name": "Edwin Roth",
+   "loser_name": "Joey Krafchick",
+   "winner_score": 417,
+   "loser_score": 337,
+   "winner_started": false
+  },
+  {
+   "round": 8,
+   "winner_name": "Christopher Sykes",
+   "loser_name": "Richard Popper",
+   "winner_score": 389,
+   "loser_score": 381,
+   "winner_started": false
+  },
+  {
+   "round": 8,
+   "winner_name": "Andy Hoang",
+   "loser_name": "Michael Fleck",
+   "winner_score": 431,
+   "loser_score": 284,
+   "winner_started": false
+  },
+  {
+   "round": 8,
+   "winner_name": "Joel Horn",
+   "loser_name": "Robin Pollock Daniel",
+   "winner_score": 381,
+   "loser_score": 324,
+   "winner_started": false
+  },
+  {
+   "round": 8,
+   "winner_name": "Zachary Ansell",
+   "loser_name": "Noah Kalus",
+   "winner_score": 401,
+   "loser_score": 370,
+   "winner_started": false
+  },
+  {
+   "round": 8,
+   "winner_name": "Billy Nakamura",
+   "loser_name": "Chris Kulig",
+   "winner_score": 525,
+   "loser_score": 319,
+   "winner_started": false
+  },
+  {
+   "round": 8,
+   "winner_name": "David Spargo",
+   "loser_name": "Carol McDonald",
+   "winner_score": 424,
+   "loser_score": 360,
+   "winner_started": false
+  },
+  {
+   "round": 8,
+   "winner_name": "Eric Goldstein",
+   "loser_name": "Wes Eddings",
+   "winner_score": 437,
+   "loser_score": 402,
+   "winner_started": false
+  },
+  {
+   "round": 8,
+   "winner_name": "Wallace Schultz",
+   "loser_name": "Vera Bigall",
+   "winner_score": 431,
+   "loser_score": 388,
+   "winner_started": false
+  },
+  {
+   "round": 8,
+   "winner_name": "Jonathan Lindh",
+   "loser_name": "David Postal",
+   "winner_score": 391,
+   "loser_score": 365,
+   "winner_started": false
+  },
+  {
+   "round": 8,
+   "winner_name": "Annette Obrestad",
+   "loser_name": "Noah Goldstein",
+   "winner_score": 472,
+   "loser_score": 317,
+   "winner_started": false
+  },
+  {
+   "round": 8,
+   "winner_name": "Michael Ecsedy",
+   "loser_name": "David Firstman",
+   "winner_score": 378,
+   "loser_score": 364,
+   "winner_started": false
+  },
+  {
+   "round": 9,
+   "winner_name": "Joey Krafchick",
+   "loser_name": "Richard Popper",
+   "winner_score": 449,
+   "loser_score": 411,
+   "winner_started": false
+  },
+  {
+   "round": 9,
+   "winner_name": "Christopher Sykes",
+   "loser_name": "David Firstman",
+   "winner_score": 368,
+   "loser_score": 360,
+   "winner_started": false
+  },
+  {
+   "round": 9,
+   "winner_name": "Andy Hoang",
+   "loser_name": "Edwin Roth",
+   "winner_score": 505,
+   "loser_score": 375,
+   "winner_started": false
+  },
+  {
+   "round": 9,
+   "winner_name": "Robin Pollock Daniel",
+   "loser_name": "Noah Goldstein",
+   "winner_score": 403,
+   "loser_score": 314,
+   "winner_started": false
+  },
+  {
+   "round": 9,
+   "winner_name": "Zachary Ansell",
+   "loser_name": "Michael Ecsedy",
+   "winner_score": 479,
+   "loser_score": 322,
+   "winner_started": false
+  },
+  {
+   "round": 9,
+   "winner_name": "Billy Nakamura",
+   "loser_name": "David Postal",
+   "winner_score": 374,
+   "loser_score": 351,
+   "winner_started": false
+  },
+  {
+   "round": 9,
+   "winner_name": "Annette Obrestad",
+   "loser_name": "David Spargo",
+   "winner_score": 446,
+   "loser_score": 419,
+   "winner_started": false
+  },
+  {
+   "round": 9,
+   "winner_name": "Vera Bigall",
+   "loser_name": "Wes Eddings",
+   "winner_score": 442,
+   "loser_score": 411,
+   "winner_started": false
+  },
+  {
+   "round": 9,
+   "winner_name": "Wallace Schultz",
+   "loser_name": "Jonathan Lindh",
+   "winner_score": 405,
+   "loser_score": 384,
+   "winner_started": false
+  },
+  {
+   "round": 9,
+   "winner_name": "Eric Goldstein",
+   "loser_name": "Carol McDonald",
+   "winner_score": 480,
+   "loser_score": 363,
+   "winner_started": false
+  },
+  {
+   "round": 9,
+   "winner_name": "Noah Kalus",
+   "loser_name": "Chris Kulig",
+   "winner_score": 480,
+   "loser_score": 265,
+   "winner_started": false
+  },
+  {
+   "round": 9,
+   "winner_name": "Michael Fleck",
+   "loser_name": "Joel Horn",
+   "winner_score": 393,
+   "loser_score": 387,
+   "winner_started": false
+  },
+  {
+   "round": 10,
+   "winner_name": "Joey Krafchick",
+   "loser_name": "Michael Ecsedy",
+   "winner_score": 587,
+   "loser_score": 354,
+   "winner_started": false
+  },
+  {
+   "round": 10,
+   "winner_name": "Christopher Sykes",
+   "loser_name": "Noah Kalus",
+   "winner_score": 581,
+   "loser_score": 201,
+   "winner_started": false
+  },
+  {
+   "round": 10,
+   "winner_name": "Andy Hoang",
+   "loser_name": "Carol McDonald",
+   "winner_score": 406,
+   "loser_score": 401,
+   "winner_started": false
+  },
+  {
+   "round": 10,
+   "winner_name": "Robin Pollock Daniel",
+   "loser_name": "Michael Fleck",
+   "winner_score": 429,
+   "loser_score": 389,
+   "winner_started": false
+  },
+  {
+   "round": 10,
+   "winner_name": "Zachary Ansell",
+   "loser_name": "Vera Bigall",
+   "winner_score": 435,
+   "loser_score": 285,
+   "winner_started": false
+  },
+  {
+   "round": 10,
+   "winner_name": "Billy Nakamura",
+   "loser_name": "Richard Popper",
+   "winner_score": 437,
+   "loser_score": 316,
+   "winner_started": false
+  },
+  {
+   "round": 10,
+   "winner_name": "David Postal",
+   "loser_name": "David Spargo",
+   "winner_score": 450,
+   "loser_score": 315,
+   "winner_started": false
+  },
+  {
+   "round": 10,
+   "winner_name": "Wes Eddings",
+   "loser_name": "Joel Horn",
+   "winner_score": 425,
+   "loser_score": 414,
+   "winner_started": false
+  },
+  {
+   "round": 10,
+   "winner_name": "Wallace Schultz",
+   "loser_name": "Noah Goldstein",
+   "winner_score": 430,
+   "loser_score": 356,
+   "winner_started": false
+  },
+  {
+   "round": 10,
+   "winner_name": "Eric Goldstein",
+   "loser_name": "Bye",
+   "winner_score": 50,
+   "loser_score": 0,
+   "winner_started": false
+  },
+  {
+   "round": 10,
+   "winner_name": "David Firstman",
+   "loser_name": "Jonathan Lindh",
+   "winner_score": 431,
+   "loser_score": 412,
+   "winner_started": false
+  },
+  {
+   "round": 10,
+   "winner_name": "Bye",
+   "loser_name": "Chris Kulig",
+   "winner_score": 50,
+   "loser_score": 0,
+   "winner_started": false
+  },
+  {
+   "round": 10,
+   "winner_name": "Edwin Roth",
+   "loser_name": "Annette Obrestad",
+   "winner_score": 414,
+   "loser_score": 400,
+   "winner_started": false
+  },
+  {
+   "round": 11,
+   "winner_name": "Joey Krafchick",
+   "loser_name": "Joel Horn",
+   "winner_score": 416,
+   "loser_score": 389,
+   "winner_started": false
+  },
+  {
+   "round": 11,
+   "winner_name": "Christopher Sykes",
+   "loser_name": "David Postal",
+   "winner_score": 500,
+   "loser_score": 387,
+   "winner_started": false
+  },
+  {
+   "round": 11,
+   "winner_name": "Andy Hoang",
+   "loser_name": "Noah Goldstein",
+   "winner_score": 427,
+   "loser_score": 335,
+   "winner_started": false
+  },
+  {
+   "round": 11,
+   "winner_name": "Robin Pollock Daniel",
+   "loser_name": "Vera Bigall",
+   "winner_score": 435,
+   "loser_score": 291,
+   "winner_started": false
+  },
+  {
+   "round": 11,
+   "winner_name": "David Firstman",
+   "loser_name": "Zachary Ansell",
+   "winner_score": 427,
+   "loser_score": 328,
+   "winner_started": false
+  },
+  {
+   "round": 11,
+   "winner_name": "Carol McDonald",
+   "loser_name": "Billy Nakamura",
+   "winner_score": 379,
+   "loser_score": 357,
+   "winner_started": false
+  },
+  {
+   "round": 11,
+   "winner_name": "David Spargo",
+   "loser_name": "Edwin Roth",
+   "winner_score": 427,
+   "loser_score": 355,
+   "winner_started": false
+  },
+  {
+   "round": 11,
+   "winner_name": "Wes Eddings",
+   "loser_name": "Noah Kalus",
+   "winner_score": 453,
+   "loser_score": 436,
+   "winner_started": false
+  },
+  {
+   "round": 11,
+   "winner_name": "Wallace Schultz",
+   "loser_name": "Michael Ecsedy",
+   "winner_score": 380,
+   "loser_score": 378,
+   "winner_started": false
+  },
+  {
+   "round": 11,
+   "winner_name": "Eric Goldstein",
+   "loser_name": "Michael Fleck",
+   "winner_score": 469,
+   "loser_score": 293,
+   "winner_started": false
+  },
+  {
+   "round": 11,
+   "winner_name": "Annette Obrestad",
+   "loser_name": "Jonathan Lindh",
+   "winner_score": 489,
+   "loser_score": 314,
+   "winner_started": false
+  },
+  {
+   "round": 11,
+   "winner_name": "Bye",
+   "loser_name": "Chris Kulig",
+   "winner_score": 50,
+   "loser_score": 0,
+   "winner_started": false
+  },
+  {
+   "round": 11,
+   "winner_name": "Richard Popper",
+   "loser_name": "Bye",
+   "winner_score": 50,
+   "loser_score": 0,
+   "winner_started": false
+  },
+  {
+   "round": 12,
+   "winner_name": "Joey Krafchick",
+   "loser_name": "Annette Obrestad",
+   "winner_score": 542,
+   "loser_score": 315,
+   "winner_started": false
+  },
+  {
+   "round": 12,
+   "winner_name": "Christopher Sykes",
+   "loser_name": "Vera Bigall",
+   "winner_score": 399,
+   "loser_score": 383,
+   "winner_started": false
+  },
+  {
+   "round": 12,
+   "winner_name": "David Postal",
+   "loser_name": "Andy Hoang",
+   "winner_score": 465,
+   "loser_score": 378,
+   "winner_started": false
+  },
+  {
+   "round": 12,
+   "winner_name": "Robin Pollock Daniel",
+   "loser_name": "Carol McDonald",
+   "winner_score": 464,
+   "loser_score": 335,
+   "winner_started": false
+  },
+  {
+   "round": 12,
+   "winner_name": "Zachary Ansell",
+   "loser_name": "Noah Goldstein",
+   "winner_score": 422,
+   "loser_score": 411,
+   "winner_started": false
+  },
+  {
+   "round": 12,
+   "winner_name": "Billy Nakamura",
+   "loser_name": "Noah Kalus",
+   "winner_score": 491,
+   "loser_score": 312,
+   "winner_started": false
+  },
+  {
+   "round": 12,
+   "winner_name": "David Spargo",
+   "loser_name": "David Firstman",
+   "winner_score": 456,
+   "loser_score": 334,
+   "winner_started": false
+  },
+  {
+   "round": 12,
+   "winner_name": "Wes Eddings",
+   "loser_name": "Michael Fleck",
+   "winner_score": 474,
+   "loser_score": 284,
+   "winner_started": false
+  },
+  {
+   "round": 12,
+   "winner_name": "Wallace Schultz",
+   "loser_name": "Edwin Roth",
+   "winner_score": 464,
+   "loser_score": 369,
+   "winner_started": false
+  },
+  {
+   "round": 12,
+   "winner_name": "Richard Popper",
+   "loser_name": "Eric Goldstein",
+   "winner_score": 509,
+   "loser_score": 430,
+   "winner_started": false
+  },
+  {
+   "round": 12,
+   "winner_name": "Jonathan Lindh",
+   "loser_name": "Michael Ecsedy",
+   "winner_score": 417,
+   "loser_score": 383,
+   "winner_started": false
+  },
+  {
+   "round": 12,
+   "winner_name": "Bye",
+   "loser_name": "Chris Kulig",
+   "winner_score": 50,
+   "loser_score": 0,
+   "winner_started": false
+  },
+  {
+   "round": 12,
+   "winner_name": "Joel Horn",
+   "loser_name": "Bye",
+   "winner_score": 50,
+   "loser_score": 0,
+   "winner_started": false
+  },
+  {
+   "round": 13,
+   "winner_name": "Joey Krafchick",
+   "loser_name": "Bye",
+   "winner_score": 50,
+   "loser_score": 0,
+   "winner_started": false
+  },
+  {
+   "round": 13,
+   "winner_name": "Christopher Sykes",
+   "loser_name": "Carol McDonald",
+   "winner_score": 454,
+   "loser_score": 315,
+   "winner_started": false
+  },
+  {
+   "round": 13,
+   "winner_name": "Andy Hoang",
+   "loser_name": "Vera Bigall",
+   "winner_score": 464,
+   "loser_score": 390,
+   "winner_started": false
+  },
+  {
+   "round": 13,
+   "winner_name": "Robin Pollock Daniel",
+   "loser_name": "Noah Kalus",
+   "winner_score": 453,
+   "loser_score": 429,
+   "winner_started": false
+  },
+  {
+   "round": 13,
+   "winner_name": "David Postal",
+   "loser_name": "Zachary Ansell",
+   "winner_score": 418,
+   "loser_score": 374,
+   "winner_started": false
+  },
+  {
+   "round": 13,
+   "winner_name": "Billy Nakamura",
+   "loser_name": "Michael Fleck",
+   "winner_score": 451,
+   "loser_score": 385,
+   "winner_started": false
+  },
+  {
+   "round": 13,
+   "winner_name": "Noah Goldstein",
+   "loser_name": "David Spargo",
+   "winner_score": 528,
+   "loser_score": 395,
+   "winner_started": false
+  },
+  {
+   "round": 13,
+   "winner_name": "Richard Popper",
+   "loser_name": "Wes Eddings",
+   "winner_score": 422,
+   "loser_score": 414,
+   "winner_started": false
+  },
+  {
+   "round": 13,
+   "winner_name": "David Firstman",
+   "loser_name": "Wallace Schultz",
+   "winner_score": 456,
+   "loser_score": 397,
+   "winner_started": false
+  },
+  {
+   "round": 13,
+   "winner_name": "Eric Goldstein",
+   "loser_name": "Joel Horn",
+   "winner_score": 392,
+   "loser_score": 345,
+   "winner_started": false
+  },
+  {
+   "round": 13,
+   "winner_name": "Jonathan Lindh",
+   "loser_name": "Edwin Roth",
+   "winner_score": 447,
+   "loser_score": 363,
+   "winner_started": false
+  },
+  {
+   "round": 13,
+   "winner_name": "Bye",
+   "loser_name": "Chris Kulig",
+   "winner_score": 50,
+   "loser_score": 0,
+   "winner_started": false
+  },
+  {
+   "round": 13,
+   "winner_name": "Annette Obrestad",
+   "loser_name": "Michael Ecsedy",
+   "winner_score": 504,
+   "loser_score": 309,
+   "winner_started": false
+  },
+  {
+   "round": 14,
+   "winner_name": "Joey Krafchick",
+   "loser_name": "Jonathan Lindh",
+   "winner_score": 395,
+   "loser_score": 361,
+   "winner_started": false
+  },
+  {
+   "round": 14,
+   "winner_name": "Christopher Sykes",
+   "loser_name": "Noah Goldstein",
+   "winner_score": 406,
+   "loser_score": 367,
+   "winner_started": false
+  },
+  {
+   "round": 14,
+   "winner_name": "Andy Hoang",
+   "loser_name": "David Firstman",
+   "winner_score": 384,
+   "loser_score": 369,
+   "winner_started": false
+  },
+  {
+   "round": 14,
+   "winner_name": "David Postal",
+   "loser_name": "Robin Pollock Daniel",
+   "winner_score": 379,
+   "loser_score": 330,
+   "winner_started": false
+  },
+  {
+   "round": 14,
+   "winner_name": "Zachary Ansell",
+   "loser_name": "Edwin Roth",
+   "winner_score": 523,
+   "loser_score": 312,
+   "winner_started": false
+  },
+  {
+   "round": 14,
+   "winner_name": "Vera Bigall",
+   "loser_name": "Billy Nakamura",
+   "winner_score": 419,
+   "loser_score": 370,
+   "winner_started": false
+  },
+  {
+   "round": 14,
+   "winner_name": "Michael Ecsedy",
+   "loser_name": "David Spargo",
+   "winner_score": 485,
+   "loser_score": 460,
+   "winner_started": false
+  },
+  {
+   "round": 14,
+   "winner_name": "Wes Eddings",
+   "loser_name": "Carol McDonald",
+   "winner_score": 439,
+   "loser_score": 390,
+   "winner_started": false
+  },
+  {
+   "round": 14,
+   "winner_name": "Wallace Schultz",
+   "loser_name": "Annette Obrestad",
+   "winner_score": 524,
+   "loser_score": 253,
+   "winner_started": false
+  },
+  {
+   "round": 14,
+   "winner_name": "Eric Goldstein",
+   "loser_name": "Noah Kalus",
+   "winner_score": 414,
+   "loser_score": 395,
+   "winner_started": false
+  },
+  {
+   "round": 14,
+   "winner_name": "Bye",
+   "loser_name": "Chris Kulig",
+   "winner_score": 50,
+   "loser_score": 0,
+   "winner_started": false
+  },
+  {
+   "round": 14,
+   "winner_name": "Richard Popper",
+   "loser_name": "Joel Horn",
+   "winner_score": 572,
+   "loser_score": 405,
+   "winner_started": false
+  },
+  {
+   "round": 14,
+   "winner_name": "Michael Fleck",
+   "loser_name": "Bye",
+   "winner_score": 50,
+   "loser_score": 0,
+   "winner_started": false
+  },
+  {
+   "round": 15,
+   "winner_name": "Joey Krafchick",
+   "loser_name": "Eric Goldstein",
+   "winner_score": 607,
+   "loser_score": 347,
+   "winner_started": false
+  },
+  {
+   "round": 15,
+   "winner_name": "Christopher Sykes",
+   "loser_name": "Michael Fleck",
+   "winner_score": 484,
+   "loser_score": 290,
+   "winner_started": false
+  },
+  {
+   "round": 15,
+   "winner_name": "Andy Hoang",
+   "loser_name": "Noah Kalus",
+   "winner_score": 425,
+   "loser_score": 402,
+   "winner_started": false
+  },
+  {
+   "round": 15,
+   "winner_name": "Richard Popper",
+   "loser_name": "Robin Pollock Daniel",
+   "winner_score": 490,
+   "loser_score": 393,
+   "winner_started": false
+  },
+  {
+   "round": 15,
+   "winner_name": "Zachary Ansell",
+   "loser_name": "Carol McDonald",
+   "winner_score": 431,
+   "loser_score": 372,
+   "winner_started": false
+  },
+  {
+   "round": 15,
+   "winner_name": "Billy Nakamura",
+   "loser_name": "Joel Horn",
+   "winner_score": 401,
+   "loser_score": 370,
+   "winner_started": false
+  },
+  {
+   "round": 15,
+   "winner_name": "David Spargo",
+   "loser_name": "Vera Bigall",
+   "winner_score": 414,
+   "loser_score": 377,
+   "winner_started": false
+  },
+  {
+   "round": 15,
+   "winner_name": "Wes Eddings",
+   "loser_name": "Bye",
+   "winner_score": 50,
+   "loser_score": 0,
+   "winner_started": false
+  },
+  {
+   "round": 15,
+   "winner_name": "David Postal",
+   "loser_name": "Wallace Schultz",
+   "winner_score": 444,
+   "loser_score": 430,
+   "winner_started": false
+  },
+  {
+   "round": 15,
+   "winner_name": "Jonathan Lindh",
+   "loser_name": "Noah Goldstein",
+   "winner_score": 410,
+   "loser_score": 372,
+   "winner_started": false
+  },
+  {
+   "round": 15,
+   "winner_name": "Bye",
+   "loser_name": "Chris Kulig",
+   "winner_score": 50,
+   "loser_score": 0,
+   "winner_started": false
+  },
+  {
+   "round": 15,
+   "winner_name": "David Firstman",
+   "loser_name": "Annette Obrestad",
+   "winner_score": 438,
+   "loser_score": 360,
+   "winner_started": false
+  },
+  {
+   "round": 15,
+   "winner_name": "Edwin Roth",
+   "loser_name": "Michael Ecsedy",
+   "winner_score": 522,
+   "loser_score": 324,
+   "winner_started": false
+  },
+  {
+   "round": 16,
+   "winner_name": "Joey Krafchick",
+   "loser_name": "Wallace Schultz",
+   "winner_score": 457,
+   "loser_score": 418,
+   "winner_started": false
+  },
+  {
+   "round": 16,
+   "winner_name": "Edwin Roth",
+   "loser_name": "Christopher Sykes",
+   "winner_score": 473,
+   "loser_score": 404,
+   "winner_started": false
+  },
+  {
+   "round": 16,
+   "winner_name": "Andy Hoang",
+   "loser_name": "Michael Ecsedy",
+   "winner_score": 419,
+   "loser_score": 358,
+   "winner_started": false
+  },
+  {
+   "round": 16,
+   "winner_name": "David Firstman",
+   "loser_name": "Robin Pollock Daniel",
+   "winner_score": 373,
+   "loser_score": 368,
+   "winner_started": false
+  },
+  {
+   "round": 16,
+   "winner_name": "Zachary Ansell",
+   "loser_name": "Annette Obrestad",
+   "winner_score": 499,
+   "loser_score": 336,
+   "winner_started": false
+  },
+  {
+   "round": 16,
+   "winner_name": "Billy Nakamura",
+   "loser_name": "Noah Goldstein",
+   "winner_score": 396,
+   "loser_score": 331,
+   "winner_started": false
+  },
+  {
+   "round": 16,
+   "winner_name": "David Spargo",
+   "loser_name": "Jonathan Lindh",
+   "winner_score": 534,
+   "loser_score": 346,
+   "winner_started": false
+  },
+  {
+   "round": 16,
+   "winner_name": "Bye",
+   "loser_name": "Wes Eddings",
+   "winner_score": 50,
+   "loser_score": 0,
+   "winner_started": false
+  },
+  {
+   "round": 16,
+   "winner_name": "Eric Goldstein",
+   "loser_name": "Vera Bigall",
+   "winner_score": 442,
+   "loser_score": 431,
+   "winner_started": false
+  },
+  {
+   "round": 16,
+   "winner_name": "Bye",
+   "loser_name": "Chris Kulig",
+   "winner_score": 50,
+   "loser_score": 0,
+   "winner_started": false
+  },
+  {
+   "round": 16,
+   "winner_name": "Joel Horn",
+   "loser_name": "Noah Kalus",
+   "winner_score": 432,
+   "loser_score": 287,
+   "winner_started": false
+  },
+  {
+   "round": 16,
+   "winner_name": "Richard Popper",
+   "loser_name": "Michael Fleck",
+   "winner_score": 420,
+   "loser_score": 405,
+   "winner_started": false
+  },
+  {
+   "round": 16,
+   "winner_name": "Carol McDonald",
+   "loser_name": "Bye",
+   "winner_score": 50,
+   "loser_score": 0,
+   "winner_started": false
+  },
+  {
+   "round": 16,
+   "winner_name": "David Postal",
+   "loser_name": "Bye",
+   "winner_score": 50,
+   "loser_score": 0,
+   "winner_started": false
+  }
+ ],
+ "round_pairings": [
+  {
+   "round": 1,
+   "pairing": "COP",
+   "start_round": 0
+  },
+  {
+   "round": 2,
+   "pairing": "COP",
+   "start_round": 1
+  },
+  {
+   "round": 3,
+   "pairing": "COP",
+   "start_round": 2
+  },
+  {
+   "round": 4,
+   "pairing": "COP",
+   "start_round": 3
+  },
+  {
+   "round": 5,
+   "pairing": "COP",
+   "start_round": 4
+  },
+  {
+   "round": 6,
+   "pairing": "COP",
+   "start_round": 5
+  },
+  {
+   "round": 7,
+   "pairing": "COP",
+   "start_round": 6
+  },
+  {
+   "round": 8,
+   "pairing": "COP",
+   "start_round": 7
+  },
+  {
+   "round": 9,
+   "pairing": "COP",
+   "start_round": 8
+  },
+  {
+   "round": 10,
+   "pairing": "COP",
+   "start_round": 9
+  },
+  {
+   "round": 11,
+   "pairing": "COP",
+   "start_round": 10
+  },
+  {
+   "round": 12,
+   "pairing": "COP",
+   "start_round": 11
+  },
+  {
+   "round": 13,
+   "pairing": "COP",
+   "start_round": 12
+  },
+  {
+   "round": 14,
+   "pairing": "COP",
+   "start_round": 13
+  },
+  {
+   "round": 15,
+   "pairing": "COP",
+   "start_round": 14
+  },
+  {
+   "round": 16,
+   "pairing": "COP",
+   "start_round": 15
+  },
+  {
+   "round": 17,
+   "pairing": "COP",
+   "start_round": 16
+  },
+  {
+   "round": 18,
+   "pairing": "COP",
+   "start_round": 17
+  },
+  {
+   "round": 19,
+   "pairing": "COP",
+   "start_round": 18
+  },
+  {
+   "round": 20,
+   "pairing": "COP",
+   "start_round": 19
+  },
+  {
+   "round": 21,
+   "pairing": "COP",
+   "start_round": 20
+  },
+  {
+   "round": 22,
+   "pairing": "COP",
+   "start_round": 21
+  },
+  {
+   "round": 23,
+   "pairing": "COP",
+   "start_round": 22
+  },
+  {
+   "round": 24,
+   "pairing": "COP",
+   "start_round": 23
+  },
+  {
+   "round": 25,
+   "pairing": "COP",
+   "start_round": 24
+  },
+  {
+   "round": 26,
+   "pairing": "COP",
+   "start_round": 25
+  },
+  {
+   "round": 27,
+   "pairing": "COP",
+   "start_round": 26
+  }
+ ],
+ "cop_config": {
+  "place_prizes": 5,
+  "gibson_spreads": [
+   200
+  ],
+  "hopefulness": [
+   0.01
+  ],
+  "control_loss_thresholds": [
+   0.25
+  ],
+  "control_loss_activation_round": 0,
+  "simulations": 50000,
+  "always_wins_simulations": 50000,
+  "disallow_repeat_byes": false
+ },
+ "fixed_pairings": {
+  "17": [
+   [
+    "Joey Krafchick",
+    "David Postal"
+   ],
+   [
+    "Noah Kalus",
+    "Bye"
+   ]
+  ]
+ },
+ "seed": 1735968364
+}

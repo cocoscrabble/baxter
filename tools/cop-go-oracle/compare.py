@@ -221,8 +221,10 @@ def compare(path, workers):
     if go != rust:
         weights, chosen = parse_weights(case["log"])
         if chosen is not None:
-            theirs, _ = score(go, weights)
-            ours, barred = score(rust, weights)
+            # Pinned games are placed, not matched — upstream codes them `PP`
+            # in its own table — and both sides hold them, so they are left out.
+            theirs, _ = score(go - pins, weights)
+            ours, barred = score(rust - pins, weights)
             if barred:
                 case["barred"] = barred
             else:

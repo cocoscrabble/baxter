@@ -121,14 +121,14 @@ for something Baxter cannot express (class prizes, top-down byes, …).
 ### Findings at the pin (2026-09-21)
 
 The converter reproduces upstream's standings on every fixture. Of the 26:
-1 match, 1 both-refuse, and **no comparable case agrees**:
+1 match, 1 both-refuse, and **no other comparable case agrees**:
 
-- **`PIN` ×3 — a real Baxter bug.** The port enforces a fixed pairing only as a
-  weight (`PROHIBITIVE_WEIGHT` on the pinned player's other pairs, in
-  `build_weight_edges`), and the pinned game can carry prohibitive weights of
-  its own, so the matching can find it cheaper to break the pin. Upstream now
-  excludes those pairs outright (`PP`). A director's fixed pairing in a COP
-  round can therefore be silently ignored.
+- **`PIN` ×3 — a real Baxter bug, since fixed.** The port enforced a fixed
+  pairing only as a weight, which the matching could outbid when the pinned game
+  carried prohibitive weights of its own. Pinned players now sit outside the
+  matching and their games are placed as given, as upstream does; see
+  `scrabble-pairing/tests/cop_pins.rs`, which runs the Albany position that
+  broke. No case reports `PIN` any more.
 - **Round one.** With no results, upstream pairs adjacent seeds (1–2, 3–4);
   the port uses COP.pm's Swiss-style split (1–5, 2–6). Upstream also breaks
   equal records by *descending* player index.
