@@ -31,6 +31,8 @@ class ReplayError(Exception):
 
 # Events that consume draft pairings; regenerate the division first so the draft
 # they act on exists (reproducing the lazy Pair-Rounds render the director did).
+# Only for a publish logged before publishes recorded their rows: one that
+# carries ``pairings`` installs those instead (``commands._publish``).
 NEEDS_REGEN = {"round_published", "rounds_published"}
 
 # ---------------------------------------------------------------------------
@@ -158,6 +160,10 @@ class ReplayContext:
     def __init__(self):
         self.tournament = None
         self._actors = {}
+        # Engine drift: recorded publishes today's engine would pair differently
+        # (``generate_pairings.install_published``). Informational — the
+        # recorded board is what replays.
+        self.drift = []
 
     def actor(self, username):
         if not username:
@@ -351,7 +357,7 @@ def apply_event(ctx, event):
     if payload.get("division"):
         division = ctx.tournament.divisions.filter(name=payload["division"]).first()
 
-    if event_type in NEEDS_REGEN and division is not None:
+    if event_type in NEEDS_REGEN and division is not None and "pairings" not in payload:
         regenerate_pairings(division)
 
     if event_type in GRID_BY_EVENT:
@@ -371,9 +377,22 @@ def replay(events, *, verify=False, upto=None):
 
     ``upto`` stops after that seq. ``verify`` compares each event's recorded
     digest against the replayed division's digest and raises on the first
-    mismatch. Returns the ReplayContext (with the reconstructed tournament).
+    mismatch. Returns the ReplayContext (with the reconstructed tournament), whose
+    ``drift`` lists the recorded publishes today's engine would have paired
+    differently — reported, not failed: what was published is what replays.
     """
+    from tournaments.generate_pairings import ENGINE_DRIFT
+
     ctx = ReplayContext()
+    token = ENGINE_DRIFT.set(ctx.drift)
+    try:
+        _replay_events(ctx, events, verify=verify, upto=upto)
+    finally:
+        ENGINE_DRIFT.reset(token)
+    return ctx
+
+
+def _replay_events(ctx, events, *, verify, upto):
     for event in events:
         if upto is not None and event.get("seq", 0) > upto:
             break
@@ -389,7 +408,6 @@ def replay(events, *, verify=False, upto=None):
                     f"({event['event_type']}): recorded {event['digest']} "
                     f"!= replayed {actual}"
                 )
-    return ctx
 
 
 def events_from_tournament(tournament):

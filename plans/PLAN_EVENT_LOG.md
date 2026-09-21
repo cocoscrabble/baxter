@@ -36,6 +36,44 @@ plan's replay phases after that seed lands** (cutover Phase 2). Before then,
 recording works fine but replays of Random-strategy rounds won't be
 bit-faithful.
 
+### A publish records the board it printed — **added 2026-09-21**
+
+The second exception to "intent, not effect", and a deliberate one. A publish
+used to record `{division, round}` and replay re-ran the engine to decide what
+had been published. That made every engine change — a bug fix as much as a new
+algorithm — a rewrite of history: an old log replayed through a fixed engine
+printed a different board, the digest broke at that publish, and everything
+after it was lost with it. (It surfaced when a COP bug fix and a planned COP
+re-port both turned out to break every existing COP log.)
+
+A published round is a fact, not a derivation: it is the board that was printed
+and played. So `round_published` / `rounds_published` now carry `pairings`
+(`{round: [row, …]}`, read back from storage after the publish; players by
+number, playoff games by `[series key, position]`), and replay installs those
+rows instead of trusting the engine (`commands._publish`,
+`generate_pairings.install_published`). Everything downstream — materialized
+byes and forfeits, round status, later rounds' standings — follows from the
+installed board exactly as before.
+
+Replay stays a test. It still regenerates before a recorded publish (it needs
+that for a playoff's series rows anyway) and compares: a board today's engine
+would print differently is **engine drift** — collected on
+`ReplayContext.drift`, printed by `replay_tournament`, and a failure in the
+fuzzer, where one build writes and replays its own log and drift can only mean
+nondeterminism. Drafts remain derived and outside the digest.
+
+A publish logged before this carries no board and still replays by
+regenerating, so an engine change can break an old log at its first publish.
+That is accepted rather than backfilled: replay exists to diagnose what happened
+in a live tournament, and every tournament logged before this had finished. A
+backfill (replay each log, and record a board only where every digest
+reproduces) was written and dropped for that reason.
+
+What this does *not* cover: state derived from a published board later on —
+a playoff window repaired when a result lands, and the standings in the digest
+— is still recomputed at replay, so a fix to that logic still shows up as a
+digest mismatch.
+
 ### A grid save records what it changed — **added after phase 6**
 
 The one place "intent, not effect" was awkward. A grid save's intent *is* a

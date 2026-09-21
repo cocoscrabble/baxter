@@ -173,14 +173,59 @@ def _invalidate_drafts(division):
     division.round_pairings_set.filter(status=RoundPairings.DRAFT).delete()
 
 
+def _publish(division, rounds, payload):
+    """Publish, recording what went out; or, replaying, put back what did.
+
+    A published round is a printed board, so the event records its rows
+    (``pairings``) and replay installs them rather than asking today's engine
+    — otherwise every engine bug fix would silently rewrite old tournaments on
+    replay. See ``generate_pairings.install_published``.
+
+    A payload without ``pairings`` is either a live publish or one logged before
+    publishes were recorded (only in tournaments that had already finished;
+    they were not backfilled); both publish the drafts as they stand (replay
+    regenerates them first), and the returned payload records the result.
+    """
+    from tournaments.generate_pairings import (
+        install_published,
+        publish_rounds,
+        published_rows,
+        regenerate_pairings,
+    )
+    from tournaments.pairing.base import PairingError
+
+    recorded = payload.get("pairings")
+    if recorded is None:
+        published = publish_rounds(division, rounds)
+    else:
+        # Regenerate first: it syncs a playoff's series rows, which recorded
+        # playoff games point at, and it is what drift is measured against.
+        # An engine that can no longer pair this position is drift too, not a
+        # reason to lose the record of what was published.
+        try:
+            regenerate_pairings(division)
+        except PairingError:
+            pass
+        install_published(division, recorded)
+        published = publish_rounds(
+            division, [int(r) for r in recorded], regenerate=False
+        )
+    return published, {
+        **payload,
+        "pairings": recorded if recorded is not None
+        else published_rows(division, published),
+    }
+
+
 @records_event("rounds_published")
 def publish_all_rounds(tournament, actor, payload):
-    """payload: {division}. Publishes every draft round; records which."""
-    from tournaments.generate_pairings import publish_rounds
+    """payload: {division} -> recorded {division, rounds, pairings}.
 
+    Publishes every draft round; records which, and what they held.
+    """
     division = _division(tournament, payload["division"])
-    published = publish_rounds(division)
-    out = {**payload, "rounds": published}
+    published, out = _publish(division, None, payload)
+    out = {**out, "rounds": published}
     return EventResult(
         payload=out, division=division, result=published, record=bool(published)
     )
@@ -188,13 +233,11 @@ def publish_all_rounds(tournament, actor, payload):
 
 @records_event("round_published")
 def publish_round(tournament, actor, payload):
-    """payload: {division, round}."""
-    from tournaments.generate_pairings import publish_rounds
-
+    """payload: {division, round} -> recorded {division, round, pairings}."""
     division = _division(tournament, payload["division"])
-    published = publish_rounds(division, [payload["round"]])
+    published, out = _publish(division, [payload["round"]], payload)
     return EventResult(
-        payload=payload, division=division, result=published, record=bool(published)
+        payload=out, division=division, result=published, record=bool(published)
     )
 
 

@@ -735,3 +735,101 @@ class SeedingReplayTests(TestCase):
              for e in division.entrants.select_related("player")},
             {"Low": 1, "High": 2, "Mid": 3},
         )
+
+
+class RecordedPublishTests(LoggedTournamentMixin, TestCase):
+    """A publish records the board it printed, and replay puts that board back.
+
+    The point is engine changes: a bug fix or an improvement to pairing must not
+    rewrite a tournament that has already been played when its log is replayed.
+    Replay still regenerates and compares, so the change shows up as drift.
+    """
+
+    def _publish_event(self, tournament):
+        return tournament.events.get(event_type="round_published")
+
+    def test_a_publish_records_its_board(self):
+        tournament, division = self._build_logged_tournament()
+        rows = self._publish_event(tournament).payload["pairings"]["1"]
+        self.assertEqual(
+            sorted(tuple(sorted((r["first"], r["second"]))) for r in rows),
+            sorted(
+                tuple(sorted((p.first.player.player_number, p.second.player.player_number)))
+                for p in division.pairings.filter(round=1)
+            ),
+        )
+        self.assertTrue(all(r["table"] >= 1 for r in rows))
+
+    def test_an_engine_change_does_not_rewrite_a_published_round(self):
+        from unittest.mock import patch
+
+        from tournaments import generate_pairings
+        from tournaments.models import Pairing, RoundPairings
+
+        tournament, division = self._build_logged_tournament()
+        published = {
+            frozenset((p.first.player.player_number, p.second.player.player_number))
+            for p in division.pairings.filter(round=1)
+        }
+        real = generate_pairings.regenerate_pairings
+
+        def a_different_engine(div):
+            # Pair round 1 the other way round: swap two players between games.
+            real(div)
+            drafts = list(
+                Pairing.objects.filter(
+                    division=div, round=1, round_pairings__status=RoundPairings.DRAFT
+                ).order_by("table")
+            )
+            if len(drafts) == 2:
+                a, b = drafts
+                Pairing.objects.filter(pk=a.pk).update(second=b.first)
+                Pairing.objects.filter(pk=b.pk).update(first=a.second)
+
+        with patch.object(generate_pairings, "regenerate_pairings", a_different_engine):
+            ctx = replay(events_from_tournament(tournament), verify=True)
+
+        replayed = ctx.tournament.divisions.get()
+        self.assertEqual(
+            {
+                frozenset((p.first.player.player_number, p.second.player.player_number))
+                for p in replayed.pairings.filter(round=1)
+            },
+            published,
+        )
+        self.assertEqual([(d["division"], d["round"]) for d in ctx.drift],
+                         [(division.name, 1)])
+
+    def test_the_same_engine_reports_no_drift(self):
+        tournament, _ = self._build_logged_tournament()
+        self.assertEqual(replay(events_from_tournament(tournament), verify=True).drift, [])
+
+    def test_a_publish_logged_before_boards_were_recorded_still_replays(self):
+        tournament, division = self._build_logged_tournament()
+        events = events_from_tournament(tournament)
+        for event in events:
+            event["payload"] = {
+                k: v for k, v in event["payload"].items() if k != "pairings"
+            }
+        ctx = replay(events, verify=True)
+        self.assertEqual(
+            division_digest(ctx.tournament.divisions.get()), division_digest(division)
+        )
+
+    def test_the_replayed_log_records_the_same_board(self):
+        tournament, _ = self._build_logged_tournament()
+        ctx = replay(events_from_tournament(tournament), verify=True)
+        self.assertEqual(
+            self._publish_event(ctx.tournament).payload["pairings"],
+            self._publish_event(tournament).payload["pairings"],
+        )
+
+    def test_the_activity_log_shows_the_board(self):
+        from tournaments.events import event_detail
+
+        tournament, division = self._build_logged_tournament()
+        detail = event_detail(self._publish_event(tournament))
+        texts = [text for _, _, text in detail["lines"]]
+        self.assertEqual(len(texts), division.pairings.filter(round=1).count())
+        self.assertTrue(all(text.startswith("R1  T") for text in texts), texts)
+        self.assertTrue(any("Alice" in text for text in texts), texts)

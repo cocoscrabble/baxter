@@ -48,6 +48,15 @@ class Command(BaseCommand):
         except ReplayError as exc:
             raise CommandError(str(exc))
 
+        # Drift is not a failure: the published boards replayed as recorded.
+        # It says today's engine would have printed something else — expected
+        # after an engine fix, and worth knowing either way.
+        for d in ctx.drift:
+            self.stdout.write(self.style.WARNING(
+                f"Engine drift: {d['division']} round {d['round']} was published "
+                f"as recorded; today's engine would pair it differently."
+            ))
+
         target = ctx.tournament
         suffix = " (digests verified)" if options["verify"] else ""
         self.stdout.write(

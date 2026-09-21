@@ -4,6 +4,7 @@ Generates pairings from the pairing algorithm, resolves fixed table assignments,
 assigns table numbers, and persists RoundPairings + Pairing records.
 """
 
+import contextvars
 from collections import defaultdict
 
 from django.db import transaction
@@ -220,14 +221,18 @@ def materialize_absences(division, round_num):
             )
 
 
-def publish_rounds(division, round_numbers=None):
+def publish_rounds(division, round_numbers=None, *, regenerate=True):
     """Publish draft rounds, auto-record their byes, and refresh round status.
 
     ``round_numbers=None`` publishes every draft round. Returns the rounds
     actually published. Centralises publishing so a bye or forfeit is always
     recorded the moment its round goes live.
+
+    ``regenerate=False`` publishes the drafts exactly as they stand — for replay
+    of a recorded publish, whose drafts have just been replaced by the rows that
+    were actually published (``install_published``).
     """
-    if playoff_for(division) is not None:
+    if regenerate and playoff_for(division) is not None:
         # A playoff round's contents depend on results that may have landed
         # since the schedule was last rendered — a series that went 1–1 needs its
         # decider, which a stale draft round wouldn't hold. Regenerating here
@@ -251,6 +256,125 @@ def publish_rounds(division, round_numbers=None):
             if rp:
                 rp.update_status()
     return published
+
+
+# ---------------------------------------------------------------------------
+# Recorded publishes
+#
+# A published round is a printed board: the fact is which games went out, not
+# what the engine would say about them now. So a publish event records the rows
+# it published, and replay installs them rather than re-deriving them — which is
+# what keeps an old log replaying after the engine has been fixed or improved.
+# Replay still regenerates first and compares, so a difference is reported as
+# engine drift rather than silently absorbed (``install_published``).
+# ---------------------------------------------------------------------------
+
+
+# Where replay collects engine drift: a list while a replay runs, else None.
+# Commands have no replay context of their own, so the recorded-publish path
+# reports through this (``replay.replay`` sets it).
+ENGINE_DRIFT = contextvars.ContextVar("engine_drift", default=None)
+
+
+def published_rows(division, round_numbers):
+    """``{"<round>": [row, …]}`` for ``round_numbers``, read back from storage.
+
+    Pk-free like every payload: players by number (the bye by its reserved one),
+    a playoff game's series by ``[key, position]``. Rows are sorted so a payload
+    is stable for a given board.
+    """
+    out = {}
+    for round_num in round_numbers:
+        rows = []
+        for p in division.pairings.filter(round=round_num).select_related(
+            "first__player", "second__player", "series"
+        ):
+            rows.append({
+                "first": p.first.player.player_number,
+                "second": p.second.player.player_number,
+                "table": p.table,
+                "table_label": p.table_label,
+                "repeats": p.repeats,
+                "forfeit": p.forfeit,
+                "series": [p.series.key, p.series.position] if p.series else None,
+                "game": p.game_number,
+            })
+        rows.sort(key=lambda r: (r["table"], r["first"], r["second"]))
+        out[str(round_num)] = rows
+    return out
+
+
+def _board(rows):
+    """What drift compares: the games and where they sit, not bookkeeping."""
+    return sorted(
+        (tuple(sorted((r["first"], r["second"]))), r["table"], r["table_label"])
+        for r in rows
+    )
+
+
+@as_derived
+def install_published(division, recorded):
+    """Replace the drafts of the recorded rounds with the rows that were published.
+
+    Returns the rounds whose freshly regenerated drafts differ from the record —
+    engine drift: the engine today would not have printed that board. Drift is
+    reported, never acted on; what was published stands.
+    """
+    from tournaments.models import Entrant
+
+    entrants = {
+        e.player.player_number: e
+        for e in Entrant.all_objects.filter(division=division).select_related("player")
+    }
+    playoff = playoff_for(division)
+    series = (
+        {(s.key, s.position): s for s in playoff.series.all()} if playoff else {}
+    )
+
+    drifted = []
+    for round_key, rows in recorded.items():
+        round_num = int(round_key)
+        rp_obj, _ = RoundPairings.objects.get_or_create(
+            division=division, round=round_num
+        )
+        if rp_obj.status != RoundPairings.DRAFT:
+            raise ValueError(
+                f"Round {round_num} of {division.name} is already published."
+            )
+        current = published_rows(division, [round_num])[round_key]
+        if _board(current) != _board(rows):
+            drifted.append(round_num)
+            sink = ENGINE_DRIFT.get()
+            if sink is not None:
+                sink.append({
+                    "division": division.name,
+                    "round": round_num,
+                    "recorded": _board(rows),
+                    "regenerated": _board(current),
+                })
+        division.pairings.filter(round=round_num).delete()
+        for row in rows:
+            try:
+                first, second = entrants[row["first"]], entrants[row["second"]]
+            except KeyError as exc:
+                raise ValueError(
+                    f"Round {round_num} names player {exc.args[0]!r}, who is not "
+                    f"entered in {division.name}."
+                ) from None
+            Pairing.objects.create(
+                division=division,
+                round=round_num,
+                round_pairings=rp_obj,
+                first=first,
+                second=second,
+                table=row["table"],
+                table_label=row["table_label"],
+                repeats=row["repeats"],
+                forfeit=row["forfeit"],
+                series=series.get(tuple(row["series"])) if row["series"] else None,
+                game_number=row["game"],
+            )
+    return drifted
 
 
 def unpublish_rounds(division, round_numbers=None):
