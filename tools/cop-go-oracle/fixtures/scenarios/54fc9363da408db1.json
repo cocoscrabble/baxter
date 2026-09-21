@@ -1,0 +1,30 @@
+{
+    "playerNames": [
+        "a",
+        "b",
+        "c"
+    ],
+    "playerClasses": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+    ],
+    "classPrizes": [
+        2
+    ],
+    "gibsonSpread": 200,
+    "controlLossThreshold": 0.25,
+    "hopefulnessThreshold": 0.02,
+    "allPlayers": 8,
+    "validPlayers": 8,
+    "rounds": 10,
+    "placePrizes": 2,
+    "divisionSims": 1000,
+    "controlLossSims": 1000,
+    "controlLossActivationRound": 10
+}

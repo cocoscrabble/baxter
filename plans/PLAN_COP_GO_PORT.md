@@ -1,7 +1,8 @@
 # PLAN_COP_GO_PORT.md — Re-port COP from liwords' Go implementation
 
-**Status:** planned (2026-09-21). Supersedes the COP.pm-derived port described in
-`PLAN_COP.md`, which stays as history.
+**Status:** stages 0–5 implemented (2026-09-21); COP in Baxter is this port.
+Supersedes the COP.pm-derived port described in `PLAN_COP.md`, which stays as
+history. See "Outcome" at the end.
 
 ## Why a re-port
 
@@ -37,9 +38,11 @@ replaces `COP` in place.
    becomes a total-sims cap (`max_simulations`), sized by benchmark. Where the
    oracle's run is not clock-bound, the cap is never reached and parity is exact;
    where it is (`maybeTimeLimited`), the two legitimately differ.
-4. **Player index = position in `PairingInput.players`.** Upstream breaks exact
-   record ties on player index (higher index ranks first). Baxter's order is
-   its input order; the converter already writes liwords' index order.
+4. **Player index = position in `PairingInput.players`, reversed.** Upstream
+   breaks exact record ties on player index (higher index ranks first). Baxter
+   sends entrants in seeding order, so reversing it gives a tie to the better
+   seed. The converter writes players in reverse, landing back on upstream's
+   indices.
 5. **Seed.** A COP round seeds its PCG from `PairingInput.seed` and the round
    (`seed + round − 1`), so rounds differ and replay is stable. The converter
    maps a request's seed (including liwords' derived FNV-of-names default) onto
@@ -58,23 +61,26 @@ replaces `COP` in place.
 
 ## Layout
 
-`scrabble-pairing/src/strategies/cop/` replaces `cop.rs`:
+`scrabble-pairing/src/strategies/cop_go/` replaces `cop.rs`:
 
 | Module | Upstream | Contents |
 |---|---|---|
-| `rand.rs` | `x/exp/rand` | PCG source, `Uint64n`/`Intn`/`Int63`/`Int31n`/`Shuffle` |
-| `score_diffs.rs` | `standings/score_differences.go` | the empirical spread table |
-| `standings.rs` | `standings/standings.go` | packed records, gibsonization, segment pairings, sims, force-winner sims, Clopper–Pearson |
+| `rand.rs` | `x/exp/rand` | PCG source, `Uint64n`/`Intn`/`Int63`/`Shuffle` |
+| `cephes.rs` | gonum `mathext` | the Beta quantile (Cephes `incbi`/`incbet`/`ndtri`) for Clopper–Pearson |
+| `score_diffs.rs` | `standings/score_differences.go` | the empirical spread table (generated) |
+| `request.rs` | `api/proto/ipc/pair.proto` | `PairRequest`, from/to the oracle's protobuf JSON |
+| `verify.rs` | `verifyreq` | request validation, upstream's error codes |
+| `standings.rs` | `standings/standings.go` | packed records, gibsonization, segment pairings, sims, force-winner sims, the re-sim loop |
 | `precomp.rs` | `copdata/copdata.go` | `PrecompData`, hopeful/absolute ranks, parity promotion, control loss |
-| `policies.rs` | `cop/cop.go` | constraint + weight policies and their precomputations |
 | `factor3.rs` | `cop/cop.go` | Factor 3 |
-| `matching.rs` | `cop/cop.go` | graph build, min-weight matching, retry, result assembly |
-| `mod.rs` | — | Baxter adapter: `PairingInput` → request shape, pins, bye, output |
-| `trace.rs` | — | structured trace for parity tooling |
+| `matching.rs` | `cop/cop.go` | pre-matching decisions, constraint + weight policies, matching, retry, assembly |
+| `cop.rs` | `cop/cop.go` | `COPPair`: the pipeline end to end |
+| `mod.rs` | — | Baxter adapter: `PairingInput` → request, answer → pairings |
+| `trace.rs` | — | structured trace for parity tooling (`cop_trace` example) |
 
-The matcher is the vendored `max_weight_matching` if it agrees with upstream's
-(both descend from Van Rantwijk's `mwmatching.py`; verified in stage 4),
-otherwise a port of `pkg/matching`.
+The matcher is the vendored `max_weight_matching`: it and upstream's both
+descend from Van Rantwijk's `mwmatching.py`, and they pick the same matching on
+every fixture, ties included.
 
 ## Stages — each verified against the oracle before the next
 
@@ -105,3 +111,52 @@ intermediates (sim tallies, precomp table, pairing weights); `compare.py
   count. Port gonum's algorithm if a generic implementation ever disagrees.
 - **Cost.** Upstream burns up to 6s × 8 cores; Baxter pairs inside a web request.
   The cap is the control; stage 5 measures it.
+
+## Outcome (2026-09-21)
+
+**Parity.** `compare.py --stages` is exact at every stage — sim tallies,
+precomp table and destiny's child, every pair's constraint code and weights,
+final pairings — on every fixture and every captured scenario whose oracle run
+was not clock-bound; the final pairings match even on most that were.
+
+- Fixtures: the 26 real-tournament positions (`fixtures/`).
+- Scenarios: 156 requests captured from upstream's own tests
+  (`dump-scenarios.sh`, `fixtures/scenarios/`), which reach the rules no
+  fixture does: the top-4 lock, leader v 3rd, Factor 3's control-loss branch,
+  the retry, the forced contender bye, plus upstream's request validation (41
+  refusals, all with the same error code).
+- End to end through Baxter's engine (the adapter, the converter), 22 of the
+  26 fixtures match; one both refuse; three differ only because class prizes
+  decide them.
+- `tests/cop_go_parity.rs` freezes 13 of these for CI.
+
+**The vendored matcher agrees with upstream's**, ties included, so
+`pkg/matching` was not ported.
+
+**Cost.** The sim cap is a work budget: `SIM_BUDGET` (400M player-rounds)
+divided by players × rounds remaining (`cop_go::default_max_sims`). On the
+development machine (8 cores; the sims use 4 threads) the heaviest fixtures pair
+in 4.5s (Lake George CSW after round 8, 18 players, 7 left — upstream's own
+run is clock-bound), 3.7s (Albany after 15, 30 players, 12 left) and 2.1s
+(Kingston); the other 23 in about a second or less, 13s for all 26. That is
+the heavy tail — positions where upstream also runs out of clock — and it sits
+well inside the 30s request even on a slower server.
+
+**Upstream findings** (worth reporting to liwords):
+- Control loss (`CL`: the leader must play the destiny's child) and the forced
+  contender bye (`CB`: that same player must take the bye) can together leave
+  the leader no legal opponent; upstream then fails the round as
+  overconstrained. Seen in small test fields; confirmed on upstream's own code
+  with the `cop_request` example.
+- Control loss does not look at prepaired games either: pins can leave the
+  leader nobody the constraint allows.
+
+**Open for Baxter:**
+- `control_loss_activation_round` defaults to 0, so control loss applies from
+  the first round, which makes the conflict above reachable in a small
+  division. Upstream's own fixtures activate it in roughly the last quarter.
+- Class prizes are ported but inert until divisions have classes
+  (`PLAN_COP.md` Phase 5).
+- `max_simulations` is config-only (no form field); `top_down_byes` is on the
+  settings form.
+

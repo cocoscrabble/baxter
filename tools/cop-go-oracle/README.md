@@ -82,6 +82,24 @@ runs; `albany_after_round15` and `lakegeorge_csw_after_round8` are clock-bound
 (~6s), `kingston2023_after_round15` is close (~5s) and may be on a slower
 machine. `albany_csw_july2026_round28` returns `ALL_ROUNDS_PAIRED` by design.
 
+## Scenarios
+
+`fixtures/scenarios/` holds requests captured from upstream's **own tests**
+(`dump-scenarios.sh`): the real-tournament fixtures leave some of COP's rules
+unexercised, and upstream's `cop_test.go` / `scenarios_test.go` construct
+positions aimed at them, in Go code rather than as data. The script copies the
+pinned module's source out of the module cache, adds a one-line hook to
+`COPPair` that writes each request to disk, runs the tests there, and keeps the
+distinct COP requests (named by content hash). The oracle itself is never
+modified. It skips upstream's timing loops and non-COP tests, still takes about
+an hour, and samples 20 of the ~1000 near-identical 53-player requests one test
+loops over. Rerun it when the pin moves.
+
+```bash
+tools/cop-go-oracle/dump-scenarios.sh
+uv run --no-sync python tools/cop-go-oracle/compare.py --stages tools/cop-go-oracle/fixtures/scenarios/*.json
+```
+
 ## Fixtures
 
 `fixtures/` holds upstream's own test positions — the real tournaments in
@@ -91,19 +109,28 @@ with the version it came from; regenerate when the pin moves.
 
 ## Comparing with Baxter's port
 
+Baxter's COP is a port of this code (`scrabble-pairing/src/strategies/cop_go`,
+`plans/PLAN_COP_GO_PORT.md`). Two comparisons, at two levels:
+
 ```bash
-make rust-engine                                           # if the crate changed
-uv run --no-sync python tools/cop-go-oracle/compare.py     # every fixture
-uv run --no-sync python tools/cop-go-oracle/compare.py fixtures/default.json --out /tmp/cop
+uv run --no-sync python tools/cop-go-oracle/compare.py --stages   # the port's core, stage by stage
+make rust-engine                                                   # if the crate changed
+uv run --no-sync python tools/cop-go-oracle/compare.py             # end to end, through Baxter's engine
 ```
 
-`convert.py` maps a `PairRequest` onto Baxter's engine input (its docstring has
-the full mapping and what is lossy); `compare.py` pairs each case both ways and
-compares the rounds as sets of games. `--out DIR` keeps, per case, COP's log,
-the converted input and both pairings; `--json` emits one object per case;
-`--strict` exits 1 on any comparable failure.
+**`--stages`** runs upstream's own request through the port's core (the
+`cop_trace` example in `scrabble-pairing`, built on demand) and diffs each
+intermediate against the oracle's log: the baseline sim tallies, the Precomp
+Data table and destiny's child, every pair's constraint code and weights in
+the Pairing Weights table, and the final pairings. No converter is involved, so
+these should be **exact** — the port reproduces upstream's RNG and worker
+seeding — except where the oracle's run was clock-bound. The port's sim cap is
+raised for this, so only upstream's clock can separate them.
 
-Each case gets one verdict:
+**End to end** (no flag) converts each request to Baxter's engine input
+(`convert.py`; its docstring has the mapping and what is lossy), pairs it with
+the engine through the Python extension, and compares the games. A difference
+is scored on upstream's own logged weights:
 
 | Verdict | Meaning |
 |---|---|
@@ -115,24 +142,31 @@ Each case gets one verdict:
 | `CONVERT` | The converted standings disagree with the ones COP logged: a converter bug, so nothing else in the case means anything. Checked on every run. |
 | `both refuse` / `error` | One or both engines declined to pair. |
 
-Lower case with `*` means the case is **not comparable**: clock-bound, or it asks
-for something Baxter cannot express (class prizes, top-down byes, …).
+Lower case with `*` means the case is **not comparable**: clock-bound, or it
+uses class prizes, which Baxter cannot express yet. `--out DIR` keeps each
+case's log, converted input and both pairings; `--json` emits one object per
+case; `--strict` exits 1 on any comparable failure.
 
-### Findings at the pin (2026-09-21)
+**Any Baxter COP round** can be run through upstream too: the `cop_request`
+example prints the request the port builds for a round of an engine input.
 
-The converter reproduces upstream's standings on every fixture. Of the 26:
-1 match, 1 both-refuse, and **no other comparable case agrees**:
+```bash
+cd scrabble-pairing
+cargo run --release --example cop_request -- 5 < engine_input.json \
+    | ../tools/cop-go-oracle/cop-go-oracle
+```
 
-- **`PIN` ×3 — a real Baxter bug, since fixed.** The port enforced a fixed
-  pairing only as a weight, which the matching could outbid when the pinned game
-  carried prohibitive weights of its own. Pinned players now sit outside the
-  matching and their games are placed as given, as upstream does; see
-  `scrabble-pairing/tests/cop_pins.rs`, which runs the Albany position that
-  broke. No case reports `PIN` any more.
-- **Round one.** With no results, upstream pairs adjacent seeds (1–2, 3–4);
-  the port uses COP.pm's Swiss-style split (1–5, 2–6). Upstream also breaks
-  equal records by *descending* player index.
-- **Upstream logic the port lacks**: Factor 3 control loss (`F3`), stricter
-  gibson bars (`GB`, `GG`), forced-bye handling (`CB`), and cash-contender
-  penalties the port does not apply — the ~1.5 billion `WORSE` gaps are those
-  weights.
+### Status (2026-09-21)
+
+- `--stages`: all four stages exact on every fixture that is not clock-bound,
+  and the final pairings match even on those.
+- End to end: 22 of 26 match; one both-refuse (every round already paired);
+  three differ only because class prizes decide their pairings.
+- The earlier comparison against the COP.pm-era port found a real bug —
+  fixed pairings enforced only as a weight, which the matching could outbid —
+  fixed before the re-port (`scrabble-pairing/tests/cop_pins.rs`) and kept in
+  it (upstream's `PP`).
+- An upstream finding, from the `cop_request` route: in small fields, control
+  loss (the leader must play the destiny's child) and the forced contender bye
+  (that same player must take the bye) can together leave the leader no legal
+  opponent, and upstream fails the round as overconstrained.

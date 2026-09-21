@@ -1,0 +1,127 @@
+{
+    "playerNames": [
+        "P0",
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+        "P6"
+    ],
+    "playerClasses": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+    ],
+    "divisionPairings": [
+        {
+            "pairings": [
+                0,
+                4,
+                5,
+                6,
+                1,
+                2,
+                3
+            ]
+        },
+        {
+            "pairings": [
+                4,
+                1,
+                6,
+                5,
+                0,
+                3,
+                2
+            ]
+        },
+        {
+            "pairings": [
+                5,
+                6,
+                2,
+                4,
+                3,
+                0,
+                1
+            ]
+        },
+        {
+            "pairings": [
+                6,
+                5,
+                3,
+                2,
+                4,
+                1,
+                0
+            ]
+        }
+    ],
+    "divisionResults": [
+        {
+            "results": [
+                50,
+                455,
+                420,
+                400,
+                400,
+                400,
+                415
+            ]
+        },
+        {
+            "results": [
+                460,
+                50,
+                430,
+                400,
+                400,
+                415,
+                400
+            ]
+        },
+        {
+            "results": [
+                460,
+                420,
+                50,
+                400,
+                406,
+                400,
+                400
+            ]
+        },
+        {
+            "results": [
+                460,
+                420,
+                400,
+                420,
+                -50,
+                400,
+                400
+            ]
+        }
+    ],
+    "classPrizes": [
+        2
+    ],
+    "gibsonSpread": 200,
+    "controlLossThreshold": 0.05,
+    "hopefulnessThreshold": 0.02,
+    "allPlayers": 7,
+    "validPlayers": 7,
+    "rounds": 8,
+    "placePrizes": 2,
+    "divisionSims": 100000,
+    "controlLossSims": 20000,
+    "controlLossActivationRound": 4,
+    "seed": "1",
+    "topDownByes": true
+}

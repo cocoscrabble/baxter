@@ -10,7 +10,9 @@
 //! Stage 2: the "Precomp Data" table (gibson status and groups, hopeful and
 //! absolute ranks, the control-loss search) and the destiny's child.
 //! Stages 3-4: the pairings themselves — policies, Factor 3, matching, retry
-//! and assembly — exactly upstream's. (The live comparison also diffs every
+//! and assembly — exactly upstream's. The `scenario_*` cases are requests
+//! upstream's own tests pair (`tools/cop-go-oracle/dump-scenarios.sh`), chosen
+//! for rules no real-tournament fixture reaches. (The live comparison also diffs every
 //! weight of every pair; freezing those tables is not worth their size.)
 
 use scrabble_pairing::strategies::cop_go::trace::trace_json;
@@ -21,10 +23,12 @@ const STAGES: &str = include_str!("data/cop_go/stages.json");
 /// Cases that run hundreds of thousands of sims (among them the only case that
 /// re-sims with an improved factor, and the only one with a destiny's child)
 /// — seconds in release, far longer in debug.
-const HEAVY: [&str; 3] = [
+const HEAVY: [&str; 5] = [
     "albany_after_round16",
     "almost_gibsonized",
     "july4th2026_random_start_run305_after_round24",
+    "scenario_leader_vs_third",
+    "scenario_top4_lock",
 ];
 
 #[test]
@@ -69,7 +73,12 @@ fn check(heavy: bool) {
             }
         }
         check_precomp(name, &trace["precomp"], &case["precomp"]);
-        assert_eq!(trace["pairings"], case["pairings"], "{name}: pairings");
+        if case["error"].is_null() {
+            assert_eq!(trace["pairings"], case["pairings"], "{name}: pairings");
+        } else {
+            // Upstream refuses this round after matching; so must we, alike.
+            assert_eq!(trace["error"]["code"], case["error"], "{name}: error");
+        }
     }
 }
 
