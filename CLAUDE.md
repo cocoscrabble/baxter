@@ -126,7 +126,8 @@ own, which is gated on `is_staff` rather than on the role.
 Actions run inside `admin_log.logged(kind, actor)`, which records success, a
 refusal the caller marks with `entry.fail(...)`, or an exception on its way out
 (then re-raised) — so a cron pull that crashed still leaves a row. The pulls log
-from `run_sync`, so all three paths are covered. `test_admin_log.CompletenessTests`
+from `run_sync`, so all three paths are covered, and a pull's summary names the
+upcoming divisions whose entrants it re-pinned (`RosterSync`/`WespaSync.repinned`). `test_admin_log.CompletenessTests`
 fails if an admin view with a POST handler never logs. The index flags any
 failure in the last week.
 

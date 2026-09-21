@@ -38,17 +38,28 @@ def save_players(players, fields, *, actor=None):
     ``bulk_update`` bypasses ``Player.save``, so a caller writing
     ``player_number`` must hand over a canonical one. ``actor`` is who the
     downstream events are attributed to; None for the scheduled pulls.
+
+    Returns the divisions whose entrants were re-pinned, so a pull can say so.
     """
     players = list(players)
     if not players:
-        return
+        return []
     Player.objects.bulk_update(players, list(fields), batch_size=500)
     if RATING_FIELDS & set(fields):
-        players_rerated(players, actor=actor)
+        return players_rerated(players, actor=actor)
+    return []
 
 
 def players_rerated(players, *, actor=None):
-    """Everything that follows a change in how ``players`` are rated."""
+    """Everything that follows a change in how ``players`` are rated.
+
+    Returns the divisions whose entrants were re-pinned.
+    """
     from .entrant_sync import refresh_upcoming
 
-    refresh_upcoming(players=players, actor=actor)
+    return refresh_upcoming(players=players, actor=actor)
+
+
+def division_labels(divisions):
+    """``"Tournament / Division"`` for each — how a pull record names them."""
+    return [f"{d.tournament.name} / {d.name}" for d in divisions]

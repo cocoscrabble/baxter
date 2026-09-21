@@ -189,6 +189,17 @@ class MatchingTests(TestCase):
         self.assertEqual(self.ann.wespa_rating, 1450)
         self.assertEqual(self.ann.effective_rating, (1600, "coco"))
 
+    def test_a_pull_names_the_upcoming_divisions_it_moved(self):
+        owner = User.objects.create_user(username="td-wespa", password="pw")
+        tournament = Tournament.objects.create(
+            name="Next Month", location="X",
+            start_date=date(2026, 10, 1), owner=owner,
+        )
+        division = Division.objects.create(tournament=tournament, name="Open")
+        Entrant.enter(division, self.bea, 1)
+        result = import_wespa(document(row(7, "Bea Fox", 1450)))
+        self.assertEqual(result.repinned, ["Next Month / Open"])
+
     def test_a_pull_does_not_move_a_pinned_entrant_rating(self):
         """Why a pull is safe mid-event: a started division keeps its seeds."""
         owner = User.objects.create_user(username="td-wespa", password="pw")

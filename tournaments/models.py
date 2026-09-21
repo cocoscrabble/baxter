@@ -1312,6 +1312,21 @@ class TournamentEvent(models.Model):
         return f"{self.tournament} #{self.seq} {self.event_type}"
 
 
+def repinned_clause(labels, shown=3):
+    """``"; re-pinned entrants in 2 upcoming divisions (A / Open, B / Open)"``,
+    or nothing. A pull's summary, so a rating change that moved a tournament
+    still being entered for says which."""
+    if not labels:
+        return ""
+    names = ", ".join(labels[:shown])
+    if len(labels) > shown:
+        names += f" and {len(labels) - shown} more"
+    return (
+        f"; re-pinned entrants in {len(labels)} upcoming "
+        f"division{'s' if len(labels) != 1 else ''} ({names})"
+    )
+
+
 class RosterSync(models.Model):
     """The outcome of one pull of the central roster.
 
@@ -1352,6 +1367,9 @@ class RosterSync(models.Model):
     # dicts. Nothing was written for them. Entries are removed as each is
     # confirmed, so an empty list means there is nothing left to do.
     pending = models.JSONField(default=list, blank=True)
+    # "Tournament / Division" for each division not yet under way whose
+    # entrants were re-pinned to the ratings this pull wrote (player_ratings).
+    repinned = models.JSONField(default=list, blank=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -1389,7 +1407,7 @@ class RosterSync(models.Model):
         )
         if self.pending:
             line += f", {len(self.pending)} awaiting confirmation"
-        return line + "."
+        return line + repinned_clause(self.repinned) + "."
 
 
 class WespaPlayer(models.Model):
@@ -1517,6 +1535,9 @@ class WespaSync(models.Model):
     # Nothing was written for these. Entries are removed as each is confirmed,
     # so an empty list means there is nothing left to do.
     pending = models.JSONField(default=list, blank=True)
+    # "Tournament / Division" for each division not yet under way whose
+    # entrants were re-pinned to the ratings this pull wrote (player_ratings).
+    repinned = models.JSONField(default=list, blank=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -1556,4 +1577,4 @@ class WespaSync(models.Model):
             line += f", {self.linked} newly linked"
         if self.pending:
             line += f", {len(self.pending)} awaiting confirmation"
-        return line + "."
+        return line + repinned_clause(self.repinned) + "."

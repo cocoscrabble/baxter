@@ -69,6 +69,7 @@ def _run_sync(source, raw):
     record.updated = len(result.updated)
     record.unchanged = len(result.unchanged)
     record.pending = [p.to_json() for p in result.pending]
+    record.repinned = result.repinned
     record.save()
     logger.info("Roster pull (%s): %s", source, record.summary())
     return record
