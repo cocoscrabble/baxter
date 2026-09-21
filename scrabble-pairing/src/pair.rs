@@ -13,7 +13,7 @@ use crate::round_pairing::{normalize_round_robin_start_rounds, RoundPairing, RP}
 use crate::standings::{
     standings_after_round, Pairing, Pairings, Player, Repeats, Starts, BYE_NAME,
 };
-use crate::strategies::{basic, cop, quads, roundrobin, swiss, Ctx};
+use crate::strategies::{basic, cop_go, quads, roundrobin, swiss, Ctx};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RoundStatus {
@@ -45,7 +45,7 @@ fn run_strategy(rp: &RoundPairing, ctx: &mut Ctx) -> Result<Pairings, String> {
         RP::Sixes => quads::pair_sixes(ctx, rp)?,
         RP::Charlottesville => roundrobin::pair_charlottesville(ctx, rp)?,
         RP::SwissPlusRandom => swiss::pair_swiss_plus_random(ctx, rp),
-        RP::Cop => cop::pair_cop(ctx, rp)?,
+        RP::Cop => cop_go::pair_cop(ctx, rp)?,
         RP::Unknown => return Err("unknown pairing strategy".to_string()),
     })
 }
@@ -275,6 +275,7 @@ fn pair_round(
     inactive_map: &HashMap<i32, Vec<String>>,
     repeats: &Repeats,
     rng: &mut ChaCha8Rng,
+    seed: u64,
     cop_config: Option<&CopConfig>,
     swiss_config: &SwissConfig,
     rp: &RoundPairing,
@@ -308,6 +309,7 @@ fn pair_round(
             published_pairings: published_map,
             repeats,
             rng,
+            seed,
             cop_config,
             swiss_config,
         };
@@ -340,6 +342,7 @@ fn pair_round(
             published_pairings: published_map,
             repeats,
             rng,
+            seed,
             cop_config,
             swiss_config,
         };
@@ -403,6 +406,7 @@ pub fn pair(input: &PairingInput) -> Vec<RoundResult> {
                 &input.inactive_players,
                 &repeats,
                 &mut rng,
+                input.seed,
                 input.cop_config.as_ref(),
                 &input.swiss_config,
                 rp,

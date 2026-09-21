@@ -28,49 +28,46 @@ pub struct ResultSlipData {
     pub winner_started: bool,
 }
 
-/// Tuning + prize configuration for the COP strategy (per division). Mirrors the
-/// TSH config values COP.pm reads; the per-round arrays are forward-filled to the
-/// round count inside the engine, so a single-element array (the common case,
-/// produced by the Django adapter from a scalar setting) is fine.
+/// Tuning + prize configuration for the COP strategy (per division), in the
+/// terms of liwords' `PairRequest`, which the COP port runs on
+/// (`strategies/cop_go`). The per-round arrays are indexed by rounds remaining
+/// (index 0 is the final round) and the last entry repeats — upstream's own
+/// rule — so a single-element array, what the Django adapter sends from a
+/// scalar setting, applies to every round.
 #[derive(Debug, Clone, Deserialize)]
 pub struct CopConfig {
-    /// Number of place prizes (1-indexed count). COP's 0-indexed
-    /// `lowest_ranked_payout` is `place_prizes - 1`.
+    /// Number of place prizes (clamped to the field size).
     pub place_prizes: i32,
-    /// Max winning spread per round, by rounds-remaining (forward-filled).
+    /// Max winning spread per simulated game, and the gibsonization margin.
     #[serde(default)]
     pub gibson_spreads: Vec<i32>,
-    /// Contender threshold: a player counts as a contender for a rank when they
-    /// reach it in more than this fraction of sims. By rounds-remaining.
+    /// A player is a contender for a place when they reach it in at least this
+    /// fraction of simulations.
     #[serde(default)]
     pub hopefulness: Vec<f64>,
-    /// Control-loss thresholds, by rounds-remaining (forward-filled).
+    /// Control-loss thresholds.
     #[serde(default)]
     pub control_loss_thresholds: Vec<f64>,
-    /// 0-indexed round at/after which control loss (destiny control) is enforced.
+    /// Completed rounds from which control loss (destiny control) applies.
     #[serde(default)]
     pub control_loss_activation_round: i32,
-    /// Monte Carlo iteration counts (unused until sims land in Phase 2).
+    /// Division simulations (upstream's `divisionSims`): the initial count,
+    /// re-simulated in batches until the contention picture is confident.
     #[serde(default)]
     pub simulations: u32,
+    /// Control-loss simulations per candidate (upstream's `controlLossSims`).
     #[serde(default)]
     pub always_wins_simulations: u32,
     /// Penalize giving a player a second bye.
     #[serde(default)]
     pub disallow_repeat_byes: bool,
-    /// Count the rounds still to play from the round being paired rather than
-    /// from `start_round`.
-    ///
-    /// COP reads its standings from `start_round` and, by default, derives the
-    /// horizon from the same place — self-consistent, and identical either way
-    /// for the usual sliding COP round where `start_round == round - 1`. They
-    /// diverge only when a round pairs off an *older* snapshot (`pair_from > 1`),
-    /// where counting from `start_round` overstates the rounds left and inflates
-    /// the contention analysis. Set this to count `total_rounds - round + 1`
-    /// instead: standings stay where they were asked for, but "how much is still
-    /// to play" reflects the round actually being paired.
+    /// Give the bye to the highest-ranked player with the fewest byes.
     #[serde(default)]
-    pub horizon_from_paired_round: bool,
+    pub top_down_byes: bool,
+    /// Cap on total division simulations, standing in for upstream's 6s clock;
+    /// 0 means the engine's default. See `strategies/cop_go`.
+    #[serde(default)]
+    pub max_simulations: u32,
 }
 
 /// Tuning knobs for the Swiss family (Swiss and SwissPlusRandom).

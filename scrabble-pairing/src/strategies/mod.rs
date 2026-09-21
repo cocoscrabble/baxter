@@ -5,7 +5,6 @@
 //! read from.
 
 pub mod basic;
-pub mod cop;
 pub mod cop_go;
 pub mod quads;
 pub mod roundrobin;
@@ -42,6 +41,9 @@ pub struct Ctx<'a> {
     pub published_pairings: &'a HashMap<i32, Vec<(String, String)>>,
     pub repeats: &'a Repeats,
     pub rng: &'a mut ChaCha8Rng,
+    /// `PairingInput::seed`, for strategies that seed their own generator
+    /// (COP runs upstream's PCG, seeded per round from this).
+    pub seed: u64,
     /// COP tuning/prize config, when the division uses the COP strategy.
     pub cop_config: Option<&'a CopConfig>,
     /// Swiss tuning knobs (weight, max distance, SwissPlusRandom split).

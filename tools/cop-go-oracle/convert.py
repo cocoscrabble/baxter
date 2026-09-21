@@ -9,10 +9,11 @@ This maps one onto the other so the same position can be paired by both.
 
 The mapping, and where it is lossy:
 
-- **Players** are the request's names, in index order. Past round 0 the engine
-  seeds nobody off ratings, but a rating is still required, so each player gets
-  a descending one (``len - index``): index order is the only seeding liwords
-  has. ``removedPlayers`` become ``dropped``.
+- **Players** are the request's names in *reverse* index order: Baxter's COP
+  adapter numbers players in reverse input order (so an exact tie goes to the
+  better seed; ``strategies/cop_go/mod.rs``), and this lands its indices back
+  on upstream's. Ratings are required but unused by COP: descending in index
+  order, the only seeding liwords has. ``removedPlayers`` become ``dropped``.
 - **Results.** liwords stores each player's *score* per round and a pairing
   array of opponent indexes; the engine wants one slip per game. A game becomes
   a slip, higher score winning (equal scores are a draw either way round).
@@ -45,7 +46,7 @@ The mapping, and where it is lossy:
 
 **Not expressible** in the engine, and reported as warnings so a comparison can
 mark the case rather than blame the port: class prizes with anyone in a class
-(Baxter defers them), ``topDownByes``, and any pairing method other than COP.
+(Baxter has no in-division classes yet) and any pairing method other than COP.
 (``factor`` and ``initialNonperfRounds`` only steer upstream's non-COP methods,
 so a COP request carrying them is still comparable.)
 """
@@ -73,12 +74,6 @@ class Conversion:
 
 
 def _config(req, warnings):
-    unsupported = {
-        "topDownByes": "top-down byes",
-    }
-    for key, what in unsupported.items():
-        if req.get(key):
-            warnings.append(f"uses {what} ({key}={req[key]!r}), which the engine has no equivalent of")
     # Class k competes for classPrizes[k - 1]; class 0 is no class. So prizes
     # with nobody in a class are inert, and only a classed player is a warning.
     classed = sum(1 for c in req.get("playerClasses") or [] if c > 0)
@@ -98,6 +93,7 @@ def _config(req, warnings):
         "simulations": req.get("divisionSims", 0),
         "always_wins_simulations": req.get("controlLossSims", 0),
         "disallow_repeat_byes": not req.get("allowRepeatByes", False),
+        "top_down_byes": bool(req.get("topDownByes", False)),
     }
 
 
@@ -113,7 +109,7 @@ def convert(req):
     removed = set(req.get("removedPlayers") or [])
     players = [
         {"name": name, "rating": len(names) - i, "dropped": i in removed}
-        for i, name in enumerate(names)
+        for i, name in reversed(list(enumerate(names)))
     ]
 
     pairings = [r.get("pairings") or [] for r in req.get("divisionPairings") or []]

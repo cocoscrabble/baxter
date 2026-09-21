@@ -177,9 +177,9 @@ class CopConfigTests(TestCase):
                 "simulations": 200,
                 "always_wins_simulations": 100,
                 "disallow_repeat_byes": False,
-                # Off unless a division opts in; the engine reads the horizon
-                # from start_round by default.
-                "horizon_from_paired_round": False,
+                # Off, and the engine's own cap, unless a division opts in.
+                "top_down_byes": False,
+                "max_simulations": 0,
             },
         )
 
@@ -187,16 +187,13 @@ class CopConfigTests(TestCase):
         d = pairing_data_to_input(_cop_pd({"place_prizes": 3}))
         self.assertEqual(d["cop_config"]["gibson_spreads"], [500])
 
-    def test_horizon_flag_passes_through_when_set(self):
-        # Not in DEFAULT_COP_CONFIG and not on the settings form, so a division
-        # only carries it if it was written into cop_config directly (as
-        # scripts/compare_swiss.py does to match a sheet). The adapter still has
-        # to forward it, or the engine silently counts rounds the other way.
-        pd = _cop_pd({**_COP_CONFIG, "horizon_from_paired_round": True})
-        self.assertIs(
-            pairing_data_to_input(pd)["cop_config"]["horizon_from_paired_round"],
-            True,
-        )
+    def test_opt_in_settings_pass_through_when_set(self):
+        # Not in DEFAULT_COP_CONFIG and not on the settings form yet, so a
+        # division only carries them if they were written into cop_config
+        # directly; the adapter still has to forward them.
+        pd = _cop_pd({**_COP_CONFIG, "top_down_byes": True, "max_simulations": 50000})
+        config = pairing_data_to_input(pd)["cop_config"]
+        self.assertEqual((config["top_down_byes"], config["max_simulations"]), (True, 50000))
 
     def test_empty_config_serializes_to_none(self):
         # No usable config → None, so a COP round fails loudly rather than pairing

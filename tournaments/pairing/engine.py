@@ -39,10 +39,9 @@ def _cop_config_to_input(c: dict | None) -> dict | None:
         "simulations": int(c.get("simulations", 1000)),
         "always_wins_simulations": int(c.get("always_wins_simulations", 1000)),
         "disallow_repeat_byes": bool(c.get("disallow_repeat_byes", False)),
-        # Count the rounds left from the round being paired rather than from
-        # start_round. Only differs when a COP round pairs off an older snapshot
-        # (pair_from > 1); see CopConfig in scrabble-pairing/src/model.rs.
-        "horizon_from_paired_round": bool(c.get("horizon_from_paired_round", False)),
+        # Neither is in the settings form yet; both default off/engine-chosen.
+        "top_down_byes": bool(c.get("top_down_byes", False)),
+        "max_simulations": int(c.get("max_simulations", 0)),
     }
 
 

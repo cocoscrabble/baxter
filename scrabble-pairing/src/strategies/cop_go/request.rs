@@ -5,16 +5,16 @@
 //! compared against upstream on the very same request. Baxter's own adapter
 //! (`mod.rs`) builds one from a `PairingInput`.
 
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Request {
     pub player_names: Vec<String>,
     pub player_classes: Vec<i32>,
-    #[serde(deserialize_with = "rounds_of_pairings")]
+    #[serde(deserialize_with = "rounds_of_pairings", serialize_with = "pairings_rows")]
     pub division_pairings: Vec<Vec<i32>>,
-    #[serde(deserialize_with = "rounds_of_results")]
+    #[serde(deserialize_with = "rounds_of_results", serialize_with = "results_rows")]
     pub division_results: Vec<Vec<i32>>,
     pub class_prizes: Vec<i32>,
     pub gibson_spread: i32,
@@ -29,12 +29,13 @@ pub struct Request {
     pub control_loss_activation_round: i32,
     pub allow_repeat_byes: bool,
     pub removed_players: Vec<i32>,
-    #[serde(deserialize_with = "int64")]
+    #[serde(deserialize_with = "int64", serialize_with = "int64_string")]
     pub seed: i64,
     pub top_down_byes: bool,
     /// Baxter's cap on total division sims, standing in for upstream's 6s
     /// re-simulation clock (`plans/PLAN_COP_GO_PORT.md`, decision 3). Not in
-    /// upstream's request; 0 means `DEFAULT_MAX_SIMS`.
+    /// upstream's request — `request_json` strips it, since the oracle's strict
+    /// parser rejects fields it does not know. 0 means `DEFAULT_MAX_SIMS`.
     pub max_sims: i32,
 }
 
@@ -69,16 +70,30 @@ impl Request {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct PairingsRow {
     #[serde(default)]
     pairings: Vec<i32>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct ResultsRow {
     #[serde(default)]
     results: Vec<i32>,
+}
+
+fn pairings_rows<S: Serializer>(rows: &[Vec<i32>], s: S) -> Result<S::Ok, S::Error> {
+    let rows: Vec<PairingsRow> = rows.iter().map(|r| PairingsRow { pairings: r.clone() }).collect();
+    rows.serialize(s)
+}
+
+fn results_rows<S: Serializer>(rows: &[Vec<i32>], s: S) -> Result<S::Ok, S::Error> {
+    let rows: Vec<ResultsRow> = rows.iter().map(|r| ResultsRow { results: r.clone() }).collect();
+    rows.serialize(s)
+}
+
+fn int64_string<S: Serializer>(v: &i64, s: S) -> Result<S::Ok, S::Error> {
+    s.serialize_str(&v.to_string())
 }
 
 fn rounds_of_pairings<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<Vec<i32>>, D::Error> {
