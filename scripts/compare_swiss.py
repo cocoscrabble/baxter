@@ -103,11 +103,10 @@ COP_CONFIG = {
     "simulations": 1000,
     "always_wins_simulations": 1000,
     "disallow_repeat_byes": True,
-    # Standings still come from the round's own start_round, so both engines read
-    # the same snapshot — but the sheet's ST/STPR rounds pair two rounds back, and
-    # counting the horizon from there would tell COP one more round remains than
-    # actually does, inflating the contention analysis it pairs on.
-    "horizon_from_paired_round": True,
+    # This used to set horizon_from_paired_round, because the sheet's ST/STPR
+    # rounds pair two rounds back. COP is now liwords' port, which always counts
+    # rounds remaining from the results it pairs off, so the option is gone and
+    # COP here reads one more round remaining than the sheet's round implies.
 }
 # Groups smaller than this are merged into the one above, so the bottom of the
 # field is never left with a stub group. Mirrors both implementations.
