@@ -372,6 +372,9 @@ class CopConfigForm(forms.Form):
     )
     always_wins_simulations = forms.IntegerField(
         min_value=1, label="Control-loss simulations",
+        help_text="Runs used to decide whether the leader controls their own "
+        "destiny. By far the slowest part of COP: raise it with care, since a "
+        "large division pairs in the page request.",
     )
     disallow_repeat_byes = forms.BooleanField(
         required=False, label="Disallow repeat byes",

@@ -307,10 +307,43 @@ class DivisionSlugAlias(models.Model):
         return self.slug
 
 
-# Default COP prize/tuning config. Seeded when a COP schedule is saved, or
-# lazily on first pairing for imported/legacy schedules, and used as the
-# settings form's field defaults so the two never drift.
+# Default COP prize/tuning config. Seeded when a COP schedule is saved, and used
+# as the settings form's field defaults so the two never drift.
+#
+# hopefulness and control_loss_threshold are upstream COP's recommended values
+# (README at jvc56/tournament_pairing_algorithms 126363a). The rest are not:
+#
+# - gibson_spread stays at Baxter's 500 (de1cd8a) rather than upstream's
+#   [250, 200], which it deliberately departed from.
+# - The simulation counts are sized to finish inside gunicorn's 30s request
+#   timeout, because COP runs synchronously in the request. Upstream's
+#   100000/10000 are calibrated for its API server and take 36s for a 60-player
+#   division here, 142s for 100. `simulations` is cheap and hopefulness 0.02
+#   is a rare event to estimate, so it goes up tenfold; `always_wins_simulations`
+#   dominates the cost and already resolves the 0.30 threshold to about ±3%,
+#   so it stays. See PLAN_COP.md.
+#
+# Changing a value here changes only what *new* seeds write: the schedule
+# command records what it seeded (payload v3), and anything older replays with
+# LEGACY_DEFAULT_COP_CONFIG below.
 DEFAULT_COP_CONFIG = {
+    "place_prizes": 3,
+    "gibson_spread": 500,
+    "hopefulness": 0.02,
+    "control_loss_threshold": 0.30,
+    "control_loss_activation_round": 0,
+    "simulations": 10000,
+    "always_wins_simulations": 1000,
+    "disallow_repeat_byes": True,
+}
+
+# What every COP seed wrote before seeds were recorded in the log. cop_config is
+# in division_digest, so a seed that isn't in its event payload has to replay to
+# exactly the value it originally wrote — these, the defaults in force until
+# payload v3. **Never change this dict**: every such log would stop verifying.
+# (Seeds from before de1cd8a wrote gibson_spread 250, and already replay as 500;
+# no log records which era a seed came from, so that can't be recovered.)
+LEGACY_DEFAULT_COP_CONFIG = {
     "place_prizes": 3,
     "gibson_spread": 500,
     "hopefulness": 0.05,

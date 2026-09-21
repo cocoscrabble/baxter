@@ -737,6 +737,93 @@ class SeedingReplayTests(TestCase):
         )
 
 
+class CopSeedReplayTests(TestCase):
+    """The COP config a schedule seeds has to survive a replay — it is in the
+    digest. So the seed is recorded in the event rather than re-derived, and a
+    log from before it was recorded replays with the defaults of its day."""
+
+    COP_SCHEDULE = [
+        {"pairing": "Swiss", "rounds": 1, "pair_from": 1},
+        {"pairing": "COP", "rounds": 3, "pair_from": 1},
+    ]
+
+    def setUp(self):
+        from tournaments.commands import create_tournament
+
+        self.owner = User.objects.create_user(username="owner", password="pw")
+        self.tournament = create_tournament(
+            None, self.owner,
+            {
+                "name": "Champs", "location": "X", "start_date": "2026-04-01",
+                "default_division": {"name": "Open"},
+            },
+        )
+        self.division = self.tournament.divisions.get(name="Open")
+
+    def _save_schedule(self):
+        from tournaments.commands import save_settings
+
+        save_settings(
+            self.tournament, self.owner,
+            {"division": "Open", "blocks": self.COP_SCHEDULE},
+        )
+
+    def _replayed_config(self, ctx):
+        return ctx.tournament.divisions.get(name="Open").settings.cop_config
+
+    def test_a_seeded_config_survives_a_change_of_defaults(self):
+        from unittest.mock import patch
+
+        from tournaments.models import DEFAULT_COP_CONFIG
+
+        self._save_schedule()
+        seeded = self.division.settings.cop_config
+        self.assertEqual(seeded, DEFAULT_COP_CONFIG)
+        (event,) = [
+            e for e in events_from_tournament(self.tournament)
+            if e["event_type"] == "division_settings_saved"
+        ]
+        self.assertEqual(event["payload"]["seeded_cop_config"], seeded)
+
+        events = list(events_from_tournament(self.tournament))
+        self.tournament.delete()
+        # The defaults move on after the event was written.
+        with patch.dict(DEFAULT_COP_CONFIG, {"hopefulness": 0.5, "simulations": 7}):
+            ctx = replay(events, verify=True)
+
+        self.assertEqual(self._replayed_config(ctx), seeded)
+
+    def test_a_log_from_before_v3_replays_with_the_legacy_defaults(self):
+        from unittest.mock import patch
+
+        from tournaments.models import DEFAULT_COP_CONFIG
+
+        # Record the log the way a v2 app did: seeding the defaults it had then,
+        # and leaving the seed out of the payload.
+        legacy = {
+            "place_prizes": 3,
+            "gibson_spread": 500,
+            "hopefulness": 0.05,
+            "control_loss_threshold": 0.25,
+            "control_loss_activation_round": 0,
+            "simulations": 1000,
+            "always_wins_simulations": 1000,
+            "disallow_repeat_byes": True,
+        }
+        with patch.dict(DEFAULT_COP_CONFIG, legacy, clear=True):
+            self._save_schedule()
+        events = []
+        for e in events_from_tournament(self.tournament):
+            payload = dict(e["payload"])
+            payload.pop("seeded_cop_config", None)
+            events.append({**e, "payload": payload, "schema_version": 2})
+        self.tournament.delete()
+
+        ctx = replay(events, verify=True)
+
+        self.assertEqual(self._replayed_config(ctx), legacy)
+
+
 class RecordedPublishTests(LoggedTournamentMixin, TestCase):
     """A publish records the board it printed, and replay puts that board back.
 

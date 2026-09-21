@@ -139,9 +139,11 @@ def as_derived(func):
 # ---------------------------------------------------------------------------
 
 # The payload schema version stamped on new events. v1 payloads identified
-# players by name; v2 identifies them by player number.
-# replay.SCHEMA_UPGRADES upgrades v1 on read.
-PAYLOAD_VERSION = 2
+# players by name; v2 identifies them by player number. v3
+# division_settings_saved payloads record the COP config they seeded, where
+# older ones left replay to re-derive it from whatever the defaults had become.
+# replay.SCHEMA_UPGRADES upgrades older payloads on read.
+PAYLOAD_VERSION = 3
 
 
 def record_event(

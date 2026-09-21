@@ -14,12 +14,12 @@ from .assign_tables import assign_tables, parse_board_table_map
 from .events import as_derived, derived_writes
 from .models import (
     BYE_PLAYER_NUMBER,
+    LEGACY_DEFAULT_COP_CONFIG,
     DivisionSettings,
     Pairing,
     Playoff,
     ResultSlip,
     RoundPairings,
-    default_cop_config,
 )
 from .pairing.base import PairingData, Starts, standings_after_round
 from .pairing.base import Pairing as EnginePairing
@@ -443,14 +443,21 @@ def resolve_fixed_table(first_ft, second_ft, first_rank, second_rank):
 
 
 def _ensure_cop_config(division, pd):
-    """Seed default COP config the first time a division with a COP round is
-    paired. COP can't pair without ``cop_config``; rather than fail, drop in the
-    defaults (persisted, so the organizer can then tune them on the settings tab)
-    and use them for this pairing. A division already configured is left alone;
-    a schedule with no COP round never gets one."""
+    """Seed COP config the first time a division with a COP round is paired, for
+    a schedule that arrived without one. COP can't pair without ``cop_config``;
+    rather than fail, drop in defaults (persisted, so the organizer can then tune
+    them on the settings tab) and use them for this pairing. A division already
+    configured is left alone; a schedule with no COP round never gets one.
+
+    Only legacy data gets here: every schedule saved since the schedule command
+    started seeding comes with its config already. And this write is not logged
+    — it runs wherever pairings are regenerated, including a page render — so
+    replay re-derives it. cop_config is in the digest, so it has to re-derive the
+    same value every time: the frozen legacy defaults, which are also what this
+    wrote when it was still being reached. Not ``DEFAULT_COP_CONFIG``, which moves."""
     if pd.cop_config or not any(rp.pairing == RP.COP for rp in pd.round_pairings):
         return
-    cfg = default_cop_config()
+    cfg = dict(LEGACY_DEFAULT_COP_CONFIG)
     settings_obj, _ = DivisionSettings.objects.get_or_create(division=division)
     settings_obj.cop_config = cfg
     settings_obj.save(update_fields=["cop_config"])

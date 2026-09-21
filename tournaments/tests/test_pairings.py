@@ -1044,8 +1044,8 @@ class PublishedStartLedgerTests(PairingDBTestBase):
 
 
 class CopConfigLazySeedTests(PairingDBTestBase):
-    """A division with a COP round gets default cop_config seeded the first time
-    it's paired (regenerate_pairings), so COP works without prior configuration."""
+    """A division with a COP round gets cop_config seeded the first time it's
+    paired (regenerate_pairings), so COP works without prior configuration."""
 
     def _schedule(self, rps):
         DivisionSettings.objects.update_or_create(
@@ -1059,14 +1059,17 @@ class CopConfigLazySeedTests(PairingDBTestBase):
     def _cop_config(self):
         return DivisionSettings.objects.get(division=self.division).cop_config
 
-    def test_cop_round_seeds_default_config(self):
-        from tournaments.models import default_cop_config
+    def test_cop_round_seeds_the_legacy_defaults(self):
+        # Not DEFAULT_COP_CONFIG: this seed is unlogged, so replay re-derives it,
+        # and it has to come out the same after the defaults move.
+        from tournaments.models import DEFAULT_COP_CONFIG, LEGACY_DEFAULT_COP_CONFIG
         self._schedule([
             {"round": 1, "start_round": 0, "pairing": "Swiss"},
             {"round": 2, "start_round": 1, "pairing": "COP"},
         ])
         self._regen()
-        self.assertEqual(self._cop_config(), default_cop_config())
+        self.assertEqual(self._cop_config(), LEGACY_DEFAULT_COP_CONFIG)
+        self.assertNotEqual(self._cop_config(), DEFAULT_COP_CONFIG)
 
     def test_non_cop_schedule_leaves_config_empty(self):
         self._schedule([{"round": 1, "start_round": 0, "pairing": "Swiss"}])

@@ -3,14 +3,93 @@
 **Status:** Phases 1–4 implemented and runtime-verified — COP is fully usable in
 the app (Rust engine, Django plumbing, settings-tab config form). Phase 5 (class
 prizes) is the only remaining piece, deferred pending an in-division class model.
-Pinned to commit `fd875c0`.
+Pinned to Baxter commit `fd875c0`.
 
-Post-Phase-4 refinement: `regenerate_pairings` seeds `DEFAULT_COP_CONFIG`
-(`models.py`, also the settings form's field-default source) the first time a
-division with a COP round is paired without config, so COP works out of the box;
-the organizer can then tune it. The engine boundary stays strict (a direct
-`pair_with_engine` with no config still raises) — the seeding is an app-layer
-convenience, done as a derived write inside `regenerate_pairings`.
+**Upstream pin: `COP.pm` at `fe4b438` (2026-06-19).** Re-checked against upstream
+main `126363a` (2026-09-07) on 2026-09-20: the native `cop()` path and every one
+of its helpers are **byte-identical** to `fe4b438`, so there is nothing to
+forward-port. All five upstream commits touching `COP.pm` since the port land in
+`Run()` or in code we do not use:
+
+- `df37ca0`, `fbdb101` — vendor `max_weight_matching` and a JSON codec into
+  `COP.pm`, replacing the `Graph::Matching` and `JSON` CPAN deps. We already have
+  our own ports (`src/vendor/max_weight_matching.rs`, serde), so this is upstream
+  removing dependencies we never had. This is most of the +1420-line diff.
+- `93184c3` then `3718b33` — bound COP's inputs to the based-on round rather than
+  the last paired round; the second commit reverts all of the first but the API's
+  `division_results`. Net effect on the native path: none.
+- `475a7df` — send `PAIR_AUTO` on an empty division and apply
+  `multiround_pairings`. Entirely inside the `use_cop_api` branch; Baxter never
+  makes the API call.
+
+### Default tuning (2026-09-20)
+
+Upstream's recommended config moved in README `126363a`. `DEFAULT_COP_CONFIG`
+adopts the parts that fit Baxter:
+
+| Key | Was | Now | Upstream |
+|---|---|---|---|
+| `hopefulness` | 0.05 | **0.02** | `[0.02]` |
+| `control_loss_threshold` | 0.25 | **0.30** | `[0.30]` |
+| `simulations` | 1000 | **10000** | 100000 |
+| `always_wins_simulations` | 1000 | 1000 | 10000 |
+| `gibson_spread` | 500 | 500 | `[250, 200]` |
+
+- **gibson_spread is not upstream's.** `de1cd8a` deliberately raised it from 250
+  to 500; upstream's `[250, 200]` did not change in this release, so it is not a
+  new recommendation, and adopting it would undo that call. (It is also an array,
+  which the settings form cannot express.)
+- **The sim counts are sized to the request, not copied.** COP runs synchronously
+  in the web request, and gunicorn runs with its default 30s timeout. Upstream's
+  100000/10000 are calibrated for its API server (the pre-`126363a` README said
+  so outright). Measured through the PyO3 boundary, release build, with the new
+  hopefulness and threshold:
+
+  | Field (rounds, pairing round) | 1k/1k | 100k/1k | 1k/3k | 100k/10k |
+  |---|---|---|---|---|
+  | 30 (12, r7) | 0.9s | 2.4s | 1.8s | 7.7s |
+  | 60 (15, r9) | 3.1s | 8.4s | 12.4s | 36s |
+  | 100 (20, r11) | 13.5s | 26.4s | 40.6s | 142s |
+
+  `always_wins_simulations` dominates: it reruns for every player who can catch
+  the leader, so its cost grows with the field. It estimates a probability near
+  the 0.30 threshold, which 1000 runs already pin to about ±3% (2σ), so it
+  stays. `simulations` is cheap and now has a rarer event to find (2% rather
+  than 5%). At 1000 runs its relative error is about 22%; at 10000 it is about
+  7%, for under 1.5s extra even at 100 players.
+- Affording upstream's counts would mean running COP off the request (a job
+  queue) or parallelising the always-wins sims. Both are out of scope here; the
+  second has to stay deterministic and keep the core crate wasm-clean.
+
+**Changing the defaults must not change a replay.** `cop_config` is in
+`division_digest`, and both seeding paths used to re-derive it from the
+defaults, so every default change silently broke `replay --verify` for any
+default-seeded COP tournament. `de1cd8a` already did this once. Now:
+
+- The schedule command (`division_settings_saved`) records the config it seeded
+  as `seeded_cop_config`, and replays from it. That is payload **v3**
+  (`events.PAYLOAD_VERSION`).
+- Older payloads are upgraded on read (`replay._upgrade_settings_saved`) with
+  `LEGACY_DEFAULT_COP_CONFIG`, the defaults in force until v3. That dict is
+  frozen. Seeds from before `de1cd8a` wrote gibson_spread 250 and still replay as
+  500; nothing in the log says which era a seed came from, so that can't be
+  recovered.
+- The lazy seed in `regenerate_pairings` is unlogged, so it always seeds the
+  frozen legacy dict. Only legacy data reaches it now (see below).
+
+To redo this check: find the base with
+`for c in $(git log --format=%H -- COP.pm); do git show $c:COP.pm | md5sum; done`
+against the vendored copy, then diff the native section (`sub log_info` through
+`sub min`) between that commit and main.
+
+Post-Phase-4 refinement: the schedule command seeds `DEFAULT_COP_CONFIG`
+(`models.py`, also the settings form's field-default source) when a schedule
+first gains a COP round, so COP works out of the box; the organizer can then
+tune it. `regenerate_pairings` also seeds a division that reaches pairing with a
+COP round and no config. Since the command seeds, only legacy data gets that
+far, and it seeds `LEGACY_DEFAULT_COP_CONFIG` (see "Default tuning" above).
+The engine boundary stays strict (a direct `pair_with_engine` with no config
+still raises); seeding is an app-layer convenience.
 
 ## Goal
 
