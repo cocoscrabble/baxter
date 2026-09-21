@@ -20,3 +20,6 @@ petgraph = "0.8"
 hashbrown = "0.15"
 indexmap = "2"
 foldhash = "0.1"
+# Pure-Rust libm: the COP port's Beta quantile uses it so its floats do not
+# depend on the platform C library.
+libm = "0.2"

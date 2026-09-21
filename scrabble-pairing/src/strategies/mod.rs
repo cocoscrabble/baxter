@@ -6,6 +6,7 @@
 
 pub mod basic;
 pub mod cop;
+pub mod cop_go;
 pub mod quads;
 pub mod roundrobin;
 pub mod swiss;
