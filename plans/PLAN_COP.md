@@ -14,8 +14,10 @@ upstream's 26 real-tournament test positions as fixtures — see its README,
 including the two conditions under which its answers are reproducible. `compare.py`
 there pairs every fixture with both and scores Baxter's pairing on upstream's
 own logged weights. **First comparison (2026-09-21): no comparable case agrees**,
-and three break a director's fixed pairing — the port enforces pins only as a
-weight, and upstream now makes them hard. The README's "Findings" lists the rest
+and three broke a director's fixed pairing — the port enforced pins only as a
+weight. **Fixed:** pinned players now sit outside the matching and their games
+are placed as given (upstream's rule too), which also lets several players be
+pinned to the bye and makes round-one pins hold. The README's "Findings" lists the rest
 (round-one seeding, Factor 3, gibson bars, contender penalties). Everything below
 describes the port as made from `COP.pm`; the Perl oracle (`tools/cop-oracle/`)
 is of historical interest only.

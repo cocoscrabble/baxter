@@ -229,7 +229,7 @@ fn build_weight_edges(
     dec: &Decisions,
     times_played: &HashMap<(String, String), i32>,
     previous: &HashSet<(String, String)>,
-    prepaired: &HashMap<String, String>,
+    pinned: &HashSet<String>,
     class_prize: &HashMap<usize, usize>,
 ) -> (Vec<(usize, usize, i128)>, i128) {
     let n = players.len();
@@ -248,15 +248,16 @@ fn build_weight_edges(
             let times = *times_played.get(&key(&pi.name, &pj.name)).unwrap_or(&0);
             let prev = previous.contains(&key(&pi.name, &pj.name));
 
-            // Prepaired: a player already pinned to someone else can't take this
-            // pairing.
-            let prepaired_weight = if prepaired.get(&pi.name).is_some_and(|o| o != &pj.name)
-                || prepaired.get(&pj.name).is_some_and(|o| o != &pi.name)
-            {
-                PROHIBITIVE_WEIGHT
-            } else {
-                0
-            };
+            // A pinned (prepaired) player is not in the matching at all: their
+            // game is placed by `pair_cop`, and they keep their rank here only so
+            // everyone else's weights are computed against the true standings.
+            // A pin used to be a weight on the pinned player's other pairs, which
+            // the matching could outbid when the pinned game carried prohibitive
+            // weights of its own (a repeat, a gibson bar). Upstream (liwords)
+            // excludes these pairs too (`PP` in its weight log).
+            if pinned.contains(&pi.name) || pinned.contains(&pj.name) {
+                continue;
+            }
 
             let both_cannot_cash_abs = ii > cash_abs && jj > cash_abs;
             let both_cannot_cash_stat = ii > cash_stat && jj > cash_stat;
@@ -360,8 +361,7 @@ fn build_weight_edges(
                 + pair_with_placer_weight
                 + control_loss_weight
                 + gibson_weight
-                + koth_weight
-                + prepaired_weight;
+                + koth_weight;
             max_weight = max_weight.max(weight);
             edges.push((i, j, weight));
         }
@@ -384,9 +384,14 @@ fn solve(edges: &[(usize, usize, i128)], max_weight: i128, n: usize) -> Vec<(usi
 
 /// Initial pairing when COP is (unusually) the first round: top vs bottom half,
 /// with a bye at the bottom for an odd field (COP is meaningless with no results;
-/// see plan D5).
-fn initial_pairing(field: &[Player]) -> Pairings {
-    let mut players: Vec<Player> = field.to_vec();
+/// see plan D5). Pinned games are placed by the caller; the split is over
+/// everyone else, with a bye if what is left is odd.
+fn initial_pairing(field: &[Player], pinned: &HashSet<String>) -> Pairings {
+    let mut players: Vec<Player> = field
+        .iter()
+        .filter(|p| !pinned.contains(&p.name))
+        .cloned()
+        .collect();
     if players.len() % 2 == 1 {
         players.push(Player::bye());
     }
@@ -434,9 +439,48 @@ pub fn pair_cop(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings, String> {
     if field.is_empty() {
         return Ok(Pairings::new());
     }
+    // This round's fixed pairings. Their players sit outside the matching and
+    // their games are placed as given — a pin is a director's decision, so it
+    // holds whatever the weights would prefer. Several players may be pinned to
+    // the bye (an absence, say); the matching's own bye depends only on whether
+    // the unpinned remainder is odd.
+    let by_name: HashMap<&str, &Player> = field.iter().map(|p| (p.name.as_str(), p)).collect();
+    let as_player = |name: &str| -> Player {
+        if name.eq_ignore_ascii_case(BYE_NAME) {
+            Player::bye()
+        } else {
+            by_name.get(name).map(|p| (*p).clone()).unwrap_or_else(|| Player::new(name))
+        }
+    };
+    let mut pinned: HashSet<String> = HashSet::new();
+    let mut pinned_games: Vec<(Player, Player)> = Vec::new();
+    if let Some(pairs) = ctx.fixed_pairings.get(&rp.round) {
+        for (a, b) in pairs {
+            for name in [a, b] {
+                if name.eq_ignore_ascii_case(BYE_NAME) {
+                    continue;
+                }
+                if !by_name.contains_key(name.as_str()) {
+                    return Err(format!(
+                        "COP: the fixed pairing {a} vs {b} cannot be honored — {name} \
+                         is not in this round's field"
+                    ));
+                }
+                if !pinned.insert(name.clone()) {
+                    return Err(format!("COP: {name} is in more than one fixed pairing"));
+                }
+            }
+            pinned_games.push((as_player(a), as_player(b)));
+        }
+    }
+
     // First round: no results to simulate — fall back to a Swiss-style initial.
     if rp.start_round < 1 {
-        return Ok(initial_pairing(&field));
+        let mut out = initial_pairing(&field, &pinned);
+        for (a, b) in pinned_games {
+            out.add(a, b);
+        }
+        return Ok(out);
     }
 
     // Build the COP player list (wins doubled), in record order (the field is
@@ -460,19 +504,36 @@ pub fn pair_cop(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings, String> {
         .collect();
     sort_by_record(&mut players);
 
-    let bye_active = players.len() % 2 == 1;
-    if bye_active {
-        players.push(CopPlayer {
-            name: BYE_NAME.to_string(),
-            index: players.len(),
-            wins: 0,
-            spread: 0,
-            is_bye: true,
-            start_wins: 0,
-            start_spread: 0,
-        });
+    // Two byes, which usually coincide. The simulations play out the whole
+    // field, so they need a bye whenever it is odd. The matching pairs only the
+    // unpinned players, so it needs one whenever *they* are odd — a pinned game
+    // leaves parity alone, a player pinned to the bye flips it (upstream's
+    // `(numPlayers - numForcedByes) % 2`). When they differ, the matching gets
+    // its own list: a sim bye it does not want is kept out of it like a pinned
+    // player, and a bye only it wants is appended after the sims have run.
+    let bye = |index| CopPlayer {
+        name: BYE_NAME.to_string(),
+        index,
+        wins: 0,
+        spread: 0,
+        is_bye: true,
+        start_wins: 0,
+        start_spread: 0,
+    };
+    let sim_bye = players.len() % 2 == 1;
+    let bye_active = (players.len() - pinned.len()) % 2 == 1;
+    if sim_bye {
+        players.push(bye(players.len()));
     }
-    let n = players.len();
+    let mut matching = players.clone();
+    if bye_active && !sim_bye {
+        matching.push(bye(matching.len()));
+    }
+    let mut excluded = pinned.clone();
+    if sim_bye && !bye_active {
+        excluded.insert(BYE_NAME.to_string());
+    }
+    let n = matching.len();
 
     let rt = build_runtime(cfg, rounds_remaining, rp.round, bye_active);
 
@@ -482,11 +543,11 @@ pub fn pair_cop(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings, String> {
     for i in 0..n {
         for j in (i + 1)..n {
             let t = ctx.repeats.get(&Pairing::new(
-                Player::new(&players[i].name),
-                Player::new(&players[j].name),
+                Player::new(&matching[i].name),
+                Player::new(&matching[j].name),
             ));
             if t > 0 {
-                times_played.insert(key(&players[i].name, &players[j].name), t);
+                times_played.insert(key(&matching[i].name, &matching[j].name), t);
             }
         }
     }
@@ -499,25 +560,16 @@ pub fn pair_cop(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings, String> {
 
     // Per-player repeat totals (an opponent met k>1 times adds k-1).
     let mut number_of_repeats: HashMap<String, i32> =
-        players.iter().map(|p| (p.name.clone(), 0)).collect();
+        matching.iter().map(|p| (p.name.clone(), 0)).collect();
     for i in 0..n {
         for j in (i + 1)..n {
             let t = *times_played
-                .get(&key(&players[i].name, &players[j].name))
+                .get(&key(&matching[i].name, &matching[j].name))
                 .unwrap_or(&0);
             if t > 1 {
-                *number_of_repeats.get_mut(&players[i].name).unwrap() += t - 1;
-                *number_of_repeats.get_mut(&players[j].name).unwrap() += t - 1;
+                *number_of_repeats.get_mut(&matching[i].name).unwrap() += t - 1;
+                *number_of_repeats.get_mut(&matching[j].name).unwrap() += t - 1;
             }
-        }
-    }
-
-    // Prepaired constraints from this round's fixed pairings.
-    let mut prepaired: HashMap<String, String> = HashMap::new();
-    if let Some(pairs) = ctx.fixed_pairings.get(&rp.round) {
-        for (a, b) in pairs {
-            prepaired.insert(a.clone(), b.clone());
-            prepaired.insert(b.clone(), a.clone());
         }
     }
 
@@ -525,24 +577,17 @@ pub fn pair_cop(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings, String> {
     let class_prize: HashMap<usize, usize> = HashMap::new(); // class prizes: Phase 5
 
     let (edges, max_weight) =
-        build_weight_edges(&players, &rt, &dec, &times_played, &previous, &prepaired, &class_prize);
+        build_weight_edges(&matching, &rt, &dec, &times_played, &previous, &excluded, &class_prize);
     let matched = solve(&edges, max_weight, n);
 
-    // Translate matched positions back to real players (bye → the synthetic bye).
-    let by_name: HashMap<&str, &Player> = field.iter().map(|p| (p.name.as_str(), p)).collect();
-    let to_player = |cp: &CopPlayer| -> Player {
-        if cp.is_bye {
-            Player::bye()
-        } else {
-            by_name
-                .get(cp.name.as_str())
-                .map(|p| (*p).clone())
-                .unwrap_or_else(|| Player::new(&cp.name))
-        }
-    };
+    // Translate matched positions back to real players (bye → the synthetic bye),
+    // then place the pinned games.
     let mut out = Pairings::new();
     for (a, b) in matched {
-        out.add(to_player(&players[a]), to_player(&players[b]));
+        out.add(as_player(&matching[a].name), as_player(&matching[b].name));
+    }
+    for (a, b) in pinned_games {
+        out.add(a, b);
     }
     Ok(out)
 }
@@ -1077,8 +1122,8 @@ mod tests {
 
     #[test]
     fn cop_honors_a_fixed_pairing_pin() {
-        // Pin P1 vs P6 in the COP round; COP must honor it via its prepaired
-        // (prohibitive-weight) constraint.
+        // Pin P1 vs P6 in the COP round; the pinned players sit outside the
+        // matching and the game is placed as given.
         let base = cop_input(
             6,
             8,
@@ -1098,6 +1143,104 @@ mod tests {
             pairs.contains(&("P1".to_string(), "P6".to_string())),
             "fixed pin P1-P6 not honored: {pairs:?}"
         );
+    }
+
+    /// Every name in round `round`'s pairings, byes excluded, with a check that
+    /// nobody appears twice.
+    fn paired_once(pairs: &[(String, String)]) -> HashSet<String> {
+        let mut seen = HashSet::new();
+        for (a, b) in pairs {
+            for name in [a, b] {
+                if name != BYE_NAME {
+                    assert!(seen.insert(name.clone()), "{name} paired twice: {pairs:?}");
+                }
+            }
+        }
+        seen
+    }
+
+    fn with_fixed(json: &str, fixed: &str) -> String {
+        json.replace(r#""cop_config""#, &format!(r#""fixed_pairings":{fixed},"cop_config""#))
+    }
+
+    #[test]
+    fn a_pinned_player_is_not_in_the_matching() {
+        // The weight table gives a pinned player no edges at all — not a heavy
+        // one that a sufficiently bad alternative could still outbid.
+        let players = ranked(4);
+        let rt = rt(3, 3);
+        let dec = Decisions {
+            lowest_gibson_rank: -1,
+            lowest_finishers_statistical: vec![0, 1, 2, 3],
+            lowest_cash_statistical: 0,
+            lowest_cash_absolute: 0,
+            destinys_child: -1,
+            control_loss_weight_used: false,
+            control_loss_active: false,
+            number_of_repeats: HashMap::new(),
+        };
+        let pinned: HashSet<String> =
+            [players[0].name.clone(), players[3].name.clone()].into();
+        let (edges, _) = build_weight_edges(
+            &players, &rt, &dec, &HashMap::new(), &HashSet::new(), &pinned, &HashMap::new(),
+        );
+        assert_eq!(edges.iter().map(|&(u, v, _)| (u, v)).collect::<Vec<_>>(), vec![(1, 2)]);
+    }
+
+    #[test]
+    fn several_players_can_be_pinned_to_the_bye() {
+        // An even field with two players excused onto byes: both pins hold and
+        // the four left pair among themselves, with no bye of their own.
+        let json = with_fixed(
+            &cop_input(6, 8, 3, &[
+                ("P1", "P2", 500, 400),
+                ("P3", "P4", 500, 400),
+                ("P5", "P6", 500, 400),
+            ]),
+            r#"{"2":[["P1","Bye"],["P4","Bye"]]}"#,
+        );
+        let pairs = round_pairs(&json, 2);
+        assert!(pairs.contains(&("Bye".to_string(), "P1".to_string())), "{pairs:?}");
+        assert!(pairs.contains(&("Bye".to_string(), "P4".to_string())), "{pairs:?}");
+        assert_eq!(pairs.len(), 4, "{pairs:?}");
+        assert_eq!(paired_once(&pairs).len(), 6);
+    }
+
+    #[test]
+    fn a_pin_in_a_first_round_cop_is_honored() {
+        // COP with no results falls back to a top/bottom split; the pin is
+        // placed first and the split runs over everyone else.
+        let players: Vec<String> = (1..=6)
+            .map(|i| format!(r#"{{"name":"P{i}","rating":{}}}"#, 2000 - 10 * i))
+            .collect();
+        let json = format!(
+            r#"{{"players":[{}],"round_pairings":[{{"round":1,"start_round":0,"pairing":"COP"}}],
+                "fixed_pairings":{{"1":[["P1","P2"]]}},
+                "cop_config":{{"place_prizes":1,"gibson_spreads":[250],"hopefulness":[0.1],
+                "control_loss_thresholds":[0.25],"simulations":50,"always_wins_simulations":50}}}}"#,
+            players.join(",")
+        );
+        let pairs = round_pairs(&json, 1);
+        assert!(pairs.contains(&("P1".to_string(), "P2".to_string())), "{pairs:?}");
+        assert_eq!(paired_once(&pairs).len(), 6);
+    }
+
+    #[test]
+    fn a_pin_naming_someone_outside_the_field_is_an_error() {
+        // Leaving the pin's partner unmatched would drop them from the round
+        // without a word; refusing says what is wrong.
+        let json = with_fixed(
+            &cop_input(6, 8, 3, &[
+                ("P1", "P2", 500, 400),
+                ("P3", "P4", 500, 400),
+                ("P5", "P6", 500, 400),
+            ]),
+            r#"{"2":[["P1","Nobody"]]}"#,
+        );
+        let out = pair(&parse(&json));
+        let r = out.iter().find(|r| r.round == 2).unwrap();
+        let err = r.error.as_deref().unwrap_or("");
+        assert!(err.contains("Nobody is not in this round's field"), "{r:?}");
     }
 
     /// `horizon_from_paired_round` changes only *how many rounds COP thinks are
@@ -1310,7 +1453,7 @@ mod tests {
     fn matching_of(players: &[CopPlayer], rt: &CopRuntime, dec: &Decisions) -> Vec<(usize, usize)> {
         let tp: HashMap<(String, String), i32> = HashMap::new();
         let prev: HashSet<(String, String)> = HashSet::new();
-        let pre: HashMap<String, String> = HashMap::new();
+        let pre: HashSet<String> = HashSet::new();
         let cls: HashMap<usize, usize> = HashMap::new();
         let (edges, mw) = build_weight_edges(players, rt, dec, &tp, &prev, &pre, &cls);
         solve(&edges, mw, players.len())
