@@ -99,6 +99,14 @@ the log replays into a fresh DB. Key pieces:
   default role and would let every account read every log. Each row unfolds into
   what the event changed (`events.event_detail`).
 
+**A publish records the board it printed** (`pairings` in the publish payload),
+and replay installs it rather than re-running the engine — so a pairing-engine
+bug fix never rewrites a played tournament. Replay still regenerates and
+compares; a difference is *engine drift* (`ReplayContext.drift`), reported by
+`replay_tournament`, fatal only in the fuzzer. Publishes logged before this
+(all in finished tournaments) carry no board and still regenerate, so engine
+changes may break their replay; that is accepted, not backfilled.
+
 **A new mutating POST view must route through a command** (or be added to the
 exempt set in `test_event_completeness.py`, which fails CI otherwise).
 

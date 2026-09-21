@@ -924,6 +924,8 @@ def event_detail(event, names=None, summary="") -> dict:
             for row in rows
         ]
         return {"lines": lines, "more": len(payload["rows"]) - len(rows)}
+    if event.event_type in ("round_published", "rounds_published") and payload.get("pairings"):
+        return _published_detail(payload["pairings"], names)
     if grid is None or not _is_delta(payload):
         # A command payload: one compact line of what it recorded.
         return _recorded_detail(payload, names, summary, event.event_type)
@@ -976,6 +978,34 @@ def _readable(payload) -> bool:
     its entrants carry their names already.
     """
     return len(json.dumps(payload, default=str)) <= MAX_PAYLOAD_CHARS
+
+
+def _published_detail(pairings, names=None) -> dict:
+    """The board a publish printed, a game a line: "R2  T3  Alice – Bob".
+
+    A publish records its rows so replay can put them back
+    (``commands._publish``); the same rows are the most useful thing the log
+    can show about it — what actually went out.
+    """
+    from tournaments.models import BYE_PLAYER_NUMBER
+
+    if names is None:
+        names = _player_names(_payload_strings(pairings))
+
+    def who(number):
+        return "Bye" if number == BYE_PLAYER_NUMBER else names.get(number, number)
+
+    lines = []
+    for round_key in sorted(pairings, key=int):
+        for row in pairings[round_key]:
+            table = f"T{row['table_label'] or row['table']}  " if row["table"] else ""
+            lines.append((
+                "", "",
+                f"R{round_key}  {table}{who(row['first'])} – {who(row['second'])}"
+                + ("  (forfeit)" if row.get("forfeit") else ""),
+            ))
+    shown = lines[:MAX_DETAIL_ROWS]
+    return {"lines": shown, "more": len(lines) - len(shown)}
 
 
 def _recorded_detail(payload, names=None, summary="", event_type="") -> dict:

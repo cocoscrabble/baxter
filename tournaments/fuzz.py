@@ -294,6 +294,13 @@ class Fuzzer:
             d.name: division_digest(d) for d in self.tournament.divisions.all()
         }
         ctx = replay(events, verify=True)
+        # The log was written by this same build, so a recorded publish that
+        # this engine would pair differently is nondeterminism, not a fix.
+        if ctx.drift:
+            first = ctx.drift[0]
+            raise InvariantError(
+                f"engine drift on replay: {first['division']} round {first['round']}"
+            )
         for name, digest in digests_before.items():
             replayed = ctx.tournament.divisions.filter(name=name).first()
             if replayed is None or division_digest(replayed) != digest:
