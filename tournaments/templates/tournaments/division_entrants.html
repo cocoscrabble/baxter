@@ -22,12 +22,14 @@ which is why they can sit in a table this form does not wrap.
 <div class="drift-banner">
     <p><strong>{{ drift|length }} entrant{{ drift|length|pluralize }}</strong>
     {{ drift|length|pluralize:"has,have" }} a pinned rating that no longer matches
-    the player table. Entrants keep the rating they were entered with, so nothing
-    changes until you say so.</p>
+    the player table.
+    {% if division_under_way %}Ratings froze when the first round was published,
+    so nothing changes until you say so.{% else %}Ratings follow the player table
+    until the first round is published, so these will be taken then at the latest.{% endif %}</p>
     {% if division_under_way %}
     <p class="error">This division is already under way. Re-pinning now changes
-    the live rating projection and the seed order below; it does not re-pair
-    rounds that have already gone out.</p>
+    the live rating projection; it does not re-pair rounds that have already gone
+    out, or renumber the entrants.</p>
     {% endif %}
     <p>
         <button type="submit" form="refresh-ratings">Update ticked ratings</button>

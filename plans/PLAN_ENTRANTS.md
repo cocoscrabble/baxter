@@ -85,6 +85,23 @@ default, so a later session should not relitigate them without asking.
    has moved on. Manual ratings are still never touched, and the entrants page
    marks the drift for editors only.
 
+   *Revised again (2026-09):* the pin is live until the division starts — its
+   first round published (`Division.under_way`), the same moment the seeding
+   freezes. People register for a future tournament weeks or months ahead, and
+   a rating snapshotted then is not the rating they bring to the event. So
+   whatever moves player ratings (roster pull, WESPA pull, player import, a
+   WESPA link, a guest merge) re-pins every non-manual entrant of every division
+   that has not started and reseeds it (`entrant_sync.refresh_upcoming`), and
+   publishing the first round catches up anything still behind first
+   (`refresh_before_start`) — re-pairing and asking the director to look again,
+   rather than publishing drafts they never saw, if anything moved. These are
+   the same logged `entrant_ratings_refreshed` / `entrants_reseeded` commands,
+   carrying values, so replay is unaffected; the scheduled pulls record them
+   with no actor. This retires the "consequence" above: a global refresh now
+   *does* write replayable state, but only through those commands, and only in
+   divisions that have not started. Any refresh or reseed also drops the
+   division's draft rounds, which were paired off the old seeds.
+
 4. **Guests are not a new kind.** A guest is simply a player with no CoCo
    number and no CoCo rating: a `T-` number, `is_provisional=True`, and a WESPA
    or manually-entered rating. No `is_guest` field, no `kind` enum. Their `T-`

@@ -16,8 +16,9 @@
 only for a player who has no CoCo rating, and it is never sent to the central
 database. WESPA players are also not added to the CoCo database.</p>
 
-<p>Syncing does not disturb any tournament in progress: entrants pin the rating they
-were seeded from when they enter, so a refresh cannot reshuffle pairings.</p>
+<p>Syncing does not disturb any tournament in progress. Entrants' ratings follow
+the player table only until their division's first round is published, then
+freeze, so a refresh cannot reshuffle pairings once play has started.</p>
 
 <p>The list holds {{ mirror_count }} WESPA player{{ mirror_count|pluralize }}.
 Of Baxter's {{ player_count }} player{{ player_count|pluralize }},

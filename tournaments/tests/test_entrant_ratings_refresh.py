@@ -1,8 +1,10 @@
 """Re-pinning entrant ratings from the player table.
 
-Entrants freeze their rating seed at registration so a roster pull cannot move a
-running tournament (plans/PLAN_ENTRANTS.md decision 3). That stays true; this is
-the director's deliberate override of it, one entrant at a time.
+Entrants pin their rating seed at registration, and it freezes once the division
+is under way, so a roster pull cannot move a running tournament
+(plans/PLAN_ENTRANTS.md decision 3). Before that it follows the player table
+(LiveBeforeStartTests, at the end). The rest is the director's deliberate
+override of the freeze, one entrant at a time.
 
 The three things worth pinning: manual ratings are never on offer, the event
 records values rather than an intent to sync (a replay reads a player table that
@@ -15,8 +17,13 @@ from datetime import date
 from django.test import TestCase
 from django.urls import reverse
 
-from tournaments.commands import add_entrant, create_tournament
-from tournaments.entrant_sync import rating_drift
+from tournaments.commands import (
+    add_entrant,
+    create_tournament,
+    reseed_entrants,
+    save_settings,
+)
+from tournaments.entrant_sync import rating_drift, refresh_upcoming
 from tournaments.models import Entrant, Player, RoundPairings
 from users.models import User
 
@@ -330,3 +337,138 @@ class DisplayTests(RefreshTestCase):
         )
         response = self.client.get(self.entrants_url())
         self.assertNotContains(response, "already under way")
+
+
+class LiveBeforeStartTests(RefreshTestCase):
+    """Until the first round is published, the seed follows the player table.
+
+    An entry taken months ahead is seeded off the ratings current when play
+    begins. The freeze, and everything above, only applies once under way.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.other = Player.objects.create(
+            name="Bea", player_number="0234", rating=1600
+        )
+        add_entrant(
+            self.tournament, self.owner,
+            {
+                "division": "Open", "player": "0234",
+                "rating": 1600, "rating_source": Entrant.COCO,
+            },
+        )
+        reseed_entrants(self.tournament, self.owner, {"division": "Open"})
+        save_settings(
+            self.tournament, self.owner,
+            {"division": "Open",
+             "blocks": [{"pairing": "KotH", "rounds": 1, "pair_from": 0}]},
+        )
+
+    def numbers(self):
+        return dict(
+            self.division.entrants.values_list("player__player_number", "number")
+        )
+
+    def publish_url(self):
+        return reverse("publish_round", kwargs=self.division.slug_kwargs())
+
+    def test_a_division_that_has_not_started_follows_the_player_table(self):
+        self.move_player(rating=1700, career_games=140)
+        self.assertEqual(refresh_upcoming(), [self.division])
+        self.entrant.refresh_from_db()
+        self.assertEqual((self.entrant.rating, self.entrant.career_games), (1700, 140))
+
+    def test_the_seeding_follows_the_rating(self):
+        self.assertEqual(self.numbers(), {"0234": 1, "0233": 2})
+        self.move_player(rating=1700)
+        refresh_upcoming()
+        self.assertEqual(self.numbers(), {"0233": 1, "0234": 2})
+
+    def test_a_started_division_keeps_its_seed(self):
+        RoundPairings.objects.create(
+            division=self.division, round=1, status=RoundPairings.PUBLISHED
+        )
+        self.move_player(rating=1700)
+        self.assertEqual(refresh_upcoming(), [])
+        self.entrant.refresh_from_db()
+        self.assertEqual(self.entrant.rating, 1500)
+        self.assertEqual(self.numbers(), {"0234": 1, "0233": 2})
+
+    def test_a_manual_rating_is_left_alone(self):
+        Entrant.objects.filter(pk=self.entrant.pk).update(
+            rating=1450, rating_source=Entrant.MANUAL
+        )
+        self.move_player(rating=1700)
+        refresh_upcoming()
+        self.entrant.refresh_from_db()
+        self.assertEqual(self.entrant.rating, 1450)
+
+    def test_narrowing_skips_divisions_the_players_are_not_in(self):
+        self.move_player(rating=1700)
+        stranger = Player.objects.create(name="Cy", player_number="0235", rating=1)
+        self.assertEqual(refresh_upcoming(players=[stranger]), [])
+        self.assertEqual(refresh_upcoming(players=[self.player]), [self.division])
+
+    def test_drafts_paired_off_the_old_seed_are_dropped(self):
+        RoundPairings.objects.create(
+            division=self.division, round=1, status=RoundPairings.DRAFT
+        )
+        self.move_player(rating=1700)
+        refresh_upcoming()
+        self.assertFalse(self.division.round_pairings_set.exists())
+
+    def test_publishing_catches_up_and_asks_for_a_second_look(self):
+        self.client.force_login(self.owner)
+        self.client.get(
+            reverse("division_pair_rounds", kwargs=self.division.slug_kwargs())
+        )
+        self.move_player(rating=1700)
+
+        response = self.client.post(self.publish_url(), {"round": 1}, follow=True)
+        self.assertContains(response, "re-paired on the current ratings")
+        # Re-paired but not published: the director has not seen these yet.
+        self.assertEqual(
+            self.division.round_pairings_set.get(round=1).status,
+            RoundPairings.DRAFT,
+        )
+        self.entrant.refresh_from_db()
+        self.assertEqual(self.entrant.rating, 1700)
+
+        self.client.post(self.publish_url(), {"round": 1})
+        self.assertEqual(
+            self.division.round_pairings_set.get(round=1).status,
+            RoundPairings.PUBLISHED,
+        )
+
+    def test_publishing_with_nothing_stale_goes_straight_through(self):
+        self.client.force_login(self.owner)
+        self.client.get(
+            reverse("division_pair_rounds", kwargs=self.division.slug_kwargs())
+        )
+        self.client.post(self.publish_url(), {"round": 1})
+        self.assertEqual(
+            self.division.round_pairings_set.get(round=1).status,
+            RoundPairings.PUBLISHED,
+        )
+
+    def test_a_replay_reproduces_the_live_refresh(self):
+        # Same caveat as EventTests: the player table is not moved again before
+        # replaying, because entrant_added without a rating re-derives it.
+        from tournaments.events import division_digest
+        from tournaments.replay import events_from_tournament, replay
+
+        self.move_player(rating=1700)
+        refresh_upcoming()  # as a scheduled pull does: no actor
+        self.client.force_login(self.owner)
+        self.client.get(
+            reverse("division_pair_rounds", kwargs=self.division.slug_kwargs())
+        )
+        self.client.post(self.publish_url(), {"round": 1})
+        self.division.refresh_from_db()
+
+        ctx = replay(events_from_tournament(self.tournament), verify=True)
+        self.assertEqual(
+            division_digest(ctx.tournament.divisions.get()),
+            division_digest(self.division),
+        )
