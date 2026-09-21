@@ -9,6 +9,9 @@
 //! tallies to the last sim.
 //! Stage 2: the "Precomp Data" table (gibson status and groups, hopeful and
 //! absolute ranks, the control-loss search) and the destiny's child.
+//! Stages 3-4: the pairings themselves — policies, Factor 3, matching, retry
+//! and assembly — exactly upstream's. (The live comparison also diffs every
+//! weight of every pair; freezing those tables is not worth their size.)
 
 use scrabble_pairing::strategies::cop_go::trace::trace_json;
 use serde_json::Value;
@@ -66,6 +69,7 @@ fn check(heavy: bool) {
             }
         }
         check_precomp(name, &trace["precomp"], &case["precomp"]);
+        assert_eq!(trace["pairings"], case["pairings"], "{name}: pairings");
     }
 }
 
