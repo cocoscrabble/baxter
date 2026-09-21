@@ -5,7 +5,18 @@ the app (Rust engine, Django plumbing, settings-tab config form). Phase 5 (class
 prizes) is the only remaining piece, deferred pending an in-division class model.
 Pinned to Baxter commit `fd875c0`.
 
-**Upstream pin: `COP.pm` at `fe4b438` (2026-06-19).** Re-checked against upstream
+**Source of truth moved (2026-09-21): upstream COP is now liwords' Go port**
+([`woogles-io/liwords` `pkg/pair`](https://github.com/woogles-io/liwords/tree/master/pkg/pair)),
+where development continued after `COP.pm`; it has grown well past it (Factor 3
+control loss, contender-group parity, top-down byes, …). An oracle running it
+unmodified is at `tools/cop-go-oracle/`, pinned to liwords `4cba544`, with
+upstream's 26 real-tournament test positions as fixtures — see its README,
+including the two conditions under which its answers are reproducible. The
+Rust port has **not** yet been compared against it; everything below describes
+the port as made from `COP.pm`, and the Perl oracle (`tools/cop-oracle/`) is now
+of historical interest only.
+
+**Previous upstream pin: `COP.pm` at `fe4b438` (2026-06-19).** Re-checked against upstream
 main `126363a` (2026-09-07) on 2026-09-20: the native `cop()` path and every one
 of its helpers are **byte-identical** to `fe4b438`, so there is nothing to
 forward-port. All five upstream commits touching `COP.pm` since the port land in
