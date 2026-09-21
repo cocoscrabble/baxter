@@ -121,6 +121,15 @@ confirmation, or a scheduled pull that has been failing, is flagged here.
 `/manage/` mirrors the sibling cocodb site's staff area; `/admin/` stays Django's
 own, which is gated on `is_staff` rather than on the role.
 
+**Every admin action is recorded in the admin log** (`/manage/log/`,
+`AdminAction`): who did it (blank for a scheduled pull), and whether it worked.
+Actions run inside `admin_log.logged(kind, actor)`, which records success, a
+refusal the caller marks with `entry.fail(...)`, or an exception on its way out
+(then re-raised) — so a cron pull that crashed still leaves a row. The pulls log
+from `run_sync`, so all three paths are covered. `test_admin_log.CompletenessTests`
+fails if an admin view with a POST handler never logs. The index flags any
+failure in the last week.
+
 `/manage/users/` lists every account and lets an admin set a new password on
 one ranked **strictly below** them (`can_set_password_for`): never their own,
 another admin's, a superuser's, or — unless they are staff — a staff account's,

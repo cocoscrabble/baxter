@@ -15,20 +15,35 @@ log nobody reads. Unexpected exceptions still propagate.
 
 import logging
 
-from .models import WespaSync
+from .admin_log import logged
+from .models import AdminAction, WespaSync
 from .wespa_api import WespaFetchError, WespaParseError, fetch_wespa
 from .wespa_ratings import PendingLink, import_wespa
 
 logger = logging.getLogger(__name__)
 
 
-def run_sync(source, raw=None) -> WespaSync:
+def run_sync(source, raw=None, actor=None) -> WespaSync:
     """Pull the WESPA list (or import ``raw``), apply it, and record the outcome.
 
     ``source`` is one of the :class:`WespaSync` source constants. Pass ``raw``
     for an uploaded file; leave it out to fetch from the configured endpoint.
     Returns the saved record either way — check ``record.ok``.
+
+    Also lands a row in the admin log, attributed to ``actor`` (None for the
+    scheduled pull) — including when the pull crashes outright.
     """
+    with logged(AdminAction.WESPA_PULL, actor) as entry:
+        record = _run_sync(source, raw)
+        if record.ok:
+            entry.summary = f"{record.get_source_display()}: {record.summary()}"
+        else:
+            entry.summary = record.get_source_display()
+            entry.fail(record.error)
+    return record
+
+
+def _run_sync(source, raw):
     record = WespaSync(source=source)
     try:
         if raw is None:

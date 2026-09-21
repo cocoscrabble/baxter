@@ -46,6 +46,12 @@ ago, {{ last_wespa_sync.get_source_display|lower }}) failed:
 {{ last_wespa_sync.error }}</p>
 {% endif %}
 
+{% if recent_failures %}
+<p class="error"><strong>{{ recent_failures }} admin action{{ recent_failures|pluralize }}
+failed in the last week.</strong>
+<a href="{% url 'admin_log' %}?failed=1">See {{ recent_failures|pluralize:"it,them" }}</a>.</p>
+{% endif %}
+
 <h2>Players</h2>
 
 <p>{{ player_count }} player{{ player_count|pluralize }},
@@ -83,6 +89,10 @@ ago, {{ last_wespa_sync.get_source_display|lower }}) failed:
 <h2>Accounts and raw data</h2>
 
 <ul>
+    <li><a href="{% url 'admin_log' %}">Admin log</a>: Every action taken
+    from these pages, and every scheduled pull, with who did it and whether it
+    worked.</li>
+
     <li><a href="{% url 'user_list' %}">Users</a>: Every registered account,
     with usernames and email addresses. Set a new password for a director who
     is locked out.</li>

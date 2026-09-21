@@ -1421,6 +1421,63 @@ class WespaPlayer(models.Model):
         return f"{self.name} ({self.rating})"
 
 
+class AdminAction(models.Model):
+    """One site-wide admin action and whether it worked: the admin log.
+
+    A tournament's own changes are in its event log, but the player and account
+    tools belong to no tournament, and most of them used to leave no trace at
+    all — a WESPA link, a player import, a password set on someone's account. The
+    pulls left a ``RosterSync``/``WespaSync`` row, but those are state (the
+    held-back rows live on them) and their pages read only the latest.
+
+    Written through ``admin_log.logged``, which records a failure too — an
+    expected refusal the caller marks, or an exception on its way out — so "did
+    the pull on Tuesday work, and who linked this player" are both answerable
+    at ``/manage/log/``. Not replayable and not meant to be: it is an audit
+    trail, not a source of state.
+    """
+
+    ROSTER_PULL = "roster_pull"
+    ROSTER_RESOLUTION = "roster_resolution"
+    WESPA_PULL = "wespa_pull"
+    WESPA_LINK = "wespa_link"
+    WESPA_UNLINK = "wespa_unlink"
+    PLAYER_IMPORT = "player_import"
+    PLAYER_MERGE = "player_merge"
+    PASSWORD_SET = "password_set"
+    KINDS = [
+        (ROSTER_PULL, "PlayerDB pull"),
+        (ROSTER_RESOLUTION, "Guest number confirmed"),
+        (WESPA_PULL, "WESPA pull"),
+        (WESPA_LINK, "WESPA link"),
+        (WESPA_UNLINK, "WESPA unlink"),
+        (PLAYER_IMPORT, "Player import"),
+        (PLAYER_MERGE, "Guest merged"),
+        (PASSWORD_SET, "Password set"),
+    ]
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    kind = models.CharField(max_length=32, choices=KINDS)
+    # None for a scheduled pull. SET_NULL so deleting an account keeps its
+    # history; ``actor_name`` is what the page shows then.
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="+",
+    )
+    actor_name = models.CharField(max_length=150, blank=True)
+    ok = models.BooleanField()
+    summary = models.TextField(blank=True)
+    error = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        indexes = [models.Index(fields=["kind", "-created_at"])]
+
+    def __str__(self):
+        outcome = "ok" if self.ok else "failed"
+        return f"{self.get_kind_display()} ({outcome})"
+
+
 class WespaSync(models.Model):
     """The outcome of one pull of the WESPA rating list.
 
