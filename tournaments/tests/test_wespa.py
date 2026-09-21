@@ -14,6 +14,7 @@ from tournaments.models import (
     Division,
     Entrant,
     Player,
+    RoundPairings,
     Tournament,
     WespaPlayer,
     WespaSync,
@@ -189,7 +190,7 @@ class MatchingTests(TestCase):
         self.assertEqual(self.ann.effective_rating, (1600, "coco"))
 
     def test_a_pull_does_not_move_a_pinned_entrant_rating(self):
-        """The reason this can stay an unlogged global action."""
+        """Why a pull is safe mid-event: a started division keeps its seeds."""
         owner = User.objects.create_user(username="td-wespa", password="pw")
         tournament = Tournament.objects.create(
             name="In Progress", location="X",
@@ -198,6 +199,10 @@ class MatchingTests(TestCase):
         division = Division.objects.create(tournament=tournament, name="Open")
         entrant = Entrant.enter(division, self.bea, 1)
         self.assertEqual((entrant.rating, entrant.rating_source), (0, "none"))
+        # In progress: the seed freezes when the first round is published.
+        RoundPairings.objects.create(
+            division=division, round=1, status=RoundPairings.PUBLISHED
+        )
 
         import_wespa(document(row(7, "Bea Fox", 1450)))
 

@@ -33,7 +33,6 @@ from .entrant_sync import (
     payload_for,
     rating_drift,
     refresh_before_start,
-    refresh_upcoming,
 )
 from .live_ratings import project_ratings
 from .player_source import get_player_source
@@ -2448,8 +2447,7 @@ class PlayerImportView(LoginRequiredMixin, IsAdminMixin, View):
             messages.error(request, "No file uploaded.")
             return redirect("player_import")
 
-        result, errors = import_players(uploaded.read())
-        refresh_upcoming(actor=request.user)
+        result, errors = import_players(uploaded.read(), actor=request.user)
         if errors:
             for error in errors[:25]:
                 messages.error(request, error)
@@ -2596,9 +2594,6 @@ class PlayerMergeView(LoginRequiredMixin, IsAdminMixin, View):
         except ValueError as exc:
             messages.error(request, str(exc))
             return redirect("player_merge")
-        # The guest's entrants were pinned at the guest's rating; before the
-        # start they take the real player's.
-        refresh_upcoming(players=[into], actor=request.user)
         messages.success(
             request,
             f"Merged guest {guest.player_number} into {into.name} "
@@ -2773,11 +2768,10 @@ class WespaImportView(LoginRequiredMixin, IsAdminMixin, View):
             messages.error(request, "That player is no longer here — try again.")
             return redirect("wespa_import")
         try:
-            link_player(player, row)
+            link_player(player, row, actor=request.user)
         except ValueError as exc:
             messages.error(request, str(exc))
             return redirect("wespa_import")
-        refresh_upcoming(players=[player], actor=request.user)
         # A resolved name leaves the pending list whether it was resolved from
         # there or from the search, so the same work is never offered twice.
         record = WespaSync.latest_successful()

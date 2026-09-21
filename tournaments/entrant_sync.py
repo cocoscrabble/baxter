@@ -3,9 +3,9 @@
 An entrant pins their whole rating seed on the entrant row (PLAN_ENTRANTS
 decision 3), but the pin only *freezes* once the division has started — its
 first round published (``Division.under_way``), the same moment the seeding
-freezes. Until then the seed is live: whatever moves a player's rating (a
-roster or WESPA pull, a player import, a WESPA link, a guest merge) re-pins
-every entrant of every division that has not started (``refresh_upcoming``), and
+freezes. Until then the seed is live: every write of a player's rating goes
+through ``player_ratings``, which re-pins every entrant of every division that
+has not started (``refresh_upcoming``), and
 publishing the first round catches up anything still behind first
 (``refresh_before_start``). An entry taken months ahead of the event is seeded
 off the ratings current when play begins, not when the form came in.
@@ -173,22 +173,37 @@ def refresh_before_start(division, actor=None):
 
 def upcoming_divisions(players=None):
     """Divisions with entrants and no round out of draft, optionally narrowed to
-    those entering one of ``players``."""
-    divisions = Division.objects.filter(entrants__isnull=False).exclude(
-        round_pairings_set__status__in=[
-            s for s, _ in RoundPairings.STATUS_CHOICES if s != RoundPairings.DRAFT
-        ]
+    those entering one of ``players``.
+
+    Narrowed here rather than in SQL: a WESPA pull can rate thousands of
+    players, far more than there are divisions waiting to start.
+    """
+    divisions = (
+        Division.objects.filter(entrants__isnull=False)
+        .exclude(
+            round_pairings_set__status__in=[
+                s for s, _ in RoundPairings.STATUS_CHOICES
+                if s != RoundPairings.DRAFT
+            ]
+        )
+        .select_related("tournament")
+        .distinct()
     )
-    if players is not None:
-        divisions = divisions.filter(entrants__player__in=players)
-    return divisions.select_related("tournament").distinct()
+    if players is None:
+        return list(divisions)
+    wanted = {p.pk for p in players}
+    return [
+        d for d in divisions
+        if wanted.intersection(d.entrants.values_list("player_id", flat=True))
+    ]
 
 
 def refresh_upcoming(players=None, actor=None):
     """``refresh_before_start`` every division that has not started.
 
-    Called after anything that moves player ratings. ``actor`` is None for the
-    scheduled pulls, which have nobody to attribute the change to. Returns the
+    Reached through ``player_ratings``, the gate every rating write goes
+    through, rather than called directly. ``actor`` is None for the scheduled
+    pulls, which have nobody to attribute the change to. Returns the
     divisions that changed.
     """
     return [

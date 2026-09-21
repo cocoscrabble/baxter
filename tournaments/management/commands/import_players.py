@@ -2,7 +2,8 @@ import csv
 
 from django.core.management.base import BaseCommand, CommandError
 
-from tournaments.models import Player
+from tournaments.models import Player, canonical_player_number
+from tournaments.player_ratings import save_players
 
 
 class Command(BaseCommand):
@@ -44,9 +45,11 @@ class Command(BaseCommand):
 
             if existing:
                 if update:
-                    existing.player_number = player_number
+                    # save_players bulk-updates, bypassing Player.save's
+                    # canonicalization, so apply it here.
+                    existing.player_number = canonical_player_number(player_number)
                     existing.rating = rating
-                    existing.save()
+                    save_players([existing], ["player_number", "rating"])
                     updated_count += 1
                     self.stdout.write(f"  Updated: {name}")
                 else:

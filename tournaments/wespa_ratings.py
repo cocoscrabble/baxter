@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from django.db import transaction
 
 from .models import Player, WespaPlayer
+from .player_ratings import save_players
 from .wespa_api import parse_wespa
 
 # What a pull owns on a mirror row. ``wespa_id`` is the key, not a field.
@@ -182,12 +183,9 @@ def _apply_to_players(mirror, result):
             )
         )
 
-    if to_rate:
-        Player.objects.bulk_update(to_rate, ["wespa_rating"], batch_size=500)
-    if to_link:
-        Player.objects.bulk_update(
-            to_link, ["wespa_id", "wespa_rating"], batch_size=500
-        )
+    # One write, so the downstream step runs once. Rewriting wespa_id on the
+    # players who were only re-rated writes the value they already hold.
+    save_players([*to_rate, *to_link], ["wespa_id", "wespa_rating"])
 
 
 def _player_json(player):
@@ -208,7 +206,7 @@ def _row_json(row):
     }
 
 
-def link_player(player, wespa_player):
+def link_player(player, wespa_player, *, actor=None):
     """Assert that ``player`` is ``wespa_player``, and take the rating.
 
     The one step a human makes. Unlogged like the rest of this module: the link
@@ -229,7 +227,7 @@ def link_player(player, wespa_player):
     if wespa_player.rating is not None:
         player.wespa_rating = wespa_player.rating
         fields.append("wespa_rating")
-    player.save(update_fields=fields)
+    save_players([player], fields, actor=actor)
     return player
 
 

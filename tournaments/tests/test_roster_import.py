@@ -12,7 +12,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from tournaments.models import Division, Entrant, Player, Tournament
+from tournaments.models import Division, Entrant, Player, RoundPairings, Tournament
 from tournaments.roster_import import (
     RosterParseError,
     import_roster,
@@ -209,10 +209,22 @@ class SeedFreezingTests(TestCase):
         self.assertEqual(entrant.career_games, 100)
         self.assertEqual(entrant.last_played, date(2026, 3, 14))
 
+    def test_a_pull_moves_a_tournament_that_has_not_started(self):
+        import_roster(roster(entry("0233", "Alec")))
+        player = Player.objects.get(player_number="0233")
+        entrant = Entrant.enter(self.division, player, 1)
+        import_roster(roster(entry("0233", "Alec", rating=1900)))
+        entrant.refresh_from_db()
+        self.assertEqual(entrant.rating, 1900)
+
     def test_a_later_pull_cannot_move_a_running_tournament(self):
         import_roster(roster(entry("0233", "Alec")))
         player = Player.objects.get(player_number="0233")
         entrant = Entrant.enter(self.division, player, 1)
+        # Running: the seed freezes when the first round is published.
+        RoundPairings.objects.create(
+            division=self.division, round=1, status=RoundPairings.PUBLISHED
+        )
 
         import_roster(
             roster(entry("0233", "Alec", rating=1900, deviation=60.0,
@@ -545,6 +557,9 @@ class ResolutionTests(TestCase):
         """A rename is not a reason to reseed a tournament already under way."""
         from tournaments.roster_import import resolve_number
 
+        RoundPairings.objects.create(
+            division=self.division, round=1, status=RoundPairings.PUBLISHED
+        )
         before = (self.entrant.rating, self.entrant.rating_source)
         resolve_number(self._pending(), actor=self.owner)
         self.entrant.refresh_from_db()

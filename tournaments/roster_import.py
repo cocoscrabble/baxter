@@ -48,6 +48,7 @@ from django.conf import settings
 from django.db import transaction
 
 from .models import Player
+from .player_ratings import save_players
 
 SCHEMA = "coco.roster/1"
 
@@ -240,10 +241,7 @@ def import_roster(raw):
         # bulk_create bypasses save(), so the numbers are canonicalized above —
         # they came through canonical_player_number in parse_roster.
         Player.objects.bulk_create(to_create, batch_size=500)
-    if to_update:
-        Player.objects.bulk_update(
-            to_update, [*SYNCED_FIELDS, "is_provisional"], batch_size=500
-        )
+    save_players(to_update, [*SYNCED_FIELDS, "is_provisional"])
     return result
 
 
@@ -371,5 +369,5 @@ def resolve_number(pending, actor=None):
     for name in SYNCED_FIELDS:
         setattr(player, name, pending.row[name])
     player.is_provisional = False
-    player.save(update_fields=[*SYNCED_FIELDS, "is_provisional"])
+    save_players([player], [*SYNCED_FIELDS, "is_provisional"], actor=actor)
     return player

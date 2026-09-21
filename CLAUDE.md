@@ -252,12 +252,16 @@ moment the seeding freezes. Before that it is live: people register for a future
 event early, and the rating they registered with is not the one they bring
 (`plans/PLAN_ENTRANTS.md` decision 3, revised).
 
-- Whatever moves player ratings — roster pull, WESPA pull, player import, WESPA
-  link, guest merge — calls `entrant_sync.refresh_upcoming`, which re-pins and
-  reseeds every division that has not started. A new path that writes
-  `Player.rating`/`wespa_rating` should call it too (from the view or sync
-  layer — **never from inside a command**, or replaying that command would
-  re-read the replay database's player table).
+- **Every write of a player's rating goes through `player_ratings.save_players`**
+  — the roster pull and resolution confirm, the WESPA pull and link, the player
+  imports. It writes, then runs `players_rerated`, the one place for everything
+  downstream of a rating change (today `entrant_sync.refresh_upcoming`, which
+  re-pins and reseeds every division that has not started). `players_rerated`
+  is called on its own only where the rating an entrant follows changes without
+  a rating write: a guest merge, and the Django admin form.
+  `test_player_ratings` fails on a `Player.objects.bulk_update` anywhere else.
+  **Never call either from inside a command** — replaying that command would
+  re-read the replay database's player table.
 - Publishing catches up first (`refresh_before_start`). If anything moved, the
   drafts are re-paired and the director is asked to publish again rather than
   printing a round they never saw.
