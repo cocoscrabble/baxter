@@ -1,0 +1,34 @@
+{
+    "playerNames": [
+        "Alice",
+        "Bob",
+        "Charlie",
+        "Dave",
+        "Eric",
+        "Frank",
+        "Grace",
+        "Holly"
+    ],
+    "playerClasses": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+    ],
+    "classPrizes": [
+        2
+    ],
+    "gibsonSpread": 200,
+    "controlLossThreshold": 0.25,
+    "allPlayers": 8,
+    "validPlayers": 8,
+    "rounds": 10,
+    "placePrizes": 2,
+    "divisionSims": 1000,
+    "controlLossSims": 1000,
+    "controlLossActivationRound": 10
+}

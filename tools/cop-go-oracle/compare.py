@@ -304,7 +304,7 @@ def write_case(out_dir, case):
 
 CRATE = HERE.parent.parent / "scrabble-pairing"
 # Well past anything upstream reaches in its 6s budget.
-STAGES_MAX_SIMS = 5_000_000
+STAGES_MAX_SIMS = 20_000_000
 TRACE = CRATE / "target" / "release" / "examples" / "cop_trace"
 
 

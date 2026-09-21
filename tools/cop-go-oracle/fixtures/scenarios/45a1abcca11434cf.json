@@ -1,0 +1,183 @@
+{
+    "playerNames": [
+        "P0",
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+        "P6",
+        "P7"
+    ],
+    "playerClasses": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+    ],
+    "divisionPairings": [
+        {
+            "pairings": [
+                1,
+                0,
+                3,
+                2,
+                5,
+                4,
+                7,
+                6
+            ]
+        },
+        {
+            "pairings": [
+                1,
+                0,
+                3,
+                2,
+                5,
+                4,
+                7,
+                6
+            ]
+        },
+        {
+            "pairings": [
+                1,
+                0,
+                3,
+                2,
+                5,
+                4,
+                7,
+                6
+            ]
+        },
+        {
+            "pairings": [
+                1,
+                0,
+                3,
+                2,
+                5,
+                4,
+                7,
+                6
+            ]
+        },
+        {
+            "pairings": [
+                1,
+                0,
+                3,
+                2,
+                5,
+                4,
+                7,
+                6
+            ]
+        },
+        {
+            "pairings": [
+                1,
+                0,
+                3,
+                2,
+                5,
+                4,
+                7,
+                6
+            ]
+        }
+    ],
+    "divisionResults": [
+        {
+            "results": [
+                425,
+                400,
+                430,
+                400,
+                420,
+                400,
+                415,
+                400
+            ]
+        },
+        {
+            "results": [
+                425,
+                400,
+                430,
+                400,
+                380,
+                400,
+                385,
+                400
+            ]
+        },
+        {
+            "results": [
+                425,
+                400,
+                430,
+                400,
+                420,
+                400,
+                415,
+                400
+            ]
+        },
+        {
+            "results": [
+                425,
+                400,
+                430,
+                400,
+                380,
+                400,
+                385,
+                400
+            ]
+        },
+        {
+            "results": [
+                425,
+                400,
+                385,
+                400,
+                420,
+                400,
+                415,
+                400
+            ]
+        },
+        {
+            "results": [
+                400,
+                425,
+                385,
+                400,
+                380,
+                400,
+                385,
+                400
+            ]
+        }
+    ],
+    "classPrizes": [
+        2
+    ],
+    "gibsonSpread": 200,
+    "controlLossThreshold": 0.25,
+    "hopefulnessThreshold": 0.02,
+    "allPlayers": 8,
+    "validPlayers": 8,
+    "rounds": 8,
+    "placePrizes": 1,
+    "divisionSims": 100000,
+    "controlLossSims": 20000,
+    "controlLossActivationRound": 6
+}

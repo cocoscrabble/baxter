@@ -38,6 +38,23 @@ regenerate lifecycle. `tests/corpus/cases.json` is a **frozen** regression
 fixture (the Python oracle that generated it is gone); `cargo test` still checks
 the Rust engine against it.
 
+### COP is a port of liwords' Go implementation
+
+`strategies/cop_go/` ports upstream COP (`woogles-io/liwords` `pkg/pair`, pinned
+in `tools/cop-go-oracle/go.mod`) line for line, **including its RNG and sim
+worker seeding**, so it reproduces upstream's pairings exactly
+(`plans/PLAN_COP_GO_PORT.md`). Keep it that way: a change to COP is a change to
+upstream first, or a documented departure. The submodules take upstream's own
+`PairRequest`; `cop_go/mod.rs` is the only Baxter-shaped part (the adapter from
+`PairingInput`, and the departures: a sim cap instead of upstream's 6s clock,
+players numbered in reverse seeding order, clamped place prizes).
+
+To check it: `tools/cop-go-oracle/compare.py --stages` (the core vs upstream,
+stage by stage, exact) and without `--stages` (end to end through the engine);
+`tests/cop_go_parity.rs` freezes cases for CI. The `cop_request` example prints
+upstream's request for any Baxter COP round, to run it through the oracle —
+the way to tell a port bug from upstream behaviour.
+
 ## Playoffs
 
 A division may carry a `Playoff`: a 2/4/8-player bracket with per-series

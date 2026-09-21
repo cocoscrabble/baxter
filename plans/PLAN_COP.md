@@ -5,6 +5,10 @@ the app (Rust engine, Django plumbing, settings-tab config form). Phase 5 (class
 prizes) is the only remaining piece, deferred pending an in-division class model.
 Pinned to Baxter commit `fd875c0`.
 
+**Superseded (2026-09-21): COP in Baxter is now a port of liwords' Go
+implementation — see `PLAN_COP_GO_PORT.md`.** What follows is the history of the
+COP.pm-era port it replaced (`strategies/cop.rs`, deleted).
+
 **Source of truth moved (2026-09-21): upstream COP is now liwords' Go port**
 ([`woogles-io/liwords` `pkg/pair`](https://github.com/woogles-io/liwords/tree/master/pkg/pair)),
 where development continued after `COP.pm`; it has grown well past it (Factor 3

@@ -1,0 +1,106 @@
+{
+    "playerNames": [
+        "P0",
+        "P1",
+        "P2",
+        "P3",
+        "P4"
+    ],
+    "playerClasses": [
+        0,
+        0,
+        0,
+        0,
+        0
+    ],
+    "divisionPairings": [
+        {
+            "pairings": [
+                2,
+                1,
+                0,
+                4,
+                3
+            ]
+        },
+        {
+            "pairings": [
+                3,
+                4,
+                2,
+                0,
+                1
+            ]
+        },
+        {
+            "pairings": [
+                4,
+                2,
+                1,
+                3,
+                0
+            ]
+        },
+        {
+            "pairings": [
+                1,
+                0,
+                3,
+                2,
+                4
+            ]
+        }
+    ],
+    "divisionResults": [
+        {
+            "results": [
+                500,
+                50,
+                300,
+                420,
+                380
+            ]
+        },
+        {
+            "results": [
+                500,
+                380,
+                50,
+                300,
+                420
+            ]
+        },
+        {
+            "results": [
+                500,
+                420,
+                380,
+                50,
+                300
+            ]
+        },
+        {
+            "results": [
+                500,
+                300,
+                420,
+                380,
+                50
+            ]
+        }
+    ],
+    "classPrizes": [
+        2
+    ],
+    "gibsonSpread": 5000,
+    "controlLossThreshold": 0.25,
+    "hopefulnessThreshold": 0.02,
+    "allPlayers": 5,
+    "validPlayers": 5,
+    "rounds": 8,
+    "placePrizes": 1,
+    "divisionSims": 5000,
+    "controlLossSims": 1000,
+    "controlLossActivationRound": 8,
+    "seed": "1"
+}
