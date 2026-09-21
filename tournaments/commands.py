@@ -388,6 +388,12 @@ def save_settings(tournament, actor, payload):
     The absence settings are *not* here: they have their own command, so this
     one stays the schedule's writer and nothing has to send a whole block list
     to change how a withdrawal is scored (`forfeits.save_absence_settings`).
+
+    The first COP schedule seeds the default COP config, and the recorded
+    payload carries it as ``seeded_cop_config``: cop_config is in the digest, so
+    replay has to write the value that was seeded, not whatever the defaults
+    have since become. A payload from before v3 has it filled in on read with
+    the defaults of its day (``replay.SCHEMA_UPGRADES``).
     """
     from tournaments.pairing.round_pairing import RP, blocks_to_round_pairings
 
@@ -401,8 +407,10 @@ def save_settings(tournament, actor, payload):
     if not settings_obj.cop_config and any(
         pairing["pairing"] == str(RP.COP) for pairing in round_pairings
     ):
-        settings_obj.cop_config = default_cop_config()
+        seeded = payload.get("seeded_cop_config") or default_cop_config()
+        settings_obj.cop_config = seeded
         update_fields.append("cop_config")
+        payload = {**payload, "seeded_cop_config": seeded}
     settings_obj.save(update_fields=update_fields)
     return EventResult(payload=payload, division=division, result=settings_obj)
 

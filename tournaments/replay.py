@@ -140,9 +140,22 @@ def _upgrade_rows(*fields):
     return upgrade
 
 
+def _upgrade_settings_saved(payload, from_version):
+    """Before v3 the schedule command re-derived any COP config it seeded from
+    the defaults of the moment, so a replay wrote today's defaults instead of
+    the ones it had seeded. Those were the legacy defaults; pin them. The command
+    only reads this if it seeds, so a schedule with no COP round is unaffected."""
+    if from_version >= 3:
+        return payload
+    from tournaments.models import LEGACY_DEFAULT_COP_CONFIG
+
+    return {"seeded_cop_config": dict(LEGACY_DEFAULT_COP_CONFIG), **payload}
+
+
 # Schema-version upgrade hooks: event_type -> function(payload, from_version) ->
 # payload.
 SCHEMA_UPGRADES: dict = {
+    "division_settings_saved": _upgrade_settings_saved,
     "fixed_pairing_added": _upgrade_pair,
     "fixed_pairing_removed": _upgrade_pair,
     "fixed_pairings_removed": _upgrade_kept_pairings,
