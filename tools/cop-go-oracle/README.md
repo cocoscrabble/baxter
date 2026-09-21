@@ -88,3 +88,51 @@ machine. `albany_csw_july2026_round28` returns `ALL_ROUNDS_PAIRED` by design.
 `pkg/pair/testutils` (Albany, Kingston, Belleville, Lake George, …) — as request
 JSON, written by `go run ./cmd/dump-fixtures`. Committed so the corpus is pinned
 with the version it came from; regenerate when the pin moves.
+
+## Comparing with Baxter's port
+
+```bash
+make rust-engine                                           # if the crate changed
+uv run --no-sync python tools/cop-go-oracle/compare.py     # every fixture
+uv run --no-sync python tools/cop-go-oracle/compare.py fixtures/default.json --out /tmp/cop
+```
+
+`convert.py` maps a `PairRequest` onto Baxter's engine input (its docstring has
+the full mapping and what is lossy); `compare.py` pairs each case both ways and
+compares the rounds as sets of games. `--out DIR` keeps, per case, COP's log,
+the converted input and both pairings; `--json` emits one object per case;
+`--strict` exits 1 on any comparable failure.
+
+Each case gets one verdict:
+
+| Verdict | Meaning |
+|---|---|
+| `match` | Same games. |
+| `tie` | Different games, equally optimal on **upstream's own weights** (COP logs every pair's weight; Baxter's pairing is totalled on that table). |
+| `WORSE` | Heavier than upstream's choice on upstream's weights; the gap is shown. |
+| `BARRED` | Uses a pair upstream excludes outright; the log's constraint code is shown (`GB` gibsonized, `CB` forced bye, `F3` Factor 3, `PP` prepaired, `KH` class KOTH, `TB` top-down bye, …). |
+| `PIN` | Baxter broke a game already paired in the request — a director's fixed pairing. |
+| `CONVERT` | The converted standings disagree with the ones COP logged: a converter bug, so nothing else in the case means anything. Checked on every run. |
+| `both refuse` / `error` | One or both engines declined to pair. |
+
+Lower case with `*` means the case is **not comparable**: clock-bound, or it asks
+for something Baxter cannot express (class prizes, top-down byes, …).
+
+### Findings at the pin (2026-09-21)
+
+The converter reproduces upstream's standings on every fixture. Of the 26:
+1 match, 1 both-refuse, and **no comparable case agrees**:
+
+- **`PIN` ×3 — a real Baxter bug.** The port enforces a fixed pairing only as a
+  weight (`PROHIBITIVE_WEIGHT` on the pinned player's other pairs, in
+  `build_weight_edges`), and the pinned game can carry prohibitive weights of
+  its own, so the matching can find it cheaper to break the pin. Upstream now
+  excludes those pairs outright (`PP`). A director's fixed pairing in a COP
+  round can therefore be silently ignored.
+- **Round one.** With no results, upstream pairs adjacent seeds (1–2, 3–4);
+  the port uses COP.pm's Swiss-style split (1–5, 2–6). Upstream also breaks
+  equal records by *descending* player index.
+- **Upstream logic the port lacks**: Factor 3 control loss (`F3`), stricter
+  gibson bars (`GB`, `GG`), forced-bye handling (`CB`), and cash-contender
+  penalties the port does not apply — the ~1.5 billion `WORSE` gaps are those
+  weights.
