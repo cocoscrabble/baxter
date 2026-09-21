@@ -1736,6 +1736,11 @@ class InlineFixedPairingTests(TestCase):
                 {"round": 2, "pairing": "KotH", "start_round": 1},
             ],
         )
+        # Pin the seeds to the players' ratings, as registration would;
+        # otherwise the first publish catches them up and asks to be re-run.
+        from tournaments.entrant_sync import refresh_before_start
+
+        refresh_before_start(cls.division)
 
     def _datastar_post(self, name, payload):
         return self.client.post(

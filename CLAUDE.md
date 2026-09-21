@@ -167,9 +167,10 @@ Two things follow from nobody watching a scheduled pull, and both are the reason
   human makes. Those live on the record, not in the puller's session, which is
   what lets a director confirm what a cron tick found.
 
-A pull cannot disturb a running event: entrants freeze their whole rating seed
-at registration (`plans/PLAN_ENTRANTS.md` decision 3), which is what makes an
-unattended pull safe at any hour.
+A pull cannot disturb a running event: entrants' rating seeds freeze when their
+division's first round is published (`plans/PLAN_ENTRANTS.md` decision 3), which
+is what makes an unattended pull safe at any hour. Before that, a pull re-pins
+them — see "Entrant ratings".
 
 **Two guests with one name are not held back** — picking between them is the
 guess — so the pull creates the real player as a third row, and renumbering is
@@ -208,10 +209,11 @@ Four rules, all easy to break:
   row is the normal case and is not reported — a pending list holding most of the
   roster is a list nobody reads. Spelling mismatches are linked by hand at
   `/players/wespa/`.
-- **Still unlogged and still global**, for the reason below: entrants pin their
-  rating at entry, so a weekly pull cannot move a live event. The one logged
-  part is `player_created`, which now carries `wespa_id` so a replay recreates a
-  guest already linked.
+- **Still unlogged and still global** for the player table: entrants' ratings
+  freeze once their division is under way, so a weekly pull cannot move a live
+  event. What it logs is `player_created`, which carries `wespa_id` so a replay
+  recreates a guest already linked, and the re-pinning of divisions that have
+  not started (see "Entrant ratings").
 
 ## Entrant numbers are a seeding
 
@@ -244,15 +246,31 @@ Three things that are easy to break:
 
 ## Entrant ratings
 
-An entrant freezes their whole rating seed at registration, and the roster pull
-cannot move it — that is what makes the six-hourly sync safe mid-tournament
-(`plans/PLAN_ENTRANTS.md` decision 3).
+An entrant pins their whole rating seed on the entrant row, but the pin only
+**freezes once the division is under way** (first round published) — the same
+moment the seeding freezes. Before that it is live: people register for a future
+event early, and the rating they registered with is not the one they bring
+(`plans/PLAN_ENTRANTS.md` decision 3, revised).
 
-The exception is deliberate and per-entrant: `/entrants/refresh-ratings/`
-re-pins the ticked entrants from the player table. The entrants page shows the
-drift for editors, with checkboxes, and warns if a round has already left draft.
+- Whatever moves player ratings — roster pull, WESPA pull, player import, WESPA
+  link, guest merge — calls `entrant_sync.refresh_upcoming`, which re-pins and
+  reseeds every division that has not started. A new path that writes
+  `Player.rating`/`wespa_rating` should call it too (from the view or sync
+  layer — **never from inside a command**, or replaying that command would
+  re-read the replay database's player table).
+- Publishing catches up first (`refresh_before_start`). If anything moved, the
+  drafts are re-paired and the director is asked to publish again rather than
+  printing a round they never saw.
+- It goes through the ordinary logged commands, so replay is exact; a scheduled
+  pull records them with no actor. Re-pinning or renumbering drops draft rounds.
 
-Three rules it follows, all easy to break:
+Once under way, the roster pull cannot move a seed — that is what makes the
+six-hourly sync safe mid-tournament. The exception is deliberate and
+per-entrant: `/entrants/refresh-ratings/` re-pins the ticked entrants from the
+player table. The entrants page shows the drift for editors, with checkboxes,
+and warns if a round has already left draft.
+
+Three rules both paths follow, all easy to break:
 
 - **Manual ratings are never offered.** A typed rating is a director saying what
   a player is worth; a sync does not overrule it.

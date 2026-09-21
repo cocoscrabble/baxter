@@ -239,9 +239,9 @@ class Division(models.Model):
 
         Two things hang off this and they are not the same kind of thing, which
         is why it sits on the division rather than beside either of them: the
-        seeding freezes here (``commands.reseed_entrants``), and the entrants
-        page says so before offering to re-pin ratings
-        (``entrant_sync.rating_drift``). It used to live with the second, which
+        seeding freezes here (``commands.reseed_entrants``), and so do entrant
+        ratings, which follow the player table until then
+        (``entrant_sync.refresh_before_start``). It used to live with the second, which
         made the first look like a detail of rating sync.
         """
         return self.round_pairings_set.exclude(
@@ -662,9 +662,11 @@ class Entrant(models.Model):
 
     # -- pinned ratings -----------------------------------------------------
 
-    # Pinned rating, snapshotted at entry, and never re-derived. Seeding,
-    # display and replay read this, so a running tournament is isolated from
-    # Player.rating and Player.wespa_rating
+    # Pinned rating, snapshotted at entry. Seeding, display and replay read
+    # this, so a running tournament is isolated from Player.rating and
+    # Player.wespa_rating. Until the division is under way it is re-pinned
+    # whenever those move (entrant_sync.refresh_upcoming), always by a logged
+    # command carrying the values -- never re-derived on read.
     rating = models.IntegerField(default=0)
     rating_source = models.CharField(
         max_length=8, choices=RATING_SOURCES, default=NONE

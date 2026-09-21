@@ -15,6 +15,7 @@ log nobody reads. Unexpected exceptions still propagate.
 
 import logging
 
+from .entrant_sync import refresh_upcoming
 from .models import WespaSync
 from .wespa_api import WespaFetchError, WespaParseError, fetch_wespa
 from .wespa_ratings import PendingLink, import_wespa
@@ -49,6 +50,9 @@ def run_sync(source, raw=None) -> WespaSync:
     record.pending = [p.to_json() for p in result.pending]
     record.save()
     logger.info("WESPA pull (%s): %s", source, record.summary())
+    # Entrants of a division that has not started follow the ratings just
+    # written; one under way keeps what it started with (entrant_sync).
+    refresh_upcoming()
     return record
 
 

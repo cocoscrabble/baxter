@@ -316,14 +316,15 @@ class LiveTournamentTests(TestCase):
 
     This is governing principle 1 restated where it now matters most: the pull
     used to happen only when a human chose the moment, and now it happens on a
-    timer that knows nothing about who is mid-round.
+    timer that knows nothing about who is mid-round. Before the first round is
+    published, though, the seed is meant to follow the player table.
     """
 
-    def test_a_scheduled_pull_does_not_move_a_registered_entrant(self):
+    def setUp(self):
         from tournaments.commands import create_tournament
 
         owner = User.objects.create_user(username="td-cron", password="pw")
-        player = Player.objects.create(
+        self.player = Player.objects.create(
             name="Alec", player_number="0233", rating=1500, deviation=80.0,
             career_games=100,
         )
@@ -334,16 +335,30 @@ class LiveTournamentTests(TestCase):
                 "editors": [], "default_division": {"name": "Open", "pairing_seed": 1},
             },
         )
-        entrant = Entrant.enter(tournament.divisions.get(), player, 1)
-        before = (entrant.rating, entrant.deviation, entrant.career_games)
+        self.division = tournament.divisions.get()
+        self.entrant = Entrant.enter(self.division, self.player, 1)
 
+    def pull(self):
         with served(roster(entry("0233", "Alec", rating=1900, deviation=40.0,
                                  games=500))):
             run_sync(RosterSync.SCHEDULED)
+        self.entrant.refresh_from_db()
+        return (self.entrant.rating, self.entrant.deviation, self.entrant.career_games)
 
-        entrant.refresh_from_db()
-        self.assertEqual(
-            (entrant.rating, entrant.deviation, entrant.career_games), before
+    def test_a_scheduled_pull_does_not_move_an_entrant_once_under_way(self):
+        from tournaments.models import RoundPairings
+
+        RoundPairings.objects.create(
+            division=self.division, round=1, status=RoundPairings.PUBLISHED
         )
+        self.assertEqual(self.pull(), (1500, 80.0, 100))
         # The player row did move — it is the entrant's frozen seed that must not.
         self.assertEqual(Player.objects.get(player_number="0233").rating, 1900)
+
+    def test_a_scheduled_pull_moves_an_entrant_before_the_start(self):
+        self.assertEqual(self.pull(), (1900, 40.0, 500))
+        self.assertTrue(
+            self.division.tournament.events.filter(
+                event_type="entrant_ratings_refreshed", actor=None
+            ).exists()
+        )

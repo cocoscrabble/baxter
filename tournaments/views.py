@@ -29,7 +29,12 @@ from django.views.generic import (
 
 from .datastar_utils import fragment_response, is_datastar
 from .display import division_labels, label_entrants, label_standings
-from .entrant_sync import payload_for, rating_drift
+from .entrant_sync import (
+    payload_for,
+    rating_drift,
+    refresh_before_start,
+    refresh_upcoming,
+)
 from .live_ratings import project_ratings
 from .player_source import get_player_source
 from datastar_py.django import read_signals
@@ -858,9 +863,10 @@ class DivisionEntrantsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
 class DivisionRefreshRatingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
     """Re-pin the ticked entrants' seeds from the player table.
 
-    The entrant snapshot exists so a roster pull cannot move a running
-    tournament (PLAN_ENTRANTS decision 3). This is the director choosing to move
-    it anyway, for the entrants they picked — so it is a logged command, unlike
+    The entrant snapshot freezes when the division starts, so a roster pull
+    cannot move a running tournament (PLAN_ENTRANTS decision 3); before that it
+    follows the player table by itself (``entrant_sync.refresh_upcoming``). This
+    is the director choosing to move it anyway, for the entrants they picked — so it is a logged command, unlike
     the global rating refreshes, because it mutates state the digest covers.
 
     The seeds are re-read here rather than taken from the form: this means
@@ -1137,7 +1143,9 @@ class DivisionStandingsTableView(VisibleDivisionMixin, DetailView):
 
 
 
-def _pairings_body_response(request, division, *, select_round=None, error=None):
+def _pairings_body_response(
+    request, division, *, select_round=None, error=None, notice=None
+):
     """Datastar: re-render the pairings body, optionally focused on ``select_round``.
 
     Falls back to a flash + redirect for non-Datastar (no-JS) submissions, which
@@ -1156,12 +1164,38 @@ def _pairings_body_response(request, division, *, select_round=None, error=None)
         context.update(_editor_pairings_context(division, presenter))
         if error:
             context["fixed_error"] = error
+        if notice:
+            context["pairing_error"] = notice
         return fragment_response(
             "tournaments/_pairings_body.html", context, request=request
         )
     if error:
         messages.error(request, error)
+    if notice:
+        messages.warning(request, notice)
     return redirect("division_pair_rounds", **division.slug_kwargs())
+
+
+def _repaired_before_start(request, division, select_round=None):
+    """Catch a not-yet-started division's seeds up before its first publish.
+
+    Ratings stay live until the first round is published (entrant_sync), and
+    publishing is the moment they freeze — so a rating that moved since the
+    drafts were drawn is taken now. If anything did move, the drafts the
+    director was looking at are gone; publishing their replacements unseen
+    would print a round nobody checked, so this re-pairs and hands back the new
+    drafts instead. Returns that response, or None to go ahead and publish.
+    """
+    if not refresh_before_start(division, request.user):
+        return None
+    notice = _autogenerate_pairable_rounds(division) or (
+        "Ratings in the player table changed since these pairings were drawn, "
+        "so the round has been re-paired on the current ratings. Check it and "
+        "publish again."
+    )
+    return _pairings_body_response(
+        request, division, select_round=select_round, notice=notice
+    )
 
 
 class PublishPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
@@ -1169,6 +1203,9 @@ class PublishPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
 
     def post(self, request, *args, **kwargs):
         division = self.division
+        repaired = _repaired_before_start(request, division)
+        if repaired is not None:
+            return repaired
         publish_all_rounds(division.tournament, request.user, {"division": division.name})
         return _pairings_body_response(request, division)
 
@@ -1197,6 +1234,9 @@ class PublishRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
         round_number, error = _read_int(data, "round")
         if error:
             return error
+        repaired = _repaired_before_start(request, division, round_number)
+        if repaired is not None:
+            return repaired
         publish_round(
             division.tournament, request.user,
             {"division": division.name, "round": round_number},
@@ -2409,6 +2449,7 @@ class PlayerImportView(LoginRequiredMixin, IsAdminMixin, View):
             return redirect("player_import")
 
         result, errors = import_players(uploaded.read())
+        refresh_upcoming(actor=request.user)
         if errors:
             for error in errors[:25]:
                 messages.error(request, error)
@@ -2555,6 +2596,9 @@ class PlayerMergeView(LoginRequiredMixin, IsAdminMixin, View):
         except ValueError as exc:
             messages.error(request, str(exc))
             return redirect("player_merge")
+        # The guest's entrants were pinned at the guest's rating; before the
+        # start they take the real player's.
+        refresh_upcoming(players=[into], actor=request.user)
         messages.success(
             request,
             f"Merged guest {guest.player_number} into {into.name} "
@@ -2733,6 +2777,7 @@ class WespaImportView(LoginRequiredMixin, IsAdminMixin, View):
         except ValueError as exc:
             messages.error(request, str(exc))
             return redirect("wespa_import")
+        refresh_upcoming(players=[player], actor=request.user)
         # A resolved name leaves the pending list whether it was resolved from
         # there or from the search, so the same work is never offered twice.
         record = WespaSync.latest_successful()

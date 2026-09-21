@@ -1,10 +1,20 @@
-"""Re-pinning entrant ratings from the player table.
+"""Keeping entrant ratings in step with the player table.
 
-An entrant freezes their whole rating seed at registration (PLAN_ENTRANTS
-decision 3). That is what lets the roster pull run on a six-hourly cron without
-reshuffling a tournament in progress, and it is not being weakened here. This is
-the deliberate opposite gesture: a director looking at a division whose seeds
-have gone stale and choosing, entrant by entrant, to take the new ones.
+An entrant pins their whole rating seed on the entrant row (PLAN_ENTRANTS
+decision 3), but the pin only *freezes* once the division has started — its
+first round published (``Division.under_way``), the same moment the seeding
+freezes. Until then the seed is live: whatever moves a player's rating (a
+roster or WESPA pull, a player import, a WESPA link, a guest merge) re-pins
+every entrant of every division that has not started (``refresh_upcoming``), and
+publishing the first round catches up anything still behind first
+(``refresh_before_start``). An entry taken months ahead of the event is seeded
+off the ratings current when play begins, not when the form came in.
+
+Once a division is under way, the freeze is what lets the roster pull run on a
+six-hourly cron without reshuffling a tournament in progress, and nothing here
+weakens it. What remains after that is the deliberate gesture: a director
+looking at a division whose seeds have gone stale and choosing, entrant by
+entrant, to take the new ones.
 
 Two properties pull in different directions, and the split below is how they are
 kept apart:
@@ -19,16 +29,18 @@ kept apart:
   ratings are part of the division digest (``events.division_digest``), so this
   is not a fine point: an event meaning "take whatever the roster says" would
   replay to a different digest every time, and the fuzzer's invariant would
-  fail.
+  fail. The automatic refreshes are the same logged commands as the manual one,
+  for the same reason.
 
-**Manual ratings are never offered.** A director who typed a rating was saying
-what this player is worth; a sync is not entitled to overrule it (decision 3
-again). To move one, edit it by hand — which re-pins it as manual.
+**Manual ratings are never offered**, before the start or after. A director who
+typed a rating was saying what this player is worth; a sync is not entitled to
+overrule it (decision 3 again). To move one, edit it by hand — which re-pins it
+as manual.
 """
 
 from dataclasses import dataclass
 
-from .models import Entrant
+from .models import Division, Entrant, RoundPairings
 
 # What a refresh writes. Exactly the fields Entrant.enter freezes, because half
 # a seed is worse than a stale one: the live projection damps by career games
@@ -131,3 +143,56 @@ def payload_for(division, drifted):
             for d in drifted
         ],
     }
+
+
+def refresh_before_start(division, actor=None):
+    """Re-pin a division that has not started to the player table, and reseed.
+
+    A no-op once the division is under way — from then on only a director
+    re-pins, entrant by entrant. Before that the seed is meant to be live, so
+    every non-manual drift is taken. Both steps go through the logged commands
+    and record nothing when nothing moved, so this is safe to call freely.
+
+    Returns whether anything changed (a rating seed or an entrant number), which
+    is what tells the publish gate its draft pairings are stale.
+    """
+    from .commands import refresh_entrant_ratings, reseed_entrants
+
+    if division.under_way():
+        return False
+    drifted = rating_drift(division)
+    if drifted:
+        refresh_entrant_ratings(
+            division.tournament, actor, payload_for(division, drifted)
+        )
+    renumbered = reseed_entrants(
+        division.tournament, actor, {"division": division.name}
+    )
+    return bool(drifted or renumbered)
+
+
+def upcoming_divisions(players=None):
+    """Divisions with entrants and no round out of draft, optionally narrowed to
+    those entering one of ``players``."""
+    divisions = Division.objects.filter(entrants__isnull=False).exclude(
+        round_pairings_set__status__in=[
+            s for s, _ in RoundPairings.STATUS_CHOICES if s != RoundPairings.DRAFT
+        ]
+    )
+    if players is not None:
+        divisions = divisions.filter(entrants__player__in=players)
+    return divisions.select_related("tournament").distinct()
+
+
+def refresh_upcoming(players=None, actor=None):
+    """``refresh_before_start`` every division that has not started.
+
+    Called after anything that moves player ratings. ``actor`` is None for the
+    scheduled pulls, which have nobody to attribute the change to. Returns the
+    divisions that changed.
+    """
+    return [
+        division
+        for division in upcoming_divisions(players)
+        if refresh_before_start(division, actor)
+    ]

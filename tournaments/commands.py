@@ -160,6 +160,19 @@ def _division(tournament, name):
     return Division.objects.get(tournament=tournament, name=name)
 
 
+def _invalidate_drafts(division):
+    """Drop draft rounds paired around a field that has since changed.
+
+    Drafts are derived (and outside the digest), so deleting them is safe inside
+    a command; the lazy Pair Rounds render re-pairs, and replay regenerates
+    before every publish. Regenerating here instead would let a PairingError
+    abort an unrelated change.
+    """
+    from tournaments.models import RoundPairings
+
+    division.round_pairings_set.filter(status=RoundPairings.DRAFT).delete()
+
+
 @records_event("rounds_published")
 def publish_all_rounds(tournament, actor, payload):
     """payload: {division}. Publishes every draft round; records which."""
@@ -782,6 +795,9 @@ def reseed_entrants(tournament, actor, payload):
         # Nothing moved. Recording it would fill the log with no-ops, since
         # every add and rating edit calls this.
         return EventResult(payload=payload, division=division, record=False)
+    # The number breaks ties between equal ratings, so drafts paired off the
+    # old order are stale.
+    _invalidate_drafts(division)
     return EventResult(
         payload={**payload, "seeding": seeding},
         division=division,
@@ -927,6 +943,9 @@ def refresh_entrant_ratings(tournament, actor, payload):
             setattr(entrant, field, value)
         entrant.save(update_fields=list(SEED_FIELDS))
         updated.append(entrant)
+    # The engine pairs off these ratings, so drafts drawn from the old ones would
+    # publish a round nobody asked for. The lazy Pair Rounds render re-pairs.
+    _invalidate_drafts(division)
 
     return EventResult(payload=payload, division=division, result=updated)
 
