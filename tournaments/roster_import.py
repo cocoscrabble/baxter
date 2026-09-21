@@ -48,7 +48,7 @@ from django.conf import settings
 from django.db import transaction
 
 from .models import Player
-from .player_ratings import save_players
+from .player_ratings import division_labels, save_players
 
 SCHEMA = "coco.roster/1"
 
@@ -108,6 +108,8 @@ class RosterImportResult:
     # Rows held back for a director to confirm. Nothing was written for these.
     pending: list = field(default_factory=list)
     generated_at: str = ""
+    # Divisions not yet started whose entrants followed the new ratings.
+    repinned: list = field(default_factory=list)
 
     @property
     def total(self):
@@ -241,7 +243,9 @@ def import_roster(raw):
         # bulk_create bypasses save(), so the numbers are canonicalized above —
         # they came through canonical_player_number in parse_roster.
         Player.objects.bulk_create(to_create, batch_size=500)
-    save_players(to_update, [*SYNCED_FIELDS, "is_provisional"])
+    result.repinned = division_labels(
+        save_players(to_update, [*SYNCED_FIELDS, "is_provisional"])
+    )
     return result
 
 

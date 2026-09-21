@@ -355,6 +355,27 @@ class LiveTournamentTests(TestCase):
         # The player row did move — it is the entrant's frozen seed that must not.
         self.assertEqual(Player.objects.get(player_number="0233").rating, 1900)
 
+    def test_the_pull_says_which_upcoming_divisions_it_moved(self):
+        from tournaments.models import AdminAction
+
+        self.pull()
+        record = RosterSync.latest()
+        self.assertEqual(record.repinned, ["Live / Open"])
+        clause = "re-pinned entrants in 1 upcoming division (Live / Open)"
+        self.assertIn(clause, record.summary())
+        self.assertIn(clause, AdminAction.objects.get().summary)
+
+    def test_a_pull_that_moves_nothing_upcoming_says_nothing_about_it(self):
+        from tournaments.models import RoundPairings
+
+        RoundPairings.objects.create(
+            division=self.division, round=1, status=RoundPairings.PUBLISHED
+        )
+        self.pull()
+        record = RosterSync.latest()
+        self.assertEqual(record.repinned, [])
+        self.assertNotIn("re-pinned", record.summary())
+
     def test_a_scheduled_pull_moves_an_entrant_before_the_start(self):
         self.assertEqual(self.pull(), (1900, 40.0, 500))
         self.assertTrue(

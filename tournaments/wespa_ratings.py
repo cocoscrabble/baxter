@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from django.db import transaction
 
 from .models import Player, WespaPlayer
-from .player_ratings import save_players
+from .player_ratings import division_labels, save_players
 from .wespa_api import parse_wespa
 
 # What a pull owns on a mirror row. ``wespa_id`` is the key, not a field.
@@ -80,6 +80,8 @@ class WespaImportResult:
     linked: list = field(default_factory=list)
     # Names held back for a director. Nothing was written for these.
     pending: list = field(default_factory=list)
+    # Divisions not yet started whose entrants followed the new ratings.
+    repinned: list = field(default_factory=list)
 
     @property
     def total(self):
@@ -185,7 +187,9 @@ def _apply_to_players(mirror, result):
 
     # One write, so the downstream step runs once. Rewriting wespa_id on the
     # players who were only re-rated writes the value they already hold.
-    save_players([*to_rate, *to_link], ["wespa_id", "wespa_rating"])
+    result.repinned = division_labels(
+        save_players([*to_rate, *to_link], ["wespa_id", "wespa_rating"])
+    )
 
 
 def _player_json(player):

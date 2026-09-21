@@ -62,6 +62,7 @@ def _run_sync(source, raw):
     record.rated = len(result.rated)
     record.linked = len(result.linked)
     record.pending = [p.to_json() for p in result.pending]
+    record.repinned = result.repinned
     record.save()
     logger.info("WESPA pull (%s): %s", source, record.summary())
     return record
