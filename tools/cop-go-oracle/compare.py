@@ -409,6 +409,57 @@ def _diff_precomp(ours, theirs):
     return out
 
 
+def logged_weights(log, bye_node):
+    """The "Pairing Weights" table as ``{(i, j): row}`` by rank, the bye as
+    ``bye_node``. A barred row carries its constraint code; the rest their
+    total and per-policy weights (RD, PC, CC, GC, RE, BB, BR)."""
+    table = _table_at(log, "Pairing Weights")
+    if table is None:
+        return None
+    header, rows = table
+    col = {name: i for i, name in enumerate(header)}
+    total_col = header.index("Total")
+    policies = header[total_col + 1:]
+
+    def rank(cell):
+        if cell == "BYE":
+            return bye_node
+        m = re.match(r"^(\d+) \(#", cell)
+        return int(m.group(1)) - 1 if m else None
+
+    out = {}
+    for r in rows:
+        i, j = rank(r[0]), rank(r[3])
+        if i is None or j is None:
+            continue  # spacer
+        code = r[col["C"]] or None
+        out[(i, j)] = {
+            "code": code,
+            "selected": r[header.index("S", 6)] == "*",
+            "total": None if code else int(r[total_col]),
+            "weights": None if code else [int(r[total_col + 1 + k]) for k in range(len(policies))],
+        }
+    return out
+
+
+def _diff_weights(trace_matching, theirs):
+    if theirs is None:
+        return ["no Pairing Weights table in the Go log"]
+    ours = {(row["i"], row["j"]): row for row in trace_matching["weights"]}
+    out = []
+    if set(ours) != set(theirs):
+        out.append(f"pairs: Rust {len(ours)} vs Go {len(theirs)}")
+    for key in sorted(set(ours) & set(theirs)):
+        a, b = ours[key], theirs[key]
+        if a["code"] != b["code"]:
+            out.append(f"{key} code: Rust {a['code']} vs Go {b['code']}")
+        elif not b["code"] and (a["total"], a["weights"]) != (b["total"], b["weights"]):
+            out.append(f"{key} weights: Rust {a['weights']} vs Go {b['weights']}")
+        elif a["selected"] != b["selected"]:
+            out.append(f"{key} selected: Rust {a['selected']} vs Go {b['selected']}")
+    return out
+
+
 def _diff_sims(name, ours, theirs):
     if theirs is None and ours is None:
         return []
@@ -441,6 +492,12 @@ def compare_stages(path, workers):
         "sims": _diff_sims("initial", trace["initial"], logged_sims(log, "Initial Sim Results"))
         + _diff_sims("improved", trace["improved"], logged_sims(log, "Improved Factor Sim Results")),
         "precomp": _diff_precomp(trace["precomp"], logged_precomp(log, names)),
+        "weights": _diff_weights(
+            trace["matching"], logged_weights(log, len(trace["matching"]["nodes"]) - 1)
+        ),
+        "pairings": []
+        if trace["pairings"] == oracle["response"]["pairings"]
+        else [f"Rust {trace['pairings']} vs Go {oracle['response']['pairings']}"],
     }
     return {
         "case": path.stem,
@@ -460,7 +517,7 @@ def stages_main(args):
         for stage, problems in case["stages"].items():
             cells.append(f"{stage}:{'ok' if not problems else 'DIFF'}")
         star = " (clock-bound)" if case["timeLimited"] else ""
-        print(f"{' '.join(cells):24} {case['case']}{star}")
+        print(f"{' '.join(cells):52} {case['case']}{star}")
         for stage, problems in case["stages"].items():
             for p in problems[:4]:
                 print(f"    {stage}: {p}")

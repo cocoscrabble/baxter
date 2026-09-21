@@ -4,11 +4,13 @@
 
 use serde::Serialize;
 
-use super::precomp::{get_precomp_data, PrecompData};
-use super::rand::Rand;
+use super::cop::cop_pair;
+use super::factor3::Factor3;
+use super::matching::MatchingTrace;
+use super::precomp::PrecompData;
 use super::request::Request;
 use super::standings::{SimResults, Standings};
-use super::verify::{verify, PairError};
+use super::verify::PairError;
 
 #[derive(Serialize)]
 pub struct SimTrace {
@@ -42,14 +44,18 @@ pub struct Trace {
     pub initial: Option<SimTrace>,
     pub improved: Option<SimTrace>,
     pub precomp: Option<PrecompTrace>,
+    pub factor3: Option<Factor3>,
+    pub matching: Option<MatchingTrace>,
+    /// The answer: player index → opponent index (bye = own index).
+    pub pairings: Option<Vec<i32>>,
 }
 
-fn precomp_trace(pd: &PrecompData) -> PrecompTrace {
+fn precomp_trace(pd: &PrecompData, ranks: &(Vec<usize>, Vec<usize>)) -> PrecompTrace {
     PrecompTrace {
         gibsonized: pd.gibsonized_players.clone(),
         gibson_groups: pd.gibson_groups.clone(),
-        highest_rank_hopefully: pd.highest_rank_hopefully.clone(),
-        highest_rank_absolutely: pd.highest_rank_absolutely.clone(),
+        highest_rank_hopefully: ranks.0.clone(),
+        highest_rank_absolutely: ranks.1.clone(),
         vs_first: pd.vs_first_wins.clone(),
         vs_factor: pd.all_control_losses.clone(),
         destinys_child: (pd.destinys_child >= 0)
@@ -67,19 +73,24 @@ fn sim_trace(factor: i32, standings: &Standings, sims: &SimResults) -> SimTrace 
 }
 
 pub fn trace(req: &Request) -> Trace {
-    let seed = req.effective_seed();
-    if let Err(e) = verify(req) {
-        return Trace { seed, error: Some(e), ..Default::default() };
-    }
-    let mut rng = Rand::new(seed);
-    let pd = get_precomp_data(req, &mut rng);
+    let out = cop_pair(req);
+    let (pairings, error) = match out.pairings {
+        Ok(p) => (Some(p), None),
+        Err(e) => (None, Some(e)),
+    };
+    let Some(pd) = out.precomp else {
+        return Trace { seed: out.seed, error, ..Default::default() };
+    };
     let base = &pd.baseline;
     Trace {
-        seed,
-        error: None,
+        seed: out.seed,
+        error,
         initial: Some(sim_trace(base.initial_factor, &pd.standings, &base.initial)),
         improved: base.improved.as_ref().map(|s| sim_trace(base.max_factor, &pd.standings, s)),
-        precomp: Some(precomp_trace(&pd)),
+        precomp: Some(precomp_trace(&pd, out.ranks_before_factor3.as_ref().unwrap())),
+        factor3: out.factor3,
+        matching: out.matching,
+        pairings,
     }
 }
 

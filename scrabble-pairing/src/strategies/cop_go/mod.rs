@@ -2,6 +2,9 @@
 //! Under construction beside `cop.rs`; it replaces it at stage 5.
 
 pub mod cephes;
+pub mod cop;
+pub mod factor3;
+pub mod matching;
 pub mod precomp;
 pub mod rand;
 pub mod request;
