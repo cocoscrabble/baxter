@@ -1333,6 +1333,7 @@ dd {
 .badge-published { background-color: var(--color-published-light); color: var(--color-published); }
 .badge-future { background-color: var(--color-future-light); color: var(--color-future); }
 .badge-error { background-color: #fdecea; color: #b3261e; }
+.badge-ok { background-color: var(--color-success-bg); color: var(--color-success-text); }
 
 /* ── Inline fixed pairings (pairings tab) ──────────────────── */
 .fixed-pairings-section {

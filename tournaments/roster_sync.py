@@ -18,7 +18,8 @@ code that writes to the ``Player`` table, and it is as atomic as it ever was.
 
 import logging
 
-from .models import RosterSync
+from .admin_log import logged
+from .models import AdminAction, RosterSync
 from .roster_import import (
     PendingResolution,
     RosterFetchError,
@@ -30,13 +31,27 @@ from .roster_import import (
 logger = logging.getLogger(__name__)
 
 
-def run_sync(source, raw=None) -> RosterSync:
+def run_sync(source, raw=None, actor=None) -> RosterSync:
     """Pull the roster (or import ``raw``), apply it, and record the outcome.
 
     ``source`` is one of the :class:`RosterSync` source constants. Pass ``raw``
     for an uploaded snapshot; leave it out to fetch from the configured
     endpoint. Returns the saved record either way — check ``record.ok``.
+
+    Also lands a row in the admin log, attributed to ``actor`` (None for the
+    scheduled pull) — including when the pull crashes outright.
     """
+    with logged(AdminAction.ROSTER_PULL, actor) as entry:
+        record = _run_sync(source, raw)
+        if record.ok:
+            entry.summary = f"{record.get_source_display()}: {record.summary()}"
+        else:
+            entry.summary = record.get_source_display()
+            entry.fail(record.error)
+    return record
+
+
+def _run_sync(source, raw):
     record = RosterSync(source=source)
     try:
         if raw is None:

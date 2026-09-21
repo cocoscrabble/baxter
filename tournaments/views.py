@@ -1,5 +1,6 @@
 import json
 from collections import defaultdict
+from datetime import timedelta
 from urllib.parse import urlencode
 
 from django.contrib import messages
@@ -94,8 +95,10 @@ from .forfeits import (
 )
 from .grids import BoardTableMapGrid, EntrantsGrid, FixedPairingsGrid, FixedTablesGrid, ResultsGrid
 from coco_ratings.identity import canonical_player_number
+from .admin_log import logged
 from .models import (
     EDIT_SCOPES,
+    AdminAction,
     Division,
     Entrant,
     DivisionSettings,
@@ -2355,6 +2358,46 @@ class AdminIndexView(LoginRequiredMixin, IsAdminMixin, TemplateView):
         context["wespa_pending_count"] = len(wespa_sync.pending_links())
         context["wespa_mirror_count"] = WespaPlayer.objects.count()
         context["merge_count"] = len(merge_candidates())
+        # A week of failures, so one that nobody watched happen is flagged here
+        # even when it was not the latest attempt at that action.
+        context["recent_failures"] = AdminAction.objects.filter(
+            ok=False, created_at__gte=timezone.now() - timedelta(days=7)
+        ).count()
+        return context
+
+
+class AdminLogView(LoginRequiredMixin, IsAdminMixin, TemplateView):
+    """The admin log: every site-wide admin action, newest first, and whether it
+    worked (``admin_log``). Filterable by action and to failures only, by GET,
+    so a filtered view is a link an admin can send to someone."""
+
+    template_name = "tournaments/admin_log.html"
+    per_page = 100
+
+    def get_context_data(self, **kwargs):
+        from django.core.paginator import Paginator
+
+        context = super().get_context_data(**kwargs)
+        actions = AdminAction.objects.select_related("actor")
+        kinds = dict(AdminAction.KINDS)
+        selected_kind = self.request.GET.get("kind", "")
+        failed_only = self.request.GET.get("failed") == "1"
+        if selected_kind in kinds:
+            actions = actions.filter(kind=selected_kind)
+        else:
+            selected_kind = ""
+        if failed_only:
+            actions = actions.filter(ok=False)
+        context["page_obj"] = Paginator(actions, self.per_page).get_page(
+            self.request.GET.get("page")
+        )
+        context["kinds"] = AdminAction.KINDS
+        context["selected_kind"] = selected_kind
+        context["failed_only"] = failed_only
+        context["filter_query"] = urlencode(
+            {k: v for k, v in (("kind", selected_kind),
+                               ("failed", "1" if failed_only else "")) if v}
+        )
         return context
 
 
@@ -2395,8 +2438,10 @@ class UserListView(LoginRequiredMixin, IsAdminMixin, TemplateView):
 class UserSetPasswordView(LoginRequiredMixin, IsAdminMixin, View):
     """Set a new password on another account, e.g. for a director locked out.
 
-    Unlogged: accounts are not tournament state. Django rotates the session
-    auth hash with the password, so the account is signed out everywhere.
+    Not in any tournament's log — accounts are not tournament state — but in
+    the admin log, since setting a password is taking an account over. The
+    password itself is never recorded. Django rotates the session auth hash
+    with the password, so the account is signed out everywhere.
     """
 
     template_name = "tournaments/user_set_password.html"
@@ -2414,8 +2459,11 @@ class UserSetPasswordView(LoginRequiredMixin, IsAdminMixin, View):
     def post(self, request, pk):
         form = SetPasswordForm(self.target, request.POST)
         if not form.is_valid():
+            # A mistyped confirmation is not an action; nothing was changed.
             return self._render(form)
-        form.save()
+        with logged(AdminAction.PASSWORD_SET, request.user) as entry:
+            form.save()
+            entry.summary = f"Set a new password for {self.target.username}"
         messages.success(request, f"Set a new password for {self.target.username}.")
         return redirect("user_list")
 
@@ -2447,18 +2495,23 @@ class PlayerImportView(LoginRequiredMixin, IsAdminMixin, View):
             messages.error(request, "No file uploaded.")
             return redirect("player_import")
 
-        result, errors = import_players(uploaded.read(), actor=request.user)
-        if errors:
-            for error in errors[:25]:
-                messages.error(request, error)
-            if len(errors) > 25:
-                messages.error(request, f"... and {len(errors) - 25} more.")
-        else:
-            messages.success(
-                request,
-                f"Imported {result['total']} player(s): {result['added']} added, "
-                f"{result['updated']} updated, {result['unchanged']} unchanged."
-            )
+        with logged(AdminAction.PLAYER_IMPORT, request.user) as entry:
+            entry.summary = uploaded.name
+            result, errors = import_players(uploaded.read(), actor=request.user)
+            if errors:
+                more = f" (and {len(errors) - 1} more)" if len(errors) > 1 else ""
+                entry.fail(f"Nothing imported: {errors[0]}{more}")
+                for error in errors[:25]:
+                    messages.error(request, error)
+                if len(errors) > 25:
+                    messages.error(request, f"... and {len(errors) - 25} more.")
+            else:
+                entry.summary = (
+                    f"Imported {result['total']} player(s) from {uploaded.name}: "
+                    f"{result['added']} added, {result['updated']} updated, "
+                    f"{result['unchanged']} unchanged"
+                )
+                messages.success(request, entry.summary + ".")
         return redirect("player_import")
 
 
@@ -2477,9 +2530,10 @@ class RosterImportView(LoginRequiredMixin, IsAdminMixin, View):
     unattended one leave the same kind of record, and this page shows whichever
     happened last — including one that failed while nobody was looking.
 
-    Global and unlogged, like the other roster imports, and for the same reason:
-    entrants freeze their rating seed when they enter, so a pull cannot move a
-    tournament that is already under way.
+    Global, and in no tournament's log: entrants' rating seeds freeze once
+    their division is under way, so a pull cannot move a running tournament
+    (and the re-pinning of divisions not yet started logs itself, through
+    ``player_ratings``). Every action here lands in the admin log instead.
     """
 
     template_name = "tournaments/roster_import.html"
@@ -2517,13 +2571,13 @@ class RosterImportView(LoginRequiredMixin, IsAdminMixin, View):
             return self._resolve(request)
 
         if request.POST.get("source") == "fetch":
-            record = run_sync(RosterSync.MANUAL)
+            record = run_sync(RosterSync.MANUAL, actor=request.user)
         else:
             uploaded = request.FILES.get("roster_file")
             if not uploaded:
                 messages.error(request, "No file uploaded.")
                 return redirect("roster_import")
-            record = run_sync(RosterSync.UPLOAD, uploaded.read())
+            record = run_sync(RosterSync.UPLOAD, uploaded.read(), actor=request.user)
 
         if not record.ok:
             messages.error(request, record.error)
@@ -2547,12 +2601,17 @@ class RosterImportView(LoginRequiredMixin, IsAdminMixin, View):
         if entry is None:
             messages.error(request, "That resolution is no longer pending.")
             return redirect("roster_import")
-        try:
-            player = resolve_number(entry, actor=request.user)
-        except (RosterParseError, ValueError) as exc:
-            messages.error(request, str(exc))
-            return redirect("roster_import")
-        forget_resolution(record, key)
+        with logged(AdminAction.ROSTER_RESOLUTION, request.user) as log:
+            log.summary = (
+                f"{entry.name}: {entry.local_number} to #{entry.roster_number}"
+            )
+            try:
+                player = resolve_number(entry, actor=request.user)
+            except (RosterParseError, ValueError) as exc:
+                log.fail(exc)
+                messages.error(request, str(exc))
+                return redirect("roster_import")
+            forget_resolution(record, key)
         messages.success(
             request,
             f"{player.name} is now #{player.player_number}, "
@@ -2589,11 +2648,17 @@ class PlayerMergeView(LoginRequiredMixin, IsAdminMixin, View):
         if guest.name.casefold() != into.name.casefold():
             messages.error(request, "Only players with the same name can be merged here.")
             return redirect("player_merge")
-        try:
-            merge_guest(guest, into, actor=request.user)
-        except ValueError as exc:
-            messages.error(request, str(exc))
-            return redirect("player_merge")
+        with logged(AdminAction.PLAYER_MERGE, request.user) as entry:
+            entry.summary = (
+                f"Guest {guest.player_number} into {into.name} "
+                f"(#{into.player_number})"
+            )
+            try:
+                merge_guest(guest, into, actor=request.user)
+            except ValueError as exc:
+                entry.fail(exc)
+                messages.error(request, str(exc))
+                return redirect("player_merge")
         messages.success(
             request,
             f"Merged guest {guest.player_number} into {into.name} "
@@ -2623,9 +2688,10 @@ class WespaImportView(LoginRequiredMixin, IsAdminMixin, View):
       differs between the two lists can only ever be fixed by hand.
     - The search, when linking one of them.
 
-    Global and unlogged, like the other roster imports, and for the same reason:
-    entrants freeze their rating seed when they enter, so a pull cannot move a
-    tournament that is already under way.
+    Global, and in no tournament's log: entrants' rating seeds freeze once
+    their division is under way, so a pull cannot move a running tournament
+    (and the re-pinning of divisions not yet started logs itself, through
+    ``player_ratings``). Every action here lands in the admin log instead.
     """
 
     template_name = "tournaments/wespa_import.html"
@@ -2732,13 +2798,15 @@ class WespaImportView(LoginRequiredMixin, IsAdminMixin, View):
             return self._unlink(request)
 
         if request.POST.get("source") == "fetch":
-            record = wespa_sync.run_sync(WespaSync.MANUAL)
+            record = wespa_sync.run_sync(WespaSync.MANUAL, actor=request.user)
         else:
             uploaded = request.FILES.get("wespa_file")
             if not uploaded:
                 messages.error(request, "No file uploaded.")
                 return redirect("wespa_import")
-            record = wespa_sync.run_sync(WespaSync.UPLOAD, uploaded.read())
+            record = wespa_sync.run_sync(
+                WespaSync.UPLOAD, uploaded.read(), actor=request.user
+            )
 
         if not record.ok:
             messages.error(request, record.error)
@@ -2767,11 +2835,17 @@ class WespaImportView(LoginRequiredMixin, IsAdminMixin, View):
         if player is None or row is None:
             messages.error(request, "That player is no longer here — try again.")
             return redirect("wespa_import")
-        try:
-            link_player(player, row, actor=request.user)
-        except ValueError as exc:
-            messages.error(request, str(exc))
-            return redirect("wespa_import")
+        with logged(AdminAction.WESPA_LINK, request.user) as entry:
+            entry.summary = (
+                f"{player.name} (#{player.player_number}) to WESPA {row.name} "
+                f"(id {row.wespa_id})"
+            )
+            try:
+                link_player(player, row, actor=request.user)
+            except ValueError as exc:
+                entry.fail(exc)
+                messages.error(request, str(exc))
+                return redirect("wespa_import")
         # A resolved name leaves the pending list whether it was resolved from
         # there or from the search, so the same work is never offered twice.
         record = WespaSync.latest_successful()
@@ -2794,7 +2868,12 @@ class WespaImportView(LoginRequiredMixin, IsAdminMixin, View):
         if player is None:
             messages.error(request, "That player is no longer here.")
             return redirect("wespa_import")
-        unlink_player(player)
+        with logged(AdminAction.WESPA_UNLINK, request.user) as entry:
+            entry.summary = (
+                f"{player.name} (#{player.player_number}) from WESPA id "
+                f"{player.wespa_id}"
+            )
+            unlink_player(player)
         messages.success(
             request,
             f"{player.name} is no longer linked to a WESPA player. The rating "
