@@ -31,6 +31,8 @@ Current plans:
   min-cost matching, plus new `DivisionSettings` fields (prizes, gibson spread,
   hopefulness, control-loss, sim counts). **Not started**; 5 phases, class prizes
   deferred.
+- `PLAN_COP_GO_PORT.md` — re-port COP from liwords' Go implementation (the new
+  upstream), verified stage by stage for exact parity against the Go oracle
 - `PLAN_PLAYOFFS.md` — configurable 2/4/8-player championship playoffs with
   per-stage best-of-N series (issue #44), in postscript and concurrent timing
   modes, with a full placement bracket (third place, and 5th–8th for a top-8) so
