@@ -73,6 +73,7 @@ def merge_guest(guest, into, actor=None):
     """
     from .commands import apply_player_merge, merge_player
     from .events import command_context, record_event
+    from .player_ratings import players_rerated
 
     if not guest.is_provisional:
         raise ValueError(f"{guest.name} ({guest.player_number}) is not a guest.")
@@ -89,4 +90,8 @@ def merge_guest(guest, into, actor=None):
     with command_context():
         for tournament in tournaments[1:]:
             record_event(tournament, "player_merged", payload, actor=actor)
+    # The guest's entrants were pinned at the guest's rating and now belong to
+    # a player rated differently. Here, not in the command, so a replay of the
+    # merge does not re-read the replay database's player table.
+    players_rerated([into], actor=actor)
     return merged

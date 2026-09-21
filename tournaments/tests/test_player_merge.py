@@ -62,6 +62,14 @@ class MergeTests(TestCase):
             self.assertEqual(entrant.player_id, self.coco.pk)
         self.assertEqual(merge_candidates(), [])
 
+    def test_entrants_take_the_real_players_rating_before_the_start(self):
+        # Entered as an unrated guest; neither division has published a round.
+        merge_guest(self.guest1, self.coco, actor=self.owner)
+        self.entrant1.refresh_from_db()
+        self.assertEqual(
+            (self.entrant1.rating, self.entrant1.rating_source), (1400, Entrant.COCO)
+        )
+
     def test_the_wespa_link_moves_with_the_person(self):
         merge_guest(self.guest2, self.coco, actor=self.owner)
         self.coco.refresh_from_db()

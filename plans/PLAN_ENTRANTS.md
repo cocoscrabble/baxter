@@ -89,9 +89,11 @@ default, so a later session should not relitigate them without asking.
    first round published (`Division.under_way`), the same moment the seeding
    freezes. People register for a future tournament weeks or months ahead, and
    a rating snapshotted then is not the rating they bring to the event. So
-   whatever moves player ratings (roster pull, WESPA pull, player import, a
-   WESPA link, a guest merge) re-pins every non-manual entrant of every division
-   that has not started and reseeds it (`entrant_sync.refresh_upcoming`), and
+   every write of a player's rating goes through one gate
+   (`player_ratings.save_players`; a guest merge calls its downstream half,
+   `players_rerated`, directly), which re-pins every non-manual entrant of
+   every division that has not started and reseeds it
+   (`entrant_sync.refresh_upcoming`), and
    publishing the first round catches up anything still behind first
    (`refresh_before_start`) — re-pairing and asking the director to look again,
    rather than publishing drafts they never saw, if anything moved. These are

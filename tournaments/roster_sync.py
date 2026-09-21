@@ -18,7 +18,6 @@ code that writes to the ``Player`` table, and it is as atomic as it ever was.
 
 import logging
 
-from .entrant_sync import refresh_upcoming
 from .models import RosterSync
 from .roster_import import (
     PendingResolution,
@@ -57,9 +56,6 @@ def run_sync(source, raw=None) -> RosterSync:
     record.pending = [p.to_json() for p in result.pending]
     record.save()
     logger.info("Roster pull (%s): %s", source, record.summary())
-    # Entrants of a division that has not started follow the ratings just
-    # written; one under way keeps what it started with (entrant_sync).
-    refresh_upcoming()
     return record
 
 

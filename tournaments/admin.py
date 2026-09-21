@@ -1,6 +1,7 @@
 from django.contrib import admin
 
 from .models import Division, Entrant, Pairing, Player, ResultSlip, RoundPairings, Tournament
+from .player_ratings import RATING_FIELDS, players_rerated
 
 
 class DivisionInline(admin.TabularInline):
@@ -21,6 +22,11 @@ class TournamentAdmin(admin.ModelAdmin):
 class PlayerAdmin(admin.ModelAdmin):
     list_display = ("name", "player_number", "rating")
     search_fields = ("name", "player_number")
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        if change and RATING_FIELDS.intersection(form.changed_data):
+            players_rerated([obj], actor=request.user)
 
 
 @admin.register(Entrant)

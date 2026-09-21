@@ -25,6 +25,7 @@ from coco_ratings.identity import canonical_player_number
 from django.db import transaction
 
 from .models import Player
+from .player_ratings import save_players
 
 
 def export_players():
@@ -38,7 +39,7 @@ def export_players():
     ]
 
 
-def import_players(raw):
+def import_players(raw, *, actor=None):
     """Upsert players from ``raw`` (parsed JSON, a JSON string, or bytes).
 
     Matches existing players on ``player_number``: updates name/rating when they
@@ -92,8 +93,7 @@ def import_players(raw):
     existing = {
         canonical_player_number(p.player_number): p for p in Player.objects.all()
     }
-    to_create = []
-    updated = 0
+    to_create, to_update = [], []
     with transaction.atomic():
         for number, fields in cleaned.items():
             player = existing.get(number)
@@ -108,9 +108,10 @@ def import_players(raw):
             elif player.name != fields["name"] or player.rating != fields["rating"]:
                 player.name = fields["name"]
                 player.rating = fields["rating"]
-                player.save(update_fields=["name", "rating"])
-                updated += 1
+                to_update.append(player)
         Player.objects.bulk_create(to_create)
+        save_players(to_update, ["name", "rating"], actor=actor)
+    updated = len(to_update)
 
     return {
         "total": len(cleaned),
