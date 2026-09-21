@@ -11,10 +11,14 @@ where development continued after `COP.pm`; it has grown well past it (Factor 3
 control loss, contender-group parity, top-down byes, …). An oracle running it
 unmodified is at `tools/cop-go-oracle/`, pinned to liwords `4cba544`, with
 upstream's 26 real-tournament test positions as fixtures — see its README,
-including the two conditions under which its answers are reproducible. The
-Rust port has **not** yet been compared against it; everything below describes
-the port as made from `COP.pm`, and the Perl oracle (`tools/cop-oracle/`) is now
-of historical interest only.
+including the two conditions under which its answers are reproducible. `compare.py`
+there pairs every fixture with both and scores Baxter's pairing on upstream's
+own logged weights. **First comparison (2026-09-21): no comparable case agrees**,
+and three break a director's fixed pairing — the port enforces pins only as a
+weight, and upstream now makes them hard. The README's "Findings" lists the rest
+(round-one seeding, Factor 3, gibson bars, contender penalties). Everything below
+describes the port as made from `COP.pm`; the Perl oracle (`tools/cop-oracle/`)
+is of historical interest only.
 
 **Previous upstream pin: `COP.pm` at `fe4b438` (2026-06-19).** Re-checked against upstream
 main `126363a` (2026-09-07) on 2026-09-20: the native `cop()` path and every one
