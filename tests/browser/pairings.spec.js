@@ -84,6 +84,10 @@ for (const width of mobileWidths) {
     expect(dimensions.tableRight).toBeLessThanOrEqual(dimensions.viewportWidth);
     expect(dimensions.actionRight).toBeLessThanOrEqual(dimensions.viewportWidth);
 
+    const tableNumber = page.locator(".pairing-table-number").first();
+    expect(await tableNumber.evaluate((cell) => getComputedStyle(cell).fontWeight)).toBe("400");
+    expect(await tableNumber.evaluate((cell) => getComputedStyle(cell, "::before").fontWeight)).toBe("400");
+
     const rows = page.locator(".published-pairings-table tbody tr");
     await expect(rows).toHaveCount(2);
     for (const row of await rows.all()) {
