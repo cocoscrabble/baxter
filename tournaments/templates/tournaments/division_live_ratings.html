@@ -6,20 +6,21 @@
 <h1>Projected ratings: {{ division.name }}</h1>
 
 <p class="note">
-  <strong>Provisional.</strong> Ratings are official only once the whole history
-  is replayed in order, so these change if another tournament is rated ahead of
-  this one. This is a preview of what the games played so far would do.
+  <strong>Provisional.</strong> These ratings are estimates and may change after all
+  tournament results are reviewed for completion and errata. This table provides
+  a preview of how the games played so far are projected to change the players’
+  ratings.
 </p>
 
 {% if not rows %}
 {% include "tournaments/_empty_state.html" with message="No completed games yet." %}
 {% else %}
 <div class="table-scroll table-narrow">
-<table>
+<table class="ratings-table">
     <thead>
         <tr>
             <th>Player</th>
-            <th class="num">W-L</th>
+            <th class="num ratings-record">W-L</th>
             <th class="num">Spread</th>
             <th class="num">Initial Rating</th>
             <th class="num">Projected</th>
@@ -30,7 +31,7 @@
         {% for row in rows %}
         <tr>
             <td>{{ row.entrant.display_name|default:row.projection.name }}{% if row.projection.was_unrated %}*{% endif %}</td>
-            <td class="num">{{ row.projection.wins|floatformat:"-1" }}-{{ row.projection.losses|floatformat:"-1" }}</td>
+            <td class="num ratings-record">{{ row.projection.wins|floatformat:"-1" }}-{{ row.projection.losses|floatformat:"-1" }}</td>
             <td class="num">{{ row.projection.spread }}</td>
             {% comment %}
             A newly rated player has no "before": the official run records their
