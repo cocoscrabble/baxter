@@ -1035,8 +1035,14 @@ td a:hover {
 
 /* Schedule-method inputs share a toolbar; keep the numeric field compact so
    all controls wrap as units instead of forcing horizontal page overflow. */
+.pairing-method-controls #method-rounds-controls:not([hidden]) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
 .pairing-method-controls input[type="number"] {
-    width: 7rem;
+    width: 4.5rem;
 }
 
 .pairing-method-controls select {

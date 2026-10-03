@@ -19,7 +19,7 @@ the form below is the answer to that, and saying "no players match" directly
 above it would only be telling the director something they can already see.
 {% endcomment %}
 {% if search_results %}
-  <h3>Already in Baxter ({{ search_results|length }})</h3>
+  <h3>Players Found ({{ search_results|length }})</h3>
   <table>
     <thead>
       <tr>
@@ -39,7 +39,7 @@ above it would only be telling the director something they can already see.
         <td class="num">{% if record.wespa_rating is not None %}{{ record.wespa_rating }}{% else %}—{% endif %}</td>
         <td>
           <button type="submit" form="register-add-form" name="player"
-                  value="{{ record.player_number }}">Enter</button>
+                  value="{{ record.player_number }}">Register Player</button>
         </td>
       </tr>
       {% endfor %}
