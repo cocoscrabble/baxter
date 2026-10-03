@@ -381,11 +381,11 @@ def unpublish_rounds(division, round_numbers=None):
     """Revert published rounds with no real results back to draft.
 
     A round is eligible when it is PUBLISHED or IN_PROGRESS and carries no
-    director-entered results — an auto-materialized bye (the only result a
-    freshly published round can have) does not count. The bye slips are deleted
-    so the round becomes a clean draft that ``regenerate_pairings`` can re-pair,
-    and its status is restored to DRAFT so the editor treats it as pairable
-    again. ``round_numbers=None`` considers every published round.
+    contested results — auto-materialized byes and forfeits do not count.
+    Their slips are deleted and the status returns to DRAFT. Forfeited boards
+    are removed so the editor regenerates real games rather than recreating
+    the same forfeits on publish; ordinary bye-only boards remain editable.
+    ``round_numbers=None`` considers every published round.
 
     Returns the rounds actually unpublished (empty if none were eligible).
     """
