@@ -2763,6 +2763,20 @@ class DivisionEntrantsEditViewTests(TestCase):
         self.assertEqual(self.division.entrants.count(), 2)
         self.assertEqual(self.division.entrants.get(number=1).player, self.player1)
 
+    def test_grid_tentative_is_the_only_payment_status_input(self):
+        self.client.login(username="owner", password="testpass123")
+        for tentative in (True, False):
+            response = self.client.post(
+                self.url,
+                json.dumps({"rows": [{"number": 1, "player": self.player1.pk,
+                                     "tentative": tentative}]}),
+                content_type="application/json",
+            )
+            self.assertTrue(response.json()["ok"])
+            entrant = self.division.entrants.get()
+            self.assertEqual(entrant.tentative, tentative)
+            self.assertEqual(entrant.paid, not tentative)
+
     def test_post_replaces_existing_entrants(self):
         Entrant.objects.create(division=self.division, player=self.player1, number=1)
         self.client.login(username="owner", password="testpass123")
@@ -3359,7 +3373,8 @@ class EntrantsGridFlagColumnsTests(TestCase):
 
     def test_the_registration_flags_are_checkboxes(self):
         cols = self.columns()
-        for field in ("tentative", "paid", "playing_up"):
+        self.assertNotIn("paid", cols)
+        for field in ("tentative", "playing_up"):
             self.assertEqual(cols[field]["kind"], "flag", field)
             self.assertEqual(cols[field]["value_type"], "bool", field)
             self.assertTrue(cols[field]["editable"], field)

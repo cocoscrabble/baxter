@@ -2039,7 +2039,6 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
                 initial={
                     "rating": entrant.rating,
                     "tentative": entrant.tentative,
-                    "paid": entrant.paid,
                     "playing_up": entrant.playing_up,
                     "payment_note": entrant.payment_note,
                 }

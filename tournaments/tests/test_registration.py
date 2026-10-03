@@ -105,27 +105,26 @@ class AddExistingTests(RegistrationTestCase):
         self.assertContains(response, "Pick a player first")
 
 
-class PaidClearsTentativeTests(RegistrationTestCase):
-    """Marking someone paid confirms them by default, and the organizer can
-    override that in either direction (decision 5)."""
-
-    def test_paid_alone_leaves_them_confirmed(self):
-        self._post(action="add", player="0001", number=1, paid="on", payment_note="")
+class TentativeStatusTests(RegistrationTestCase):
+    def test_confirmed_registration_is_paid(self):
+        self._post(action="add", player="0001", number=1, payment_note="")
         entrant = self.division.entrants.get()
         self.assertTrue(entrant.paid)
         self.assertFalse(entrant.tentative)
 
-    def test_paid_and_tentative_together_is_an_override_that_sticks(self):
+    def test_stale_paid_input_cannot_override_tentative(self):
         self._post(
             action="add", player="0001", number=1, paid="on", tentative="on",
             payment_note="",
         )
         entrant = self.division.entrants.get()
-        self.assertTrue(entrant.paid)
-        self.assertTrue(
-            entrant.tentative,
-            "an organizer who re-ticks tentative on a paid entrant means it",
-        )
+        self.assertFalse(entrant.paid)
+        self.assertTrue(entrant.tentative)
+
+    def test_registration_only_offers_tentative(self):
+        response = self.client.get(self.url(), {"q": "Ann"})
+        self.assertContains(response, 'name="tentative"')
+        self.assertNotContains(response, 'name="paid"')
 
 
 class GuestTests(RegistrationTestCase):
