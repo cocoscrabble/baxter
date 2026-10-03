@@ -30,21 +30,25 @@
             <option value="custom">Custom</option>
         </select>
         <span id="method-rounds-controls">
-            <label for="method-total-rounds">Total rounds</label>
+            <label for="method-total-rounds">Total Rounds</label>
             <input id="method-total-rounds" type="number" min="14" value="{{ method_total_rounds }}">
         </span>
-        <button id="generate-method-btn" type="button">Generate Schedule</button>
+        <button id="generate-method-btn" type="button">Generate Pairings Schedule</button>
         <span id="method-status"></span>
     </div>
     {% comment %}
     One description per method, shown by the selector. Copy lives here rather
     than in the JS so it stays with the rest of the page's prose.
     {% endcomment %}
+    <p class="note">After you generate the pairings schedule, go to
+        <a href="{% url 'division_pair_rounds' division.tournament.slug division.slug %}">Pair Rounds</a>
+        to view and publish round pairings.</p>
     <p class="empty-state" data-method="SwissContenders">
         Swiss Contenders uses no-repeat Swiss for the first third,
         Swiss pairings minimizing repeats for the middle third, and COP for the
         final third. Minimal-repeat Swiss remains repeat-free while possible.
         Extra rounds go first to the middle third, then the first.
+        Swiss Contenders requires the tournament to have a minimum of 14 rounds.
     </p>
     <p class="empty-state" data-method="custom" hidden>
         Build the schedule yourself, one block at a time — a pairing strategy

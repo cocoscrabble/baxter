@@ -209,7 +209,7 @@ function syncMethodControls() {
     const custom = methodSelect.value === "custom";
     // Total rounds is an input to generation; Custom generates nothing.
     roundsControls.hidden = custom;
-    generateBtn.textContent = custom ? "Define blocks manually" : "Generate Schedule";
+    generateBtn.textContent = custom ? "Define blocks manually" : "Generate Pairings Schedule";
     document.querySelectorAll("[data-method]").forEach(el => {
         el.hidden = el.dataset.method !== methodSelect.value;
     });

@@ -109,7 +109,7 @@ class WhatIfImportViewTests(TestCase):
 
 @tag("slow")
 class TournamentListSplitsWhatIfTests(TestCase):
-    """What-if sandboxes list in their own table under the real tournaments.
+    """Sandbox Testing list in their own table under the real tournaments.
 
     Both sandbox kinds set ``is_fake``, so the split keys on the divisions
     instead: a what-if import forces every division ``is_test``, a fake
@@ -159,8 +159,8 @@ class TournamentListSplitsWhatIfTests(TestCase):
         html = self.client.get(reverse("tournament_list")).content.decode()
         self.assertLess(html.index("Real Open"), html.index("Test tournaments"))
         self.assertLess(html.index("Test tournaments"), html.index("Fake Cup"))
-        self.assertLess(html.index("Fake Cup"), html.index("What-if sandboxes"))
-        self.assertLess(html.index("What-if sandboxes"), html.index("Sandbox Cup"))
+        self.assertLess(html.index("Fake Cup"), html.index("<h2>Sandbox Testing</h2>"))
+        self.assertLess(html.index("<h2>Sandbox Testing</h2>"), html.index("Sandbox Cup"))
 
     def test_a_visitor_who_cannot_open_them_is_not_shown_them(self):
         # Their divisions are is_test, which 404s for anyone who cannot edit the
@@ -168,7 +168,7 @@ class TournamentListSplitsWhatIfTests(TestCase):
         self.client.logout()
         html = self.client.get(reverse("tournament_list")).content.decode()
         self.assertNotIn("Sandbox Cup", html)
-        self.assertNotIn("What-if sandboxes", html)
+        self.assertNotIn("Sandbox Testing", html)
         # The real tournaments are still public, and so are the test ones —
         # fake_tournament leaves their divisions visible on purpose.
         self.assertIn("Real Open", html)

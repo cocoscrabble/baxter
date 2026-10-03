@@ -11,7 +11,7 @@
     &middot;
     <a href="{% url 'fake_tournament_create' %}">Create Test Tournament</a>
     &middot;
-    <a href="{% url 'whatif_import' %}">Import for What-if</a>
+    <a href="{% url 'whatif_import' %}">Import for Sandbox Testing</a>
 </p>
 {% endif %}
 
@@ -41,7 +41,7 @@ either.
 
 {% if whatif_tournaments %}
 <section class="sandbox-list">
-    <h2>What-if sandboxes</h2>
+    <h2>Sandbox Testing</h2>
     <p class="note">
         Imported copies of finished tournaments, for trying out pairings without
         touching the real thing. Listed only for people who can edit them —
