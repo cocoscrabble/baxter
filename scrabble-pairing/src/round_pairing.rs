@@ -55,22 +55,27 @@ pub struct RoundPairing {
     pub pairing: RP,
 }
 
-/// Make each contiguous round-robin block share its first round as `start_round`.
-///
-/// A round-robin schedule rotates off a single fixed ordering (the standings as
-/// of `start_round`), so every round in the block must point at the same one.
-/// Normalise inputs where we have a run of round-robin rounds not following this convention.
+/// Repair legacy per-round sources while preserving explicit RR block starts.
+/// A schedule-editor block begins with `start_round == round`, including when
+/// two blocks use the same strategy consecutively. Legacy `round - 1` sources
+/// still normalize to one rotation.
 pub fn normalize_round_robin_start_rounds(rps: &mut [RoundPairing]) {
     let mut i = 0;
     while i < rps.len() {
-        if rps[i].pairing.is_round_robin() {
-            let block_pairing = rps[i].pairing;
-            let block_start = rps[i].round;
-            while i < rps.len() && rps[i].pairing == block_pairing {
-                rps[i].start_round = block_start;
-                i += 1;
-            }
-        } else {
+        if !rps[i].pairing.is_round_robin() {
+            i += 1;
+            continue;
+        }
+        let block_pairing = rps[i].pairing;
+        let block_start = rps[i].round;
+        rps[i].start_round = block_start;
+        i += 1;
+        while i < rps.len()
+            && rps[i].pairing == block_pairing
+            && rps[i].round == rps[i - 1].round + 1
+            && rps[i].start_round != rps[i].round
+        {
+            rps[i].start_round = block_start;
             i += 1;
         }
     }
@@ -79,6 +84,24 @@ pub fn normalize_round_robin_start_rounds(rps: &mut [RoundPairing]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn preserves_adjacent_explicit_rr_blocks() {
+        for pairing in [RP::RoundRobin, RP::DoubleRoundRobin, RP::Charlottesville] {
+            let mut rps: Vec<RoundPairing> = (1..=6)
+                .map(|round| RoundPairing {
+                    round,
+                    start_round: if round <= 3 { 1 } else { 4 },
+                    pairing,
+                })
+                .collect();
+            normalize_round_robin_start_rounds(&mut rps);
+            assert_eq!(
+                rps.iter().map(|r| r.start_round).collect::<Vec<_>>(),
+                vec![1, 1, 1, 4, 4, 4]
+            );
+        }
+    }
 
     #[test]
     fn deserializes_strategy_strings() {

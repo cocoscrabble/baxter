@@ -95,24 +95,28 @@ class RoundPairing:
 
 
 def normalize_round_robin_start_rounds(rps: list[RoundPairing]) -> list[RoundPairing]:
-    """Make each contiguous round-robin block share its first round as start_round.
+    """Repair legacy per-round sources without merging explicit RR blocks.
 
-    A round-robin schedule rotates off a single fixed ordering (the standings as
-    of ``start_round``), so every round in the block must point at the same one —
-    this is what ``make_pairings`` produces. The settings editor instead stores a
-    per-round ``start_round`` (defaulting to ``round - 1``), which leaves later
-    rounds reading results that don't exist yet and pairing nobody. Repair those
-    blocks in place; non-round-robin rounds are left untouched.
+    A block produced by the schedule editor starts with start_round == round.
+    Preserve that boundary, even when the preceding block has the same strategy.
+    Older per-round settings use round - 1 and still collapse to one rotation.
     """
     i = 0
     while i < len(rps):
-        if RP.is_round_robin(rps[i].pairing):
-            block_pairing = rps[i].pairing
-            block_start = rps[i].round
-            while i < len(rps) and rps[i].pairing == block_pairing:
-                rps[i].start_round = block_start
-                i += 1
-        else:
+        if not RP.is_round_robin(rps[i].pairing):
+            i += 1
+            continue
+        block_pairing = rps[i].pairing
+        block_start = rps[i].round
+        rps[i].start_round = block_start
+        i += 1
+        while (
+            i < len(rps)
+            and rps[i].pairing == block_pairing
+            and rps[i].round == rps[i - 1].round + 1
+            and rps[i].start_round != rps[i].round
+        ):
+            rps[i].start_round = block_start
             i += 1
     return rps
 
@@ -173,12 +177,17 @@ def round_pairings_to_blocks(round_pairings) -> list[dict]:
     """
     blocks = []
     last_sig = None
-    for rp in sorted(round_pairings, key=lambda x: x["round"]):
+    normalized = normalize_round_robin_start_rounds([
+        RoundPairing.from_dict(rp)
+        for rp in sorted(round_pairings, key=lambda x: x["round"])
+    ])
+    for entry in normalized:
+        rp = entry.to_dict()
         pairing = rp["pairing"]
         if RP.is_round_robin(pairing):
-            # Round-robin doesn't pair off standings, so pair_from is nominal —
-            # consecutive RR rounds are one block regardless of stored start_round.
-            sig = (pairing, "rr")
+            # The block start identifies each rotation, even when two blocks
+            # use the same strategy back to back. pair_from remains nominal.
+            sig = (pairing, "rr", rp["start_round"])
             pair_from = 1
         elif RP.is_quad(pairing):
             # Quads pair off one fixed snapshot; the block is delimited by that

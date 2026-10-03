@@ -260,3 +260,23 @@ class RoundPairingsToBlocksTests(TestCase):
             {"round": 3, "start_round": 0, "pairing": "Quads_Clustered"},
         ])
         self.assertEqual(blocks, [{"pairing": "Quads_Clustered", "rounds": 3, "pair_from": 1}])
+
+
+class AdjacentRoundRobinBlocksTests(TestCase):
+    def test_normalizing_preserves_adjacent_explicit_blocks(self):
+        for strategy in ("RoundRobin", "DoubleRoundRobin", "Charlottesville"):
+            with self.subTest(strategy=strategy):
+                blocks = [
+                    {"pairing": strategy, "rounds": 3, "pair_from": 1},
+                    {"pairing": strategy, "rounds": 3, "pair_from": 1},
+                ]
+                rps = blocks_to_round_pairings(blocks)
+                normalize_round_robin_start_rounds(rps)
+                self.assertEqual([r.start_round for r in rps], [1, 1, 1, 4, 4, 4])
+                self.assertEqual(round_pairings_to_blocks([r.to_dict() for r in rps]), blocks)
+
+    def test_editor_round_trip_keeps_legacy_sliding_sources_as_one_block(self):
+        rows = [{"round": r, "start_round": r - 1, "pairing": "RoundRobin"} for r in range(1, 4)]
+        self.assertEqual(round_pairings_to_blocks(rows), [
+            {"pairing": "RoundRobin", "rounds": 3, "pair_from": 1},
+        ])
