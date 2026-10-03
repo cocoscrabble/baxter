@@ -1063,29 +1063,21 @@ class RoundPairings(models.Model):
         real_results = ResultSlip.objects.filter(
             pairing__round_pairings=self
         ).played().count()
-        if (
-            total > 0
-            and with_results == total
-            and self.status in (RoundPairings.PUBLISHED, RoundPairings.IN_PROGRESS)
-        ):
-            # Tested first so a single call can settle the round outright. When
-            # the last missing result is a bye, `real_results < total` is also
-            # true, and checking that first would stop at IN_PROGRESS — leaving a
-            # fully played round stuck there until something happened to call
-            # this again, which for a batch-entered round nothing does.
-            #
-            # `total > 0` guards against an unpaired round (e.g. a round-robin
-            # block round created up front but not yet paired): with no pairings
-            # `with_results == total` is vacuously true, which would otherwise
-            # mark a round with no games as finished.
-            self.status = RoundPairings.FINISHED
+        if self.status == RoundPairings.DRAFT:
+            return  # Refreshing results must never publish an unseen board.
+        if total > 0 and with_results == total:
+            status = RoundPairings.FINISHED
+        elif real_results > 0:
+            status = RoundPairings.IN_PROGRESS
+        else:
+            status = RoundPairings.PUBLISHED
+        # Completion is reversible: deleting results from a finished round
+        # reopens its existing published board, so it is visible again and can
+        # be unpublished/re-paired once no contested results remain.
+        if status != self.status:
+            self.status = status
             self.save(update_fields=["status"])
-        elif real_results == 0 and self.status == RoundPairings.IN_PROGRESS:
-            self.status = RoundPairings.PUBLISHED
-            self.save(update_fields=["status"])
-        elif 0 < real_results < total and self.status == RoundPairings.PUBLISHED:
-            self.status = RoundPairings.IN_PROGRESS
-            self.save(update_fields=["status"])
+
 
 
 class Pairing(models.Model):

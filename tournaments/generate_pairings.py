@@ -412,6 +412,16 @@ def unpublish_rounds(division, round_numbers=None):
         division.round_pairings_set.filter(round__in=to_unpublish).update(
             status=RoundPairings.DRAFT
         )
+        # A forfeited game was dissolved into two absence boards. Keeping
+        # those drafts would recreate the forfeits on the next publish, even
+        # after the director cleared their results to start the round over.
+        # Drop these rounds' boards so the ordinary lazy pairing path rebuilds
+        # real games. Ordinary bye-only drafts retain their existing boards.
+        reset_rounds = list(
+            division.pairings.filter(round__in=to_unpublish, forfeit=True)
+            .values_list("round", flat=True).distinct()
+        )
+        division.pairings.filter(round__in=reset_rounds).delete()
     return to_unpublish
 
 
