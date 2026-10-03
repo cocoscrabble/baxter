@@ -10,6 +10,7 @@ from tournaments.generate_pairings import publish_rounds, regenerate_pairings
 from tournaments.models import ResultSlip, RoundPairings
 from tournaments.pairings_view import PairingsPresenter, PublishedPairingsPresenter
 from tournaments.tests.test_byes import make_division
+from tournaments.tests.test_replay import LoggedTournamentMixin
 from users.models import User
 
 
@@ -89,3 +90,25 @@ class CompletedRoundResetTests(TestCase):
         draft.update_status()
         draft.refresh_from_db()
         self.assertEqual(draft.status, RoundPairings.DRAFT)
+
+
+class CompletedRoundResetReplayTests(LoggedTournamentMixin, TestCase):
+    def test_forfeit_clear_and_republish_replays_with_matching_digests(self):
+        from tournaments.events import division_digest
+        from tournaments.replay import events_from_tournament, replay
+
+        tournament, division = self._build_logged_tournament()
+        for pairing in list(division.pairings.filter(round=1)):
+            forfeit_game(tournament, self.owner, {
+                "division": division.name, "round": 1,
+                "player": pairing.first.key,
+            })
+        response = self._post_json("division_edit_results", division, {"rows": []})
+        self.assertEqual(response.status_code, 200)
+        self.client.post(reverse("unpublish_round", kwargs=division.slug_kwargs()), {"round": 1})
+        self.client.get(reverse("division_pair_rounds", kwargs=division.slug_kwargs()))
+        self.client.post(reverse("publish_round", kwargs=division.slug_kwargs()), {"round": 1})
+        recorded = division_digest(division)
+        ctx = replay(events_from_tournament(tournament), verify=True)
+        self.assertEqual(division_digest(ctx.tournament.divisions.get()), recorded)
+        self.assertEqual(ctx.drift, [])
