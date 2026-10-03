@@ -104,7 +104,11 @@ class EntrantDTO(DataClassJsonMixin):
                 rating=None if raw_rating in (None, "") else int(raw_rating),
                 rating_source=str(row.get("rating_source") or ""),
                 tentative=bool(row.get("tentative", False)),
-                paid=bool(row.get("paid", False)),
+                # The current grid has only Tentative. Older clients and
+                # replay payloads still carry an explicit paid value; preserve
+                # it rather than rewriting historical registration state.
+                paid=(bool(row["paid"]) if "paid" in row
+                      else not bool(row.get("tentative", False))),
                 playing_up=bool(row.get("playing_up", False)),
             )
         except (ValueError, TypeError):

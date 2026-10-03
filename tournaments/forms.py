@@ -465,28 +465,22 @@ class RegistrationForm(forms.Form):
         help_text="Leave blank to use the player's own rating.",
     )
     tentative = forms.BooleanField(required=False, label="Tentative")
-    paid = forms.BooleanField(required=False, label="Paid")
     playing_up = forms.BooleanField(required=False, label="Playing up")
     payment_note = forms.CharField(
         required=False, label="Payment note",
         widget=forms.Textarea(attrs={"rows": 2}),
     )
 
-    # The three flags are one row about one person, laid out horizontally by
-    # the template. Named here rather than hard-coded there so adding a fourth
-    # is one edit, in the place the fields are already declared.
-    FLAG_FIELDS = ("tentative", "paid", "playing_up")
+    # One attendance/payment choice: Tentative means not yet paid. Keep the
+    # stored paid flag for exports and exact replay of earlier event logs.
+    FLAG_FIELDS = ("tentative", "playing_up")
 
     def flag_fields(self):
         return [self[name] for name in self.FLAG_FIELDS]
 
     def clean(self):
         cleaned = super().clean()
-        # Marking someone paid confirms them by default; an organizer who means
-        # to hold a paid entrant re-ticks the box, and that override survives
-        # because it is applied here rather than as a model side effect
-        if cleaned.get("paid") and not self.data.get(self.add_prefix("tentative")):
-            cleaned["tentative"] = False
+        cleaned["paid"] = not cleaned.get("tentative", False)
         return cleaned
 
     def registration(self) -> dict:

@@ -209,8 +209,6 @@ class EntrantsGrid(EditGrid):
         # eats about 20px — too tight and the title truncates to "O…".
         Column("tentative", "Tent.", kind="flag", value_type="bool",
                new_row=False, width=90),
-        Column("paid", "Paid", kind="flag", value_type="bool",
-               new_row=False, width=85),
         Column("playing_up", "Up", kind="flag", value_type="bool",
                new_row=False, width=75),
         # Shown, not set. Withdrawing is more than a flag: it also has to
@@ -269,7 +267,7 @@ class EntrantsGrid(EditGrid):
                     "rating_source": entrant.rating_source if entrant else "",
                     "dropped": r.get("dropped", False),
                     "tentative": r.get("tentative", False),
-                    "paid": r.get("paid", False),
+                    "paid": entrant.paid if entrant else r.get("paid", False),
                     "playing_up": r.get("playing_up", False),
                 }
             )

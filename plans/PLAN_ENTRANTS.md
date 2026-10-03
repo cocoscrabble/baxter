@@ -111,9 +111,12 @@ default, so a later session should not relitigate them without asking.
    `PLAN_PLAYER_IDENTITY.md`), so a guest sharing a name with a member is an
    ordinary, supported case.
 
-5. **Tentative is its own field, defaulted from payment.** `Entrant.tentative`
-   is set/cleared by an organizer (issue #42). Marking an entrant paid clears
-   `tentative` by default; the organizer can override in either direction.
+5. **Tentative is the single registration status control.** Updated after Jen
+   and Martin’s October 2 agreement: remove Paid from registration and the
+   entrants grid; Tentative means unpaid, and clearing it confirms payment.
+   Registration saves derive `paid = not tentative`. The grid derives payment
+   when the current client omits it. Stored fields and explicit historical
+   event payloads remain independent so existing logs replay exactly.
 
 6. **Payment is a flag plus a note.** `Entrant.paid` (bool) and
    `Entrant.payment_note` (text). No amounts, methods, or fee schedule —
