@@ -23,6 +23,10 @@
 <button type="button" class="btn-unpublish-round"
     data-on:click="@post('{% url 'unpublish_round' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {round: {{ selected_round }}}})">Unpublish round {{ selected_round }}</button>
 {% endif %}
+{% if can_edit and can_reset_selected %}
+<button type="button" class="btn-reset-round"
+    data-on:click="if (confirm('Reset round {{ selected_round }}? This deletes all results for this round and regenerates its pairings. Later published rounds must be unpublished or reset first.')) @post('{% url 'unpublish_round' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {round: {{ selected_round }}, reset: true}})">Reset round {{ selected_round }}</button>
+{% endif %}
 </div>
 
 {% if selected_status == 'finished' or selected_status == 'in_progress' %}

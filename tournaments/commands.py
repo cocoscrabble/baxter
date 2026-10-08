@@ -253,6 +253,19 @@ def unpublish_round(tournament, actor, payload):
     )
 
 
+@records_event("round_reset")
+def reset_round(tournament, actor, payload):
+    """Explicitly discard a round's results and boards, retaining its schedule."""
+    from tournaments.generate_pairings import reset_round_pairings
+
+    division = _division(tournament, payload["division"])
+    reset = reset_round_pairings(division, payload["round"])
+    refresh_after_results(division)
+    return EventResult(
+        payload=payload, division=division, result=reset, record=bool(reset)
+    )
+
+
 # ---------------------------------------------------------------------------
 # Fixed pairings (thin adapters; pk args translated to/from player numbers)
 # ---------------------------------------------------------------------------

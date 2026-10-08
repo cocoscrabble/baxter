@@ -470,6 +470,7 @@ class PairingsPresenter:
                 sel["status"] in ("published", "in_progress")
                 and sel["round"] not in self.rounds_with_real_results
             )
+            context["can_reset_selected"] = sel["status"] in ("published", "in_progress", "finished")
         rows = self._rows_for_selected()
         if rows is not None:
             context["round_pairings"] = rows
