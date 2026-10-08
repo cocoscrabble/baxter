@@ -109,6 +109,27 @@ class CompletedRoundResetTests(TestCase):
         event = self.division.tournament.events.get(event_type="round_reset")
         self.assertEqual(event.payload, {"division": self.division.name, "round": 1})
 
+    def test_finished_round_reset_generates_in_the_live_fragment(self):
+        for pairing in self.division.pairings.filter(round=1):
+            ResultSlip.objects.create(
+                division=self.division, round=1, pairing=pairing,
+                winner=pairing.first, loser=pairing.second,
+                winner_score=400, loser_score=350, winner_started=True,
+            )
+        self.rp.update_status()
+        self.assertEqual(self.division.round_pairings_set.get(round=1).status, RoundPairings.FINISHED)
+        response = self.client.post(
+            reverse("unpublish_round", kwargs=self.division.slug_kwargs()),
+            json.dumps({"round": 1, "reset": True}),
+            content_type="application/json", headers={"datastar-request": "true"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.division.result_slips.count(), 0)
+        self.assertEqual(self.division.round_pairings_set.get(round=1).status, RoundPairings.DRAFT)
+        self.assertEqual(self.division.pairings.filter(round=1).count(), 3)
+        body = b"".join(response.streaming_content).decode()
+        self.assertIn("Publish round 1", body)
+
     def test_reset_refuses_to_invalidate_later_published_rounds(self):
         from tournaments.commands import reset_round
         from tournaments.events import division_digest
