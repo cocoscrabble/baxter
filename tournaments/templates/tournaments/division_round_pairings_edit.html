@@ -52,7 +52,10 @@
     </p>
     <p class="empty-state" data-method="custom" hidden>
         Build the schedule yourself, one block at a time — a pairing strategy
-        and how many rounds it runs for. Nothing is generated.
+        and how many rounds it runs for. Then click <strong>Save Schedule and View Pairings</strong>
+        to save your blocks and generate draft pairings on Pair Rounds.
+        Published rounds keep their existing pairings; use <strong>Reset round</strong>
+        on Pair Rounds to discard accidental results and regenerate a round.
     </p>
 </section>
 
@@ -94,6 +97,7 @@ const pageData = {
     saveUrl: "",
     previewUrl: "{{ preview_url }}",
     methodPreviewUrl: "{{ method_preview_url }}",
+    pairRoundsUrl: "{% url 'division_pair_rounds' division.tournament.slug division.slug %}",
 };
 </script>
 <script type="module" src="{% static 'editgrid/js/presence.js' %}"></script>

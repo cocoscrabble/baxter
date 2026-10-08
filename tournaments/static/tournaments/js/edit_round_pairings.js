@@ -127,20 +127,25 @@ function refreshPreview() {
 let saving = false;
 let saveQueued = false;
 
+let savePromise;
 function save() {
-    if (saving) { saveQueued = true; return; }
+    if (saving) { saveQueued = true; return savePromise; }
     saving = true;
-    const payload = { blocks: blocks() };
-    const version = getEditVersion(GRID_ID);
-    if (version !== undefined) payload._version = version;
-    postJson({ url: pageData.saveUrl, csrfToken: pageData.csrfToken, payload, statusEl: saveStatus })
-        .then(res => {
-            saving = false;
-            if (res && res.ok && res.body && typeof res.body.version === "number") {
+    savePromise = (async () => {
+        do {
+            saveQueued = false;
+            const payload = { blocks: blocks() };
+            const version = getEditVersion(GRID_ID);
+            if (version !== undefined) payload._version = version;
+            const res = await postJson({ url: pageData.saveUrl, csrfToken: pageData.csrfToken, payload, statusEl: saveStatus });
+            if (!res || !res.ok) return false;
+            if (res.body && typeof res.body.version === "number") {
                 setEditVersion(GRID_ID, res.body.version);
             }
-            if (saveQueued) { saveQueued = false; save(); }
-        });
+        } while (saveQueued);
+        return true;
+    })().finally(() => { saving = false; });
+    return savePromise;
 }
 
 // Debounced so a flurry of edits (and an edit that auto-updates a second cell)
@@ -209,7 +214,8 @@ function syncMethodControls() {
     const custom = methodSelect.value === "custom";
     // Total rounds is an input to generation; Custom generates nothing.
     roundsControls.hidden = custom;
-    generateBtn.textContent = custom ? "Define blocks manually" : "Generate Pairings Schedule";
+    generateBtn.textContent = custom ? "Save Schedule and View Pairings" : "Generate Pairings Schedule";
+    if (custom) showEditor();
     document.querySelectorAll("[data-method]").forEach(el => {
         el.hidden = el.dataset.method !== methodSelect.value;
     });
@@ -226,16 +232,23 @@ document.getElementById("add-block-btn").addEventListener("click", () => {
         .then(afterChange);
 });
 
-generateBtn.addEventListener("click", () => {
+generateBtn.addEventListener("click", async () => {
     const status = methodStatus;
 
     if (methodSelect.value === "custom") {
-        // Reveal only. Existing blocks are deliberately left alone: a division
-        // with a saved schedule would otherwise lose it to a button press.
-        showEditor();
-        status.textContent = (pageData.blocks || []).length
-            ? "Editing the existing blocks."
-            : "Add a block to start.";
+        clearTimeout(saveTimer);
+        await tablesBuilt;
+        if (!blocks().length) {
+            status.textContent = "Add at least one block first.";
+            return;
+        }
+        generateBtn.disabled = true;
+        try {
+            if (await save()) window.location.assign(pageData.pairRoundsUrl);
+            else status.textContent = "Schedule not saved. Resolve the save error before viewing pairings.";
+        } finally {
+            generateBtn.disabled = false;
+        }
         return;
     }
 
