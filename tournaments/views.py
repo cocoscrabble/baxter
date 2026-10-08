@@ -83,6 +83,7 @@ from .commands import (
     simulate_match_cmd,
     simulate_round_cmd,
     unpublish_round,
+    reset_round,
     update_playoff,
     update_tournament,
 )
@@ -1247,8 +1248,7 @@ class PublishRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
 
 
 class UnpublishRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
-    """Revert a published round with no results to draft so it can be edited and
-    republished, then live-swap the pairings body."""
+    """Unpublish safely, or explicitly reset results after client confirmation."""
 
     def post(self, request, *args, **kwargs):
         division = self.get_division()
@@ -1256,15 +1256,21 @@ class UnpublishRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
         round_number, error = _read_int(data, "round")
         if error:
             return error
-        unpublished = unpublish_round(
-            division.tournament, request.user,
-            {"division": division.name, "round": round_number},
-        )
-        error = None if unpublished else (
-            f"Round {round_number} can't be unpublished — it already has results."
-        )
+        payload = {"division": division.name, "round": round_number}
+        notice = None
+        try:
+            if data.get("reset") in (True, "1", "true"):
+                unpublished = reset_round(division.tournament, request.user, payload)
+                notice = _autogenerate_pairable_rounds(division) if unpublished else None
+            else:
+                unpublished = unpublish_round(division.tournament, request.user, payload)
+            error = None if unpublished else (
+                f"Round {round_number} can't be unpublished. Use Reset round to discard its results."
+            )
+        except ValueError as exc:
+            error = str(exc)
         return _pairings_body_response(
-            request, division, select_round=round_number, error=error
+            request, division, select_round=round_number, error=error, notice=notice
         )
 
 

@@ -83,6 +83,51 @@ class CompletedRoundResetTests(TestCase):
         self.save_results([], version=1)
         self.assertEqual(self.rp.status, RoundPairings.PUBLISHED)
 
+    def test_reset_discards_played_results_and_pairs_new_entrants(self):
+        from tournaments.models import Entrant, Player
+
+        pairing = self.division.pairings.filter(round=1).first()
+        ResultSlip.objects.create(
+            division=self.division, round=1, pairing=pairing,
+            winner=pairing.first, loser=pairing.second,
+            winner_score=400, loser_score=350, winner_started=True,
+        )
+        self.rp.update_status()
+        url = reverse("unpublish_round", kwargs=self.division.slug_kwargs())
+        self.client.post(url, {"round": 1})
+        self.assertEqual(self.division.result_slips.count(), 1)
+        for n in (7, 8):
+            p = Player.objects.create(name=f"New {n}", player_number=str(n), rating=1500)
+            Entrant.objects.create(division=self.division, player=p, number=n,
+                                   rating=1500, rating_source="manual")
+        response = self.client.post(url, {"round": 1, "reset": "1"}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.rp = self.division.round_pairings_set.get(round=1)
+        self.assertEqual(self.rp.status, RoundPairings.DRAFT)
+        self.assertEqual(self.division.result_slips.count(), 0)
+        self.assertEqual(self.division.pairings.filter(round=1).count(), 4)
+        event = self.division.tournament.events.get(event_type="round_reset")
+        self.assertEqual(event.payload, {"division": self.division.name, "round": 1})
+
+    def test_reset_refuses_to_invalidate_later_published_rounds(self):
+        from tournaments.commands import reset_round
+        from tournaments.events import division_digest
+
+        for pairing in self.division.pairings.filter(round=1):
+            ResultSlip.objects.create(
+                division=self.division, round=1, pairing=pairing,
+                winner=pairing.first, loser=pairing.second,
+                winner_score=400, loser_score=350, winner_started=True,
+            )
+        self.rp.update_status()
+        regenerate_pairings(self.division)
+        publish_rounds(self.division, [2])
+        before = division_digest(self.division)
+        with self.assertRaisesMessage(ValueError, "later rounds first"):
+            reset_round(self.division.tournament, self.owner,
+                        {"division": self.division.name, "round": 1})
+        self.assertEqual(division_digest(self.division), before)
+
     def test_status_refresh_does_not_publish_a_draft(self):
         draft = self.division.round_pairings_set.filter(status=RoundPairings.DRAFT).first()
         if draft is None:
@@ -111,4 +156,23 @@ class CompletedRoundResetReplayTests(LoggedTournamentMixin, TestCase):
         recorded = division_digest(division)
         ctx = replay(events_from_tournament(tournament), verify=True)
         self.assertEqual(division_digest(ctx.tournament.divisions.get()), recorded)
+        self.assertEqual(ctx.drift, [])
+
+    def test_reset_with_played_results_replays_exactly(self):
+        from tournaments.commands import reset_round, publish_round
+        from tournaments.events import division_digest
+        from tournaments.replay import events_from_tournament, replay
+
+        tournament, division = self._build_logged_tournament()
+        pairing = division.pairings.filter(round=1).first()
+        response = self._post_json("division_edit_results", division, {"rows": [{
+            "round": 1, "winner": pairing.first_id, "loser": pairing.second_id,
+            "winner_score": 400, "loser_score": 350, "winner_started": True,
+        }]})
+        self.assertEqual(response.status_code, 200)
+        reset_round(tournament, self.owner, {"division": division.name, "round": 1})
+        regenerate_pairings(division)
+        publish_round(tournament, self.owner, {"division": division.name, "round": 1})
+        ctx = replay(events_from_tournament(tournament), verify=True)
+        self.assertEqual(division_digest(ctx.tournament.divisions.get()), division_digest(division))
         self.assertEqual(ctx.drift, [])

@@ -425,6 +425,26 @@ def unpublish_rounds(division, round_numbers=None):
     return to_unpublish
 
 
+def reset_round_pairings(division, round_number):
+    """Reset one published round; later published rounds must be undone first.
+
+    Later drafts depend on these results and are discarded too. Earlier rounds,
+    schedule blocks, and deliberately fixed pairings remain intact.
+    """
+    with transaction.atomic():
+        rounds = division.round_pairings_set.select_for_update()
+        current = rounds.filter(round=round_number).first()
+        if current is None or current.status == RoundPairings.DRAFT:
+            return []
+        if (rounds.filter(round__gt=round_number).exclude(status=RoundPairings.DRAFT).exists()
+                or division.result_slips.filter(round__gt=round_number).exists()):
+            raise ValueError("Unpublish or reset later rounds first, starting with the last round.")
+        division.result_slips.filter(round=round_number).delete()
+        division.pairings.filter(round__gte=round_number).delete()
+        rounds.filter(round__gte=round_number).update(status=RoundPairings.DRAFT)
+        return [round_number]
+
+
 def get_fixed_table(fixed_table_lookup, entrant_id, round_num):
     """Return (table_label, is_all) for an entrant in a round, or None.
 

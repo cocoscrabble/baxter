@@ -61,6 +61,7 @@ EVENT_TYPES = frozenset(
         "rounds_published",
         "round_published",
         "round_unpublished",
+        "round_reset",
         "entrant_withdrawn",
         "entrant_rejoined",
         "game_forfeited",
@@ -682,6 +683,7 @@ def describe_event(event, names=None) -> str:
         "fixed_pairings_removed": lambda: f"Removed fixed pairings in {div}",
         "rounds_published": lambda: f"Published rounds {p.get('rounds', '')} in {div}",
         "round_published": lambda: f"Published round {p.get('round', '')} in {div}",
+        "round_reset": lambda: f"Reset round {p.get('round', '')} and discarded its results in {div}",
         "round_unpublished": lambda: f"Unpublished round {p.get('round', '')} in {div}",
         "entrant_withdrawn": lambda: "{} withdrew from {}{}".format(
             *who("player"), div, resolved()
