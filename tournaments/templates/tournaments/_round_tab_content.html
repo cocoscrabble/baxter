@@ -25,7 +25,7 @@
 {% endif %}
 {% if can_edit and can_reset_selected %}
 <button type="button" class="btn-reset-round"
-    data-on:click="if (confirm('Reset round {{ selected_round }}? This deletes all results for this round and regenerates its pairings. Later published rounds must be unpublished or reset first.')) @post('{% url 'unpublish_round' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {round: {{ selected_round }}, reset: true}})">Reset round {{ selected_round }}</button>
+    data-on:click="if (confirm('Reset round {{ selected_round }}? This deletes all results for this round and regenerates its pairings. Later published rounds must be unpublished or reset first.{% if reset_restarts_division %} The division will no longer have started: ratings are re-pinned and entrant numbers recalculated when you next publish.{% endif %}')) @post('{% url 'unpublish_round' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {round: {{ selected_round }}, reset: true}})">Reset round {{ selected_round }}</button>
 {% endif %}
 </div>
 

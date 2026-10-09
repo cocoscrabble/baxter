@@ -149,6 +149,28 @@ class CompletedRoundResetTests(TestCase):
                         {"division": self.division.name, "round": 1})
         self.assertEqual(division_digest(self.division), before)
 
+    def test_reset_warns_only_when_it_unstarts_the_division(self):
+        for pairing in self.division.pairings.filter(round=1):
+            ResultSlip.objects.create(
+                division=self.division, round=1, pairing=pairing,
+                winner=pairing.first, loser=pairing.second,
+                winner_score=400, loser_score=350, winner_started=True,
+            )
+        self.rp.update_status()
+        regenerate_pairings(self.division)
+        publish_rounds(self.division, [2])
+        flag = lambda r: PairingsPresenter(self.division).select(r).as_context()["reset_restarts_division"]
+        self.assertTrue(flag(1))
+        self.assertFalse(flag(2))
+
+    def test_resetting_a_draft_round_says_there_is_nothing_to_reset(self):
+        response = self.client.post(
+            reverse("unpublish_round", kwargs=self.division.slug_kwargs()),
+            {"round": 2, "reset": "1"}, follow=True,
+        )
+        self.assertContains(response, "nothing to reset")
+        self.assertFalse(self.division.tournament.events.filter(event_type="round_reset").exists())
+
     def test_status_refresh_does_not_publish_a_draft(self):
         draft = self.division.round_pairings_set.filter(status=RoundPairings.DRAFT).first()
         if draft is None:

@@ -82,8 +82,8 @@ from .commands import (
     save_settings,
     simulate_match_cmd,
     simulate_round_cmd,
-    unpublish_round,
     reset_round,
+    unpublish_round,
     update_playoff,
     update_tournament,
 )
@@ -1260,13 +1260,16 @@ class UnpublishRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
         notice = None
         try:
             if data.get("reset") in (True, "1", "true"):
-                unpublished = reset_round(division.tournament, request.user, payload)
-                notice = _autogenerate_pairable_rounds(division) if unpublished else None
+                reset = reset_round(division.tournament, request.user, payload)
+                notice = _autogenerate_pairable_rounds(division) if reset else None
+                error = None if reset else (
+                    f"Round {round_number} has not been published, so there is nothing to reset."
+                )
             else:
                 unpublished = unpublish_round(division.tournament, request.user, payload)
-            error = None if unpublished else (
-                f"Round {round_number} can't be unpublished. Use Reset round to discard its results."
-            )
+                error = None if unpublished else (
+                    f"Round {round_number} can't be unpublished. Use Reset round to discard its results."
+                )
         except ValueError as exc:
             error = str(exc)
         return _pairings_body_response(
