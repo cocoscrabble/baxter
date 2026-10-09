@@ -11,7 +11,7 @@ from .views import (
     DivisionAllResultsView,
     DivisionCreateView,
     DivisionDeleteView,
-    DivisionDetailView,
+    DivisionRootRedirectView,
     DivisionRenameView,
     DivisionRestoreView,
     DivisionScorecardsView,
@@ -100,7 +100,7 @@ urlpatterns = [
     path("<slug:tournament_slug>/activity/export/", TournamentEventLogExportView.as_view(), name="tournament_event_log_export"),
     path("<slug:tournament_slug>/division/create/", DivisionCreateView.as_view(), name="division_create"),
 
-    path(D, DivisionDetailView.as_view(), name="division_detail"),
+    path(D, DivisionRootRedirectView.as_view()),
     path(D + "entrants/", DivisionEntrantsView.as_view(), name="division_entrants"),
     path(D + "entrants/refresh-ratings/", DivisionRefreshRatingsView.as_view(), name="division_refresh_ratings"),
     path(D + "entrants/withdraw/", DivisionWithdrawEntrantView.as_view(), name="division_withdraw_entrant"),

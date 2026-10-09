@@ -720,41 +720,20 @@ class ResultSlipCreateViewTests(TestCase):
 
 
 @tag("slow")
-class DivisionDetailLatestResultsTests(TestCase):
+class DivisionNavTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         setUpTournament(cls)
 
-    def test_shows_only_max_round_results(self):
-        ResultSlip.objects.create(
-            division=self.division,
-            round=1,
-            winner=self.entrant1,
-            winner_score=400,
-            loser=self.entrant2,
-            loser_score=350,
-            winner_started=True,
-        )
-        ResultSlip.objects.create(
-            division=self.division,
-            round=2,
-            winner=self.entrant2,
-            winner_score=420,
-            loser=self.entrant1,
-            loser_score=390,
-            winner_started=False,
-        )
-        response = self.client.get(
-            reverse("division_detail", kwargs=self.division.slug_kwargs())
-        )
-        # Round 2 scores should appear, round 1 scores should not
-        self.assertContains(response, "420")
-        self.assertNotContains(response, "400-350")
+    def test_bare_division_url_redirects_to_entrants(self):
+        entrants = reverse("division_entrants", kwargs=self.division.slug_kwargs())
+        response = self.client.get(entrants.removesuffix("entrants/"))
+        self.assertRedirects(response, entrants)
 
     def test_settings_link_shown_for_editor(self):
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(
-            reverse("division_detail", kwargs=self.division.slug_kwargs())
+            reverse("division_entrants", kwargs=self.division.slug_kwargs())
         )
         self.assertContains(
             response, reverse("division_settings", kwargs=self.division.slug_kwargs())
@@ -762,7 +741,7 @@ class DivisionDetailLatestResultsTests(TestCase):
 
     def test_settings_link_hidden_for_anonymous(self):
         response = self.client.get(
-            reverse("division_detail", kwargs=self.division.slug_kwargs())
+            reverse("division_entrants", kwargs=self.division.slug_kwargs())
         )
         self.assertNotContains(response, "Settings")
 
@@ -1255,9 +1234,9 @@ class DivisionPairingsViewTests(TestCase):
         self.client.get(reverse("division_pair_rounds", kwargs=self.division.slug_kwargs()))
         self.assertEqual(Pairing.objects.filter(division=self.division).count(), 0)
 
-    def test_pairings_link_on_division_detail(self):
+    def test_pairings_link_in_division_nav(self):
         response = self.client.get(
-            reverse("division_detail", kwargs=self.division.slug_kwargs())
+            reverse("division_entrants", kwargs=self.division.slug_kwargs())
         )
         self.assertContains(
             response,
@@ -2209,22 +2188,22 @@ class TestDivisionVisibilityTests(TestCase):
         self.assertContains(response, "Open")
         self.assertContains(response, "Test Div")
 
-    def test_test_division_detail_404_for_non_editor(self):
+    def test_test_division_404_for_non_editor(self):
         response = self.client.get(
-            reverse("division_detail", kwargs=self.test_division.slug_kwargs())
+            reverse("division_entrants", kwargs=self.test_division.slug_kwargs())
         )
         self.assertEqual(response.status_code, 404)
 
-    def test_test_division_detail_works_for_editor(self):
+    def test_test_division_works_for_editor(self):
         self.client.login(username="owner", password="testpass123")
         response = self.client.get(
-            reverse("division_detail", kwargs=self.test_division.slug_kwargs())
+            reverse("division_entrants", kwargs=self.test_division.slug_kwargs())
         )
         self.assertEqual(response.status_code, 200)
 
     def test_regular_division_visible_to_non_editor(self):
         response = self.client.get(
-            reverse("division_detail", kwargs=self.division.slug_kwargs())
+            reverse("division_entrants", kwargs=self.division.slug_kwargs())
         )
         self.assertEqual(response.status_code, 200)
 

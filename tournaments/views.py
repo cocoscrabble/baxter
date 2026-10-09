@@ -755,33 +755,15 @@ class DivisionRenameView(LoginRequiredMixin, CanEditDivisionMixin, View):
         return redirect("tournament_detail", **tournament.slug_kwargs())
 
 
-class DivisionDetailView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
-    model = Division
-    template_name = "tournaments/division_detail.html"
-    context_object_name = "division"
+class DivisionRootRedirectView(VisibleDivisionMixin, View):
+    """The bare division URL — what the division name used to link to, before
+    its overview page (the latest round's results) was retired in favour of the
+    Results tab. Kept so old links land on Entrants; a missing or hidden
+    division still 404s here rather than redirecting first."""
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        division = self.object
-        max_round = division.max_round()
-        context["max_round"] = max_round
-        if max_round:
-            slips = list(
-                division.result_slips
-                .filter(round=max_round)
-                .select_related("winner__player", "loser__player")
-                .order_by("-created_at")
-            )
-            labels = division_labels(division)
-            label_entrants(
-                labels,
-                (s.winner for s in slips),
-                (s.loser for s in slips),
-            )
-            context["latest_results"] = slips
-        else:
-            context["latest_results"] = division.result_slips.none()
-        return context
+    def get(self, request, *args, **kwargs):
+        self.get_object()
+        return redirect("division_entrants", **self.division.slug_kwargs())
 
 
 class DivisionAllResultsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
