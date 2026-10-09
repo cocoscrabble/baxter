@@ -2,6 +2,7 @@
 
 import json
 
+from django.db import models
 from django.test import TestCase
 from django.urls import reverse
 
@@ -162,6 +163,30 @@ class CompletedRoundResetTests(TestCase):
         flag = lambda r: PairingsPresenter(self.division).select(r).as_context()["reset_restarts_division"]
         self.assertTrue(flag(1))
         self.assertFalse(flag(2))
+
+    def test_resetting_round_one_reseeds_late_entrants(self):
+        from tournaments.commands import reseed_entrants
+        from tournaments.models import Entrant, Player
+
+        p = Player.objects.create(name="Late", player_number="900", rating=2100)
+        late = Entrant.objects.create(division=self.division, player=p, number=7,
+                                      rating=2100, rating_source="manual")
+        reseed_entrants(self.division.tournament, self.owner, {"division": self.division.name})
+        late.refresh_from_db()
+        self.assertEqual(late.number, 7)  # under way: appended
+
+        url = reverse("unpublish_round", kwargs=self.division.slug_kwargs())
+        self.client.post(url, {"round": 1, "reset": "1"}, follow=True)
+        late.refresh_from_db()
+        self.assertEqual(late.number, 1)
+        self.assertTrue(self.division.tournament.events.filter(event_type="entrants_reseeded").exists())
+
+        # The drafts were drawn off the new seeding, so publish goes straight through.
+        self.client.post(reverse("publish_round", kwargs=self.division.slug_kwargs()),
+                         {"round": 1}, follow=True)
+        self.assertEqual(self.division.round_pairings_set.get(round=1).status, RoundPairings.PUBLISHED)
+        self.assertTrue(self.division.pairings.filter(round=1).filter(
+            models.Q(first=late) | models.Q(second=late)).exists())
 
     def test_resetting_a_draft_round_says_there_is_nothing_to_reset(self):
         response = self.client.post(
