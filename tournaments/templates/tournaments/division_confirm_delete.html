@@ -6,7 +6,7 @@
 <span class="nav-sep">/</span>
 <a href="{% url 'tournament_detail' division.tournament.slug %}">{{ division.tournament.name }}</a>
 <span class="nav-sep">/</span>
-<a href="{% url 'division_detail' division.tournament.slug division.slug %}">{{ division.name }}</a>
+<a href="{% url 'division_entrants' division.tournament.slug division.slug %}">{{ division.name }}</a>
 {% endblock %}
 
 {% block content %}
