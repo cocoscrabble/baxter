@@ -1261,6 +1261,11 @@ class UnpublishRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
         try:
             if data.get("reset") in (True, "1", "true"):
                 reset = reset_round(division.tournament, request.user, payload)
+                if reset:
+                    # Resetting the first started round un-starts the division:
+                    # catch its seeds up now, so late entrants take their place
+                    # in the seeding and the new drafts are drawn off it.
+                    refresh_before_start(division, request.user)
                 notice = _autogenerate_pairable_rounds(division) if reset else None
                 error = None if reset else (
                     f"Round {round_number} has not been published, so there is nothing to reset."
