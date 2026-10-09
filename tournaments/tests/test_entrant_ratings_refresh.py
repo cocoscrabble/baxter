@@ -472,3 +472,56 @@ class LiveBeforeStartTests(RefreshTestCase):
             division_digest(ctx.tournament.divisions.get()),
             division_digest(self.division),
         )
+
+
+class ReseedButtonTests(LiveBeforeStartTests):
+    """The director's recovery lever: renumber by rating on demand, before start.
+
+    Every path that changes the order reseeds by itself; this is for when one
+    turns out not to, so the director is not stuck with the wrong numbers.
+    """
+
+    test_a_division_that_has_not_started_follows_the_player_table = None
+    test_a_replay_reproduces_the_live_refresh = None
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.owner)
+
+    def reseed_url(self):
+        return reverse("division_reseed_entrants", kwargs=self.division.slug_kwargs())
+
+    def scramble(self):
+        # Bypasses the commands, as the bug this guards against would.
+        entrants = self.division.entrants
+        entrants.filter(player__player_number="0233").update(number=99)
+        entrants.filter(player__player_number="0234").update(number=2)
+        entrants.filter(player__player_number="0233").update(number=1)
+
+    def reseed_events(self):
+        return self.tournament.events.filter(event_type="entrants_reseeded").count()
+
+    def test_reseeds_a_scrambled_field(self):
+        self.scramble()
+        before = self.reseed_events()
+        response = self.client.post(self.reseed_url(), follow=True)
+        self.assertContains(response, "Reseeded by rating")
+        self.assertEqual(self.numbers(), {"0234": 1, "0233": 2})
+        self.assertEqual(self.reseed_events(), before + 1)
+
+    def test_already_in_order_records_nothing(self):
+        before = self.reseed_events()
+        response = self.client.post(self.reseed_url(), follow=True)
+        self.assertContains(response, "already numbered in rating order")
+        self.assertEqual(self.reseed_events(), before)
+
+    def test_refused_once_under_way(self):
+        self.assertContains(self.client.get(self.entrants_url()), "Reseed by rating")
+        self.client.get(reverse("division_pair_rounds", kwargs=self.division.slug_kwargs()))
+        self.client.post(self.publish_url(), {"round": 1})
+        self.assertNotContains(self.client.get(self.entrants_url()), "Reseed by rating")
+
+        self.scramble()
+        response = self.client.post(self.reseed_url(), follow=True)
+        self.assertContains(response, "Seeding is fixed")
+        self.assertEqual(self.numbers(), {"0233": 1, "0234": 2})

@@ -898,6 +898,36 @@ class DivisionRefreshRatingsView(LoginRequiredMixin, CanEditDivisionMixin, View)
         return back
 
 
+class DivisionReseedEntrantsView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    """Renumber the field by pinned rating, on the director's say-so.
+
+    Every path that changes the order already reseeds, so this is a recovery
+    lever rather than a workflow step: if some path ever leaves the numbers out
+    of rating order, the director can put them right on the spot. Only before
+    the division is under way — after that the numbering is what the division
+    started as, and ``reseed_entrants`` would record nothing anyway.
+    """
+
+    def post(self, request, *args, **kwargs):
+        division = self.get_division()
+        back = redirect("division_entrants", **division.slug_kwargs())
+        if division.under_way():
+            messages.error(
+                request,
+                "Seeding is fixed once a round has been published. Reset the "
+                "published rounds first to reseed.",
+            )
+            return back
+        changed = reseed_entrants(
+            division.tournament, request.user, {"division": division.name}
+        )
+        if changed:
+            messages.success(request, f"Reseeded by rating; {len(changed)} entrant number(s) changed.")
+        else:
+            messages.info(request, "Entrants are already numbered in rating order.")
+        return back
+
+
 class _EntrantAbsenceView(LoginRequiredMixin, CanEditDivisionMixin, View):
     """Shared plumbing for the two withdrawal controls on the entrants page."""
 
