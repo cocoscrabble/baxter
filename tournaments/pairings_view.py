@@ -471,6 +471,13 @@ class PairingsPresenter:
                 and sel["round"] not in self.rounds_with_real_results
             )
             context["can_reset_selected"] = sel["status"] in ("published", "in_progress", "finished")
+            # Resetting the earliest started round un-starts the division, so
+            # the next publish re-pins ratings and renumbers entrants. Intended
+            # (a reset is a clean slate), but the director should know.
+            context["reset_restarts_division"] = not any(
+                r < sel["round"] and status != RoundPairings.DRAFT
+                for r, status in self.db_status_map.items()
+            )
         rows = self._rows_for_selected()
         if rows is not None:
             context["round_pairings"] = rows
