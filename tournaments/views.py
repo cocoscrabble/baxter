@@ -1750,7 +1750,7 @@ class LiveResultsView(_LiveDisplayMixin, DetailView):
 
     live_title = "Recent results"
     live_content_template = "tournaments/_live_results.html"
-    live_col_ems = 40
+    live_col_ems = 32
 
     def get_live_context(self, division):
         return {

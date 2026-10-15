@@ -107,6 +107,7 @@ class LiveDisplayTests(TestCase):
         self._slip(1, self.entrant1, bye, now + timedelta(minutes=1))
         response = self.client.get(self._url("live_results"))
         self.assertEqual(list(response.context["live_rows"]), [newer, older])
+        self.assertNotContains(response, "<th>Started</th>")
 
     def test_standings_ranks_run_on_across_columns(self):
         response = self.client.get(self._url("live_standings"))
