@@ -1133,11 +1133,12 @@ class DivisionStandingsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         division = self.object
-        max_round = division.max_round()
-        current_round = self.kwargs.get("round", max_round)
+        # Not max_round: byes printed for future rounds are already recorded.
+        latest = division.current_round()
+        current_round = self.kwargs.get("round", latest)
         context["standings"] = division_standings(division, current_round)
         context["round"] = current_round
-        context["rounds"] = range(1, max_round + 1)
+        context["rounds"] = range(1, latest + 1)
         return context
 
     def get(self, request, *args, **kwargs):
@@ -1160,7 +1161,7 @@ class DivisionStandingsTableView(VisibleDivisionMixin, DetailView):
     def get(self, request, *args, **kwargs):
         self.object = self.get_object()
         division = self.object
-        current_round = self.kwargs.get("round", division.max_round())
+        current_round = self.kwargs.get("round", division.current_round())
         html = render_to_string(
             "tournaments/_standings_table.html",
             {
@@ -1747,7 +1748,7 @@ class LiveStandingsView(_LiveDisplayMixin, DetailView):
     live_col_ems = 26
 
     def get_live_sections(self, division):
-        round = division.max_round()
+        round = division.current_round()
         if round == 0:
             return []  # Before any result: nothing to rank, not a 0-0 seeding list.
         return [("", division_standings(division, round))]
