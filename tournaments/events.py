@@ -427,19 +427,29 @@ def hashed_session(request) -> str:
 def export_jsonl(tournament) -> str:
     """Serialize a tournament's log to JSONL: a header line (schema versions,
     recorded-at, git rev if available) followed by one line per event in seq
-    order. The header lets a replay report which code version produced it."""
+    order. The header lets a replay report which code version produced it.
+
+    The header also carries ``players``: every player the log enters, as the
+    player table has them now. Entrant events name players by number only, so
+    a replay into a database without them (a laptop investigating a production
+    export) creates them from here rather than stopping at the first entrant.
+    """
+    import os
     import subprocess
 
-    try:
-        git_rev = (
-            subprocess.check_output(
-                ["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL
+    # Dokku sets GIT_REV; the deployed container has no .git to ask.
+    git_rev = os.environ.get("GIT_REV", "")
+    if not git_rev:
+        try:
+            git_rev = (
+                subprocess.check_output(
+                    ["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL
+                )
+                .decode()
+                .strip()
             )
-            .decode()
-            .strip()
-        )
-    except Exception:
-        git_rev = ""
+        except Exception:
+            git_rev = ""
     lines = [
         json.dumps(
             {
@@ -450,6 +460,7 @@ def export_jsonl(tournament) -> str:
                 "schema_version": PAYLOAD_VERSION,
                 "git_rev": git_rev,
                 "exported_at": _now_iso(),
+                "players": _logged_players(tournament),
             }
         )
     ]
@@ -470,6 +481,31 @@ def export_jsonl(tournament) -> str:
             )
         )
     return "\n".join(lines) + "\n"
+
+
+def _logged_players(tournament) -> list[dict]:
+    """The players a tournament's log enters, keyed by number, as they stand."""
+    from tournaments.models import Entrant, Player
+
+    numbers = {
+        e.payload.get("player")
+        for e in tournament.events.filter(event_type="entrant_added")
+    }
+    numbers |= set(
+        Entrant.all_objects.filter(division__tournament=tournament)
+        .values_list("player__player_number", flat=True)
+    )
+    return [
+        {
+            "player_number": p.player_number,
+            "name": p.name,
+            "rating": p.rating,
+            "wespa_rating": p.wespa_rating,
+            "is_provisional": p.is_provisional,
+        }
+        for p in Player.objects.filter(player_number__in=numbers, is_bye=False)
+        .order_by("player_number")
+    ]
 
 
 def _now_iso() -> str:

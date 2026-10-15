@@ -170,13 +170,17 @@ SCHEMA_UPGRADES: dict = {
 
 
 class ReplayContext:
-    def __init__(self):
+    def __init__(self, players=None):
         self.tournament = None
+        # The export header's players, by number: created on first entry when
+        # this database does not have them (see ``events.export_jsonl``).
+        self._players = {p["player_number"]: p for p in players or ()}
         self._actors = {}
         # Engine drift: recorded publishes today's engine would pair differently
         # (``generate_pairings.install_published``). Informational — the
         # recorded board is what replays.
         self.drift = []
+        self.applied = 0
 
     def actor(self, username):
         if not username:
@@ -184,6 +188,22 @@ class ReplayContext:
         if username not in self._actors:
             self._actors[username], _ = User.objects.get_or_create(username=username)
         return self._actors[username]
+
+    def ensure_player(self, number):
+        """Create a player the log enters but this database lacks.
+
+        Only ever *creates*: a player already here is used as it is, so
+        replaying into the database the log came from changes nothing.
+        """
+        from tournaments.models import Player, canonical_player_number
+
+        if not number:
+            return
+        number = canonical_player_number(str(number))
+        spec = self._players.get(number)
+        if spec is None or Player.objects.filter(player_number=number).exists():
+            return
+        Player.objects.create(**spec)
 
 
 def parse_jsonl(text):
@@ -370,6 +390,12 @@ def apply_event(ctx, event):
     if payload.get("division"):
         division = ctx.tournament.divisions.filter(name=payload["division"]).first()
 
+    # An added entrant names its player by number alone; one this database
+    # lacks comes from the export header. (Grid rows carry the name and rating
+    # themselves, and ``grids.resolve_player`` rebuilds from those.)
+    if event_type == "entrant_added":
+        ctx.ensure_player(payload.get("player"))
+
     if event_type in NEEDS_REGEN and division is not None and "pairings" not in payload:
         regenerate_pairings(division)
 
@@ -385,7 +411,7 @@ def apply_event(ctx, event):
     command(ctx.tournament, actor, payload, actor_session=event.get("actor_session", ""))
 
 
-def replay(events, *, verify=False, upto=None):
+def replay(events, *, verify=False, upto=None, players=None):
     """Apply ``events`` (dicts in seq order) into the current DB.
 
     ``upto`` stops after that seq. ``verify`` compares each event's recorded
@@ -393,10 +419,12 @@ def replay(events, *, verify=False, upto=None):
     mismatch. Returns the ReplayContext (with the reconstructed tournament), whose
     ``drift`` lists the recorded publishes today's engine would have paired
     differently — reported, not failed: what was published is what replays.
+    ``players`` is an export header's player list (``events.export_jsonl``).
+    ``applied`` counts the events actually replayed.
     """
     from tournaments.generate_pairings import ENGINE_DRIFT
 
-    ctx = ReplayContext()
+    ctx = ReplayContext(players)
     token = ENGINE_DRIFT.set(ctx.drift)
     try:
         _replay_events(ctx, events, verify=verify, upto=upto)
@@ -409,7 +437,13 @@ def _replay_events(ctx, events, *, verify, upto):
     for event in events:
         if upto is not None and event.get("seq", 0) > upto:
             break
-        apply_event(ctx, event)
+        try:
+            apply_event(ctx, event)
+        except Exception as exc:
+            # Keep the exception's type (callers match on it) but say where.
+            exc.add_note(f"at seq {event.get('seq')} ({event['event_type']})")
+            raise
+        ctx.applied += 1
         if verify and event.get("digest") and event.get("division") and ctx.tournament:
             division = ctx.tournament.divisions.filter(name=event["division"]).first()
             if division is None:
