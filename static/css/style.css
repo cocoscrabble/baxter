@@ -148,9 +148,22 @@ h3 { font-size: 1.02rem; margin: var(--space-md) 0 var(--space-sm); }
 }
 
 /* ── Live displays (a screen at the venue) ─────────────────── */
-/* Read from across a room, so the type scales with the screen rather than
-   sitting at laptop size, and nothing reacts to a pointer. */
+/* Every row is on screen at once, at the largest type that allows it. The page
+   is exactly one screen tall; <main> is a size container, so `cqh`/`cqw` below
+   are the space left under the header. #live-content carries the row counts
+   (_live_content.html), and the type is the smaller of what the height and the
+   width allow.
+
+   The em figures are a model of a row, and views.py (LIVE_ROW_EMS,
+   LIVE_OVERHEAD_EMS, LIVE_COLUMN_GAP) uses the same model to choose the
+   landscape column count — change them together. A row is 1.45 line-height +
+   2 × 0.3em padding ≈ 2.1em; the subtitle, header row and "Updated" line
+   ≈ 6.5em. Cells don't wrap, so a row stays one line. */
 .live-body {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     font-size: clamp(16px, 1.5vw, 34px);
 }
 
@@ -159,6 +172,12 @@ h3 { font-size: 1.02rem; margin: var(--space-md) 0 var(--space-sm); }
     align-items: center;
     gap: var(--space-md);
     padding: var(--space-md) var(--pad-inline) 0;
+}
+
+@media (orientation: portrait) {
+    .live-header {
+        font-size: clamp(16px, 2.5vw, 34px);
+    }
 }
 
 .live-logo {
@@ -171,40 +190,85 @@ h3 { font-size: 1.02rem; margin: var(--space-md) 0 var(--space-sm); }
     font-size: 1.8em;
 }
 
-.live-subtitle {
-    margin: 0 0 var(--space-sm);
-    font-size: 1.2em;
-}
-
 .live-page {
-    padding: var(--space-md) var(--pad-inline) var(--space-lg);
+    flex: 1;
+    min-height: 0;
+    container-type: size;
+    padding: var(--space-md) var(--pad-inline);
 }
 
-.live-page table {
+/* Portrait: one table, as tall as the screen. */
+#live-content {
+    font-size: min(
+        calc(100cqh / (var(--live-rows, 10) * 2.1 + 6.5)),
+        calc(100cqw / var(--live-col-ems, 30))
+    );
+}
+
+.live-grid {
+    display: none;
+}
+
+/* Landscape: the columns side by side, each as tall as the screen. */
+@media (orientation: landscape) {
+    #live-content {
+        font-size: min(
+            calc(100cqh / (var(--live-col-rows, 10) * 2.1 + 6.5)),
+            calc((100cqw - (var(--live-cols, 1) - 1) * 2cqw)
+                 / var(--live-cols, 1) / var(--live-col-ems, 30))
+        );
+    }
+
+    .live-single {
+        display: none;
+    }
+
+    .live-grid {
+        display: grid;
+        grid-template-columns: repeat(var(--live-cols, 1), minmax(0, 1fr));
+        column-gap: 2cqw;
+        align-items: start;
+    }
+}
+
+.live-subtitle {
+    margin: 0 0 0.3em;
+    font-size: 1.2em;
+    line-height: 1.45;
+}
+
+.live-table {
+    margin: 0;
     background: var(--surface-raised);
 }
 
-.live-page th,
-.live-page td {
+.live-table th,
+.live-table td {
     padding: 0.3em 0.6em;
+    line-height: 1.45;
+    white-space: nowrap;
 }
 
-.live-page tbody tr:hover {
+/* Outranks `.standings-table td.standings-player`, which lets names wrap. */
+.live-table.standings-table td.standings-player {
+    white-space: nowrap;
+}
+
+.live-table tbody tr:hover {
     background-color: transparent;
 }
 
-.live-page tbody tr:nth-child(even) {
+.live-table tbody tr:nth-child(even) {
     background-color: rgba(0, 0, 0, 0.03);
 }
 
 .live-number {
     color: var(--color-muted);
     font-size: 0.8em;
-    white-space: nowrap;
 }
 
 .live-updated {
-    margin: var(--space-sm) 0 0;
+    margin: 0.3em 0 0;
     font-size: 0.75em;
     color: var(--color-muted);
 }

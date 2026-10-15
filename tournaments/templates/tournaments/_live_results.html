@@ -1,4 +1,3 @@
-{% if result_slips %}
 <table class="live-table">
     <thead>
         <tr>
@@ -9,7 +8,7 @@
         </tr>
     </thead>
     <tbody>
-        {% for slip in result_slips %}
+        {% for slip in rows %}
         <tr>
             <td class="num">{{ slip.round }}</td>
             <td>{{ slip.winner.display_name }}</td>
@@ -19,6 +18,3 @@
         {% endfor %}
     </tbody>
 </table>
-{% else %}
-{% include "tournaments/_empty_state.html" with message="No results yet." %}
-{% endif %}

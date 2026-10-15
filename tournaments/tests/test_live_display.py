@@ -3,13 +3,31 @@ recent results for a screen at the venue."""
 
 from datetime import timedelta
 
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from tournaments.models import Entrant, Pairing, Player, ResultSlip, RoundPairings
 
+from tournaments.views import live_columns, split_columns
+
 from .test_views import setUpTournament
+
+
+class LiveLayoutTests(SimpleTestCase):
+    def test_small_field_stays_in_one_column(self):
+        self.assertEqual(live_columns(8, 26), 1)
+
+    def test_larger_field_spreads_across_columns(self):
+        self.assertGreater(live_columns(80, 26), 1)
+        self.assertLessEqual(live_columns(500, 26), 4)
+
+    def test_wider_tables_get_fewer_columns(self):
+        self.assertLessEqual(live_columns(80, 38), live_columns(80, 26))
+
+    def test_split_reads_down_then_across(self):
+        self.assertEqual(split_columns(list(range(7)), 3), [[0, 1, 2], [3, 4, 5], [6]])
+        self.assertEqual(split_columns([], 2), [])
 
 
 class LiveDisplayTests(TestCase):
@@ -69,7 +87,7 @@ class LiveDisplayTests(TestCase):
         )
         response = self.client.get(self._url("live_pairings"))
         self.assertEqual(response.context["round"], 2)
-        firsts = [e.pairing.first for e in response.context["pairings"]]
+        firsts = [e.pairing.first for e in response.context["live_rows"]]
         self.assertEqual(firsts, [self.entrant1])
 
     def test_results_newest_first_without_byes(self):
@@ -80,7 +98,13 @@ class LiveDisplayTests(TestCase):
         bye = self.division.bye_entrant()
         self._slip(1, self.entrant1, bye, now + timedelta(minutes=1))
         response = self.client.get(self._url("live_results"))
-        self.assertEqual(list(response.context["result_slips"]), [newer, older])
+        self.assertEqual(list(response.context["live_rows"]), [newer, older])
+
+    def test_standings_ranks_run_on_across_columns(self):
+        response = self.client.get(self._url("live_standings"))
+        ranks = [p.rank for column in response.context["live_columns"] for p in column]
+        self.assertEqual(ranks, list(range(1, len(ranks) + 1)))
+        self.assertContains(response, "--live-rows: 4;")
 
     def test_editor_sees_no_editor_columns(self):
         self.client.login(username="owner", password="testpass123")

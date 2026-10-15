@@ -1,5 +1,3 @@
-{% if pairings %}
-<h2 class="live-subtitle">Round {{ round }}</h2>
 <table class="live-table">
     <thead>
         <tr>
@@ -10,7 +8,7 @@
         </tr>
     </thead>
     <tbody>
-        {% for entry in pairings %}
+        {% for entry in rows %}
         <tr>
             <td class="num">{{ entry.pairing.table_label|default:entry.pairing.table }}</td>
             <td>{{ entry.pairing.first.display_name }} <span class="live-number">(#{{ entry.pairing.first.number }})</span></td>
@@ -20,6 +18,3 @@
         {% endfor %}
     </tbody>
 </table>
-{% else %}
-{% include "tournaments/_empty_state.html" with message="No pairings published yet." %}
-{% endif %}

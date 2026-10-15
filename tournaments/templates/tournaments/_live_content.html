@@ -1,4 +1,17 @@
-<div id="live-content">
-{% include live_content_template %}
+{# The layout counts ride on the fragment so each poll resizes the type for #}
+{# however many rows it brought; style.css turns them into a font size. #}
+{# The rows render twice: one table for a portrait screen, and the columns #}
+{# for a landscape one. CSS shows whichever fits the screen. Stacking the #}
+{# columns instead would size each one's cells separately, so they wouldn't line up. #}
+<div id="live-content" style="--live-rows: {{ live_layout.rows }}; --live-cols: {{ live_layout.cols }}; --live-col-rows: {{ live_layout.col_rows }}; --live-col-ems: {{ live_layout.col_ems }};">
+{% if live_rows %}
+{% if live_subtitle %}<h2 class="live-subtitle">{{ live_subtitle }}</h2>{% endif %}
+<div class="live-single">{% include live_content_template with rows=live_rows %}</div>
+<div class="live-grid">
+{% for column in live_columns %}{% include live_content_template with rows=column %}{% endfor %}
+</div>
+{% else %}
+{% include "tournaments/_empty_state.html" with message=live_empty_message %}
+{% endif %}
 <p class="live-updated">Updated {{ refreshed_at|time:"g:i:s A" }}</p>
 </div>
