@@ -350,6 +350,11 @@ colliding-name fuzzer are all in. Fifteen fuzz seeds pass, and the whole chain
 `0036`–`0038` was run on Postgres against a database whose digests had been
 walked back to v1 first.
 
+The backfill migration had to stay the last migration, so it was renumbered
+after every later schema change (it ended as `0051`). Once production had run
+it, it was retired (2026-10-15): a new database writes v2 digests from the
+start, and `manage.py backfill_event_digests` remains for an old copy.
+
 Four deliberate departures:
 
 - **`division_state` is one function with a `version` argument, not a frozen

@@ -138,7 +138,7 @@ class DigestBackfillTests(TestCase):
         self.assertIsNone(schema_mismatch())
 
     def test_the_schema_guard_names_a_missing_column(self):
-        """What the migration checks before it replays anything.
+        """What the backfill checks before it replays anything.
 
         An earlier draft of the backfill ran as migration 0038, and adding the
         entrant fields after it made every replay die on a missing column —

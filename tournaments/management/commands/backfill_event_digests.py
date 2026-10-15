@@ -1,9 +1,10 @@
 """Rewrite stored event digests from the v1 (name-keyed) form to v2.
 
-Normally migration 0041 does this. This command exists for the case that
-migration refuses: it replays through the *live* models, so it can only run once
-every migration has been applied, and a later schema migration inserted after it
-would leave it unable to. Apply the migrations, then run this.
+A migration used to do this, renumbered after every schema change to stay last
+(it replays through the *live* models, so it can only run once every migration
+has been applied). Once production had run it, it was retired (2026-10-15): a
+new database writes v2 digests from the start, so only an old database copy
+that never ran it still needs this. Apply the migrations, then run this.
 
 Safe to re-run: a tournament whose digests are already v2 verifies under v1,
 fails to match, and is reported as skipped rather than rewritten twice.
