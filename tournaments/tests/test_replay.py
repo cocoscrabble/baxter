@@ -920,3 +920,100 @@ class RecordedPublishTests(LoggedTournamentMixin, TestCase):
         self.assertEqual(len(texts), division.pairings.filter(round=1).count())
         self.assertTrue(all(text.startswith("R1  T") for text in texts), texts)
         self.assertTrue(any("Alice" in text for text in texts), texts)
+
+
+@tag("slow")
+class PortableExportTests(LoggedTournamentMixin, TestCase):
+    """An export replays somewhere other than the database it came from — the
+    way a production log is investigated on a laptop."""
+
+    def _late_entrant(self, tournament, division):
+        from tournaments.commands import add_entrant
+
+        late = Player.objects.create(name="Eve", player_number="0005", rating=1200)
+        add_entrant(tournament, self.owner, {"division": division.name, "player": "0005"})
+        return late
+
+    def _export(self, tournament):
+        from tournaments.events import export_jsonl
+        from tournaments.replay import parse_jsonl
+
+        return parse_jsonl(export_jsonl(tournament))
+
+    def test_an_export_replays_into_a_database_without_its_players(self):
+        tournament, division = self._build_logged_tournament()
+        self._late_entrant(tournament, division)
+        recorded = division_digest(division)
+        header, events = self._export(tournament)
+
+        tournament.delete()
+        Player.objects.exclude(is_bye=True).delete()
+
+        ctx = replay(events, verify=True, players=header["players"])
+        self.assertEqual(division_digest(ctx.tournament.divisions.get()), recorded)
+        self.assertEqual(Player.objects.get(player_number="0005").name, "Eve")
+
+    def test_an_entrant_keeps_the_rating_it_was_entered_with(self):
+        # Entered at 1200; the player table has moved on by the time of replay.
+        tournament, division = self._build_logged_tournament()
+        late = self._late_entrant(tournament, division)
+        late.rating = 1900
+        late.save()
+        ctx = replay(events_from_tournament(tournament), verify=True)
+        entrant = ctx.tournament.divisions.get().entrants.get(player=late)
+        self.assertEqual(entrant.rating, 1200)
+
+    def test_the_header_names_the_deployed_revision(self):
+        from unittest import mock
+
+        tournament, _ = self._build_logged_tournament()
+        with mock.patch.dict("os.environ", {"GIT_REV": "abc123"}):
+            header, _ = self._export(tournament)
+        self.assertEqual(header["git_rev"], "abc123")
+
+
+@tag("slow")
+class ReplayCommandTests(LoggedTournamentMixin, TestCase):
+    def _write(self, tournament, drop_players=False):
+        import tempfile
+
+        from tournaments.events import export_jsonl
+
+        text = export_jsonl(tournament)
+        if drop_players:
+            lines = text.splitlines()
+            header = json.loads(lines[0])
+            header["players"] = []
+            text = "\n".join([json.dumps(header), *lines[1:]]) + "\n"
+        f = tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False)
+        f.write(text)
+        f.close()
+        self.addCleanup(lambda: __import__("os").unlink(f.name))
+        return f.name
+
+    def test_upto_reports_the_events_it_replayed(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        tournament, _ = self._build_logged_tournament()
+        out = StringIO()
+        call_command("replay_tournament", self._write(tournament), "--upto", "2", stdout=out)
+        self.assertIn("Replayed 2 event(s)", out.getvalue())
+
+    def test_a_failed_replay_leaves_nothing_behind_and_says_where(self):
+        from django.core.management import CommandError, call_command
+
+        from tournaments.commands import add_entrant
+
+        tournament, division = self._build_logged_tournament()
+        Player.objects.create(name="Eve", player_number="0005", rating=1200)
+        add_entrant(tournament, self.owner, {"division": division.name, "player": "0005"})
+        path = self._write(tournament, drop_players=True)
+        tournament.delete()
+        Player.objects.exclude(is_bye=True).delete()
+        before = Tournament.objects.count()
+
+        with self.assertRaisesRegex(CommandError, r"No player with number .* at seq \d+"):
+            call_command("replay_tournament", path)
+        self.assertEqual(Tournament.objects.count(), before)

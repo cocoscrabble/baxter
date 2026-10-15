@@ -922,8 +922,16 @@ def add_entrant(tournament, actor, payload):
         rating_source=payload.get("rating_source"),
         **fields,
     )
+    # The pinned rating is recorded for the same reason as the number: it is in
+    # the digest, and the player table a replay reads may since have moved (or,
+    # in a fresh database, hold a placeholder).
     return EventResult(
-        payload={**payload, "number": entrant.number},
+        payload={
+            **payload,
+            "number": entrant.number,
+            "rating": entrant.rating,
+            "rating_source": entrant.rating_source,
+        },
         division=division,
         result=entrant,
     )

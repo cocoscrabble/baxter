@@ -5,6 +5,7 @@
 """
 
 from django.core.management.base import BaseCommand, CommandError
+from django.db import transaction
 
 from tournaments.models import Tournament
 from tournaments.replay import (
@@ -39,14 +40,26 @@ class Command(BaseCommand):
             except Tournament.DoesNotExist:
                 raise CommandError(f"No tournament with slug {options['source']!r}")
             events = events_from_tournament(tournament)
+            players = None
         else:
             with open(options["source"]) as fh:
-                _header, events = parse_jsonl(fh.read())
+                header, events = parse_jsonl(fh.read())
+            players = header.get("players")
 
+        # All or nothing: a replay that stops partway would otherwise leave a
+        # half-built tournament behind, and the next attempt a second one.
         try:
-            ctx = replay(events, verify=options["verify"], upto=options["upto"])
+            with transaction.atomic():
+                ctx = replay(
+                    events, verify=options["verify"], upto=options["upto"],
+                    players=players,
+                )
         except ReplayError as exc:
-            raise CommandError(str(exc))
+            raise CommandError(_with_notes(exc))
+        except Exception as exc:
+            # A command refusing an event (a player missing, a name taken) is a
+            # replay failure too; report it with the seq it stopped at.
+            raise CommandError(f"{type(exc).__name__}: {_with_notes(exc)}") from exc
 
         # Drift is not a failure: the published boards replayed as recorded.
         # It says today's engine would have printed something else — expected
@@ -61,8 +74,12 @@ class Command(BaseCommand):
         suffix = " (digests verified)" if options["verify"] else ""
         self.stdout.write(
             self.style.SUCCESS(
-                f"Replayed {len(events)} event(s) into “{target}”{suffix}"
+                f"Replayed {ctx.applied} event(s) into “{target}”{suffix}"
                 if target
-                else f"Replayed {len(events)} event(s)"
+                else f"Replayed {ctx.applied} event(s)"
             )
         )
+
+
+def _with_notes(exc):
+    return " ".join([str(exc), *getattr(exc, "__notes__", ())])
