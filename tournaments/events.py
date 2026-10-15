@@ -147,6 +147,32 @@ def as_derived(func):
 PAYLOAD_VERSION = 3
 
 
+@functools.cache
+def code_revision() -> str:
+    """The commit this process is running, or "" if it cannot tell.
+
+    The deploy says: ``GIT_REV`` is the app's contract with whatever starts it
+    (Dokku sets it on every git-push deploy). The image has no ``.git``, so
+    nothing inside it can work the revision out. Failing that, ask git, which
+    serves a dev checkout — where, under jj, HEAD is the working copy's parent,
+    so uncommitted edits go unrecorded. Read once per process.
+    """
+    import os
+    import subprocess
+
+    rev = os.environ.get("GIT_REV", "")
+    if rev:
+        return rev
+    try:
+        return (
+            subprocess.check_output(["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL)
+            .decode()
+            .strip()
+        )
+    except Exception:
+        return ""
+
+
 def record_event(
     tournament,
     event_type,
@@ -189,6 +215,7 @@ def record_event(
             actor_session=actor_session,
             division=division,
             digest=digest,
+            code_rev=code_revision(),
         )
 
 
@@ -434,22 +461,6 @@ def export_jsonl(tournament) -> str:
     a replay into a database without them (a laptop investigating a production
     export) creates them from here rather than stopping at the first entrant.
     """
-    import os
-    import subprocess
-
-    # Dokku sets GIT_REV; the deployed container has no .git to ask.
-    git_rev = os.environ.get("GIT_REV", "")
-    if not git_rev:
-        try:
-            git_rev = (
-                subprocess.check_output(
-                    ["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL
-                )
-                .decode()
-                .strip()
-            )
-        except Exception:
-            git_rev = ""
     lines = [
         json.dumps(
             {
@@ -458,7 +469,10 @@ def export_jsonl(tournament) -> str:
                 # The version new events are written at. Individual events carry
                 # their own, which may be older.
                 "schema_version": PAYLOAD_VERSION,
-                "git_rev": git_rev,
+                # The exporter's revision. Each event carries the one that
+                # wrote it (``code_rev``), which is usually what a question
+                # about a past tournament needs.
+                "git_rev": code_revision(),
                 "exported_at": _now_iso(),
                 "players": _logged_players(tournament),
             }
@@ -477,6 +491,7 @@ def export_jsonl(tournament) -> str:
                     "schema_version": event.schema_version,
                     "payload": event.payload,
                     "digest": event.digest,
+                    "code_rev": event.code_rev,
                 }
             )
         )

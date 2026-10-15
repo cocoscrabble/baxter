@@ -1343,6 +1343,11 @@ class TournamentEvent(models.Model):
     # sha256 of the affected division's canonical state after the command, so a
     # replay can compare digests per event and pinpoint the first divergence.
     digest = models.CharField(max_length=64, blank=True)
+    # The code revision that wrote this event (``events.code_revision``), so a
+    # production log says which version produced it. Blank for events logged
+    # before this was recorded, or where the revision was unknown. Not part of
+    # the payload or the digest: replay does not depend on it.
+    code_rev = models.CharField(max_length=40, blank=True)
 
     class Meta:
         unique_together = [["tournament", "seq"]]

@@ -124,6 +124,12 @@ compares; a difference is *engine drift* (`ReplayContext.drift`), reported by
 (all in finished tournaments) carry no board and still regenerate, so engine
 changes may break their replay; that is accepted, not backfilled.
 
+**Each event records the code revision that wrote it** (`code_rev`, from
+`events.code_revision()`: the deploy's `GIT_REV` env var — Dokku sets it; the
+image has no `.git` — else `git rev-parse HEAD` in a dev checkout). It is outside
+the payload and the digest. An export's header also lists the players the log
+enters, so `replay_tournament` can rebuild a production log on a laptop.
+
 **A new mutating POST view must route through a command** (or be added to the
 exempt set in `test_event_completeness.py`, which fails CI otherwise).
 
