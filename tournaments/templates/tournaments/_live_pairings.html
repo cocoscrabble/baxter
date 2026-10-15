@@ -1,0 +1,25 @@
+{% if pairings %}
+<h2 class="live-subtitle">Round {{ round }}</h2>
+<table class="live-table">
+    <thead>
+        <tr>
+            <th class="num">Table</th>
+            <th>1st Player</th>
+            <th>2nd Player</th>
+            <th class="num">Result</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for entry in pairings %}
+        <tr>
+            <td class="num">{{ entry.pairing.table_label|default:entry.pairing.table }}</td>
+            <td>{{ entry.pairing.first.display_name }} <span class="live-number">(#{{ entry.pairing.first.number }})</span></td>
+            <td>{% if entry.absence %}<span class="tag tag-{{ entry.absence }}">{{ entry.absence }}</span>{% else %}{{ entry.pairing.second.display_name }} <span class="live-number">(#{{ entry.pairing.second.number }})</span>{% endif %}{% if entry.playoff_label %} <span class="live-number">{{ entry.playoff_label }}</span>{% endif %}</td>
+            <td class="num">{{ entry.result }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+{% include "tournaments/_empty_state.html" with message="No pairings published yet." %}
+{% endif %}

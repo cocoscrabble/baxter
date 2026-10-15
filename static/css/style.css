@@ -147,6 +147,68 @@ h3 { font-size: 1.02rem; margin: var(--space-md) 0 var(--space-sm); }
     color: var(--color-muted);
 }
 
+/* ── Live displays (a screen at the venue) ─────────────────── */
+/* Read from across a room, so the type scales with the screen rather than
+   sitting at laptop size, and nothing reacts to a pointer. */
+.live-body {
+    font-size: clamp(16px, 1.5vw, 34px);
+}
+
+.live-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-md) var(--pad-inline) 0;
+}
+
+.live-logo {
+    height: 2.5em;
+    width: auto;
+}
+
+.live-title {
+    margin: 0;
+    font-size: 1.8em;
+}
+
+.live-subtitle {
+    margin: 0 0 var(--space-sm);
+    font-size: 1.2em;
+}
+
+.live-page {
+    padding: var(--space-md) var(--pad-inline) var(--space-lg);
+}
+
+.live-page table {
+    background: var(--surface-raised);
+}
+
+.live-page th,
+.live-page td {
+    padding: 0.3em 0.6em;
+}
+
+.live-page tbody tr:hover {
+    background-color: transparent;
+}
+
+.live-page tbody tr:nth-child(even) {
+    background-color: rgba(0, 0, 0, 0.03);
+}
+
+.live-number {
+    color: var(--color-muted);
+    font-size: 0.8em;
+    white-space: nowrap;
+}
+
+.live-updated {
+    margin: var(--space-sm) 0 0;
+    font-size: 0.75em;
+    color: var(--color-muted);
+}
+
 .pairings-updated {
     margin: 0 0 var(--space-md);
     font-size: 0.85rem;

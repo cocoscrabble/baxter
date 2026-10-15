@@ -1,0 +1,6 @@
+{% if standings %}
+<h2 class="live-subtitle">After round {{ round }}</h2>
+{% include "tournaments/_standings_table.html" %}
+{% else %}
+{% include "tournaments/_empty_state.html" with message="No results yet." %}
+{% endif %}

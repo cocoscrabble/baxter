@@ -147,7 +147,12 @@ from .generate_pairings import (
 )
 from .pairing.base import PairingData, PairingError, standings_after_round
 from .pairing.round_pairing import STRATEGY_TYPES
-from .pairings_view import PairingsPresenter, PublishedPairingsPresenter
+from .pairings_view import (
+    PairingsPresenter,
+    PublishedPairingsPresenter,
+    annotate_published_rounds,
+    current_published_round,
+)
 from .playoff import (
     QUALIFIER_COUNTS,
     SERIES_LABELS,
@@ -1594,6 +1599,87 @@ class DivisionPublishedPairingsView(DivisionNavMixin, _PublishedPairingsMixin, D
     division nav, visible to everyone (no editing controls)."""
     template_name = "tournaments/division_published_pairings.html"
     active_tab = "pairings"
+
+
+LIVE_REFRESH_SECONDS = 15
+LIVE_RECENT_RESULTS = 25
+
+
+class _LiveDisplayMixin(VisibleDivisionMixin):
+    """A page for an unattended screen at the venue: no site chrome, no controls,
+    and the content re-fetched every ``LIVE_REFRESH_SECONDS`` by datastar.
+
+    The full page wraps ``live_content_template`` in ``live.html``; a
+    datastar request (the poll) gets just that fragment, morphed in by id. The
+    pages are read-only for everyone — ``can_edit`` is forced False so a
+    signed-in director's browser on the display shows what the room should see.
+    """
+
+    model = Division
+    context_object_name = "division"
+    template_name = "tournaments/live.html"
+    live_title = ""
+    live_content_template = ""
+
+    def get_live_context(self, division):
+        raise NotImplementedError
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(self.get_live_context(self.object))
+        context["can_edit"] = False
+        context["live_title"] = self.live_title
+        context["live_content_template"] = self.live_content_template
+        context["refresh_seconds"] = LIVE_REFRESH_SECONDS
+        context["refreshed_at"] = timezone.now()
+        return context
+
+    def get(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        context = self.get_context_data(object=self.object)
+        if is_datastar(request):
+            return fragment_response("tournaments/_live_content.html", context, request=request)
+        return self.render_to_response(context)
+
+
+class LiveStandingsView(_LiveDisplayMixin, DetailView):
+    live_title = "Standings"
+    live_content_template = "tournaments/_live_standings.html"
+
+    def get_live_context(self, division):
+        round = division.max_round()
+        return {"round": round, "standings": division_standings(division, round)}
+
+
+class LivePairingsView(_LiveDisplayMixin, DetailView):
+    live_title = "Pairings"
+    live_content_template = "tournaments/_live_pairings.html"
+
+    def get_live_context(self, division):
+        round = current_published_round(division)
+        if round is None:
+            return {"round": None, "pairings": []}
+        annotated = annotate_published_rounds(division, [round])
+        return {"round": round, "pairings": annotated[0][1] if annotated else []}
+
+
+class LiveResultsView(_LiveDisplayMixin, DetailView):
+    """The most recently entered results, newest first. Byes and forfeits are
+    left out: nobody submitted them, they were written at publish."""
+
+    live_title = "Recent results"
+    live_content_template = "tournaments/_live_results.html"
+
+    def get_live_context(self, division):
+        slips = list(
+            division.result_slips.played()
+            .select_related("winner__player", "loser__player")
+            .order_by(models.F("created_at").desc(nulls_last=True), "-pk")[:LIVE_RECENT_RESULTS]
+        )
+        label_entrants(
+            division_labels(division), (s.winner for s in slips), (s.loser for s in slips)
+        )
+        return {"result_slips": slips}
 
 
 class DivisionScorecardsView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixin, DetailView):

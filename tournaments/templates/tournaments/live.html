@@ -1,0 +1,30 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ live_title }} - {{ division.name }} - {{ division.tournament.name }}</title>
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+{% comment %}
+A screen at the venue: no navbar, no controls, nothing to click. Standalone
+rather than extending base.html for the same reason as the embeds — nothing but
+the content comes through. The interval sits outside #live-content, which is the
+element each poll morphs, so swapping the content never touches the timer.
+{% endcomment %}
+<body class="live-body">
+    <header class="live-header">
+        <img src="{% static 'img/coco-mark.png' %}" alt="" class="live-logo">
+        <div>
+            <p class="embed-eyebrow">{{ division.tournament.name }} · {{ division.name }}</p>
+            <h1 class="live-title">{{ live_title }}</h1>
+        </div>
+    </header>
+    <main class="live-page"
+          data-on-interval__duration.{{ refresh_seconds }}s="@get('{{ request.path }}')">
+    {% include "tournaments/_live_content.html" %}
+    </main>
+    <script type="module" src="{% static 'js/datastar.js' %}"></script>
+</body>
+</html>
