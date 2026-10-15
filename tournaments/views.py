@@ -771,6 +771,20 @@ class DivisionRootRedirectView(VisibleDivisionMixin, View):
         return redirect("division_entrants", **self.division.slug_kwargs())
 
 
+def results_newest_first(division, slips, limit=None):
+    """``slips`` (a queryset of the division's result slips) newest first, with
+    the display names ``_results_table.html`` shows. Slips from before entry
+    times were recorded have none, and go last."""
+    slips = slips.select_related("winner__player", "loser__player").order_by(
+        models.F("created_at").desc(nulls_last=True), "-pk"
+    )
+    slips = list(slips[:limit] if limit else slips)
+    label_entrants(
+        division_labels(division), (s.winner for s in slips), (s.loser for s in slips)
+    )
+    return slips
+
+
 class DivisionAllResultsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
     model = Division
     template_name = "tournaments/division_all_results.html"
@@ -779,16 +793,9 @@ class DivisionAllResultsView(DivisionNavMixin, VisibleDivisionMixin, DetailView)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        slips = list(
-            self.object.result_slips
-            .select_related("winner__player", "loser__player")
-            .order_by("-created_at")
+        context["result_slips"] = results_newest_first(
+            self.object, self.object.result_slips.all()
         )
-        labels = division_labels(self.object)
-        label_entrants(
-            labels, (s.winner for s in slips), (s.loser for s in slips)
-        )
-        context["result_slips"] = slips
         return context
 
 
@@ -1055,7 +1062,10 @@ class DivisionEntrantsEmbedView(PubliclyVisibleDivisionMixin, DetailView):
 
 def division_standings(division, current_round):
     """Return the standings list after ``current_round``, annotated with each
-    entrant's seed number and dropped flag (as ``_standings_table.html`` expects).
+    entrant's rank, seed number and dropped flag (as ``_standings_table.html``
+    expects). The rank is on the row rather than taken from the template's loop
+    counter so a table can show a slice — the live display splits the field
+    into columns.
 
     Display standings keep withdrawn players visible (marked ``dropped`` below);
     their games are always counted in everyone's record.
@@ -1069,6 +1079,8 @@ def division_standings(division, current_round):
         p.seed = seed_by_key.get(p.key)
         p.dropped = p.key in dropped_keys
     label_standings(division, standings)
+    for rank, p in enumerate(standings, start=1):
+        p.rank = rank
     return standings
 
 
@@ -1708,12 +1720,10 @@ class LiveStandingsView(_LiveDisplayMixin, DetailView):
 
     def get_live_context(self, division):
         round = division.max_round()
-        standings = division_standings(division, round)
-        # Ranked here rather than by forloop.counter, which would restart in
-        # each column.
-        for rank, player in enumerate(standings, start=1):
-            player.rank = rank
-        return {"live_subtitle": f"After round {round}", "live_rows": standings}
+        return {
+            "live_subtitle": f"After round {round}",
+            "live_rows": division_standings(division, round),
+        }
 
 
 class LivePairingsView(_LiveDisplayMixin, DetailView):
@@ -1740,18 +1750,14 @@ class LiveResultsView(_LiveDisplayMixin, DetailView):
 
     live_title = "Recent results"
     live_content_template = "tournaments/_live_results.html"
-    live_col_ems = 32
+    live_col_ems = 40
 
     def get_live_context(self, division):
-        slips = list(
-            division.result_slips.played()
-            .select_related("winner__player", "loser__player")
-            .order_by(models.F("created_at").desc(nulls_last=True), "-pk")[:LIVE_RECENT_RESULTS]
-        )
-        label_entrants(
-            division_labels(division), (s.winner for s in slips), (s.loser for s in slips)
-        )
-        return {"live_rows": slips}
+        return {
+            "live_rows": results_newest_first(
+                division, division.result_slips.played(), limit=LIVE_RECENT_RESULTS
+            )
+        }
 
 
 class DivisionScorecardsView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixin, DetailView):

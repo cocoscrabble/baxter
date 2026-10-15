@@ -1,0 +1,23 @@
+{# Result slips as a table; shared by the all-results page and the live display. #}
+<table{% if table_class %} class="{{ table_class }}"{% endif %}>
+    <thead>
+        <tr>
+            <th class="num">Round</th>
+            <th>Winner</th>
+            <th class="num">Score</th>
+            <th>Opponent</th>
+            <th>Started</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for slip in result_slips %}
+        <tr>
+            <td class="num">{{ slip.round }}</td>
+            <td>{{ slip.winner.display_name }}</td>
+            <td class="num">{{ slip.winner_score }}-{{ slip.loser_score }}</td>
+            <td>{{ slip.loser.display_name }}</td>
+            <td>{% if slip.winner_started %}Winner{% else %}Opponent{% endif %}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>

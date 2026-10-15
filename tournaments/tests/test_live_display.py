@@ -90,6 +90,14 @@ class LiveDisplayTests(TestCase):
         firsts = [e.pairing.first for e in response.context["live_rows"]]
         self.assertEqual(firsts, [self.entrant1])
 
+    def test_pairings_board_offers_no_submit_link(self):
+        # The live board shares the public pairings table, which links unplayed
+        # games to the result form; the screen must not.
+        self._create_round(1, RoundPairings.PUBLISHED, [(self.entrant1, self.entrant2)])
+        submit = reverse("resultslip_create", kwargs=self.division.slug_kwargs())
+        self.assertContains(self.client.get(self._url("published_pairings")), submit)
+        self.assertNotContains(self.client.get(self._url("live_pairings")), submit)
+
     def test_results_newest_first_without_byes(self):
         now = timezone.now()
         self._create_round(1, RoundPairings.FINISHED, [])

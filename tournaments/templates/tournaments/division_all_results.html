@@ -10,28 +10,7 @@
 
 {% if result_slips %}
 <div class="table-scroll table-narrow">
-<table>
-    <thead>
-        <tr>
-            <th class="num">Round</th>
-            <th>Winner</th>
-            <th class="num">Score</th>
-            <th>Opponent</th>
-            <th>Started</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for slip in result_slips %}
-        <tr>
-            <td class="num">{{ slip.round }}</td>
-            <td>{{ slip.winner.display_name }}</td>
-            <td class="num">{{ slip.winner_score }}-{{ slip.loser_score }}</td>
-            <td>{{ slip.loser.display_name }}</td>
-            <td>{% if slip.winner_started %}Winner{% else %}Opponent{% endif %}</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+{% include "tournaments/_results_table.html" %}
 </div>
 {% else %}
 {% include "tournaments/_empty_state.html" with message="No results yet." %}
