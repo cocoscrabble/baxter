@@ -1604,22 +1604,70 @@ class DivisionPublishedPairingsView(DivisionNavMixin, _PublishedPairingsMixin, D
 LIVE_REFRESH_SECONDS = 15
 LIVE_RECENT_RESULTS = 25
 
+# The live pages size their type to fit every row on the screen, in CSS
+# (``.live-page`` in style.css) from these numbers. Keep the two in step: a row
+# is ``LIVE_ROW_EMS`` tall, and the subtitle, header row and "Updated" line
+# together take ``LIVE_OVERHEAD_EMS``.
+LIVE_ROW_EMS = 2.1
+LIVE_OVERHEAD_EMS = 6.5
+LIVE_MAX_COLUMNS = 4
+# The gap between landscape columns, as a fraction of the screen's width.
+LIVE_COLUMN_GAP = 0.02
+# The shape assumed when choosing a landscape column count (the usable area of
+# a 16:9 screen under the header). Only the *choice* rests on it; the type is
+# then sized against the real screen, so a different shape still fits.
+LIVE_ASSUMED_ASPECT = 2.0
+
+
+def live_columns(n_rows, col_ems):
+    """How many side-by-side columns a landscape screen should split ``n_rows``
+    into: the count that lets the type be largest.
+
+    ``col_ems`` is how wide one column's table is, in ems. More columns means
+    fewer rows per column (type limited by height) but narrower columns (type
+    limited by width); the best count is where those two limits meet.
+    """
+    def font(cols):
+        per_column = -(-n_rows // cols)
+        by_height = 1 / (per_column * LIVE_ROW_EMS + LIVE_OVERHEAD_EMS)
+        width = LIVE_ASSUMED_ASPECT * (1 - (cols - 1) * LIVE_COLUMN_GAP)
+        by_width = width / (cols * col_ems)
+        return min(by_height, by_width)
+
+    return max(range(1, LIVE_MAX_COLUMNS + 1), key=font)
+
+
+def split_columns(rows, cols):
+    """``rows`` in ``cols`` consecutive runs, reading down then across."""
+    per_column = -(-len(rows) // cols) or 1
+    return [rows[i:i + per_column] for i in range(0, len(rows), per_column)]
+
 
 class _LiveDisplayMixin(VisibleDivisionMixin):
     """A page for an unattended screen at the venue: no site chrome, no controls,
     and the content re-fetched every ``LIVE_REFRESH_SECONDS`` by datastar.
 
-    The full page wraps ``live_content_template`` in ``live.html``; a
-    datastar request (the poll) gets just that fragment, morphed in by id. The
-    pages are read-only for everyone — ``can_edit`` is forced False so a
-    signed-in director's browser on the display shows what the room should see.
+    The full page wraps ``live_content_template`` in ``live.html``; a datastar
+    request (the poll) gets just that fragment, morphed in by id. The pages are
+    read-only for everyone — ``can_edit`` is forced False so a signed-in
+    director's browser on the display shows what the room should see.
+
+    Every row is meant to be on screen at once. A subclass returns its rows as
+    ``live_rows``; they are split into ``live_columns`` for a landscape screen
+    (a portrait one shows them as one table), and the counts go to the
+    template, where CSS turns them into a type size.
     """
 
     model = Division
     context_object_name = "division"
     template_name = "tournaments/live.html"
     live_title = ""
+    live_empty_message = "No results yet."
+    # Renders one table of ``rows``: the whole list on a portrait screen, one
+    # column's worth on a landscape one.
     live_content_template = ""
+    # How wide one table is, in ems of its own type.
+    live_col_ems = 30
 
     def get_live_context(self, division):
         raise NotImplementedError
@@ -1627,8 +1675,19 @@ class _LiveDisplayMixin(VisibleDivisionMixin):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.update(self.get_live_context(self.object))
+        rows = context["live_rows"]
+        cols = live_columns(len(rows), self.live_col_ems)
+        columns = split_columns(rows, cols)
+        context["live_layout"] = {
+            "rows": len(rows),
+            "cols": len(columns),
+            "col_rows": len(columns[0]) if columns else 0,
+            "col_ems": self.live_col_ems,
+        }
+        context["live_columns"] = columns
         context["can_edit"] = False
         context["live_title"] = self.live_title
+        context["live_empty_message"] = self.live_empty_message
         context["live_content_template"] = self.live_content_template
         context["refresh_seconds"] = LIVE_REFRESH_SECONDS
         context["refreshed_at"] = timezone.now()
@@ -1645,22 +1704,34 @@ class _LiveDisplayMixin(VisibleDivisionMixin):
 class LiveStandingsView(_LiveDisplayMixin, DetailView):
     live_title = "Standings"
     live_content_template = "tournaments/_live_standings.html"
+    live_col_ems = 26
 
     def get_live_context(self, division):
         round = division.max_round()
-        return {"round": round, "standings": division_standings(division, round)}
+        standings = division_standings(division, round)
+        # Ranked here rather than by forloop.counter, which would restart in
+        # each column.
+        for rank, player in enumerate(standings, start=1):
+            player.rank = rank
+        return {"live_subtitle": f"After round {round}", "live_rows": standings}
 
 
 class LivePairingsView(_LiveDisplayMixin, DetailView):
     live_title = "Pairings"
     live_content_template = "tournaments/_live_pairings.html"
+    live_empty_message = "No pairings published yet."
+    live_col_ems = 38
 
     def get_live_context(self, division):
         round = current_published_round(division)
         if round is None:
-            return {"round": None, "pairings": []}
+            return {"live_rows": []}
         annotated = annotate_published_rounds(division, [round])
-        return {"round": round, "pairings": annotated[0][1] if annotated else []}
+        return {
+            "round": round,
+            "live_subtitle": f"Round {round}",
+            "live_rows": annotated[0][1] if annotated else [],
+        }
 
 
 class LiveResultsView(_LiveDisplayMixin, DetailView):
@@ -1669,6 +1740,7 @@ class LiveResultsView(_LiveDisplayMixin, DetailView):
 
     live_title = "Recent results"
     live_content_template = "tournaments/_live_results.html"
+    live_col_ems = 32
 
     def get_live_context(self, division):
         slips = list(
@@ -1679,7 +1751,7 @@ class LiveResultsView(_LiveDisplayMixin, DetailView):
         label_entrants(
             division_labels(division), (s.winner for s in slips), (s.loser for s in slips)
         )
-        return {"result_slips": slips}
+        return {"live_rows": slips}
 
 
 class DivisionScorecardsView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixin, DetailView):

@@ -1,6 +1,20 @@
-{% if standings %}
-<h2 class="live-subtitle">After round {{ round }}</h2>
-{% include "tournaments/_standings_table.html" %}
-{% else %}
-{% include "tournaments/_empty_state.html" with message="No results yet." %}
-{% endif %}
+<table class="live-table standings-table">
+    <thead>
+        <tr>
+            <th class="num standings-rank">Rank</th>
+            <th class="standings-player">Player</th>
+            <th class="num standings-record">W-L</th>
+            <th class="num standings-spread">Spread</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for player in rows %}
+        <tr>
+            <td class="num standings-rank">{{ player.rank }}.</td>
+            <td class="standings-player">{{ player.name }}{% if player.seed %} <span class="live-number">(#{{ player.seed }})</span>{% endif %}{% if player.dropped %} <span class="tag tag-dropped">withdrew</span>{% endif %}</td>
+            <td class="num standings-record">{{ player.record }}</td>
+            <td class="num standings-spread">{{ player.spread }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
