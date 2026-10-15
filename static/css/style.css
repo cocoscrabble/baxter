@@ -558,8 +558,12 @@ h3 { font-size: 1.02rem; margin: var(--space-md) 0 var(--space-sm); }
     color: var(--color-primary);
 }
 
+/* line-height: 1 so the larger glyph doesn't grow the line box, which would
+   make a menu tab taller than its neighbours and drop its text off their
+   baseline. */
 .nav-menu-caret {
     font-size: 1.2em;
+    line-height: 1;
 }
 
 .nav-menu-panel {
