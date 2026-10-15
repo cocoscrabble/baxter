@@ -140,7 +140,7 @@ class LiveDisplayTests(TestCase):
         self._partial_round_two()
         response = self.client.get(self._url("live_standings"))
         (section,) = response.context["live_sections"]
-        self.assertEqual(section["subtitle"], "Round 2 in progress")
+        self.assertEqual(section["subtitle"], "")
         order = [(p.name, p.wins, p.losses) for p in section["rows"]]
         self.assertEqual(order, [
             ("Alice", 2, 0), ("Dan", 1, 0), ("Cara", 0, 1), ("Bob", 0, 2),

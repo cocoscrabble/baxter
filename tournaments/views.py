@@ -1750,11 +1750,7 @@ class LiveStandingsView(_LiveDisplayMixin, DetailView):
         round = division.max_round()
         if round == 0:
             return []  # Before any result: nothing to rank, not a 0-0 seeding list.
-        finished = division.round_pairings_set.filter(
-            round=round, status=RoundPairings.FINISHED
-        ).exists()
-        subtitle = f"After round {round}" if finished else f"Round {round} in progress"
-        return [(subtitle, division_standings(division, round))]
+        return [("", division_standings(division, round))]
 
 
 class LivePairingsView(_LiveDisplayMixin, DetailView):
