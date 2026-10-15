@@ -963,13 +963,19 @@ class PortableExportTests(LoggedTournamentMixin, TestCase):
         entrant = ctx.tournament.divisions.get().entrants.get(player=late)
         self.assertEqual(entrant.rating, 1200)
 
-    def test_the_header_names_the_deployed_revision(self):
+    def test_each_event_names_the_revision_that_wrote_it(self):
+        # The deploy's GIT_REV wins over asking git (production has no .git).
         from unittest import mock
 
-        tournament, _ = self._build_logged_tournament()
+        from tournaments.events import code_revision
+
+        code_revision.cache_clear()
+        self.addCleanup(code_revision.cache_clear)
         with mock.patch.dict("os.environ", {"GIT_REV": "abc123"}):
-            header, _ = self._export(tournament)
+            tournament, _ = self._build_logged_tournament()
+            header, events = self._export(tournament)
         self.assertEqual(header["git_rev"], "abc123")
+        self.assertEqual({e["code_rev"] for e in events}, {"abc123"})
 
 
 @tag("slow")
