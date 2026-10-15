@@ -432,6 +432,10 @@ class PairingsPresenter:
             db_status = self.db_status_map.get(rp.round)
             if db_status in (RoundPairings.FINISHED, RoundPairings.IN_PROGRESS):
                 continue
+            # A round robin's start_round is its block's first round, which can
+            # be this round itself; it pairs up front and waits on nothing.
+            if RP.is_round_robin(rp.pairing):
+                return None
             if rp.start_round and self.db_status_map.get(rp.start_round) != RoundPairings.FINISHED:
                 return f"Round {rp.round} is waiting for round {rp.start_round} results."
             return None
