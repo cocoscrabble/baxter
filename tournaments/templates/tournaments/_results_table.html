@@ -1,4 +1,5 @@
-{# Result slips as a table; shared by the all-results page and the live display. #}
+{# Result slips as a table; shared by the all-results page and the live display #}
+{# (which passes hide_started: a room reading the screen has no use for it). #}
 <table{% if table_class %} class="{{ table_class }}"{% endif %}>
     <thead>
         <tr>
@@ -6,7 +7,7 @@
             <th>Winner</th>
             <th class="num">Score</th>
             <th>Opponent</th>
-            <th>Started</th>
+            {% if not hide_started %}<th>Started</th>{% endif %}
         </tr>
     </thead>
     <tbody>
@@ -16,7 +17,7 @@
             <td>{{ slip.winner.display_name }}</td>
             <td class="num">{{ slip.winner_score }}-{{ slip.loser_score }}</td>
             <td>{{ slip.loser.display_name }}</td>
-            <td>{% if slip.winner_started %}Winner{% else %}Opponent{% endif %}</td>
+            {% if not hide_started %}<td>{% if slip.winner_started %}Winner{% else %}Opponent{% endif %}</td>{% endif %}
         </tr>
         {% endfor %}
     </tbody>
