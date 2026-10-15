@@ -8,13 +8,15 @@
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
     {% block extra_head %}{% endblock %}
 </head>
-<body>
+<body{% block body_attrs %}{% endblock %}>
+    {% block header %}
     <header class="embed-header">
         <a href="https://cocoscrabble.org" class="embed-logo-link">
             <img src="{% static 'img/logo.png' %}" alt="COCO logo" class="embed-logo">
         </a>
     </header>
-    <main class="embed-page">
+    {% endblock %}
+    <main class="{% block main_class %}embed-page{% endblock %}"{% block main_attrs %}{% endblock %}>
     {% block content %}{% endblock %}
     </main>
     <script type="module" src="{% static 'js/datastar.js' %}"></script>

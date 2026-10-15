@@ -1,0 +1,33 @@
+{% comment %}
+One round of published pairings: ``rows`` of AnnotatedPairing. A played game
+shows its score; an unplayed one a Submit result link unless ``readonly``.
+Shared by the public pairings pages and the live display.
+{% endcomment %}
+<table class="published-pairings-table{% if table_class %} {{ table_class }}{% endif %}">
+    <thead>
+        <tr>
+            <th>Table</th>
+            <th>1st Player</th>
+            <th>2nd Player</th>
+            <th class="no-print">{% if readonly %}Result{% endif %}</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for entry in rows %}
+        <tr>
+            <td class="pairing-table-number">{{ entry.pairing.table_label|default:entry.pairing.table }}</td>
+            <td class="pairing-player pairing-first">{{ entry.pairing.first.display_name }} (#{{ entry.pairing.first.number }})</td>
+            <td class="pairing-player pairing-second">{% if entry.absence %}<span class="tag tag-{{ entry.absence }}">{{ entry.absence }}</span>{% else %}{{ entry.pairing.second.display_name }} (#{{ entry.pairing.second.number }}){% endif %}</td>
+            {% if entry.result %}
+            <td class="pairing-action num">{{ entry.result }}</td>
+            {% elif entry.absence or readonly %}
+            {# Nothing to submit: a bye and a forfeit are recorded at publish, #}
+            {# and a read-only board (the live display) offers no links. #}
+            <td class="pairing-action no-print"></td>
+            {% else %}
+            <td class="pairing-action no-print"><a class="btn-primary" href="{% url 'resultslip_create' division.tournament.slug division.slug %}?pairing={{ entry.pairing.pk }}">Submit result</a></td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>

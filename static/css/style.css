@@ -237,6 +237,9 @@ h3 { font-size: 1.02rem; margin: var(--space-md) 0 var(--space-sm); }
     line-height: 1.45;
 }
 
+/* The tables are the shared ones (_standings_table, _published_pairings_table,
+   _results_table) and keep their own styling. What changes here is only what
+   the sizing model needs: padding and line height in ems, and no wrapping. */
 .live-table {
     margin: 0;
     background: var(--surface-raised);
@@ -254,17 +257,9 @@ h3 { font-size: 1.02rem; margin: var(--space-md) 0 var(--space-sm); }
     white-space: nowrap;
 }
 
+/* Nobody is pointing at a wall screen; a stray cursor shouldn't light a row. */
 .live-table tbody tr:hover {
     background-color: transparent;
-}
-
-.live-table tbody tr:nth-child(even) {
-    background-color: rgba(0, 0, 0, 0.03);
-}
-
-.live-number {
-    color: var(--color-muted);
-    font-size: 0.8em;
 }
 
 .live-updated {
