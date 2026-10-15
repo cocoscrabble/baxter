@@ -556,17 +556,16 @@ def annotate_published_rounds(division, rounds):
     return annotated
 
 
-def current_published_round(division):
-    """The latest round that has left draft, or None.
+def latest_published_rounds(division, count):
+    """The latest ``count`` rounds that have left draft, newest first.
 
-    Unlike the published-pairings page this includes a finished round: between
+    Unlike the published-pairings page this includes finished rounds: between
     the last result of one round and the publish of the next, a live display
     should keep showing the round just played rather than go blank.
     """
-    return (
+    return list(
         division.round_pairings_set
         .exclude(status=RoundPairings.DRAFT)
         .order_by("-round")
-        .values_list("round", flat=True)
-        .first()
+        .values_list("round", flat=True)[:count]
     )
