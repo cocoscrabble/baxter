@@ -234,6 +234,18 @@ class Division(models.Model):
             self.result_slips.aggregate(max_round=models.Max("round"))["max_round"] or 0
         )
 
+    def current_round(self):
+        """The latest round with a game actually played — what standings run to.
+
+        Not ``max_round``: a bye is recorded the moment its round is published,
+        so a director who prints rounds ahead would otherwise have every future
+        bye counted (a player 6-1 after seven rounds shown as 7-1). A round's
+        byes count once any game in it is in.
+        """
+        return (
+            self.result_slips.played().aggregate(r=models.Max("round"))["r"] or 0
+        )
+
     def under_way(self):
         """Whether any round has left draft.
 

@@ -813,6 +813,37 @@ class DivisionStandingsViewTests(TestCase):
             self.client.get(url), '<th class="num standings-firsts">Firsts</th>'
         )
 
+    def test_bye_in_a_round_not_yet_played_is_not_counted(self):
+        # A bye is recorded when its round is published, so a director who
+        # prints rounds ahead has future byes on file; they count only once a
+        # game in their round has been played.
+        def slip(round_num, winner, loser):
+            ResultSlip.objects.create(
+                division=self.division, round=round_num, winner=winner,
+                loser=loser, winner_score=450, loser_score=380, winner_started=True,
+            )
+
+        slip(1, self.entrant1, self.entrant2)
+        slip(3, self.entrant2, self.division.bye_entrant())
+        url = reverse("division_standings", kwargs=self.division.slug_kwargs())
+
+        response = self.client.get(url)
+        self.assertEqual(response.context["round"], 1)
+        self.assertEqual(list(response.context["rounds"]), [1])
+        bob = next(p for p in response.context["standings"] if p.name == "Bob")
+        self.assertEqual((bob.wins, bob.losses), (0, 1))
+
+        cara = Entrant.objects.create(
+            division=self.division,
+            player=Player.objects.create(name="Cara", player_number="003", rating=1400),
+            number=3,
+        )
+        slip(3, self.entrant1, cara)
+        response = self.client.get(url)
+        self.assertEqual(response.context["round"], 3)
+        bob = next(p for p in response.context["standings"] if p.name == "Bob")
+        self.assertEqual((bob.wins, bob.losses), (1, 1))
+
     def test_standings_for_specific_round(self):
         ResultSlip.objects.create(
             division=self.division,
