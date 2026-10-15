@@ -1445,6 +1445,7 @@ class ScheduleChangeInvalidatesDraftsTests(TestCase):
         from tournaments.commands import save_settings
         from tournaments.generate_pairings import regenerate_pairings
         from tournaments.tests.test_byes import make_division
+        from tournaments.pairings_view import PairingsPresenter
         from tournaments.views import _autogenerate_pairable_rounds
 
         owner = User.objects.create_user(username="sched", password="pw")
@@ -1467,3 +1468,5 @@ class ScheduleChangeInvalidatesDraftsTests(TestCase):
         self.assertFalse(
             division.round_pairings_set.filter(status=RoundPairings.DRAFT).exists()
         )
+        # Round 1's start_round is its own block start; it waits on nothing.
+        self.assertIsNone(PairingsPresenter(division).waiting_message)
