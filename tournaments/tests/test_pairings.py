@@ -1434,3 +1434,36 @@ class RatingEditInvalidatesDraftsTests(PairingDBTestBase):
             ),
             drafts,
         )
+
+
+class ScheduleChangeInvalidatesDraftsTests(TestCase):
+    """A draft belongs to the schedule that paired it. PDX 20/32: switching
+    RR 9 + Charlottesville 4 to RR 9 + RR 9 failed to pair, the rollback kept
+    the Charlottesville drafts for rounds 10-13, and they were published."""
+
+    def test_unpairable_schedule_leaves_no_stale_drafts(self):
+        from tournaments.commands import save_settings
+        from tournaments.generate_pairings import regenerate_pairings
+        from tournaments.tests.test_byes import make_division
+        from tournaments.views import _autogenerate_pairable_rounds
+
+        owner = User.objects.create_user(username="sched", password="pw")
+        division = make_division(owner, 9, 9, pairing="RoundRobin", first_number=900)
+        payload = {"division": division.name, "blocks": [
+            {"pairing": "RoundRobin", "rounds": 9, "pair_from": 1},
+            {"pairing": "RoundRobin", "rounds": 9, "pair_from": 1},
+        ]}
+        save_settings(division.tournament, owner, payload)
+        division = Division.objects.get(pk=division.pk)  # drop cached settings
+        regenerate_pairings(division)
+        self.assertTrue(division.pairings.filter(round=18).exists())
+
+        # A 12-round round robin over 9 players (and the bye) has no round 22.
+        payload["blocks"][1] = {"pairing": "RoundRobin", "rounds": 12, "pair_from": 1}
+        save_settings(division.tournament, owner, payload)
+        division = Division.objects.get(pk=division.pk)
+
+        self.assertIn("beyond the rotation", _autogenerate_pairable_rounds(division))
+        self.assertFalse(
+            division.round_pairings_set.filter(status=RoundPairings.DRAFT).exists()
+        )

@@ -425,6 +425,10 @@ def save_settings(tournament, actor, payload):
         update_fields.append("cop_config")
         payload = {**payload, "seeded_cop_config": seeded}
     settings_obj.save(update_fields=update_fields)
+    # Drafts paired under the old schedule must not outlive it: if the new one
+    # cannot be paired, regeneration rolls back and would leave them on the
+    # Pair Rounds tab, publishable as if the new schedule had produced them.
+    _invalidate_drafts(division)
     return EventResult(payload=payload, division=division, result=settings_obj)
 
 
