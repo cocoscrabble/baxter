@@ -16,14 +16,18 @@ from .test_views import setUpTournament
 
 class LiveLayoutTests(SimpleTestCase):
     def test_small_field_stays_in_one_column(self):
-        self.assertEqual(live_columns(8, 26), 1)
+        self.assertEqual(live_columns([8], 26), 1)
 
     def test_larger_field_spreads_across_columns(self):
-        self.assertGreater(live_columns(80, 26), 1)
-        self.assertLessEqual(live_columns(500, 26), 4)
+        self.assertGreater(live_columns([80], 26), 1)
+        self.assertLessEqual(live_columns([500], 26), 4)
 
     def test_wider_tables_get_fewer_columns(self):
-        self.assertLessEqual(live_columns(80, 38), live_columns(80, 26))
+        self.assertLessEqual(live_columns([80], 38), live_columns([80], 26))
+
+    def test_a_second_section_counts_toward_the_height(self):
+        # Two rounds of pairings stack, so they need more columns than one.
+        self.assertGreaterEqual(live_columns([15, 15], 38), live_columns([15], 38))
 
     def test_split_reads_down_then_across(self):
         self.assertEqual(split_columns(list(range(7)), 3), [[0, 1, 2], [3, 4, 5], [6]])
@@ -74,21 +78,30 @@ class LiveDisplayTests(TestCase):
         self.assertIn('id="live-content"', body)
         self.assertNotIn("data-on-interval", body)
 
-    def test_pairings_show_latest_non_draft_round_including_finished(self):
-        # Between rounds the display keeps showing the round just played, and a
-        # draft (not yet printed) round is never shown.
-        self._create_round(1, RoundPairings.FINISHED, [(self.entrant1, self.entrant2)])
-        self._create_round(2, RoundPairings.DRAFT, [(self.entrant1, self.entrant3)])
-        response = self.client.get(self._url("live_pairings"))
-        self.assertEqual(response.context["round"], 1)
+    def _subtitles(self, response):
+        return [s["subtitle"] for s in response.context["live_sections"]]
 
-        RoundPairings.objects.filter(division=self.division, round=2).update(
+    def test_pairings_show_current_round_above_the_one_before(self):
+        # Draft (not yet printed) rounds are never shown, and a finished round
+        # stays up until the next is published.
+        self._create_round(1, RoundPairings.FINISHED, [(self.entrant1, self.entrant2)])
+        self._create_round(2, RoundPairings.FINISHED, [(self.entrant1, self.entrant3)])
+        self._create_round(3, RoundPairings.DRAFT, [(self.entrant1, self.entrant4)])
+        response = self.client.get(self._url("live_pairings"))
+        self.assertEqual(self._subtitles(response), ["Round 2", "Round 1"])
+
+        RoundPairings.objects.filter(division=self.division, round=3).update(
             status=RoundPairings.PUBLISHED
         )
         response = self.client.get(self._url("live_pairings"))
-        self.assertEqual(response.context["round"], 2)
-        firsts = [e.pairing.first for e in response.context["live_rows"]]
-        self.assertEqual(firsts, [self.entrant1])
+        self.assertEqual(self._subtitles(response), ["Round 3", "Round 2"])
+        current = response.context["live_sections"][0]["rows"]
+        self.assertEqual([e.pairing.second for e in current], [self.entrant4])
+
+    def test_pairings_first_round_shows_alone(self):
+        self._create_round(1, RoundPairings.PUBLISHED, [(self.entrant1, self.entrant2)])
+        response = self.client.get(self._url("live_pairings"))
+        self.assertEqual(self._subtitles(response), ["Round 1"])
 
     def test_pairings_board_offers_no_submit_link(self):
         # The live board shares the public pairings table, which links unplayed
@@ -106,14 +119,45 @@ class LiveDisplayTests(TestCase):
         bye = self.division.bye_entrant()
         self._slip(1, self.entrant1, bye, now + timedelta(minutes=1))
         response = self.client.get(self._url("live_results"))
-        self.assertEqual(list(response.context["live_rows"]), [newer, older])
+        self.assertEqual(list(response.context["live_sections"][0]["rows"]), [newer, older])
         self.assertNotContains(response, "<th>Started</th>")
 
-    def test_standings_ranks_run_on_across_columns(self):
+    def _partial_round_two(self):
+        """Round 1 done; in round 2 only Alice-Bob has finished (Alice 2-0),
+        while Dan (1-0) is still playing Cara."""
+        now = timezone.now()
+        self._create_round(1, RoundPairings.FINISHED, [
+            (self.entrant1, self.entrant2), (self.entrant4, self.entrant3),
+        ])
+        self._create_round(2, RoundPairings.IN_PROGRESS, [
+            (self.entrant1, self.entrant2), (self.entrant3, self.entrant4),
+        ])
+        self._slip(1, self.entrant1, self.entrant2, now)
+        self._slip(1, self.entrant4, self.entrant3, now)
+        self._slip(2, self.entrant1, self.entrant2, now)
+
+    def test_standings_count_a_round_still_being_played(self):
+        self._partial_round_two()
         response = self.client.get(self._url("live_standings"))
-        ranks = [p.rank for column in response.context["live_columns"] for p in column]
+        (section,) = response.context["live_sections"]
+        self.assertEqual(section["subtitle"], "Round 2 in progress")
+        order = [(p.name, p.wins, p.losses) for p in section["rows"]]
+        self.assertEqual(order, [
+            ("Alice", 2, 0), ("Dan", 1, 0), ("Cara", 0, 1), ("Bob", 0, 2),
+        ])
+
+    def test_standings_ranks_run_on_across_columns(self):
+        self._partial_round_two()
+        response = self.client.get(self._url("live_standings"))
+        (section,) = response.context["live_sections"]
+        ranks = [p.rank for column in section["columns"] for p in column]
         self.assertEqual(ranks, list(range(1, len(ranks) + 1)))
         self.assertContains(response, "--live-rows: 4;")
+
+    def test_standings_before_any_result_are_empty(self):
+        response = self.client.get(self._url("live_standings"))
+        self.assertEqual(response.context["live_sections"], [])
+        self.assertContains(response, "No results yet.")
 
     def test_editor_sees_no_editor_columns(self):
         self.client.login(username="owner", password="testpass123")

@@ -158,7 +158,9 @@ h3 { font-size: 1.02rem; margin: var(--space-md) 0 var(--space-sm); }
    LIVE_OVERHEAD_EMS, LIVE_COLUMN_GAP) uses the same model to choose the
    landscape column count — change them together. A row is 1.45 line-height +
    2 × 0.3em padding ≈ 2.1em; the subtitle, header row and "Updated" line
-   ≈ 6.5em. Cells don't wrap, so a row stays one line. */
+   ≈ 6.5em, and each further section (the pairings page's second round) adds
+   a subtitle and header row, ≈ 4.5em; the server sends the total as
+   --live-overhead. Cells don't wrap, so a row stays one line. */
 .live-body {
     height: 100vh;
     display: flex;
@@ -200,7 +202,7 @@ h3 { font-size: 1.02rem; margin: var(--space-md) 0 var(--space-sm); }
 /* Portrait: one table, as tall as the screen. */
 #live-content {
     font-size: min(
-        calc(100cqh / (var(--live-rows, 10) * 2.1 + 6.5)),
+        calc(100cqh / (var(--live-rows, 10) * 2.1 + var(--live-overhead, 6.5))),
         calc(100cqw / var(--live-col-ems, 30))
     );
 }
@@ -213,7 +215,7 @@ h3 { font-size: 1.02rem; margin: var(--space-md) 0 var(--space-sm); }
 @media (orientation: landscape) {
     #live-content {
         font-size: min(
-            calc(100cqh / (var(--live-col-rows, 10) * 2.1 + 6.5)),
+            calc(100cqh / (var(--live-col-rows, 10) * 2.1 + var(--live-overhead, 6.5))),
             calc((100cqw - (var(--live-cols, 1) - 1) * 2cqw)
                  / var(--live-cols, 1) / var(--live-col-ems, 30))
         );
@@ -229,6 +231,10 @@ h3 { font-size: 1.02rem; margin: var(--space-md) 0 var(--space-sm); }
         column-gap: 2cqw;
         align-items: start;
     }
+}
+
+.live-section + .live-section {
+    margin-top: 0.3em;
 }
 
 .live-subtitle {

@@ -151,7 +151,7 @@ from .pairings_view import (
     PairingsPresenter,
     PublishedPairingsPresenter,
     annotate_published_rounds,
-    current_published_round,
+    latest_published_rounds,
 )
 from .playoff import (
     QUALIFIER_COUNTS,
@@ -1618,10 +1618,12 @@ LIVE_RECENT_RESULTS = 25
 
 # The live pages size their type to fit every row on the screen, in CSS
 # (``.live-page`` in style.css) from these numbers. Keep the two in step: a row
-# is ``LIVE_ROW_EMS`` tall, and the subtitle, header row and "Updated" line
-# together take ``LIVE_OVERHEAD_EMS``.
+# is ``LIVE_ROW_EMS`` tall; the subtitle, header row and "Updated" line together
+# take ``LIVE_OVERHEAD_EMS``; each further section (the pairings page shows two
+# rounds) adds a subtitle and header row, ``LIVE_SECTION_EMS``.
 LIVE_ROW_EMS = 2.1
 LIVE_OVERHEAD_EMS = 6.5
+LIVE_SECTION_EMS = 4.5
 LIVE_MAX_COLUMNS = 4
 # The gap between landscape columns, as a fraction of the screen's width.
 LIVE_COLUMN_GAP = 0.02
@@ -1631,17 +1633,30 @@ LIVE_COLUMN_GAP = 0.02
 LIVE_ASSUMED_ASPECT = 2.0
 
 
-def live_columns(n_rows, col_ems):
-    """How many side-by-side columns a landscape screen should split ``n_rows``
-    into: the count that lets the type be largest.
+def ceil_div(a, b):
+    return -(-a // b)
 
-    ``col_ems`` is how wide one column's table is, in ems. More columns means
-    fewer rows per column (type limited by height) but narrower columns (type
-    limited by width); the best count is where those two limits meet.
+
+def live_overhead(n_sections):
+    """Ems of everything on a live page that is not a table row."""
+    return LIVE_OVERHEAD_EMS + LIVE_SECTION_EMS * max(n_sections - 1, 0)
+
+
+def live_columns(section_sizes, col_ems):
+    """How many side-by-side columns a landscape screen should split each
+    section into (every section gets the same count): the count that lets the
+    type be largest.
+
+    ``section_sizes`` is the number of rows in each section, and ``col_ems`` how
+    wide one column's table is, in ems. More columns means fewer rows per column
+    (type limited by height) but narrower columns (type limited by width); the
+    best count is where those two limits meet.
     """
+    overhead = live_overhead(len(section_sizes))
+
     def font(cols):
-        per_column = -(-n_rows // cols)
-        by_height = 1 / (per_column * LIVE_ROW_EMS + LIVE_OVERHEAD_EMS)
+        tallest = sum(ceil_div(n, cols) for n in section_sizes)
+        by_height = 1 / (tallest * LIVE_ROW_EMS + overhead)
         width = LIVE_ASSUMED_ASPECT * (1 - (cols - 1) * LIVE_COLUMN_GAP)
         by_width = width / (cols * col_ems)
         return min(by_height, by_width)
@@ -1651,7 +1666,7 @@ def live_columns(n_rows, col_ems):
 
 def split_columns(rows, cols):
     """``rows`` in ``cols`` consecutive runs, reading down then across."""
-    per_column = -(-len(rows) // cols) or 1
+    per_column = ceil_div(len(rows), cols) or 1
     return [rows[i:i + per_column] for i in range(0, len(rows), per_column)]
 
 
@@ -1664,10 +1679,12 @@ class _LiveDisplayMixin(VisibleDivisionMixin):
     read-only for everyone — ``can_edit`` is forced False so a signed-in
     director's browser on the display shows what the room should see.
 
-    Every row is meant to be on screen at once. A subclass returns its rows as
-    ``live_rows``; they are split into ``live_columns`` for a landscape screen
-    (a portrait one shows them as one table), and the counts go to the
-    template, where CSS turns them into a type size.
+    Every row is meant to be on screen at once. A subclass returns
+    ``live_sections``, each a subtitle and its rows (most pages have one; the
+    pairings page has the current round and the one before). Each section is
+    split into the same number of columns for a landscape screen (a portrait one
+    shows it as one table), and the counts go to the template, where CSS turns
+    them into a type size.
     """
 
     model = Division
@@ -1675,28 +1692,35 @@ class _LiveDisplayMixin(VisibleDivisionMixin):
     template_name = "tournaments/live.html"
     live_title = ""
     live_empty_message = "No results yet."
-    # Renders one table of ``rows``: the whole list on a portrait screen, one
+    # Renders one table of ``rows``: a whole section on a portrait screen, one
     # column's worth on a landscape one.
     live_content_template = ""
     # How wide one table is, in ems of its own type.
     live_col_ems = 30
 
-    def get_live_context(self, division):
+    def get_live_sections(self, division):
+        """``[(subtitle, rows), ...]``, top to bottom. Empty sections are dropped."""
         raise NotImplementedError
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context.update(self.get_live_context(self.object))
-        rows = context["live_rows"]
-        cols = live_columns(len(rows), self.live_col_ems)
-        columns = split_columns(rows, cols)
+        sections = [
+            (subtitle, rows)
+            for subtitle, rows in self.get_live_sections(self.object)
+            if rows
+        ]
+        cols = live_columns([len(rows) for _, rows in sections], self.live_col_ems)
+        context["live_sections"] = [
+            {"subtitle": subtitle, "rows": rows, "columns": split_columns(rows, cols)}
+            for subtitle, rows in sections
+        ]
         context["live_layout"] = {
-            "rows": len(rows),
-            "cols": len(columns),
-            "col_rows": len(columns[0]) if columns else 0,
+            "rows": sum(len(rows) for _, rows in sections),
+            "cols": cols,
+            "col_rows": sum(ceil_div(len(rows), cols) for _, rows in sections),
             "col_ems": self.live_col_ems,
+            "overhead": live_overhead(len(sections)),
         }
-        context["live_columns"] = columns
         context["can_edit"] = False
         context["live_title"] = self.live_title
         context["live_empty_message"] = self.live_empty_message
@@ -1714,34 +1738,38 @@ class _LiveDisplayMixin(VisibleDivisionMixin):
 
 
 class LiveStandingsView(_LiveDisplayMixin, DetailView):
+    """Standings counting every result entered so far, including those from a
+    round still being played — so mid-round a player who has finished their
+    game can be 10-6 above one at 9-6 who is still playing."""
+
     live_title = "Standings"
     live_content_template = "tournaments/_live_standings.html"
     live_col_ems = 26
 
-    def get_live_context(self, division):
+    def get_live_sections(self, division):
         round = division.max_round()
-        return {
-            "live_subtitle": f"After round {round}",
-            "live_rows": division_standings(division, round),
-        }
+        if round == 0:
+            return []  # Before any result: nothing to rank, not a 0-0 seeding list.
+        finished = division.round_pairings_set.filter(
+            round=round, status=RoundPairings.FINISHED
+        ).exists()
+        subtitle = f"After round {round}" if finished else f"Round {round} in progress"
+        return [(subtitle, division_standings(division, round))]
 
 
 class LivePairingsView(_LiveDisplayMixin, DetailView):
+    """The current round, and below it the round before, so players can still
+    check a result just entered after the next round goes up."""
+
     live_title = "Pairings"
     live_content_template = "tournaments/_live_pairings.html"
     live_empty_message = "No pairings published yet."
     live_col_ems = 38
 
-    def get_live_context(self, division):
-        round = current_published_round(division)
-        if round is None:
-            return {"live_rows": []}
-        annotated = annotate_published_rounds(division, [round])
-        return {
-            "round": round,
-            "live_subtitle": f"Round {round}",
-            "live_rows": annotated[0][1] if annotated else [],
-        }
+    def get_live_sections(self, division):
+        rounds = latest_published_rounds(division, 2)
+        annotated = dict(annotate_published_rounds(division, rounds))
+        return [(f"Round {r}", annotated.get(r, [])) for r in rounds]
 
 
 class LiveResultsView(_LiveDisplayMixin, DetailView):
@@ -1752,12 +1780,10 @@ class LiveResultsView(_LiveDisplayMixin, DetailView):
     live_content_template = "tournaments/_live_results.html"
     live_col_ems = 32
 
-    def get_live_context(self, division):
-        return {
-            "live_rows": results_newest_first(
-                division, division.result_slips.played(), limit=LIVE_RECENT_RESULTS
-            )
-        }
+    def get_live_sections(self, division):
+        return [("", results_newest_first(
+            division, division.result_slips.played(), limit=LIVE_RECENT_RESULTS
+        ))]
 
 
 class DivisionScorecardsView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixin, DetailView):
