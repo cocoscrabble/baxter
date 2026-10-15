@@ -507,45 +507,66 @@ class PublishedPairingsPresenter:
             (updated for _, updated in published if updated is not None),
             default=None,
         )
-        db_pairings = list(
-            self.division.pairings
-            .filter(round__in=published_rounds)
-            .select_related("first", "first__player", "second", "second__player")
-            .order_by("round", "table")
-        )
-        label_entrants(
-            division_labels(self.division),
-            (p.first for p in db_pairings),
-            (p.second for p in db_pairings),
-        )
-        if not db_pairings:
+        annotated = annotate_published_rounds(self.division, published_rounds)
+        if not annotated:
             context["pairings_message"] = "No pairings published yet."
             return context
-        # A played pairing shows its score (first - second) instead of a submit
-        # button, the way the "Pair rounds" tab does.
-        played = {
-            (s["round"], frozenset({s["winner_id"], s["loser_id"]})): s
-            for s in self.division.result_slips
-            .filter(round__in=published_rounds)
-            .values("round", "winner_id", "loser_id", "winner_score", "loser_score")
-        }
-        annotated = []
-        for round_num, round_pairings in groupby(db_pairings, key=lambda p: p.round):
-            rows = []
-            for p in round_pairings:
-                slip = played.get((round_num, frozenset({p.first_id, p.second_id})))
-                if slip:
-                    scores = {slip["winner_id"]: slip["winner_score"],
-                              slip["loser_id"]: slip["loser_score"]}
-                    result = f"{scores[p.first_id]} - {scores[p.second_id]}"
-                else:
-                    result = ""
-                rows.append(AnnotatedPairing(
-                    pairing=p, result=result, playoff_label=_playoff_label(p),
-                ))
-            annotated.append((round_num, rows))
         context["pairings"] = annotated
         # The round shown by default: the latest published round (tabs let the
         # viewer switch to any earlier one).
         context["current_round"] = annotated[-1][0]
         return context
+
+
+def annotate_published_rounds(division, rounds):
+    """``[(round, [AnnotatedPairing, ...]), ...]`` for ``rounds``, in round and
+    table order. A played pairing carries its score (first - second)."""
+    db_pairings = list(
+        division.pairings
+        .filter(round__in=rounds)
+        .select_related("first", "first__player", "second", "second__player")
+        .order_by("round", "table")
+    )
+    label_entrants(
+        division_labels(division),
+        (p.first for p in db_pairings),
+        (p.second for p in db_pairings),
+    )
+    played = {
+        (s["round"], frozenset({s["winner_id"], s["loser_id"]})): s
+        for s in division.result_slips
+        .filter(round__in=rounds)
+        .values("round", "winner_id", "loser_id", "winner_score", "loser_score")
+    }
+    annotated = []
+    for round_num, round_pairings in groupby(db_pairings, key=lambda p: p.round):
+        rows = []
+        for p in round_pairings:
+            slip = played.get((round_num, frozenset({p.first_id, p.second_id})))
+            if slip:
+                scores = {slip["winner_id"]: slip["winner_score"],
+                          slip["loser_id"]: slip["loser_score"]}
+                result = f"{scores[p.first_id]} - {scores[p.second_id]}"
+            else:
+                result = ""
+            rows.append(AnnotatedPairing(
+                pairing=p, result=result, playoff_label=_playoff_label(p),
+            ))
+        annotated.append((round_num, rows))
+    return annotated
+
+
+def current_published_round(division):
+    """The latest round that has left draft, or None.
+
+    Unlike the published-pairings page this includes a finished round: between
+    the last result of one round and the publish of the next, a live display
+    should keep showing the round just played rather than go blank.
+    """
+    return (
+        division.round_pairings_set
+        .exclude(status=RoundPairings.DRAFT)
+        .order_by("-round")
+        .values_list("round", flat=True)
+        .first()
+    )
