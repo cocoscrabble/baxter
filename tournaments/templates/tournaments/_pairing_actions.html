@@ -18,7 +18,7 @@ there is nothing left to take.
 {% if entry.result %}{{ entry.result }}{% endif %}
 {% if can_edit and selected_status == 'published' or can_edit and selected_status == 'in_progress' %}
     {% if entry.absence == 'bye' %}
-    <button type="button" class="btn-forfeit"
+    <button type="button" class="btn-forfeit unimportant"
         title="{{ entry.absent_player.display_name }} was absent: turn this bye into a forfeit loss"
         data-on:click="@post('{% url 'forfeit_game' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {round: {{ selected_round }}, player: '{{ entry.absent_player.key }}'}})">{{ entry.absent_player.display_name }} forfeits</button>
     {% elif not entry.absence and not entry.result %}
@@ -28,7 +28,7 @@ there is nothing left to take.
     The opponent takes a bye, so neither game is rated.
     {% endcomment %}
     {% for side in entry.sides %}
-    <button type="button" class="btn-forfeit" title="{{ side.display_name }} forfeits this game; their opponent takes a bye"
+    <button type="button" class="btn-forfeit unimportant" title="{{ side.display_name }} forfeits this game; their opponent takes a bye"
         data-on:click="@post('{% url 'forfeit_game' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {round: {{ selected_round }}, player: '{{ side.key }}'}})">{{ side.display_name }} forfeits</button>
     {% endfor %}
     {% endif %}
