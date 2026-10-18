@@ -1023,3 +1023,46 @@ class ReplayCommandTests(LoggedTournamentMixin, TestCase):
         with self.assertRaisesRegex(CommandError, r"No player with number .* at seq \d+"):
             call_command("replay_tournament", path)
         self.assertEqual(Tournament.objects.count(), before)
+
+
+class FixedByeReplayTests(LoggedTournamentMixin, TestCase):
+    def test_a_fixed_bye_replays(self):
+        # Three players, so round 1 has a bye; fix it on the top seed, through
+        # the inline picker and then the grid, and publish.
+        self.client.post(
+            reverse("tournament_create"),
+            {"name": "Champs", "location": "Reno", "start_date": "2026-03-15",
+             "editor_usernames": ""},
+        )
+        tournament = Tournament.objects.get(name="Champs")
+        division = tournament.divisions.get()
+        self._post_json("division_entrants_edit", division, {"rows": [
+            {"number": i + 1, "player": p.pk, "dropped": False}
+            for i, p in enumerate(self.players[:3])
+        ]})
+        self._post_json("division_round_pairings", division, {
+            "blocks": [{"pairing": "KotH", "rounds": 2, "pair_from": 1}]
+        })
+        self.client.get(reverse("division_pair_rounds", kwargs=division.slug_kwargs()))
+        alice = division.entrants.get(player__name="Alice")
+        self.client.post(
+            reverse("add_fixed_pairing", kwargs=division.slug_kwargs()),
+            {"round": 1, "entrant1": alice.pk, "entrant2": "bye"},
+        )
+        bye = division.bye_entrant()
+        bob = division.entrants.get(player__name="Bob")
+        self._post_json("division_fixed_pairings", division, {"rows": [
+            {"round_number": 1, "entrant1": alice.pk, "entrant2": bye.pk},
+            {"round_number": 2, "entrant1": bye.pk, "entrant2": bob.pk},
+        ]})
+        self.assertEqual(division.fixed_pairings.count(), 2)
+        self.client.post(
+            reverse("publish_round", kwargs=division.slug_kwargs()), {"round": 1}
+        )
+        slip = division.result_slips.get(round=1, loser=bye)
+        self.assertEqual(slip.winner, alice)
+
+        ctx = replay(events_from_tournament(tournament), verify=True)
+        self.assertEqual(
+            division_digest(ctx.tournament.divisions.get()), division_digest(division)
+        )

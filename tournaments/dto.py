@@ -161,8 +161,14 @@ class FixedPairingDTO(DataClassJsonMixin):
         except (ValueError, TypeError):
             return None
 
-    def validate(self, valid_entrant_ids: set[int], seen_per_round: dict[int, set[int]]) -> list[str]:
-        """Return list of validation error strings."""
+    def validate(
+        self,
+        valid_entrant_ids: set[int],
+        seen_per_round: dict[int, set[int]],
+        bye_ids: frozenset[int] | set[int] = frozenset(),
+    ) -> list[str]:
+        """Return list of validation error strings. The bye (``bye_ids``) may
+        appear in several rows of a round: each is a player sitting out."""
         errors = []
         if self.entrant1 == self.entrant2:
             errors.append("entrant1 and entrant2 must be different.")
@@ -179,8 +185,7 @@ class FixedPairingDTO(DataClassJsonMixin):
         elif self.entrant2 in seen:
             errors.append(f"player 2 already paired in round {self.round_number}.")
         else:
-            seen.add(self.entrant1)
-            seen.add(self.entrant2)
+            seen.update({self.entrant1, self.entrant2} - set(bye_ids))
         return errors
 
     def to_db_kwargs(self) -> dict:

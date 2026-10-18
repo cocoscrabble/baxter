@@ -50,6 +50,8 @@ from .forms import (
 )
 from .fake_tournament import create_fake_tournament, default_fake_tournament_name
 from .fixed_pairings import (
+    FIXED_BYE_CHOICE,
+    bye_is_offered,
     add_fixed_pairing,
     remove_fixed_pairing,
     remove_fixed_pairings,
@@ -98,6 +100,7 @@ from .grids import BoardTableMapGrid, EntrantsGrid, FixedPairingsGrid, FixedTabl
 from coco_ratings.identity import canonical_player_number
 from .admin_log import logged
 from .models import (
+    BYE_PLAYER_NUMBER,
     EDIT_SCOPES,
     AdminAction,
     Division,
@@ -1322,18 +1325,24 @@ class AddFixedPairingView(LoginRequiredMixin, CanEditDivisionMixin, View):
         entrant1_id, error = _read_int(data, "entrant1")
         if error:
             return error
-        entrant2_id, error = _read_int(data, "entrant2")
-        if error:
-            return error
         e1 = division.entrants.filter(pk=entrant1_id).select_related("player").first()
-        e2 = division.entrants.filter(pk=entrant2_id).select_related("player").first()
+        # The second picker may offer the bye, as a sentinel rather than a pk:
+        # the bye entrant need not exist yet, and rendering must not create it.
+        if data.get("entrant2") == FIXED_BYE_CHOICE:
+            key2 = BYE_PLAYER_NUMBER
+        else:
+            entrant2_id, error = _read_int(data, "entrant2")
+            if error:
+                return error
+            e2 = division.entrants.filter(pk=entrant2_id).select_related("player").first()
+            key2 = e2.key if e2 is not None and e2 != e1 else None
         error = None
-        if e1 is not None and e2 is not None and e1 != e2:
+        if e1 is not None and key2 is not None:
             _, error = add_fixed_pairing_cmd(
                 division.tournament, request.user,
                 {
                     "division": division.name, "round": round_number,
-                    "player1": e1.key, "player2": e2.key,
+                    "player1": e1.key, "player2": key2,
                 },
             )
         return _pairings_body_response(request, division, select_round=round_number, error=error)
@@ -1405,7 +1414,11 @@ def _editor_pairings_context(division, presenter):
     Keeps the publish control and the inline fixed-pairing editor consistent
     whichever endpoint rendered the ``_pairings_body`` swap unit.
     """
-    context = {"entrants": _entrants_for_editing(division)}
+    context = {
+        "entrants": _entrants_for_editing(division),
+        "offer_fixed_bye": bye_is_offered(division),
+        "fixed_bye_choice": FIXED_BYE_CHOICE,
+    }
     msg = presenter.waiting_message
     if msg:
         context["waiting_message"] = msg

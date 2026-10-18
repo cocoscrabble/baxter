@@ -281,14 +281,24 @@ def _entrant(division, key):
     return division.entrants.get(player__player_number=key)
 
 
+def _fixture_entrant(division, key):
+    """Like ``_entrant``, but a fixed pairing may also name the bye — a director
+    deciding who sits out an odd round. Created on demand, as replay does."""
+    from tournaments.models import is_reserved_player_number
+
+    if is_reserved_player_number(key):
+        return division.bye_entrant()
+    return _entrant(division, key)
+
+
 @records_event("fixed_pairing_added")
 def add_fixed_pairing_cmd(tournament, actor, payload):
     """payload: {division, round, player1, player2} — players by number."""
     from tournaments.fixed_pairings import add_fixed_pairing
 
     division = _division(tournament, payload["division"])
-    e1 = _entrant(division, payload["player1"])
-    e2 = _entrant(division, payload["player2"])
+    e1 = _fixture_entrant(division, payload["player1"])
+    e2 = _fixture_entrant(division, payload["player2"])
     ok, error = add_fixed_pairing(division, payload["round"], e1.pk, e2.pk)
     return EventResult(
         payload=payload, division=division, result=(ok, error), record=ok
@@ -302,8 +312,8 @@ def remove_fixed_pairing_cmd(tournament, actor, payload):
     from tournaments.models import FixedPairing
 
     division = _division(tournament, payload["division"])
-    e1 = _entrant(division, payload["player1"])
-    e2 = _entrant(division, payload["player2"])
+    e1 = _fixture_entrant(division, payload["player1"])
+    e2 = _fixture_entrant(division, payload["player2"])
     fp = FixedPairing.objects.filter(
         division=division, round_number=payload["round"]
     ).filter(

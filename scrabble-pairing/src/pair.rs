@@ -377,6 +377,19 @@ pub fn pair(input: &PairingInput) -> Vec<RoundResult> {
 
     let players = &input.players;
     let slips = &input.result_slips;
+    // A fixed bye may arrive spelled however the caller spells the bye (Baxter
+    // sends its reserved number, "BYE"); strategies that match pins by name
+    // expect the bye they build themselves, so spell it theirs.
+    let fixed_pairings: HashMap<i32, Vec<(String, String)>> = input
+        .fixed_pairings
+        .iter()
+        .map(|(&round, pins)| {
+            let canon = |n: &String| {
+                if n.eq_ignore_ascii_case(BYE_NAME) { BYE_NAME.to_string() } else { n.clone() }
+            };
+            (round, pins.iter().map(|(a, b)| (canon(a), canon(b))).collect())
+        })
+        .collect();
 
     let mut repeats = Repeats::default();
     let mut starts = Starts::new();
@@ -401,7 +414,7 @@ pub fn pair(input: &PairingInput) -> Vec<RoundResult> {
                 players,
                 slips,
                 &rps,
-                &input.fixed_pairings,
+                &fixed_pairings,
                 &input.published_pairings,
                 &input.inactive_players,
                 &repeats,
@@ -1327,6 +1340,23 @@ mod tests {
         let m = meetings(&out);
         assert_eq!(m.len(), 15); // C(6, 2)
         assert!(m.values().all(|&c| c == 1), "repeats: {m:?}");
+    }
+
+    #[test]
+    fn round_robin_fixed_bye_in_any_spelling() {
+        // 5 players: the bye is a phantom sixth. Baxter pins it by its reserved
+        // number "BYE"; the solver must take that as its own "Bye".
+        let json = format!(
+            r#"{{"players":[{}],"round_pairings":[{}],"fixed_pairings":{{"2":[["P3","BYE"]]}}}}"#,
+            rr_players_json(5),
+            rr_rounds_json(5, "RoundRobin"),
+        );
+        let out = pair(&input(&json));
+        assert!(out.iter().all(|r| r.error.is_none()), "{:?}", out);
+        assert!(round_pairs(&out, 2).iter().any(|(a, b)| {
+            (a == "P3" && b == "Bye") || (a == "Bye" && b == "P3")
+        }));
+        assert_eq!(meetings(&out).len(), 10); // C(5, 2)
     }
 
     #[test]

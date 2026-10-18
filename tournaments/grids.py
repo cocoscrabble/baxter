@@ -3,6 +3,7 @@
 from editgrid.grids import Column, EditGrid, JsonBlobGrid
 
 from .display import display_names, division_labels, label_entrants
+from .fixed_pairings import bye_entrant_ids, bye_is_offered
 from .dto import EntrantDTO, FixedPairingDTO, FixedTableDTO, ResultSlipDTO
 from .models import (
     DivisionSettings,
@@ -95,8 +96,9 @@ def _result_entrants(division):
     entrant: ``materialize_byes`` writes a real slip for every bye, and the grid
     loads the division's whole result set. Everywhere else ``division.entrants``
     (the manager that hides the bye) is what is wanted, which is why this is not
-    folded into ``_entrant_key_map`` and friends — a fixed pairing against the
-    bye is meaningless and must stay unofferable.
+    folded into ``_entrant_key_map`` and friends. (Fixed pairings may name the
+    bye too, to choose who sits out an odd round; ``FixedPairingsGrid`` handles
+    that itself.)
 
     The bye is included only when it already exists. A division that has never
     had an odd round has no bye entrant, and creating one here — on a read —
@@ -517,7 +519,8 @@ class FixedPairingsGrid(EditGrid):
     ]
 
     def to_portable(self, rows, division):
-        keys = _entrant_key_map(division)
+        # The bye included: a fixed pairing may name it (who sits out an odd round).
+        keys = {e.pk: e.player.player_number for e in _result_entrants(division)}
         return [
             {
                 "round_number": r["round_number"],
@@ -548,11 +551,17 @@ class FixedPairingsGrid(EditGrid):
 
     def from_portable(self, rows, division):
         pks = _entrant_pk_by_key(division)
+
+        def resolve(key):
+            if key is not None and is_reserved_player_number(key):
+                return division.bye_entrant().pk
+            return pks.get(key)
+
         return [
             {
                 "round_number": r["round_number"],
-                "entrant1": pks.get(r["entrant1"]),
-                "entrant2": pks.get(r["entrant2"]),
+                "entrant1": resolve(r["entrant1"]),
+                "entrant2": resolve(r["entrant2"]),
             }
             for r in rows
         ]
@@ -565,10 +574,19 @@ class FixedPairingsGrid(EditGrid):
         }
 
     def lookups(self, division):
-        return {"entrantValues": _entrant_values(division)}
+        values = _entrant_values(division)
+        bye_ids = bye_entrant_ids(division)
+        if bye_ids or bye_is_offered(division):
+            # Creating the bye here is a write on a read, but only for an odd
+            # field, which needs one for its first draft anyway.
+            bye = division.bye_entrant()
+            values.append({"id": bye.pk, "label": bye.player.name})
+        return {"entrantValues": values}
 
     def validate_args(self, division):
-        return (set(division.entrants.values_list("pk", flat=True)), {})
+        bye_ids = bye_entrant_ids(division)
+        valid = set(division.entrants.values_list("pk", flat=True)) | bye_ids
+        return (valid, {}, bye_ids)
 
 
 class FixedTablesGrid(EditGrid):
