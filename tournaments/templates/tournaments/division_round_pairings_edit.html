@@ -25,15 +25,16 @@
             {% comment %}
             Deliberately not a PairingMethod: it generates nothing, so there is
             no server side to it. It reveals the block editor and leaves the
-            schedule to the director.
+            schedule to the director. It is the default: a generated schedule is
+            a choice the director makes, not something to fall into.
             {% endcomment %}
-            <option value="custom">Custom</option>
+            <option value="custom" selected>Custom</option>
         </select>
-        <span id="method-rounds-controls">
+        <span id="method-rounds-controls" hidden>
             <label for="method-total-rounds">Total Rounds</label>
             <input id="method-total-rounds" type="number" min="14" value="{{ method_total_rounds }}">
         </span>
-        <button id="generate-method-btn" type="button">Generate Pairings Schedule</button>
+        <button id="generate-method-btn" type="button">Save Schedule and View Pairings</button>
         <span id="method-status"></span>
     </div>
     {% comment %}
@@ -43,14 +44,14 @@
     <p class="note">After you generate the pairings schedule, go to
         <a href="{% url 'division_pair_rounds' division.tournament.slug division.slug %}">Pair Rounds</a>
         to view and publish round pairings.</p>
-    <p class="empty-state" data-method="SwissContenders">
+    <p class="empty-state" data-method="SwissContenders" hidden>
         Swiss Contenders uses no-repeat Swiss for the first third,
         Swiss pairings minimizing repeats for the middle third, and COP for the
         final third. Minimal-repeat Swiss remains repeat-free while possible.
         Extra rounds go first to the middle third, then the first.
         Swiss Contenders requires the tournament to have a minimum of 14 rounds.
     </p>
-    <p class="empty-state" data-method="custom" hidden>
+    <p class="empty-state" data-method="custom">
         Build the schedule yourself, one block at a time — a pairing strategy
         and how many rounds it runs for. Then click <strong>Save Schedule and View Pairings</strong>
         to save your blocks and generate draft pairings on Pair Rounds.
