@@ -854,6 +854,18 @@ input[type="submit"]:hover {
     background-color: #fff;
 }
 
+/* A rarely-needed action (e.g. forfeits) that should recede next to the
+   ordinary buttons around it. */
+.unimportant {
+    background-color: #fff;
+    color: var(--color-primary);
+    border: 1px solid var(--color-primary);
+}
+
+.unimportant:hover {
+    background-color: var(--color-primary-light);
+}
+
 /* Filled purple button, used on anchors that should read as a primary action
    (e.g. the "Submit results" links in the pairings table). */
 .btn-primary {
