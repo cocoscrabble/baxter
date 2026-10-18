@@ -82,7 +82,7 @@ in words. Two views of the same data, not a duplicate to be merged.
                 <form method="post" action="{% url 'division_rejoin_entrant' division.tournament.slug division.slug %}">
                     {% csrf_token %}
                     <input type="hidden" name="player" value="{{ entrant.player.player_number }}">
-                    <button type="submit" class="btn-secondary btn-small">Rejoin</button>
+                    <button type="submit" class="unimportant btn-small">Rejoin</button>
                 </form>
                 {% else %}
                 <form method="post" action="{% url 'division_withdraw_entrant' division.tournament.slug division.slug %}">
