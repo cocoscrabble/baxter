@@ -92,6 +92,7 @@
             <select data-bind="fixedSecond">
                 <option value="">— player —</option>
                 {% for e in entrants %}<option value="{{ e.pk }}">{{ e.display_name }}</option>{% endfor %}
+                {% if offer_fixed_bye %}<option value="{{ fixed_bye_choice }}">Bye</option>{% endif %}
             </select>
             <button type="button"
                 data-attr-disabled="$fixedFirst === '' || $fixedSecond === '' || $fixedFirst === $fixedSecond"

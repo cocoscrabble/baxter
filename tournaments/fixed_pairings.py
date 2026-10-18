@@ -9,7 +9,7 @@ any *unplayed* round and only those rounds are reverted to draft and regenerated
 from django.db.models import Q
 
 from .generate_pairings import regenerate_pairings
-from .models import FixedPairing
+from .models import Entrant, FixedPairing
 from .pairing.base import PairingData, PairingError
 from .pairing.round_pairing import RP
 
@@ -71,12 +71,37 @@ def _already_played(division, entrant1_id, entrant2_id) -> bool:
     ).exists()
 
 
+# What the inline picker posts for the bye, in place of an entrant pk.
+FIXED_BYE_CHOICE = "bye"
+
+
+def bye_is_offered(division) -> bool:
+    """Whether the fixed-pairing pickers offer the bye: the field is odd, so
+    somebody sits out each round and the director may choose who."""
+    return division.entrants.filter(dropped=False).count() % 2 == 1
+
+
+def bye_entrant_ids(division) -> set[int]:
+    return set(
+        Entrant.all_objects.filter(division=division, player__is_bye=True)
+        .values_list("pk", flat=True)
+    )
+
+
 def add_fixed_pairing(division, round_number, entrant1_id, entrant2_id) -> tuple[bool, str | None]:
-    """Add a fixed pairing and regenerate. Returns (ok, error_message)."""
+    """Add a fixed pairing and regenerate. Returns (ok, error_message).
+
+    One side may be the bye entrant: that fixes who gets the bye that round
+    (the engine then hands out no other, as the rest of the field is even).
+    """
     valid_ids = set(division.entrants.values_list("pk", flat=True))
+    bye_ids = bye_entrant_ids(division)
+    if entrant1_id in bye_ids:
+        # Store real-player-first, as every bye row is.
+        entrant1_id, entrant2_id = entrant2_id, entrant1_id
     if (
         entrant1_id not in valid_ids
-        or entrant2_id not in valid_ids
+        or entrant2_id not in valid_ids | bye_ids
         or entrant1_id == entrant2_id
     ):
         return False, None  # silent rejection (caller redirects without flash)
@@ -97,6 +122,8 @@ def add_fixed_pairing(division, round_number, entrant1_id, entrant2_id) -> tuple
     already_fixed = set()
     for fp in division.fixed_pairings.filter(round_number=round_number):
         already_fixed.update([fp.entrant1_id, fp.entrant2_id])
+    # The bye is every absent player's opponent, so it may be fixed more than once.
+    already_fixed -= bye_ids
     if entrant1_id in already_fixed or entrant2_id in already_fixed:
         return False, "One or both players already have a fixed pairing for this round."
 

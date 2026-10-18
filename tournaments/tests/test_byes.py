@@ -625,3 +625,115 @@ class ByeIsNotSeededTests(TestCase):
         self.bye.refresh_from_db()
         self.assertEqual(self.bye.number, 3)
         self.assertEqual(self._numbers(), [(1, "Rated"), (2, "Unrated"), (4, "Guest")])
+
+
+class FixedByeTests(TestCase):
+    """A director can fix who gets the bye in an odd round."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(username="fixedbye", password="p")
+
+    def _bye_holders(self, division, round_num):
+        return [
+            (p.first if p.second.player.is_bye else p.second).player.name
+            for p in division.pairings.filter(round=round_num)
+            if p.first.player.is_bye or p.second.player.is_bye
+        ]
+
+    def _key(self, division, name):
+        return division.entrants.get(player__name=name).key
+
+    def _fix_bye(self, division, name, round_num=1):
+        from tournaments.commands import add_fixed_pairing_cmd
+
+        number = self._key(division, name)
+        return add_fixed_pairing_cmd(
+            division.tournament, self.user,
+            {"division": division.name, "round": round_num,
+             "player1": number, "player2": BYE_PLAYER_NUMBER},
+        )
+
+    def test_fixed_bye_overrides_the_automatic_choice(self):
+        division = make_division(self.user, 5, 3)
+        regenerate_pairings(division)
+        # KotH gives the bye to the lowest seed; fix it on the top seed instead.
+        self.assertEqual(self._bye_holders(division, 1), ["P5"])
+        ok, error = self._fix_bye(division, "P1")
+        self.assertTrue(ok, error)
+        self.assertEqual(self._bye_holders(division, 1), ["P1"])
+        self.assertEqual(division.pairings.filter(round=1).count(), 3)
+
+    def test_fixed_bye_in_a_round_robin(self):
+        division = make_division(self.user, 5, 5, pairing="RoundRobin")
+        regenerate_pairings(division)
+        ok, error = self._fix_bye(division, "P3", round_num=2)
+        self.assertTrue(ok, error)
+        self.assertEqual(self._bye_holders(division, 2), ["P3"])
+        # Still a round robin: everyone sits out exactly once.
+        holders = Counter(
+            name for r in range(1, 6) for name in self._bye_holders(division, r)
+        )
+        self.assertEqual(holders, Counter(f"P{i}" for i in range(1, 6)))
+
+    def test_fixed_bye_is_removable_through_the_command(self):
+        from tournaments.commands import remove_fixed_pairing_cmd
+
+        division = make_division(self.user, 5, 3)
+        self._fix_bye(division, "P1")
+        ok, error = remove_fixed_pairing_cmd(
+            division.tournament, self.user,
+            {"division": division.name, "round": 1,
+             "player1": self._key(division, "P1"), "player2": BYE_PLAYER_NUMBER},
+        )
+        self.assertTrue(ok, error)
+        self.assertFalse(division.fixed_pairings.exists())
+        self.assertEqual(self._bye_holders(division, 1), ["P5"])
+
+    def test_inline_picker_offers_the_bye_only_for_an_odd_field(self):
+        from tournaments.fixed_pairings import bye_is_offered
+
+        self.assertTrue(bye_is_offered(make_division(self.user, 5, 3)))
+        self.assertFalse(
+            bye_is_offered(make_division(self.user, 4, 3, first_number=10))
+        )
+
+    def test_add_view_accepts_the_bye_choice(self):
+        division = make_division(self.user, 5, 3)
+        regenerate_pairings(division)
+        self.client.force_login(self.user)
+        p1 = division.entrants.get(player__name="P1")
+        self.client.post(
+            reverse("add_fixed_pairing", kwargs=division.slug_kwargs()),
+            {"round": 1, "entrant1": p1.pk, "entrant2": "bye"},
+        )
+        self.assertEqual(self._bye_holders(division, 1), ["P1"])
+
+    def test_grid_offers_and_accepts_the_bye(self):
+        from tournaments.grids import FixedPairingsGrid
+
+        division = make_division(self.user, 5, 3)
+        grid = FixedPairingsGrid()
+        values = grid.lookups(division)["entrantValues"]
+        bye = division.bye_entrant()
+        self.assertIn(bye.pk, [v["id"] for v in values])
+
+        p1, p2 = (division.entrants.get(player__name=n).pk for n in ("P1", "P2"))
+        rows = [
+            {"round_number": 1, "entrant1": p1, "entrant2": bye.pk},
+            # Typed bye-first, and a second bye in the same round: both fine.
+            {"round_number": 1, "entrant1": bye.pk, "entrant2": p2},
+        ]
+        validated, errors = grid.validate(rows, division)
+        self.assertEqual(errors, [])
+        self.assertEqual(len(validated), 2)
+        portable = grid.to_portable(rows, division)
+        self.assertEqual(portable[0]["entrant2"], BYE_PLAYER_NUMBER)
+        self.assertEqual(grid.from_portable(portable, division), rows)
+
+    def test_grid_does_not_offer_the_bye_for_an_even_field(self):
+        from tournaments.grids import FixedPairingsGrid
+
+        division = make_division(self.user, 4, 3)
+        values = FixedPairingsGrid().lookups(division)["entrantValues"]
+        self.assertNotIn("Bye", [v["label"] for v in values])

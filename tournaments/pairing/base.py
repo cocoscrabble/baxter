@@ -166,9 +166,12 @@ class PairingData:
         ]
         fixed: dict[int, list[tuple[str, str]]] = defaultdict(list)
         for fp in division.fixed_pairings.select_related("entrant1__player", "entrant2__player").all():
-            fixed[fp.round_number].append(
-                (fp.entrant1.player.player_number, fp.entrant2.player.player_number)
-            )
+            pair = (fp.entrant1.player.player_number, fp.entrant2.player.player_number)
+            # A fixed bye goes to the engine the way it makes its own:
+            # (player, bye). The grid lets a director type it either way round.
+            if fp.entrant1.player.is_bye:
+                pair = pair[::-1]
+            fixed[fp.round_number].append(pair)
         # Published pairings of non-draft rounds: the engine replays them into its
         # start ledger and the round-robin solver pins them, so an in-progress
         # round's printed-but-unplayed games are honored. Draft rounds are excluded
