@@ -190,7 +190,7 @@ two lists.</p>
                     {% csrf_token %}
                     <input type="hidden" name="action" value="unlink">
                     <input type="hidden" name="player_number" value="{{ row.player.player_number }}">
-                    <button type="submit" class="btn-secondary">Unlink</button>
+                    <button type="submit" class="unimportant">Unlink</button>
                 </form>
                 {% else %}
                 <a href="?link={{ row.player.player_number }}">Find in WESPA</a>

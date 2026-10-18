@@ -10,7 +10,7 @@
         <form method="post" action="{% url 'division_reseed_entrants' division.tournament.slug division.slug %}"
               title="Renumber every entrant by rating, highest first. Only possible before the first round is published.">
             {% csrf_token %}
-            <button type="submit" class="btn-secondary">Reseed by rating</button>
+            <button type="submit" class="unimportant">Reseed by rating</button>
         </form>
         {% endif %}
         <a href="{% url 'division_entrants_edit' division.tournament.slug division.slug %}" class="btn-primary">Edit Entrants</a>
