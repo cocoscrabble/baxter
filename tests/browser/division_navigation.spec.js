@@ -20,10 +20,12 @@ async function renderDivisionStandings(page) {
               <div class="nav-left">
                 <span class="nav-logo-link"><span class="nav-logo" style="display:inline-block;width:28px"></span></span>
                 <a class="nav-brand">Baxter</a>
+              </div>
+              <div class="nav-breadcrumbs">
                 <span class="nav-sep">/</span>
-                <a>Vancouver End of Summer</a>
+                <a class="tournament-name">Charlottesville Autumn One-Day</a>
                 <span class="nav-sep">/</span>
-                <a>Division 1</a>
+                <a class="division-name">Division 1</a>
               </div>
               <div class="nav-right"><a>Login</a></div>
             </div>
@@ -119,3 +121,39 @@ test("mobile division header and standings remain readable", async ({ page }) =>
   const spread = await textRect(page.locator("th.standings-spread"));
   expect(spread.left - record.right).toBeGreaterThanOrEqual(8);
 });
+
+for (const width of [320, 390, 430, 1280]) {
+  test(`tournament breadcrumbs use available width at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await renderDivisionStandings(page);
+    const layout = await page.locator(".nav-top").evaluate((nav) => {
+      const breadcrumbs = nav.querySelector(".nav-breadcrumbs");
+      const rect = breadcrumbs.getBoundingClientRect();
+      const navRect = nav.getBoundingClientRect();
+      const title = breadcrumbs.querySelector(".tournament-name");
+      const range = document.createRange();
+      range.selectNodeContents(title);
+      const titleLines = range.getClientRects().length;
+      const division = breadcrumbs.querySelector(".division-name");
+      const divisionRect = division.getBoundingClientRect();
+      const titleRect = title.getBoundingClientRect();
+      return {
+        width: rect.width,
+        navWidth: navRect.width,
+        titleLines,
+        divisionTop: divisionRect.top,
+        titleBottom: titleRect.bottom,
+        pageWidth: document.documentElement.scrollWidth,
+        viewportWidth: window.innerWidth,
+      };
+    });
+    expect(layout.pageWidth).toBeLessThanOrEqual(layout.viewportWidth);
+    if (width <= 600) {
+      expect(layout.width).toBeCloseTo(layout.navWidth, 0);
+      expect(layout.titleLines).toBe(1);
+    }
+    // The division may wrap with the title; it must not get an extra row
+    // simply because the two links are separate flex items.
+    if (width >= 430) expect(layout.divisionTop).toBeLessThan(layout.titleBottom);
+  });
+}

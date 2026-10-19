@@ -471,9 +471,10 @@ h3 { font-size: 1.02rem; margin: var(--space-md) 0 var(--space-sm); }
 }
 
 .nav-top {
-    display: flex;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    column-gap: var(--space-xs);
     align-items: center;
-    justify-content: space-between;
 }
 
 .nav-left {
@@ -498,12 +499,18 @@ h3 { font-size: 1.02rem; margin: var(--space-md) 0 var(--space-sm); }
     user-select: none;
 }
 
-.nav-left a {
+.nav-breadcrumbs {
+    overflow-wrap: anywhere;
+}
+
+.nav-left a,
+.nav-breadcrumbs a {
     text-decoration: none;
     color: var(--color-link);
 }
 
-.nav-left a:hover {
+.nav-left a:hover,
+.nav-breadcrumbs a:hover {
     text-decoration: underline;
 }
 
@@ -651,30 +658,25 @@ h3 { font-size: 1.02rem; margin: var(--space-md) 0 var(--space-sm); }
     vertical-align: middle;
 }
 
-/* Breadcrumbs can be longer than a phone screen. Let the left side take the
-   available room and wrap within it, while keeping the account links separate
-   and visible on the right. */
+/* Give the tournament and division the full phone width below the brand and
+   account links. Inline breadcrumbs wrap together, rather than as flex items. */
 @media (max-width: 600px) {
     .nav-top {
-        align-items: flex-start;
+        grid-template-columns: minmax(0, 1fr) auto;
         gap: var(--space-sm);
     }
 
-    .nav-left {
-        flex: 1 1 auto;
-        min-width: 0;
-        flex-wrap: wrap;
-        row-gap: 2px;
-        white-space: normal;
-    }
-
-    .nav-left a {
-        overflow-wrap: anywhere;
+    .nav-breadcrumbs {
+        grid-column: 1 / -1;
+        grid-row: 2;
     }
 
     .nav-right {
-        flex: 0 0 auto;
+        grid-column: 2;
+        grid-row: 1;
     }
+
+    .nav-breadcrumbs:empty { display: none; }
 }
 
 /* ── Messages ─────────────────────────────────────────────── */
