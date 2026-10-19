@@ -15,8 +15,8 @@
             <div class="nav-left">
                 <a href="https://cocoscrabble.org" class="nav-logo-link"><img src="{% static 'img/coco-mark.png' %}" alt="COCO logo" class="nav-logo"></a>
                 <a href="{% url 'tournament_list' %}" class="nav-brand">Baxter</a>
-                {% block breadcrumbs %}{% endblock %}
             </div>
+            <div class="nav-breadcrumbs">{% block breadcrumbs %}{% endblock %}</div>
             <div class="nav-right">
                 {% if user.is_authenticated %}
                     {% if user.is_admin %}<a href="{% url 'admin_index' %}">Admin</a>{% endif %}
