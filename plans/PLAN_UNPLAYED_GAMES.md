@@ -317,6 +317,12 @@ original's, and no entrant should be the bye player.
 
 ### Phase 6: backfill (`../ratings` `results/`)
 
+**Source data.** "Export the database" on `/manage/` (`tournaments/db_export.py`)
+downloads production as a `loaddata` fixture. Restore it into a fresh local
+database (`migrate`, then `loaddata`) on a checkout at the revision in the
+file name. Then every re-export and comparison below runs locally against
+production's data.
+
 **6a. Baxter-produced files.** `pdx2032-sept2026` and `vancouver-sept2026`
 are the only files with number columns. Re-export both from production Baxter
 with the phase-4 exporter and replace the files. The diff must only **add**
