@@ -179,12 +179,13 @@ pub fn results_after_round(slips: &[ResultSlipData], round: i32) -> Results {
     res
 }
 
-/// Initial seeding order: players by descending rating (ties keep input order).
+/// Initial seeding order: by seed when the caller gives one, else by descending
+/// rating (ties keep input order). See `PlayerData::seed`.
 /// Dropped (withdrawn) entrants are unpairable, so they never seed a round.
 pub fn seedings(players: &[PlayerData]) -> Vec<Player> {
     let mut indexed: Vec<&PlayerData> = players.iter().filter(|p| !p.dropped).collect();
-    // sort_by is stable, so equal ratings keep their original input order.
-    indexed.sort_by(|a, b| b.rating.cmp(&a.rating));
+    // sort_by_key is stable, so equal keys keep their original input order.
+    indexed.sort_by_key(|p| p.seeding_key());
     indexed.into_iter().map(|p| Player::new(&p.name)).collect()
 }
 
@@ -193,7 +194,7 @@ pub fn seedings(players: &[PlayerData]) -> Vec<Player> {
 /// Round 0 uses the seedings; later rounds use accumulated results. Withdrawn
 /// players are dropped from the pairable field (their games still counted for
 /// everyone else), and a late entrant with no results yet is appended as a zero
-/// record — in seeding (rating) order among newcomers — so it starts getting
+/// record — in seeding order among newcomers — so it starts getting
 /// paired. The bye is never a competitor, and `excluded` (fixed players this
 /// round) are filtered so a strategy only sees the remaining field.
 pub fn standings_after_round(
@@ -220,7 +221,7 @@ pub fn standings_after_round(
             .iter()
             .filter(|p| !p.dropped && !present.contains(&p.name))
             .collect();
-        newcomers.sort_by(|a, b| b.rating.cmp(&a.rating));
+        newcomers.sort_by_key(|p| p.seeding_key());
         for p in newcomers {
             s.push(Player::new(&p.name));
         }
@@ -371,6 +372,7 @@ mod tests {
             name: name.into(),
             rating,
             dropped: false,
+            seed: None,
         }
     }
 
@@ -390,6 +392,26 @@ mod tests {
         let es = [player("Lo", 1500), player("Hi", 1900), player("Mid", 1700)];
         let names: Vec<_> = seedings(&es).into_iter().map(|p| p.name).collect();
         assert_eq!(names, vec!["Hi", "Mid", "Lo"]);
+    }
+
+    #[test]
+    fn a_given_seed_overrides_the_rating() {
+        // Seeded 1-2-3, but Lo's rating has since overtaken both (a refresh
+        // after the division started). The seed is what counts, including for
+        // a late entrant appended after round 1.
+        let seeded = |name: &str, rating: i32, seed: i32| PlayerData {
+            seed: Some(seed),
+            ..player(name, rating)
+        };
+        let es = [seeded("Hi", 1700, 1), seeded("Mid", 1600, 2), seeded("Lo", 2000, 3)];
+        let names: Vec<_> = seedings(&es).into_iter().map(|p| p.name).collect();
+        assert_eq!(names, vec!["Hi", "Mid", "Lo"]);
+
+        let late = [seeded("A", 1500, 1), seeded("B", 1400, 2), seeded("L1", 1000, 3), seeded("L2", 2000, 4)];
+        let slips = [slip(1, "A", "B", 500, 400, true)];
+        let s = standings_after_round(&late, &slips, 1, &std::collections::HashSet::new());
+        let names: Vec<_> = s.iter().map(|p| p.name.clone()).collect();
+        assert_eq!(names, vec!["A", "B", "L1", "L2"]);
     }
 
     #[test]

@@ -266,9 +266,10 @@ Four rules, all easy to break:
 
 `Entrant.number` is the entrant's number **for this tournament** — not a seat,
 not a board, not a table. (Boards and tables are a separate, genuinely physical
-thing: `board_table_map` and `assign_tables`.) Nothing pairs off it; the engine
-keys on rating, and the number is what breaks a tie between equal ratings and
-what the standings show in brackets.
+thing: `board_table_map` and `assign_tables`.) It is what the engine and the
+standings order the field by: `PlayerData.seed` is sent to the engine, which
+then never consults the rating. **Ratings only set the seeds** — so a rating
+refreshed mid-event, or one an old log never recorded, reshuffles nothing.
 
 **Nobody types it.** It is derived from the pinned rating, highest rated is 1,
 ties broken on the player number — `Entrant.seeding_for` /

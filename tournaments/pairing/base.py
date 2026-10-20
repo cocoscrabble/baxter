@@ -31,9 +31,13 @@ class PlayerData:
     key: str
     name: str
     # The *pinned* rating, from the entrant, not the live one on the player.
-    # Seeding reads this so a rating that drifts mid-tournament — a WESPA pull,
-    # a roster sync — cannot reshuffle rounds that are already being played
+    # Only consulted when there is no ``seed``.
     rating: int
+    # The entrant number: the seeding itself. Ratings only *set* the seeds
+    # (``Entrant.seeding_for``); once set, the seed is what orders the field, so
+    # a rating that moves later — a refresh mid-event, or a replay that cannot
+    # know an old log's ratings — reshuffles nothing.
+    seed: int | None = None
 
     @classmethod
     def from_entrant(cls, entrant) -> "PlayerData":
@@ -41,7 +45,13 @@ class PlayerData:
             key=entrant.player.player_number,
             name=entrant.player.name,
             rating=entrant.rating,
+            seed=entrant.number,
         )
+
+    def seeding_key(self):
+        """By seed when there is one, else by rating, highest first. Mirrors
+        ``PlayerData::seeding_key`` in the engine."""
+        return (self.seed is None, self.seed or 0, -self.rating)
 
 
 @dataclass
@@ -149,11 +159,9 @@ class PairingData:
         # select_related the joined rows every DTO touches: without it, each
         # e.player / slip.winner.player.name is a separate query — an N+1 that
         # dominated for_division for finished divisions (hundreds of slips).
-        # Ordered explicitly, because ``seedings`` below sorts these by rating
-        # *stably* and so inherits this order as its tiebreak. It was relying on
-        # ``Entrant.Meta.ordering`` to be ["number"] — true, but nothing said so,
-        # and a change there would have quietly moved who gets paired with whom
-        # when two entrants share a rating.
+        # Ordered explicitly, as the seeding: ``seedings`` below sorts on the
+        # seed (the number) anyway, but the order is also what the engine is
+        # handed, and nothing should depend on ``Entrant.Meta.ordering``.
         entrants = [
             EntrantData(PlayerData.from_entrant(e), dropped=e.dropped)
             for e in division.entrants.select_related("player").order_by("number")
@@ -479,24 +487,17 @@ Standings = list[Player]
 
 
 def seedings(pd: PairingData, include_dropped: bool = False) -> Standings:
-    """The field in seeding order: by pinned rating, then as handed to us.
+    """The field in seeding order: by seed (the entrant number).
 
-    This is the third place the phrase "seed order" appears, and the one that
-    cannot say it the same way as the others. ``Entrant.seeding_for`` breaks a
-    tie on the player number and ``entrants_for_display`` reads the stored
-    entrant number, but neither number reaches this layer — ``EntrantData``
-    carries a key, a name and a rating, because the engine deliberately pairs
-    off none of the rest.
-
-    So the tiebreak here is the order ``PairingData`` was built in, which
-    ``for_division`` now sets explicitly to the stored seeding. The sort is
-    stable, so equal ratings keep it.
+    Ratings set the seeds and play no further part. A ``PlayerData`` with no
+    seed (the simulator, older tests) falls back to rating order, as the engine
+    does.
     """
     # Dropped entrants are unpairable, so they never seed a round (the pairing
     # path leaves include_dropped False); the standings *display* passes True to
     # keep showing them.
     entrants = [e for e in pd.entrants if include_dropped or not e.dropped]
-    entrants.sort(key=lambda x: -x.player.rating)
+    entrants.sort(key=lambda x: x.player.seeding_key())
     return [Player(e.player.key, e.player.name) for e in entrants]
 
 
@@ -523,7 +524,7 @@ def standings_after_round(
                 s = [p for p in s if p.key not in dropped]
         # A late entrant has no result slips yet, so it never appears in
         # results-derived standings and would silently never be paired. Append
-        # each recordless entrant as a zero record, in seeding (rating) order
+        # each recordless entrant as a zero record, in seeding order
         # among themselves, at the bottom of the field.
         present = {p.key for p in s}
         newcomers = [
@@ -531,7 +532,7 @@ def standings_after_round(
             for e in pd.entrants
             if e.player.key not in present and (include_dropped or not e.dropped)
         ]
-        newcomers.sort(key=lambda e: -e.player.rating)
+        newcomers.sort(key=lambda e: e.player.seeding_key())
         s = s + [Player(e.player.key, e.player.name) for e in newcomers]
     # The bye is never a competitor: it must not appear in any pairing field or
     # in displayed standings. (It is added back as a forced pairing for an odd
