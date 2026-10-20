@@ -369,6 +369,15 @@ so the regeneration happens once.
 list. Optionally run it in CI so a new file with a gap fails unless it is
 listed.
 
+## Interaction with rating milestones
+
+`../ratings/plans/rating-milestones.md` freezes published ratings at a
+committed milestone. If it lands first, which is recommended, decision 4
+no longer rewrites history. The 128-player shift becomes a change to future
+ratings only, and phase 2's golden regeneration is an engine-test update, not
+a published change. The phase-6 backfills of pre-milestone files become
+recorded `amendments`, which update W/L and career games but not ratings.
+
 ## Order and commits
 
 1. ratings phase 1 → ratings phase 2 (separate commits; deploy). Phase 2
