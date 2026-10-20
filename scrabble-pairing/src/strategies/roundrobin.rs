@@ -31,17 +31,6 @@ pub fn pair_double_round_robin(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairi
     rr_block_pairings(ctx, rp, 2)
 }
 
-/// Seeding order with a `Bye` appended for odd fields, so the rotation runs over
-/// an even number of players. Players keep their seeding order; what varies is
-/// which round template lands in which calendar round (see `rr_permutation`).
-fn rr_players(ctx: &Ctx) -> Vec<Player> {
-    let mut players = ctx.standings(0);
-    if !players.len().is_multiple_of(2) {
-        players.push(Player::bye());
-    }
-    players
-}
-
 /// Canonical (sorted) key for an unordered name pair.
 fn canon(a: &str, b: &str) -> (String, String) {
     if a <= b {
@@ -325,7 +314,10 @@ fn validate_block_pins(
 /// every pin set that already worked) and, when that can't place the pins, a
 /// general backtracking completion that searches matchings directly.
 fn rr_block_pairings(ctx: &Ctx, rp: &RoundPairing, k: i32) -> Result<Pairings, String> {
-    let players = rr_players(ctx);
+    // Seeding order, evened out with a phantom bye. Players keep their seeding
+    // order; what varies is which round template lands in which calendar round
+    // (see `rr_permutation`).
+    let players = ctx.standings_with_phantom_bye(0);
     let n = players.len();
     let num_positions = n - 1;
     let template_of_pair = rr_template_of_pair(&players);
@@ -772,10 +764,7 @@ fn charlottesville_rotation(
 /// pairings takes the plain-rotation fast path (byte-identical to the historical
 /// schedule).
 pub fn pair_charlottesville(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings, String> {
-    let mut seeding = ctx.standings(0);
-    if !seeding.len().is_multiple_of(2) {
-        seeding.push(Player::bye());
-    }
+    let seeding = ctx.standings_with_phantom_bye(0);
     let n = seeding.len();
     let (g1, g2) = charlottesville_groups(n);
     if g2.is_empty() {
