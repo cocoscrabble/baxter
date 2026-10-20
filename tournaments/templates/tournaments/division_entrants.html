@@ -36,9 +36,9 @@ which is why they can sit in a table this form does not wrap.
     so nothing changes until you say so.{% else %}Ratings follow the player table
     until the first round is published, so these will be taken then at the latest.{% endif %}</p>
     {% if division_under_way %}
-    <p class="error">This division is already under way. Re-pinning now changes
-    the live rating projection; it does not re-pair rounds that have already gone
-    out, or renumber the entrants.</p>
+    <p class="error">This division is already under way. Updating ratings now changes
+    the live rating projection, but it does not re-pair rounds that have already been 
+    published, or renumber the entrants.</p>
     {% endif %}
     <p>
         <button type="submit" form="refresh-ratings">Update ticked ratings</button>
