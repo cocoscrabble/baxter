@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from tournaments.models import Entrant, Pairing, Player, ResultSlip, RoundPairings
 
-from tournaments.views import live_columns, split_columns
+from tournaments.views import live_columns, live_overhead, live_shape, split_columns
 
 from .test_views import setUpTournament
 
@@ -28,6 +28,16 @@ class LiveLayoutTests(SimpleTestCase):
     def test_a_second_section_counts_toward_the_height(self):
         # Two rounds of pairings stack, so they need more columns than one.
         self.assertGreaterEqual(live_columns([15, 15], 38), live_columns([15], 38))
+
+    def test_tiles_band_whole_sections(self):
+        # Eight ten-row tiles in four columns: two bands, each as tall as its
+        # tallest tile, each costing a subtitle and header row.
+        self.assertEqual(
+            live_shape([10] * 8, 4, tiles=True), (20, live_overhead(2))
+        )
+        self.assertEqual(live_shape([10, 3, 5], 2, tiles=True), (15, live_overhead(2)))
+        # Never more columns than tiles.
+        self.assertEqual(live_columns([4, 4], 10, tiles=True), 2)
 
     def test_split_reads_down_then_across(self):
         self.assertEqual(split_columns(list(range(7)), 3), [[0, 1, 2], [3, 4, 5], [6]])
@@ -64,7 +74,7 @@ class LiveDisplayTests(TestCase):
         return slip
 
     def test_pages_have_no_site_nav(self):
-        for name in ("live_standings", "live_pairings", "live_results"):
+        for name in ("live_standings", "live_pairings", "live_results", "live_statistics"):
             response = self.client.get(self._url(name))
             self.assertEqual(response.status_code, 200)
             self.assertNotContains(response, 'class="navbar"')
@@ -168,3 +178,11 @@ class LiveDisplayTests(TestCase):
         response = self.client.get(self._url("division_standings"))
         for name in ("live_standings", "live_pairings", "live_results"):
             self.assertContains(response, self._url(name))
+
+    def test_statistics_show_each_category_as_a_tile(self):
+        self._create_round(1, RoundPairings.FINISHED, [])
+        self._slip(1, self.entrant1, self.entrant2, timezone.now())
+        response = self.client.get(self._url("live_statistics"))
+        self.assertTrue(response.context["live_tiles"])
+        self.assertEqual(self._subtitles(response)[:2], ["Highest wins", "Highest losses"])
+        self.assertContains(response, "live-grid live-tiles")

@@ -4,7 +4,27 @@
 {# the columns for a landscape one. CSS shows whichever fits the screen. #}
 {# Stacking the columns instead would size each one's cells separately, so #}
 {# they wouldn't line up. #}
-<div id="live-content" style="--live-rows: {{ live_layout.rows }}; --live-cols: {{ live_layout.cols }}; --live-col-rows: {{ live_layout.col_rows }}; --live-col-ems: {{ live_layout.col_ems }}; --live-overhead: {{ live_layout.overhead }};">
+{# live_tiles (the statistics page) keeps each section whole: one stack for #}
+{# portrait, and in landscape the sections themselves fill the columns. #}
+<div id="live-content" style="--live-rows: {{ live_layout.rows }}; --live-cols: {{ live_layout.cols }}; --live-col-rows: {{ live_layout.col_rows }}; --live-col-ems: {{ live_layout.col_ems }}; --live-overhead: {{ live_layout.overhead }}; --live-col-overhead: {{ live_layout.col_overhead }};">
+{% if live_tiles and live_sections %}
+<div class="live-single">
+{% for section in live_sections %}
+<section class="live-section">
+<h2 class="live-subtitle">{{ section.subtitle }}</h2>
+{% include live_content_template with rows=section.rows %}
+</section>
+{% endfor %}
+</div>
+<div class="live-grid live-tiles">
+{% for section in live_sections %}
+<section>
+<h2 class="live-subtitle">{{ section.subtitle }}</h2>
+{% include live_content_template with rows=section.rows %}
+</section>
+{% endfor %}
+</div>
+{% else %}
 {% for section in live_sections %}
 <section class="live-section">
 {% if section.subtitle %}<h2 class="live-subtitle">{{ section.subtitle }}</h2>{% endif %}
@@ -16,5 +36,6 @@
 {% empty %}
 {% include "tournaments/_empty_state.html" with message=live_empty_message %}
 {% endfor %}
+{% endif %}
 <p class="live-updated">Updated {{ refreshed_at|time:"g:i:s A" }}</p>
 </div>

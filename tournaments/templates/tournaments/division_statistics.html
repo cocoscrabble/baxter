@@ -1,0 +1,23 @@
+{% extends "tournaments/base_division.html" %}
+
+{% block title %}Statistics - {{ division.name }} - {{ division.tournament.name }} - Baxter{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <h1>Statistics: {{ division.name }}</h1>
+</div>
+
+{% if categories %}
+<p class="note">The top ten in each category, counting played games only — no byes or forfeits.</p>
+<div class="stats-grid">
+{% for category in categories %}
+<section class="stats-category">
+    <h2>{{ category.title }}</h2>
+    {% include "tournaments/_stats_table.html" with rows=category.rows %}
+</section>
+{% endfor %}
+</div>
+{% else %}
+{% include "tournaments/_empty_state.html" with message="No games played yet." %}
+{% endif %}
+{% endblock %}

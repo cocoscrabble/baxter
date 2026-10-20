@@ -36,6 +36,7 @@ from .entrant_sync import (
     refresh_before_start,
 )
 from .live_ratings import project_ratings
+from .statistics import division_statistics
 from .player_source import get_player_source
 from datastar_py.django import read_signals
 from .forms import (
@@ -799,6 +800,18 @@ class DivisionAllResultsView(DivisionNavMixin, VisibleDivisionMixin, DetailView)
         context["result_slips"] = results_newest_first(
             self.object, self.object.result_slips.all()
         )
+        return context
+
+
+class DivisionStatisticsView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
+    model = Division
+    template_name = "tournaments/division_statistics.html"
+    context_object_name = "division"
+    active_tab = "statistics"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["categories"] = division_statistics(self.object)
         return context
 
 
@@ -1656,26 +1669,45 @@ def live_overhead(n_sections):
     return LIVE_OVERHEAD_EMS + LIVE_SECTION_EMS * max(n_sections - 1, 0)
 
 
-def live_columns(section_sizes, col_ems):
-    """How many side-by-side columns a landscape screen should split each
-    section into (every section gets the same count): the count that lets the
-    type be largest.
+def live_shape(section_sizes, cols, tiles=False):
+    """``(rows, overhead)`` of the tallest landscape column at ``cols``
+    columns: table rows, and the ems of everything else.
+
+    Normally each section is split across all the columns, so a column holds
+    its share of every section. With ``tiles`` each section stays whole and the
+    sections fill the columns a band at a time (the statistics page's
+    categories), so a column is as tall as the tallest tile in each band.
+    """
+    if tiles:
+        bands = [section_sizes[i:i + cols] for i in range(0, len(section_sizes), cols)]
+        return sum(max(band) for band in bands), live_overhead(len(bands))
+    return (
+        sum(ceil_div(n, cols) for n in section_sizes),
+        live_overhead(len(section_sizes)),
+    )
+
+
+def live_columns(section_sizes, col_ems, tiles=False):
+    """How many side-by-side columns a landscape screen should use: the count
+    that lets the type be largest.
 
     ``section_sizes`` is the number of rows in each section, and ``col_ems`` how
     wide one column's table is, in ems. More columns means fewer rows per column
     (type limited by height) but narrower columns (type limited by width); the
     best count is where those two limits meet.
     """
-    overhead = live_overhead(len(section_sizes))
 
     def font(cols):
-        tallest = sum(ceil_div(n, cols) for n in section_sizes)
+        tallest, overhead = live_shape(section_sizes, cols, tiles)
         by_height = 1 / (tallest * LIVE_ROW_EMS + overhead)
         width = LIVE_ASSUMED_ASPECT * (1 - (cols - 1) * LIVE_COLUMN_GAP)
         by_width = width / (cols * col_ems)
         return min(by_height, by_width)
 
-    return max(range(1, LIVE_MAX_COLUMNS + 1), key=font)
+    most = LIVE_MAX_COLUMNS
+    if tiles:
+        most = min(most, max(len(section_sizes), 1))
+    return max(range(1, most + 1), key=font)
 
 
 def split_columns(rows, cols):
@@ -1711,6 +1743,9 @@ class _LiveDisplayMixin(VisibleDivisionMixin):
     live_content_template = ""
     # How wide one table is, in ems of its own type.
     live_col_ems = 30
+    # Lay sections out whole, side by side, instead of splitting each one
+    # across the columns (see ``live_shape``).
+    live_tiles = False
 
     def get_live_sections(self, division):
         """``[(subtitle, rows), ...]``, top to bottom. Empty sections are dropped."""
@@ -1723,17 +1758,22 @@ class _LiveDisplayMixin(VisibleDivisionMixin):
             for subtitle, rows in self.get_live_sections(self.object)
             if rows
         ]
-        cols = live_columns([len(rows) for _, rows in sections], self.live_col_ems)
+        sizes = [len(rows) for _, rows in sections]
+        cols = live_columns(sizes, self.live_col_ems, self.live_tiles)
+        col_rows, col_overhead = live_shape(sizes, cols, self.live_tiles)
         context["live_sections"] = [
             {"subtitle": subtitle, "rows": rows, "columns": split_columns(rows, cols)}
             for subtitle, rows in sections
         ]
+        context["live_tiles"] = self.live_tiles
         context["live_layout"] = {
-            "rows": sum(len(rows) for _, rows in sections),
+            "rows": sum(sizes),
             "cols": cols,
-            "col_rows": sum(ceil_div(len(rows), cols) for _, rows in sections),
+            "col_rows": col_rows,
             "col_ems": self.live_col_ems,
+            # Portrait stacks every section; landscape may band them.
             "overhead": live_overhead(len(sections)),
+            "col_overhead": col_overhead,
         }
         context["can_edit"] = False
         context["live_title"] = self.live_title
@@ -1794,6 +1834,20 @@ class LiveResultsView(_LiveDisplayMixin, DetailView):
         return [("", results_newest_first(
             division, division.result_slips.played(), limit=LIVE_RECENT_RESULTS
         ))]
+
+
+class LiveStatisticsView(_LiveDisplayMixin, DetailView):
+    """The record games so far (``statistics.division_statistics``), each
+    category a tile of its own."""
+
+    live_title = "Statistics"
+    live_content_template = "tournaments/_live_statistics.html"
+    # Two names plus five figures; measured at 38 with long real names.
+    live_col_ems = 38
+    live_tiles = True
+
+    def get_live_sections(self, division):
+        return [(c.title, c.rows) for c in division_statistics(division)]
 
 
 class DivisionScorecardsView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixin, DetailView):

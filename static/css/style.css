@@ -215,7 +215,7 @@ h3 { font-size: 1.02rem; margin: var(--space-md) 0 var(--space-sm); }
 @media (orientation: landscape) {
     #live-content {
         font-size: min(
-            calc(100cqh / (var(--live-col-rows, 10) * 2.1 + var(--live-overhead, 6.5))),
+            calc(100cqh / (var(--live-col-rows, 10) * 2.1 + var(--live-col-overhead, var(--live-overhead, 6.5)))),
             calc((100cqw - (var(--live-cols, 1) - 1) * 2cqw)
                  / var(--live-cols, 1) / var(--live-col-ems, 30))
         );
@@ -235,6 +235,13 @@ h3 { font-size: 1.02rem; margin: var(--space-md) 0 var(--space-sm); }
 
 .live-section + .live-section {
     margin-top: 0.3em;
+}
+
+/* Tiles (the statistics page): whole sections fill the columns a band at a
+   time; each band after the first costs a subtitle and header row, which
+   --live-col-overhead already counts (views.live_shape). */
+.live-tiles {
+    row-gap: 0.3em;
 }
 
 .live-subtitle {
@@ -1029,6 +1036,28 @@ td a:hover {
 
 .table-narrow {
     max-width: 680px;
+}
+
+/* The Stats tab: one table per category, two abreast where there is room. */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr));
+    gap: var(--space-md) var(--space-lg);
+    align-items: start;
+}
+
+.stats-category h2 {
+    margin-top: 0;
+}
+
+.stats-table {
+    width: 100%;
+}
+
+.stats-table td.num,
+.stats-table th.num {
+    width: 1%;
+    white-space: nowrap;
 }
 
 /* Let numeric columns take exactly the width of their widest value, including
