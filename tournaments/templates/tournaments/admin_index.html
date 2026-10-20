@@ -97,6 +97,13 @@ failed in the last week.</strong>
     with usernames and email addresses. Set a new password for a director who
     is locked out.</li>
 
+    <li><form method="post" action="{% url 'database_export' %}" class="inline">
+    {% csrf_token %}<button type="submit">Export the database</button></form>
+    Every tournament, player and account (passwords left out), as a file that
+    <code>manage.py loaddata</code> restores into an empty database. For
+    checking the ratings results files against what Baxter recorded. The export
+    is recorded in the admin log.</li>
+
     <li><a href="{% url 'admin:index' %}">Django admin</a> — user accounts and
     roles, and direct access to every table. Gated separately, on Django's
     staff flag rather than on the Admin role, so an admin without it will be
