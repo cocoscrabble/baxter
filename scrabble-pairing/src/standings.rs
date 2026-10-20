@@ -263,9 +263,12 @@ impl Repeats {
 }
 
 /// Tracks who has gone first, to balance starts across the event.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Starts {
     starts: HashMap<String, i32>,
+    /// Real games played (byes excluded), so a balance can be read as firsts
+    /// against games rather than firsts against another player's firsts.
+    games: HashMap<String, i32>,
     h2h: HashMap<(String, String), bool>,
     recent_starts: HashMap<String, i32>,
     fixed_starts: HashMap<(i32, String), bool>,
@@ -277,6 +280,10 @@ impl Starts {
     }
 
     fn record(&mut self, name1: &str, name2: &str, round: i32, p1_starts: bool) {
+        if !name1.eq_ignore_ascii_case(BYE_NAME) && !name2.eq_ignore_ascii_case(BYE_NAME) {
+            *self.games.entry(name1.to_string()).or_insert(0) += 1;
+            *self.games.entry(name2.to_string()).or_insert(0) += 1;
+        }
         if p1_starts {
             *self.starts.entry(name1.to_string()).or_insert(0) += 1;
             self.recent_starts.insert(name1.to_string(), round);
@@ -292,6 +299,17 @@ impl Starts {
             self.h2h
                 .insert((name2.to_string(), name1.to_string()), true);
         }
+    }
+
+    /// Firsts minus seconds over real games: 0 is perfectly balanced. A bye is
+    /// neither, so it leaves this untouched.
+    pub fn imbalance(&self, name: &str) -> i32 {
+        2 * *self.starts.get(name).unwrap_or(&0) - *self.games.get(name).unwrap_or(&0)
+    }
+
+    /// Whether these two have already met (in either order).
+    pub fn have_met(&self, name1: &str, name2: &str) -> bool {
+        self.h2h.contains_key(&(name1.to_string(), name2.to_string()))
     }
 
     /// Record a known start from a finished round (player1 went first).
