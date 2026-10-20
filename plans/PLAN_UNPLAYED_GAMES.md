@@ -1,19 +1,25 @@
 # Plan: Unplayed games (byes and forfeits) in the ratings database
 
-**Status: proposed** — drafted 2026-10-20. Spans this repo and `../ratings`.
-Code references are pinned at baxter `dab0590` and ratings `532aaef`.
+**Status: proposed** — drafted 2026-10-20; decision 4 settled the same day.
+Spans this repo and `../ratings`. Code references are pinned at baxter
+`dab0590` and ratings `532aaef`.
 
 ## Goal
 
 A bye or a forfeit is part of a player's tournament record, but it is not
-evidence of how well they play. So it must:
+evidence of how well they play. The rule, as settled:
 
-- **count in the record**: win/loss and spread on the ratings site
-  (`ratings.TournamentResult.wins/losses/spread`) agree with the tournament's
-  own standings;
-- **not count for ratings**: it is not a rated game, it does not count toward
-  career games (which sets the rating multiplier), and the bye is never treated
-  as a player.
+- **The rating calculation never sees an unplayed game.** It is not rated, the
+  bye is never a player, and any games count that the formula reads (today
+  only the multiplier's career games) counts **played games only**.
+- **Everything else counts it.** That covers win/loss and spread
+  (`ratings.TournamentResult.wins/losses/spread`), which must match the
+  tournament's own standings, and the career games count shown anywhere,
+  which includes byes and forfeits.
+
+So there are two counts: **rated games**, used only by the formula, and
+**career games**, which includes unplayed games and is used for everything
+else (decision 4).
 
 Today neither half is reliable, and the problem depends on which tool produced
 the file.
@@ -114,19 +120,51 @@ test must pass unchanged. That makes it a good refactor to land on its own.
 projection builds `GameResult`s itself (`tournaments/live_ratings.py`) and
 should get the same answer whether or not it filters first.
 
-### 4. Unplayed games do not count toward career games
+### 4. Two counts: rated games for the formula, career games for everything else
 
-This fixes `update_career_games`. It is the only decision here that **changes
-published ratings**: 128 players move by 1–3 points over the whole history.
-It needs sign-off.
+**Settled 2026-10-20:** the formula counts only played games, and every other
+use counts byes and forfeits as well.
 
-The fix cannot be avoided by leaving things as they are. Once Baxter exports
-byes, the current bug would add them to career games for those players. The
-backfill in phase 4 would then move ratings anyway, in a few tournaments
-only, by accident. Keeping the bug on purpose would mean preserving a
-comparison that never worked. **Recommendation: fix it for the whole history**,
-as its own commit, regenerate `tests/golden_all_ratings.txt`
-(`UPDATE_GOLDEN=1`), and regenerate `plans/rating-history.md`.
+Today one number, `career_games`, does both jobs. It feeds
+`_player_multiplier` (`calculator.py:97`), and it is also what is displayed
+and exported. Because of the `"Zz Bye"` bug it includes unplayed games
+everywhere. That is right for the displayed count and wrong for the formula.
+Splitting it:
+
+| Count | Includes unplayed | Read by |
+|---|---|---|
+| `rated_games` (new) | no | `_player_multiplier`, and nothing else |
+| `career_games` | **yes** | the site (`CurrentRating.career_games`, `_ratings_table.html`, the player page), `TournamentResult.games`, the "Games played" column of `complete-ratings-list.csv`, the roster API |
+
+The split is **additive everywhere**. `career_games` keeps its name and gets
+the meaning the user-facing places already assume. `rated_games` is new, and
+only the formula and Baxter's live projection read it. Renaming the existing
+field to mean "rated" was rejected. Baxter's event log records `career_games`
+in `entrant_ratings_refreshed` payloads, so renaming it would mean a
+compatibility shim to replay old logs. Old payloads stay valid as they are.
+
+This **changes published ratings**. Taking the unplayed games out of the
+multiplier's count moves 128 of 249 current ratings by 1–3 points over the
+whole history (measured above). Do it as its own commit, regenerate
+`tests/golden_all_ratings.txt` (`UPDATE_GOLDEN=1`), and regenerate
+`plans/rating-history.md`. Displayed career games do not change, since they
+already include byes.
+
+**Where the two counts come from.**
+
+- **Results files:** each game adds 1 to `career_games`; it adds 1 to
+  `rated_games` only if `g.is_rated`.
+- **Ratings files** (`.RT`, CSV ratings lists): these seed a player's first
+  appearance and carry a single games number. It seeds both counts, since
+  the file cannot tell them apart. The `.RT` writer is a rating-input format
+  that round-trips into the engine, so it writes `rated_games`.
+  `CSVRatingsFileWriter` ("Games played") is for people to read, so it
+  writes `career_games`.
+
+**The roster** (`coco.roster/1`, `web/ratings/roster.py`) adds `rated_games`
+next to `career_games`. Adding a field is compatible: a Baxter that does not
+know `rated_games` keeps reading `career_games`, which still includes byes.
+That is no worse than it is today.
 
 ### 5. Baxter exports every slip, played or not
 
@@ -189,15 +227,30 @@ row (`Bye,50,X,0`) gives a loss and −50; a 0–0 bye row gives a tie; a number
 file with `BYE` creates no `BYE` key in `RatingsDB`. `build_db`'s output no
 longer flags "Bye".
 
-### Phase 2: unplayed games are not career games (`../ratings`, moves ratings)
+### Phase 2: rated games vs career games (`../ratings`, moves ratings)
 
-- `update_career_games` counts only `g.is_rated` games.
-- Regenerate the golden file and `plans/rating-history.md`, and record the
-  before/after of the largest movers in the commit message.
+- `core.Player` gains `rated_games`, alongside `career_games`, as a
+  constructor argument with default 0. `update_career_games`, which should
+  probably be renamed `update_game_counts`, adds every game to `career_games`
+  and only `g.is_rated` games to `rated_games`. This replaces the
+  `"Zz Bye"` comparison.
+- `_player_multiplier` reads `rated_games`.
+- `PlayerRecord` carries both counts. `RatingsDB.adjust_tournament` carries
+  both forward. The ratings-file readers seed both from their one column
+  (decision 4).
+- `CurrentRating` gains a `rated_games` column (migration). `build_db` fills
+  it. Display keeps showing `career_games`.
+- The roster API adds `rated_games`. Update `test_roster` and the contract
+  description in `roster.py`.
+- Regenerate the golden file and `plans/rating-history.md`. Record the
+  largest movers in the commit message. The golden snapshot should include
+  both counts, so a later change cannot quietly swap them.
 
-*Verify:* the golden diff shows only career-game counts and the ratings that
-follow from them, and no W/L or spread changes. Spot-check a heavy-bye player,
-such as anyone from `mn-2022` (5 players, 15 bye rows).
+*Verify:* the golden diff shows changed ratings and a new `rated_games`. It
+should show **no** change to `career_games`, W/L or spread. Spot-check a
+heavy-bye player, such as anyone from `mn-2022` (5 players, 15 bye rows):
+`career_games` should be unchanged, and `rated_games` should be lower by
+their bye count.
 
 ### Phase 3 (optional): show it on the site (`../ratings`)
 
@@ -207,9 +260,20 @@ such as anyone from `mn-2022` (5 players, 15 bye rows).
 explains itself. This is a projection field, rebuilt every deploy, so there is
 no data migration beyond adding the column.
 
-### Phase 4: Baxter exports unplayed games
+### Phase 4: Baxter exports unplayed games, and seeds its projection from rated games
 
 - `uv lock --upgrade-package coco-ratings` to pick up phases 1–2.
+- **Rated games in the live projection.** `Player` and `Entrant` gain
+  `rated_games` (migration, default 0). Add it to `entrant_sync.SEED_FIELDS`
+  and `current_seed`, to the registration defaults (`models.py:887`) and to
+  `player_ratings`' rating-field set. `roster_import` reads `rated_games`, or
+  `career_games` when an older roster or snapshot file lacks it.
+  `live_ratings` passes `rated_games` to the core `Player`. Baxter keeps
+  syncing `career_games` but nothing in Baxter reads it for the calculation.
+- **Replay:** the `entrant_ratings_refreshed` command reads `row[field]`
+  strictly (`commands.py:1025`). Payloads logged before this have no
+  `rated_games`, so take `career_games` for it when it is missing. Neither
+  count is in `division_digest`, so the digest does not move.
 - `DivisionResultsExportView`: export every slip and remove the `is_played`
   filter. Use `BYE_PLAYER_NAME` / `BYE_PLAYER_NUMBER` for the bye side rather
   than `slip.winner.name`, so the marker does not depend on the bye player
@@ -252,7 +316,8 @@ with the phase-4 exporter and replace the files. The diff must only **add**
 rows, and every added row must involve `BYE`. If any existing row changed,
 stop and find out why before committing. Both are dated after the golden
 cutoff (`2025-12-31`), so golden is unaffected. Ratings should not move, since
-unplayed games are unrated and, after phase 2, not career games. Check that
+unplayed games are unrated and, after phase 2, not counted in `rated_games`.
+Only `career_games` and W/L should change, for the players who had a bye or forfeit. Check that
 with `coco-rate` before and after.
 
 `vancouver-sept2026` has 8 players but only 2–3 games a round from round 4
@@ -293,15 +358,16 @@ listed.
 
 ## Order and commits
 
-1. ratings phase 1 → ratings phase 2 (separate commits; deploy)
+1. ratings phase 1 → ratings phase 2 (separate commits; deploy). Phase 2
+   changes the roster, so Baxter's phase 4 should follow soon. Until it does,
+   Baxter's projection uses `career_games` as it does today.
 2. ratings phase 3 (optional, any time after 1)
 3. baxter phase 4 → baxter phase 5
 4. backfill 6a (needs 4 deployed to production Baxter) → 6b, file by file
 
 ## Open questions
 
-- **Decision 4**: fix career games for the whole history (recommended), with
-  128 ratings moving by 1–3 points?
-- **Phase 3**: show unplayed games on the site, or only fix the counts?
+- **Phase 3**: show unplayed games on the site, e.g. "8–3 (1 bye)", or only
+  fix the counts?
 - **6b**: how far back is it worth chasing sources for legacy gaps? The
   rating-neutral answer is "only where W/L is visibly wrong to someone".
