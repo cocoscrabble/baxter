@@ -64,7 +64,12 @@ def pairing_data_to_input(pd: PairingData) -> dict:
     """
     return {
         "players": [
-            {"name": e.player.key, "rating": e.player.rating, "dropped": e.dropped}
+            {
+                "name": e.player.key,
+                "rating": e.player.rating,
+                "dropped": e.dropped,
+                **({"seed": e.player.seed} if e.player.seed is not None else {}),
+            }
             for e in pd.entrants
         ],
         "result_slips": [

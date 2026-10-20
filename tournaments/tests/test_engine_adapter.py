@@ -98,6 +98,31 @@ class RoundsToDisplayTests(TestCase):
 
 
 class EnginePathTests(TestCase):
+    def test_seeds_order_the_field_not_ratings(self):
+        # Seeded A, B, C, D, but the ratings have since been refreshed to rank
+        # A, C, B, D (which would pair A-C, B-D). KotH round 1 still pairs 1v2,
+        # 3v4 by seed, and the standings' round-0 seeding agrees.
+        from tournaments.pairing.base import seedings
+
+        pd = PairingData(
+            result_slips=[],
+            entrants=[
+                EntrantData(PlayerData(n, n, rating, seed=i + 1))
+                for i, (n, rating) in enumerate(
+                    [("A", 1900), ("B", 1500), ("C", 1800), ("D", 1400)]
+                )
+            ],
+            repeats=Repeats(),
+            round_pairings=[RoundPairing(1, 0, RP.KotH)],
+        )
+        self.assertEqual([p.key for p in seedings(pd)], ["A", "B", "C", "D"])
+        self.assertEqual(pairing_data_to_input(pd)["players"][0]["seed"], 1)
+        pairs = {
+            frozenset((p.first.name, p.second.name))
+            for _, ps in pair_with_engine(pd) for p in ps
+        }
+        self.assertEqual(pairs, {frozenset("AB"), frozenset("CD")})
+
     def test_engine_pairs_initial_swiss(self):
         # Dropped D is excluded → A/B/C + bye; A fixed to B, C takes the bye.
         out = pair_with_engine(_swiss_pd())

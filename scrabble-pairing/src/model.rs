@@ -16,6 +16,21 @@ pub struct PlayerData {
     /// cases (without the field) parsing.
     #[serde(default)]
     pub dropped: bool,
+    /// The player's seed (1 = top). When given it *is* the seeding order and
+    /// the rating is not consulted: a host that has already turned ratings into
+    /// seeds (Baxter's entrant numbers) sends those, so a rating that moves
+    /// after seeding cannot reshuffle anything. Absent, players seed by rating.
+    #[serde(default)]
+    pub seed: Option<i32>,
+}
+
+impl PlayerData {
+    /// Sort key for seeding order: by seed when given, else by rating
+    /// (descending). Seeded players come first, so the order stays total even
+    /// in a mixed field.
+    pub fn seeding_key(&self) -> (bool, i32, i32) {
+        (self.seed.is_none(), self.seed.unwrap_or(0), -self.rating)
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
