@@ -107,7 +107,7 @@ Current plans:
   are ordinary work. (Password *change* for a signed-in user already exists and
   needs none of this.)
 - `PLAN_UNPLAYED_GAMES.md` — byes and forfeits in the ratings database: counted
-  in W/L and spread, never rated or counted as career games, and the bye never
-  a player. Spans this repo (export every slip) and `../ratings` (reader +
-  calculator), plus a backfill of `results/`. **Proposed**; decision 4 (career
-  games, moves 128 ratings by 1–3 pts) needs sign-off.
+  in W/L, spread and career games, but invisible to the rating formula (which
+  gets a separate played-only `rated_games` count), and the bye never a player.
+  Spans this repo (export every slip) and `../ratings` (reader + calculator),
+  plus a backfill of `results/`. **Proposed**, not started.
