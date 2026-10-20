@@ -143,6 +143,14 @@ field to mean "rated" was rejected. Baxter's event log records `career_games`
 in `entrant_ratings_refreshed` payloads, so renaming it would mean a
 compatibility shim to replay old logs. Old payloads stay valid as they are.
 
+**Why ratings move, given byes were never rated.** No bye was ever rated:
+all 260 bye rows in the corpus score 0 for the bye, and the calculator skips
+any game with a 0 score. What moves is the multiplier. `_player_multiplier`
+damps a player's change once `career_games` reaches 200, by
+`1 − games/1800`, with extra damping above 1800 and 2000 rating, and halves it
+above 1000 games. Counting byes and forfeits there made players look more
+experienced than they were, so they were damped sooner and more.
+
 This **changes published ratings**. Taking the unplayed games out of the
 multiplier's count moves 128 of 249 current ratings by 1–3 points over the
 whole history (measured above). Do it as its own commit, regenerate
@@ -252,13 +260,12 @@ heavy-bye player, such as anyone from `mn-2022` (5 players, 15 bye rows):
 `career_games` should be unchanged, and `rated_games` should be lower by
 their bye count.
 
-### Phase 3 (optional): show it on the site (`../ratings`)
+### Phase 3: dropped — no separate display of unplayed games
 
-`TournamentResult` gains `unplayed` (an int, the count of unrated games).
-`PlayerReport` carries it and `build_db` fills it. The player page shows
-"8–3 (1 bye)", or similar, so a record that does not match the rated games
-explains itself. This is a projection field, rebuilt every deploy, so there is
-no data migration beyond adding the column.
+**Decided 2026-10-20:** the site does not distinguish them. A bye is a 50–0
+win, and a forfeit a 0–50 loss, for every purpose except the rating formula.
+W/L, spread and career games already treat them that way once the rows are
+present. (Phase numbers are kept so references below stay valid.)
 
 ### Phase 4: Baxter exports unplayed games, and seeds its projection from rated games
 
@@ -361,13 +368,10 @@ listed.
 1. ratings phase 1 → ratings phase 2 (separate commits; deploy). Phase 2
    changes the roster, so Baxter's phase 4 should follow soon. Until it does,
    Baxter's projection uses `career_games` as it does today.
-2. ratings phase 3 (optional, any time after 1)
 3. baxter phase 4 → baxter phase 5
 4. backfill 6a (needs 4 deployed to production Baxter) → 6b, file by file
 
 ## Open questions
 
-- **Phase 3**: show unplayed games on the site, e.g. "8–3 (1 bye)", or only
-  fix the counts?
 - **6b**: how far back is it worth chasing sources for legacy gaps? The
   rating-neutral answer is "only where W/L is visibly wrong to someone".
