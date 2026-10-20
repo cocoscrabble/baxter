@@ -72,7 +72,9 @@ class DigestBackfillTests(TestCase):
         digests = replayed_digests(events_from_tournament(self.tournament))
         for event in self.tournament.events.filter(seq__in=digests):
             event.digest = digests[event.seq][0]
-            event.save(update_fields=["digest"])
+            # An old database's rows, as the digest_version migration tags them.
+            event.digest_version = 2
+            event.save(update_fields=["digest", "digest_version"])
         return digests
 
     def test_a_clean_tournament_is_rewritten_to_v2(self):
@@ -93,7 +95,7 @@ class DigestBackfillTests(TestCase):
         # And the log now verifies against the live state.
         self.assertEqual(
             self.tournament.events.order_by("seq").last().digest,
-            division_digest(self.division),
+            division_digest(self.division, version=2),
         )
 
     def test_a_divergent_tournament_is_skipped_and_reported(self):
@@ -275,14 +277,16 @@ class ImportedDivisionBackfillTests(TestCase):
         # The live state, before anything is replayed. Every assertion below
         # anchors to this: seeding the v1 digests *and* verifying them with the
         # same function would prove only that the function agrees with itself.
-        live = division_digest(division)
+        live = division_digest(division, version=2)
 
         # Walk its digests back to v1, as an older database holds them.
         digests = replayed_digests(events_from_tournament(tournament))
         self.assertTrue(digests, "the import should have recorded a digest")
         for event in tournament.events.filter(seq__in=digests):
             event.digest = digests[event.seq][0]
-            event.save(update_fields=["digest"])
+            # An old database's rows, as the digest_version migration tags them.
+            event.digest_version = 2
+            event.save(update_fields=["digest", "digest_version"])
 
         count, reason = backfill_tournament(tournament)
         self.assertIsNone(

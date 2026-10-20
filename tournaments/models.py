@@ -1343,6 +1343,9 @@ class TournamentEvent(models.Model):
     # sha256 of the affected division's canonical state after the command, so a
     # replay can compare digests per event and pinpoint the first divergence.
     digest = models.CharField(max_length=64, blank=True)
+    # Which ``events.division_state`` vocabulary ``digest`` is in. Rows from
+    # before this was recorded are v2; ``record_event`` writes the current one.
+    digest_version = models.PositiveSmallIntegerField(default=2)
     # The code revision that wrote this event (``events.code_revision``), so a
     # production log says which version produced it. Blank for events logged
     # before this was recorded, or where the revision was unknown. Not part of

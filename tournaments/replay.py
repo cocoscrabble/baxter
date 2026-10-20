@@ -181,6 +181,13 @@ class ReplayContext:
         # recorded board is what replays.
         self.drift = []
         self.applied = 0
+        # Divisions whose log entered someone without recording the rating it
+        # pinned (entrant_added before it carried one). Replay pins the header's
+        # rating instead, which a v2 digest — ratings and all — can disagree
+        # with; such a mismatch says nothing about the seeding, so ``--verify``
+        # lists it in ``unverified`` (seqs) rather than failing.
+        self.unrecorded_ratings = set()
+        self.unverified = []
 
     def actor(self, username):
         if not username:
@@ -395,6 +402,8 @@ def apply_event(ctx, event):
     # themselves, and ``grids.resolve_player`` rebuilds from those.)
     if event_type == "entrant_added":
         ctx.ensure_player(payload.get("player"))
+        if "rating" not in payload:
+            ctx.unrecorded_ratings.add(payload.get("division"))
 
     if event_type in NEEDS_REGEN and division is not None and "pairings" not in payload:
         regenerate_pairings(division)
@@ -448,8 +457,13 @@ def _replay_events(ctx, events, *, verify, upto):
             division = ctx.tournament.divisions.filter(name=event["division"]).first()
             if division is None:
                 continue
-            actual = division_digest(division)
+            # An event without a version predates the field: v2.
+            version = event.get("digest_version") or 2
+            actual = division_digest(division, version=version)
             if actual != event["digest"]:
+                if version == 2 and event["division"] in ctx.unrecorded_ratings:
+                    ctx.unverified.append(event.get("seq"))
+                    continue
                 raise ReplayError(
                     f"digest mismatch at seq {event.get('seq')} "
                     f"({event['event_type']}): recorded {event['digest']} "
@@ -471,6 +485,7 @@ def events_from_tournament(tournament):
                 "schema_version": e.schema_version,
                 "payload": e.payload,
                 "digest": e.digest,
+                "digest_version": e.digest_version,
             }
         )
     return events

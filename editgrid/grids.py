@@ -232,7 +232,7 @@ class EditGrid:
             key = self.portable_key(change["from"])
             if key not in keyed:
                 raise ValueError(f"row {key!r} is not there to change")
-            if keyed[key] != change["from"]:
+            if self._checked(keyed[key]) != self._checked(change["from"]):
                 raise ValueError(f"row {key!r} is not what the change was recorded over")
             keyed[key] = change["to"]
         for row in delta.get("added", []):
@@ -241,6 +241,14 @@ class EditGrid:
                 raise ValueError(f"row {key!r} is already there")
             keyed[key] = row
         return list(keyed.values())
+
+    # Fields ``apply_delta`` does not hold a change's "from" row to. For values
+    # a replay cannot be expected to reproduce and that nothing downstream keys
+    # on — the change still writes its "to" value, so they land as recorded.
+    delta_unchecked_fields: tuple[str, ...] = ()
+
+    def _checked(self, row):
+        return {k: v for k, v in row.items() if k not in self.delta_unchecked_fields}
 
     # Portable-row vocabulary for the audit surface. ``portable_player_fields``
     # names the fields holding a person's identifier, so a log reader sees a name

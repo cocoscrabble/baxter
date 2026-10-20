@@ -81,13 +81,18 @@ class DivisionDigestTests(TestCase):
         self._build_state(d1)
         state = division_state(d1)
         alice, bob = self.player1.player_number, self.player2.player_number
-        # number, key, dropped, then the pinned rating and registration state.
+        # number (the seed), key, dropped, then registration state. No rating:
+        # ratings only set the seeds (v3); v2 still carried it.
         self.assertEqual(
             state["entrants"],
             [
-                [1, alice, False, self.player1.rating, "coco", False, False, False],
-                [2, bob, False, self.player2.rating, "coco", False, False, False],
+                [1, alice, False, False, False, False],
+                [2, bob, False, False, False, False],
             ],
+        )
+        self.assertEqual(
+            division_state(d1, version=2)["entrants"][0],
+            [1, alice, False, self.player1.rating, "coco", False, False, False],
         )
         self.assertEqual(len(state["results"]), 1)
         self.assertEqual(state["results"][0][1], alice)  # winner by number

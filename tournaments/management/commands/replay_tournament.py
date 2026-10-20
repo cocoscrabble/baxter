@@ -70,6 +70,17 @@ class Command(BaseCommand):
                 f"as recorded; today's engine would pair it differently."
             ))
 
+        # Not a failure either: these digests include entrant ratings the log
+        # never recorded, so they cannot be checked. The seeding they would
+        # have caught is checked wherever the ratings are known, and by every
+        # v3 digest.
+        if ctx.unverified:
+            seqs = ctx.unverified
+            self.stdout.write(self.style.WARNING(
+                f"{len(seqs)} digest(s) not verifiable (seq {seqs[0]}–{seqs[-1]}): "
+                f"they include entrant ratings this log never recorded."
+            ))
+
         target = ctx.tournament
         suffix = " (digests verified)" if options["verify"] else ""
         self.stdout.write(

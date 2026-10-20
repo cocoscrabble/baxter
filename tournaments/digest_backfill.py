@@ -98,7 +98,12 @@ def backfill_tournament(tournament):
     from tournaments.replay import events_from_tournament
 
     events = events_from_tournament(tournament)
-    stored = {e["seq"]: e["digest"] for e in events if e.get("digest")}
+    # Only v2 rows: anything newer was written in its own vocabulary.
+    stored = {
+        e["seq"]: e["digest"]
+        for e in events
+        if e.get("digest") and (e.get("digest_version") or 2) == 2
+    }
     if not stored:
         return 0, None
 
