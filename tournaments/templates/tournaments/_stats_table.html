@@ -1,0 +1,26 @@
+{# One statistics category's games (statistics.StatRow); shared by the Stats #}
+{# tab and the live display, which passes table_class. #}
+<table class="stats-table{% if table_class %} {{ table_class }}{% endif %}">
+    <thead>
+        <tr>
+            <th class="num">#</th>
+            <th>Player</th>
+            <th class="num">Score</th>
+            <th>Opponent</th>
+            {% if rows.0.value_label %}<th class="num">{{ rows.0.value_label }}</th>{% endif %}
+            <th class="num">Round</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in rows %}
+        <tr>
+            <td class="num">{{ row.rank }}</td>
+            <td>{{ row.player.display_name }}</td>
+            <td class="num">{{ row.score }}-{{ row.opponent_score }}</td>
+            <td>{{ row.opponent.display_name }}</td>
+            {% if row.value_label %}<td class="num">{{ row.value }}</td>{% endif %}
+            <td class="num">{{ row.round }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
