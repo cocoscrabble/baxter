@@ -96,6 +96,12 @@ excluded throughout — they are stored real-player-first for display, the
 opposite of the ledger's convention that the bye opponent is the notional
 starter (`PairingData.for_division` flips them back).
 
+Unpublished rounds are oriented greedily (fewer firsts goes first), except a
+round-robin, quads or sixes block paired in one go (`RP::pairs_whole_block`):
+`pair.rs::orient_block` then rebalances the
+whole block so everyone gets half their games first (within one for odd game
+counts). Only first meetings are flipped; a rematch still reverses the last one.
+
 ## Event log
 
 Every state-changing action is recorded as an append-only `TournamentEvent`

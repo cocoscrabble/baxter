@@ -39,6 +39,13 @@ impl RP {
         )
     }
 
+    /// A block whose every round is fixed by the standings it starts from, so
+    /// it is paired whole (round robins, quads, sixes). Its starts are then
+    /// balanced across the block (`pair::orient_block`).
+    pub fn pairs_whole_block(self) -> bool {
+        self.is_round_robin() || self.is_quad()
+    }
+
     pub fn is_quad(self) -> bool {
         matches!(
             self,

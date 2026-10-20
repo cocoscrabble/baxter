@@ -72,7 +72,8 @@ fn bye_pairing(
     fixed_pairs: &[(String, String)],
     inactive: &HashSet<String>,
 ) -> Option<(String, String)> {
-    if rp.pairing.is_round_robin() || rp.pairing.is_quad() {
+    // A whole-block strategy builds its own bye (a phantom in the rotation).
+    if rp.pairing.pairs_whole_block() {
         return None;
     }
     // Players sitting the round out are not part of the field, so they neither
@@ -370,6 +371,148 @@ fn pair_round(
     Ok(result)
 }
 
+/// Decide who goes first in a run of newly paired rounds, record it in the
+/// ledger, and return the rounds oriented starter-first.
+///
+/// Each game is first oriented greedily, round by round (`Starts::add`: fewer
+/// firsts goes first). That is all a single round can do, since later rounds are
+/// unknown. A round-robin, quads or sixes block is paired whole, though
+/// (`RP::pairs_whole_block`), and greedy alone can
+/// strand a player — at Charlottesville 2026, a 7-player round robin, it gave
+/// some players 4 firsts in 6 games and others 2, because each of their
+/// opponents happened to be further behind at the moment they met.
+///
+/// So the block is then rebalanced: while some player is at least two games more
+/// "first-heavy" than another (firsts minus seconds differ by 4 or more), find
+/// the shortest chain of games A-first-over-B, B-first-over-C, ... from the heavy
+/// player to the light one and flip it. Everyone in the middle keeps their
+/// count; the two ends move one game each toward even. This stops only when no
+/// such chain exists, which is the best balance the block allows: everyone
+/// even, or within one game of it when the game counts are odd.
+///
+/// Only a pairing meeting for the first time is flipped. A rematch is left to
+/// the greedy rule, which reverses the last meeting (what a double round robin
+/// relies on). Byes are never flipped: the bye is always the notional starter.
+fn orient_block(starts: &mut Starts, block: Vec<(i32, Vec<(Pairing, i32)>)>) -> Vec<RoundResult> {
+    if block.is_empty() {
+        return Vec::new();
+    }
+
+    // Greedy pass on a scratch ledger; `starts` itself is written once, below,
+    // with the final orientation.
+    let mut trial = starts.clone();
+    let mut games: Vec<(i32, String, String, i32)> = Vec::new(); // (round, first, second, repeats)
+    for (round, pairings) in &block {
+        for (p, reps) in pairings {
+            let o = trial.add(p, *round);
+            games.push((*round, o.first.name, o.second.name, *reps));
+        }
+    }
+
+    if block.len() > 1 {
+        let is_bye = |n: &str| n.eq_ignore_ascii_case(BYE_NAME);
+        let pair_count = |a: &str, b: &str| {
+            games
+                .iter()
+                .filter(|(_, f, s, _)| (f == a && s == b) || (f == b && s == a))
+                .count()
+        };
+        let flippable: Vec<bool> = games
+            .iter()
+            .map(|(_, f, s, _)| {
+                !is_bye(f) && !is_bye(s) && !starts.have_met(f, s) && pair_count(f, s) == 1
+            })
+            .collect();
+        // Sorted, so the result never depends on hash order.
+        let mut names: Vec<String> = games
+            .iter()
+            .flat_map(|(_, f, s, _)| [f.clone(), s.clone()])
+            .filter(|n| !is_bye(n))
+            .collect();
+        names.sort();
+        names.dedup();
+        let mut imb: HashMap<String, i32> =
+            names.iter().map(|n| (n.clone(), trial.imbalance(n))).collect();
+
+        // Each flip lowers the sum of squared imbalances, so this terminates.
+        'improve: loop {
+            let mut heavy = names.clone();
+            heavy.sort_by_key(|n| std::cmp::Reverse(imb[n]));
+            for u in &heavy {
+                if let Some(path) = flip_path(u, &games, &flippable, &imb) {
+                    let v = games[*path.last().unwrap()].2.clone();
+                    for &g in &path {
+                        let (_, f, s, _) = &mut games[g];
+                        std::mem::swap(f, s);
+                    }
+                    *imb.get_mut(u).unwrap() -= 2;
+                    *imb.get_mut(&v).unwrap() += 2;
+                    continue 'improve;
+                }
+            }
+            break;
+        }
+    }
+
+    // Every round comes back, including one the strategy left empty.
+    let mut ret: Vec<RoundResult> = block
+        .iter()
+        .map(|(round, _)| RoundResult {
+            round: *round,
+            pairings: Vec::new(),
+            error: None,
+        })
+        .collect();
+    for (round, first, second, repeats) in games {
+        starts.register(&Pairing::new(Player::new(&first), Player::new(&second)), round);
+        let r = ret.iter_mut().find(|r| r.round == round).unwrap();
+        r.pairings.push(OutPairing {
+            first,
+            second,
+            repeats,
+        });
+    }
+    ret
+}
+
+/// Shortest chain of flippable games from `u` (going first in each) to a player
+/// at least 4 lighter than `u`, as game indices in order; `None` if there is
+/// none. Breadth-first, visiting games in schedule order, so it is deterministic
+/// and disturbs as few games as it can.
+fn flip_path(
+    u: &str,
+    games: &[(i32, String, String, i32)],
+    flippable: &[bool],
+    imb: &HashMap<String, i32>,
+) -> Option<Vec<usize>> {
+    let target = imb[u] - 4;
+    let mut via: HashMap<&str, usize> = HashMap::new(); // player -> game that reached them
+    let mut queue = std::collections::VecDeque::from([u]);
+    let mut seen: HashSet<&str> = HashSet::from([u]);
+    while let Some(x) = queue.pop_front() {
+        for (g, (_, f, s, _)) in games.iter().enumerate() {
+            if !flippable[g] || f != x || seen.contains(s.as_str()) {
+                continue;
+            }
+            seen.insert(s);
+            via.insert(s, g);
+            if imb[s] <= target {
+                let mut path = vec![g];
+                let mut at = x;
+                while at != u {
+                    let g = via[at];
+                    path.push(g);
+                    at = games[g].1.as_str();
+                }
+                path.reverse();
+                return Some(path);
+            }
+            queue.push_back(s);
+        }
+    }
+    None
+}
+
 /// Pair a whole tournament round by round. The public entry point.
 pub fn pair(input: &PairingInput) -> Vec<RoundResult> {
     let mut rps = input.round_pairings.clone();
@@ -397,6 +540,11 @@ pub fn pair(input: &PairingInput) -> Vec<RoundResult> {
     let status = round_status(players, slips, &input.inactive_players);
 
     let mut ret: Vec<RoundResult> = Vec::new();
+    // Newly paired rounds not yet oriented: a single round, or the run of rounds
+    // of one whole-block strategy (`RP::pairs_whole_block`), whose schedule is
+    // known up front, so its starts are decided across the block at once.
+    let mut block: Vec<(i32, Vec<(Pairing, i32)>)> = Vec::new();
+    let mut block_key: Option<(RP, i32)> = None;
     for rp in &rps {
         // A round with any saved pairing or result is history, not a candidate
         // for pairing: replay it into the repeat/starts ledger so its games and
@@ -404,13 +552,10 @@ pub fn pair(input: &PairingInput) -> Vec<RoundResult> {
         // a finished round, a partially played one, and a published round whose
         // results are all still outstanding — all three are already printed.
         let saved = replay_pairings(rp.round, slips, &input.published_pairings);
-        if !saved.is_empty() {
-            for p in saved.pairings {
-                repeats.add(&p);
-                starts.register(&p, rp.round);
-            }
-        } else if can_pair(rp, &status) {
-            match pair_round(
+        // Pairing reads the repeat ledger but not the starts one, so a round can
+        // be paired before the block in front of it is oriented.
+        let paired = (saved.is_empty() && can_pair(rp, &status)).then(|| {
+            pair_round(
                 players,
                 slips,
                 &rps,
@@ -423,33 +568,43 @@ pub fn pair(input: &PairingInput) -> Vec<RoundResult> {
                 input.cop_config.as_ref(),
                 &input.swiss_config,
                 rp,
-            ) {
-                Ok(paired) => {
-                    let mut out_pairings = Vec::new();
-                    for p in paired.pairings {
+            )
+        });
+
+        // Only the next paired round of the same whole block extends it;
+        // anything else closes it first, so the ledger stays in round order.
+        let key = rp.pairing.pairs_whole_block().then_some((rp.pairing, rp.start_round));
+        if !(matches!(paired, Some(Ok(_))) && key.is_some() && key == block_key) {
+            ret.extend(orient_block(&mut starts, std::mem::take(&mut block)));
+        }
+        block_key = key;
+
+        for p in saved.pairings {
+            repeats.add(&p);
+            starts.register(&p, rp.round);
+        }
+        match paired {
+            Some(Ok(paired)) => {
+                let games = paired
+                    .pairings
+                    .into_iter()
+                    .map(|p| {
                         let reps = repeats.add(&p);
-                        let oriented = starts.add(&p, rp.round);
-                        out_pairings.push(OutPairing {
-                            first: oriented.first.name,
-                            second: oriented.second.name,
-                            repeats: reps,
-                        });
-                    }
-                    ret.push(RoundResult {
-                        round: rp.round,
-                        pairings: out_pairings,
-                        error: None,
-                    });
-                }
-                // Invalid condition: emit an empty round carrying the reason.
-                Err(error) => ret.push(RoundResult {
-                    round: rp.round,
-                    pairings: Vec::new(),
-                    error: Some(error),
-                }),
+                        (p, reps)
+                    })
+                    .collect();
+                block.push((rp.round, games));
             }
+            // Invalid condition: emit an empty round carrying the reason.
+            Some(Err(error)) => ret.push(RoundResult {
+                round: rp.round,
+                pairings: Vec::new(),
+                error: Some(error),
+            }),
+            None => {}
         }
     }
+    ret.extend(orient_block(&mut starts, block));
     ret
 }
 
@@ -984,6 +1139,155 @@ mod tests {
             .as_deref()
             .unwrap_or("")
             .contains("no repeat-free Swiss pairing"));
+    }
+
+    /// Firsts and real games per player across the given output.
+    fn firsts_and_games(out: &[RoundResult]) -> HashMap<String, (i32, i32)> {
+        let mut tally: HashMap<String, (i32, i32)> = HashMap::new();
+        for r in out {
+            for p in &r.pairings {
+                if p.first == "Bye" || p.second == "Bye" {
+                    continue;
+                }
+                tally.entry(p.first.clone()).or_default().0 += 1;
+                tally.entry(p.first.clone()).or_default().1 += 1;
+                tally.entry(p.second.clone()).or_default().1 += 1;
+            }
+        }
+        tally
+    }
+
+    /// A round already on the board, as output, so its starts can be tallied
+    /// alongside what the engine pairs after it.
+    fn played_round(round: i32, games: &[(String, String)]) -> RoundResult {
+        RoundResult {
+            round,
+            pairings: games
+                .iter()
+                .map(|(f, s)| OutPairing { first: f.clone(), second: s.clone(), repeats: 1 })
+                .collect(),
+            error: None,
+        }
+    }
+
+    fn rr_input(names: &[&str], rounds: i32, pairing: &str, fixed: &str) -> PairingInput {
+        let players: Vec<String> = names
+            .iter()
+            .enumerate()
+            .map(|(i, n)| format!(r#"{{"name": "{n}", "rating": {}}}"#, 2000 - i as i32 * 10))
+            .collect();
+        let rps: Vec<String> = (1..=rounds)
+            .map(|r| format!(r#"{{"round": {r}, "start_round": 1, "pairing": "{pairing}"}}"#))
+            .collect();
+        input(&format!(
+            r#"{{"players": [{}], "round_pairings": [{}], "fixed_pairings": {{{fixed}}}}}"#,
+            players.join(","),
+            rps.join(",")
+        ))
+    }
+
+    #[test]
+    fn odd_round_robin_gives_everyone_half_their_games_first() {
+        // Charlottesville Autumn One-Day 2026: 7 players, 7 rounds, one pin in
+        // round 4. Round-by-round greedy gave firsts of 2..4 in 6 games; the
+        // whole block is known, so everyone can have exactly 3.
+        let names = ["Matt", "Sam", "Evans", "Zach", "Barry", "Jennifer", "JL"];
+        let out = pair(&rr_input(&names, 7, "RoundRobin", r#""4": [["Evans", "Matt"]]"#));
+        assert!(out.iter().all(|r| r.error.is_none()));
+        let tally = firsts_and_games(&out);
+        for n in names {
+            assert_eq!(tally[n], (3, 6), "{n}");
+        }
+    }
+
+    #[test]
+    fn even_round_robin_firsts_are_within_one() {
+        let names = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
+        let out = pair(&rr_input(&names, 9, "RoundRobin", ""));
+        for (n, (firsts, games)) in firsts_and_games(&out) {
+            assert_eq!(games, 9, "{n}");
+            assert!((4..=5).contains(&firsts), "{n} went first {firsts} times");
+        }
+    }
+
+    #[test]
+    fn double_round_robin_rematches_still_swap_the_start() {
+        let names = ["A", "B", "C", "D", "E"];
+        let out = pair(&rr_input(&names, 10, "DoubleRoundRobin", ""));
+        let mut firsts: HashMap<(String, String), i32> = HashMap::new();
+        for r in &out {
+            for p in &r.pairings {
+                *firsts.entry((p.first.clone(), p.second.clone())).or_default() += 1;
+            }
+        }
+        for ((a, b), n) in &firsts {
+            if a != "Bye" && b != "Bye" {
+                assert_eq!((n, firsts.get(&(b.clone(), a.clone()))), (&1, Some(&1)), "{a} v {b}");
+            }
+        }
+        for (n, (f, g)) in firsts_and_games(&out) {
+            assert_eq!((f, g), (4, 8), "{n}");
+        }
+    }
+
+    #[test]
+    fn odd_round_robin_balances_on_top_of_played_rounds() {
+        // Round 1 is already printed; the rest of the block still balances
+        // around it, and the printed round is left as printed.
+        let names = ["A", "B", "C", "D", "E"];
+        let mut inp = rr_input(&names, 5, "RoundRobin", "");
+        let first = pair(&inp);
+        let r1: Vec<(String, String)> = first[0]
+            .pairings
+            .iter()
+            .map(|p| (p.first.clone(), p.second.clone()))
+            .collect();
+        inp.published_pairings.insert(1, r1.clone());
+        let out = pair(&inp);
+        assert!(out.iter().all(|r| r.round != 1));
+        let mut all = vec![played_round(1, &r1)];
+        all.extend(out);
+        for (n, fg) in firsts_and_games(&all) {
+            assert_eq!(fg, (2, 4), "{n}");
+        }
+    }
+
+    #[test]
+    fn a_quads_block_balances_firsts_like_a_round_robin() {
+        // Round 1 played (P4 and P6 went first), then a quads block for rounds
+        // 2-4: four games each, so everyone can go first exactly twice.
+        // Round-by-round greedy left someone 3-1.
+        let inp = input(
+            r#"{
+                "players": [
+                    {"name": "P1", "rating": 2000}, {"name": "P2", "rating": 1990},
+                    {"name": "P3", "rating": 1980}, {"name": "P4", "rating": 1970},
+                    {"name": "P5", "rating": 1960}, {"name": "P6", "rating": 1950},
+                    {"name": "P7", "rating": 1940}, {"name": "P8", "rating": 1930}
+                ],
+                "result_slips": [
+                    {"round": 1, "winner_name": "P8", "loser_name": "P3", "winner_score": 400, "loser_score": 300, "winner_started": false},
+                    {"round": 1, "winner_name": "P7", "loser_name": "P5", "winner_score": 400, "loser_score": 300, "winner_started": false},
+                    {"round": 1, "winner_name": "P4", "loser_name": "P2", "winner_score": 400, "loser_score": 300, "winner_started": true},
+                    {"round": 1, "winner_name": "P6", "loser_name": "P1", "winner_score": 400, "loser_score": 300, "winner_started": true}
+                ],
+                "round_pairings": [
+                    {"round": 1, "start_round": 0, "pairing": "Random"},
+                    {"round": 2, "start_round": 1, "pairing": "Quads_Clustered"},
+                    {"round": 3, "start_round": 1, "pairing": "Quads_Clustered"},
+                    {"round": 4, "start_round": 1, "pairing": "Quads_Clustered"}
+                ],
+                "published_pairings": {"1": [["P3", "P8"], ["P5", "P7"], ["P4", "P2"], ["P6", "P1"]]}
+            }"#,
+        );
+        let r1 = inp.published_pairings[&1].clone();
+        let mut all = vec![played_round(1, &r1)];
+        let out = pair(&inp);
+        assert_eq!(out.len(), 3);
+        all.extend(out);
+        for (n, fg) in firsts_and_games(&all) {
+            assert_eq!(fg, (2, 4), "{n}");
+        }
     }
 
     #[test]
