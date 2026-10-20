@@ -55,6 +55,18 @@ impl Ctx<'_> {
     pub fn standings(&self, round: i32) -> Vec<Player> {
         standings_after_round(self.players, self.slips, round, self.excluded)
     }
+
+    /// `standings`, with a phantom `Bye` appended to an odd field so it splits
+    /// evenly. For the strategies that lay a fixed schedule over the whole
+    /// field (round robins, quads, sixes): whoever the schedule pairs with the
+    /// phantom sits that round out.
+    pub fn standings_with_phantom_bye(&self, round: i32) -> Vec<Player> {
+        let mut players = self.standings(round);
+        if !players.len().is_multiple_of(2) {
+            players.push(Player::bye());
+        }
+        players
+    }
 }
 
 /// Error if a withdrawn entrant already played a game in this block's rounds.

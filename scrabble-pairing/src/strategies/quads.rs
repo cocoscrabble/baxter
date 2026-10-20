@@ -32,11 +32,7 @@ fn quad_standings(ctx: &Ctx, rp: &RoundPairing) -> Result<Vec<Player>, String> {
         .map(|o| o.round)
         .collect();
     guard_no_dropped_in_block(ctx, &block_rounds, "quad block", "quad blocks")?;
-    let mut standings = ctx.standings(rp.start_round);
-    if !standings.len().is_multiple_of(2) {
-        standings.push(Player::bye());
-    }
-    Ok(standings)
+    Ok(ctx.standings_with_phantom_bye(rp.start_round))
 }
 
 /// 0-based position of `rp` within its run of same-strategy, same-start_round
