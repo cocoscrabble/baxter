@@ -963,6 +963,50 @@ class PortableExportTests(LoggedTournamentMixin, TestCase):
         entrant = ctx.tournament.divisions.get().entrants.get(player=late)
         self.assertEqual(entrant.rating, 1200)
 
+    def _old_style_export(self, moved_rating=None):
+        """An export shaped like one written before entrant_added recorded its
+        rating: no rating in those payloads, and v2 digests. ``moved_rating``
+        is the late entrant's rating in the header — the player table at export
+        time, which may have moved since they were entered."""
+        from tournaments.digest_backfill import replayed_digests
+
+        tournament, division = self._build_logged_tournament()
+        late = self._late_entrant(tournament, division)
+        number = division.entrants.get(player=late).number
+        header, events = self._export(tournament)
+        v2 = replayed_digests(events)
+        for event in events:
+            if event["seq"] in v2:
+                event["digest"], event["digest_version"] = v2[event["seq"]][1], 2
+            if event["event_type"] == "entrant_added":
+                event["payload"].pop("rating", None)
+                event["payload"].pop("rating_source", None)
+        if moved_rating is not None:
+            for p in header["players"]:
+                if p["player_number"] == late.player_number:
+                    p["rating"] = moved_rating
+        tournament.delete()
+        Player.objects.exclude(is_bye=True).delete()
+        return header, events, number
+
+    def test_an_old_log_whose_ratings_moved_still_replays(self):
+        # Charlottesville Autumn One-Day 2026: entered in September, exported in
+        # October after a roster pull had moved ratings. The seeds are what the
+        # log records and what replay reproduces; the v2 digests that include
+        # the unrecorded rating are reported, not failed.
+        header, events, number = self._old_style_export(moved_rating=1900)
+        ctx = replay(events, verify=True, players=header["players"])
+        entrant = ctx.tournament.divisions.get().entrants.get(player__player_number="0005")
+        self.assertEqual(entrant.number, number)
+        self.assertTrue(ctx.unverified)
+
+    def test_an_old_log_still_verifies_every_digest_it_can(self):
+        # Same log, ratings unmoved: every v2 digest reproduces, so nothing is
+        # waved through as unverifiable.
+        header, events, _ = self._old_style_export()
+        ctx = replay(events, verify=True, players=header["players"])
+        self.assertEqual(ctx.unverified, [])
+
     def test_each_event_names_the_revision_that_wrote_it(self):
         # The deploy's GIT_REV wins over asking git (production has no .git).
         from unittest import mock

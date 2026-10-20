@@ -231,7 +231,7 @@ class EntrantsGrid(EditGrid):
 
         ``player`` is the number — the identity. Name and both player ratings
         ride along so a replay into a fresh DB can create a missing player
-        correctly (pairing seeds off rating).
+        correctly.
 
         The pinned snapshot is read back from the **database**, not from
         ``rows``: it is derived server-side in ``prepare``, so the client's rows
@@ -282,6 +282,11 @@ class EntrantsGrid(EditGrid):
         return row.get("player")
 
     portable_player_fields = ("player",)
+    # Ratings only set the seeds, and the seed (``number``) is checked. A log
+    # written before entrant_added recorded its rating replays with whatever
+    # rating the export header has now, so these would refuse a change over a
+    # rating that has merely moved since.
+    delta_unchecked_fields = ("rating", "entrant_rating", "wespa_rating", "rating_source")
     # "name" rides along for a replay into a fresh database; in the log it is
     # the label, not a column of its own.
     portable_identity_fields = ("player", "name")

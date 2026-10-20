@@ -215,6 +215,7 @@ def record_event(
             actor_session=actor_session,
             division=division,
             digest=digest,
+            digest_version=DIGEST_VERSION,
             code_rev=code_revision(),
         )
 
@@ -296,7 +297,10 @@ def records_event(event_type):
 
 # The digest's schema version. v1 identified players by name; v2 identifies
 # them by player number. Stored digests were backfilled to v2 by migration 0038.
-DIGEST_VERSION = 2
+# v3 leaves entrant ratings out: ratings only set the seeds, and the seed (the
+# entrant number) is in the digest. Each event records the version its digest
+# is in (``TournamentEvent.digest_version``), so v2 digests stay checkable.
+DIGEST_VERSION = 3
 
 
 def division_state(division, version: int = DIGEST_VERSION) -> dict:
@@ -329,9 +333,11 @@ def division_state(division, version: int = DIGEST_VERSION) -> dict:
         row = [e.number, ident(e.player), e.dropped]
         if version == 1:
             return row
-        return row + [
-            e.rating, e.rating_source, e.tentative, e.paid, e.playing_up
-        ]
+        if version == 2:
+            return row + [
+                e.rating, e.rating_source, e.tentative, e.paid, e.playing_up
+            ]
+        return row + [e.tentative, e.paid, e.playing_up]
 
     entrants = sorted(
         entrant_row(e) for e in division.entrants.select_related("player")
@@ -491,6 +497,7 @@ def export_jsonl(tournament) -> str:
                     "schema_version": event.schema_version,
                     "payload": event.payload,
                     "digest": event.digest,
+                    "digest_version": event.digest_version,
                     "code_rev": event.code_rev,
                 }
             )

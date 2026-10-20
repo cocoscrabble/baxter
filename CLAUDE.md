@@ -136,6 +136,14 @@ image has no `.git` — else `git rev-parse HEAD` in a dev checkout). It is outs
 the payload and the digest. An export's header also lists the players the log
 enters, so `replay_tournament` can rebuild a production log on a laptop.
 
+**The digest leaves ratings out (v3)**: ratings only set the seeds, and the
+seed (entrant number) is in it. Each event stores its `digest_version`, so older
+v2 digests (which include ratings) are still checked under v2. A log from before
+`entrant_added` recorded its rating (2026-10-15) replays with the header's
+current rating instead; a v2 mismatch in such a division is listed as
+unverifiable, not failed (`ReplayContext.unverified`), and the entrant grid's
+replay precondition skips rating fields (`delta_unchecked_fields`).
+
 **A new mutating POST view must route through a command** (or be added to the
 exempt set in `test_event_completeness.py`, which fails CI otherwise).
 

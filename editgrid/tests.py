@@ -87,6 +87,24 @@ class GridDeltaTests(TestCase):
         with self.assertRaisesMessage(ValueError, "not what the change was recorded over"):
             self.grid.apply_delta([{"id": 1, "v": "drifted"}], delta)
 
+    def test_an_unchecked_field_may_have_moved_underneath(self):
+        class Grid(_KeyedGrid):
+            delta_unchecked_fields = ("rating",)
+
+        delta = {
+            "added": [], "removed": [],
+            "changed": [{
+                "from": {"id": 1, "v": "a", "rating": 1666},
+                "to": {"id": 1, "v": "z", "rating": 1666},
+            }],
+        }
+        # The rating moved since (1693 now): applied, and lands as recorded.
+        rebuilt = Grid().apply_delta([{"id": 1, "v": "a", "rating": 1693}], delta)
+        self.assertEqual(rebuilt, [{"id": 1, "v": "z", "rating": 1666}])
+        # Any other field still has to match.
+        with self.assertRaisesMessage(ValueError, "not what the change was recorded over"):
+            Grid().apply_delta([{"id": 1, "v": "drifted", "rating": 1666}], delta)
+
     def test_adding_a_row_that_is_already_there_raises(self):
         delta = {"added": [{"id": 1, "v": "a"}], "changed": [], "removed": []}
         with self.assertRaisesMessage(ValueError, "already there"):
