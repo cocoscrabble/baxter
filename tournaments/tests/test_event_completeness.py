@@ -82,6 +82,8 @@ EXEMPT = {
     "RosterImportView",
     # Setting another account's password. Accounts are not tournament state.
     "UserSetPasswordView",
+    # Reads every table and writes none (bar its admin-log row): a download.
+    "DatabaseExportView",
     # Dev tool that builds a whole fake tournament directly; rebuilt on commands
     # in event-log Phase 5.
     "FakeTournamentCreateView",

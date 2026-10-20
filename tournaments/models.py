@@ -1511,6 +1511,7 @@ class AdminAction(models.Model):
     PLAYER_IMPORT = "player_import"
     PLAYER_MERGE = "player_merge"
     PASSWORD_SET = "password_set"
+    DATABASE_EXPORT = "database_export"
     KINDS = [
         (ROSTER_PULL, "PlayerDB pull"),
         (ROSTER_RESOLUTION, "Guest number confirmed"),
@@ -1520,6 +1521,7 @@ class AdminAction(models.Model):
         (PLAYER_IMPORT, "Player import"),
         (PLAYER_MERGE, "Guest merged"),
         (PASSWORD_SET, "Password set"),
+        (DATABASE_EXPORT, "Database export"),
     ]
 
     created_at = models.DateTimeField(auto_now_add=True)

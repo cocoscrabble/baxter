@@ -2645,6 +2645,31 @@ class AdminIndexView(LoginRequiredMixin, IsAdminMixin, TemplateView):
         return context
 
 
+class DatabaseExportView(LoginRequiredMixin, IsAdminMixin, View):
+    """Download the whole database as a ``loaddata`` fixture (``db_export``).
+
+    POST only, from a button on ``/manage/``: it reads every table, so it must
+    not be something a link prefetch or a stray GET can set off. The file
+    holds every player and every account (without password hashes), so the
+    export is recorded in the admin log under who took it.
+    """
+
+    def post(self, request):
+        from .db_export import export_database
+        from .events import code_revision
+
+        with logged(AdminAction.DATABASE_EXPORT, request.user) as entry:
+            data, count = export_database()
+            entry.summary = f"Exported the database ({count} row{'' if count == 1 else 's'})"
+        stamp = timezone.now().strftime("%Y%m%d-%H%M")
+        rev = code_revision()[:12] or "unknown"
+        response = HttpResponse(data, content_type="application/gzip")
+        response["Content-Disposition"] = (
+            f'attachment; filename="baxter-db-{stamp}-{rev}.json.gz"'
+        )
+        return response
+
+
 class AdminLogView(LoginRequiredMixin, IsAdminMixin, TemplateView):
     """The admin log: every site-wide admin action, newest first, and whether it
     worked (``admin_log``). Filterable by action and to failures only, by GET,

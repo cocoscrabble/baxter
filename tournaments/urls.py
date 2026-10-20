@@ -3,6 +3,7 @@ from django.urls import path
 from .views import (
     AdminIndexView,
     AdminLogView,
+    DatabaseExportView,
     AddFixedPairingView,
     BulkImportEntrantsView,
     PlayerImportView,
@@ -93,6 +94,7 @@ urlpatterns = [
     path("manage/", AdminIndexView.as_view(), name="admin_index"),
     path("manage/users/", UserListView.as_view(), name="user_list"),
     path("manage/log/", AdminLogView.as_view(), name="admin_log"),
+    path("manage/export/", DatabaseExportView.as_view(), name="database_export"),
     path("manage/users/<int:pk>/password/", UserSetPasswordView.as_view(), name="user_set_password"),
     path("players/import/", PlayerImportView.as_view(), name="player_import"),
     path("players/wespa/", WespaImportView.as_view(), name="wespa_import"),
