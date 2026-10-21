@@ -436,15 +436,16 @@ class NotPlayedPredicateTests(TestCase):
             self.division.round_pairings_set.get(round=1).status, RoundPairings.DRAFT
         )
 
-    def test_a_forfeit_stays_out_of_the_registry_export(self):
-        self.make_forfeit()
+    def test_a_forfeit_is_in_the_registry_export_against_the_bye(self):
+        # Part of the record, so exported. The export keys players by number,
+        # so the bye shows up as its reserved "BYE", which marks it unplayed.
+        slip = self.make_forfeit()
         bundle = ExportTournament.from_db(self.division.tournament)
-        results = [r for d in bundle.divisions for r in d.results]
-        # The export keys players by number, so the bye shows up as "BYE".
-        self.assertNotIn(
-            BYE_PLAYER_NUMBER, {k for r in results for k in (r.winner, r.loser)}
-        )
-        self.assertEqual(results, [])
+        results = [
+            (r.winner, r.loser) for d in bundle.divisions for r in d.results
+            if BYE_PLAYER_NUMBER in (r.winner, r.loser)
+        ]
+        self.assertEqual(results, [(BYE_PLAYER_NUMBER, slip.loser.key)])
 
     def test_a_forfeit_is_exported_as_a_loss_to_the_bye(self):
         # A forfeit is part of the absentee's record, so the CSV carries it,
@@ -536,7 +537,7 @@ class ByeRotationTests(TestCase):
 
 
 class ByeExportTests(TestCase):
-    def test_export_omits_the_bye_player_and_results(self):
+    def test_export_omits_the_bye_player_but_keeps_its_results(self):
         user = User.objects.create_user(username="exp", password="p")
         for i in range(5):
             Player.objects.create(
@@ -547,9 +548,11 @@ class ByeExportTests(TestCase):
 
         data = ExportTournament.from_db(division.tournament)
         self.assertNotIn("Bye", [p.name for p in data.players])
+        # Every result, byes included: they are in the record. The bye is in
+        # no player list, only in results, as its reserved number.
         exported = sum(len(d.results) for d in data.divisions)
-        real = division.result_slips.exclude(loser__player__is_bye=True).count()
-        self.assertEqual(exported, real)
+        self.assertEqual(exported, division.result_slips.count())
+        self.assertTrue(division.result_slips.not_played().exists())
 
 
 class ByeIsNotSeededTests(TestCase):

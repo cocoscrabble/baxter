@@ -599,9 +599,11 @@ def import_division(tournament, actor, payload):
     — but the log records what was imported, not a re-keyed rewrite of it."""
     from collections import defaultdict
 
-    from tournaments.generate_pairings import BYE_LOSER_SCORE, absence_spread
+    from tournaments.generate_pairings import (
+        BYE_LOSER_SCORE, absence_row, absence_spread,
+    )
     from tournaments.grids import resolve_player
-    from tournaments.models import Entrant, Pairing, Player, RoundPairings
+    from tournaments.models import BYE_PLAYER_NAME, Entrant, Pairing, Player, RoundPairings
     from tournaments.pairing.round_pairing import blocks_to_round_pairings
 
     division, _ = Division.objects.get_or_create(
@@ -642,6 +644,31 @@ def import_division(tournament, actor, payload):
         played = set()
         games = []
         for r in by_round[round_num]:
+            # A row against the bye is a bye (the real player won) or a forfeit
+            # (the bye won). Only a payload that says its bye rows mean that is
+            # read this way: one logged before ``bye_rows`` entered "Bye" as an
+            # ordinary player, and replays as it was.
+            bye_side = payload.get("bye_rows") and next(
+                (side for side in ("winner", "loser")
+                 if r[side].casefold() == BYE_PLAYER_NAME.casefold()),
+                None,
+            )
+            if bye_side:
+                real = entrant(r["loser" if bye_side == "winner" else "winner"])
+                bye_ent = division.bye_entrant()
+                pairing = absence_row(
+                    division, rp, real, forfeit=(bye_side == "winner")
+                )
+                w, l = (bye_ent, real) if bye_side == "winner" else (real, bye_ent)
+                ResultSlip.objects.create(
+                    division=division, round=round_num, pairing=pairing,
+                    winner=w, winner_score=r["winner_score"],
+                    loser=l, loser_score=r["loser_score"],
+                    # The bye is the notional starter either way.
+                    winner_started=(bye_side == "winner"),
+                )
+                played.add(real.pk)
+                continue
             w, l = entrant(r["winner"]), entrant(r["loser"])
             games.append(
                 (w, l, r["winner_score"], r["loser_score"], r["winner_started"])
