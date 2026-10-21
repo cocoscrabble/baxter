@@ -25,12 +25,23 @@ Portable division shape::
         "results": [{"round": int, "winner": name, "loser": name,
                      "winner_score": int, "loser_score": int,
                      "winner_started": bool}, ...],
+        "bye_rows": True,
     }
+
+**Byes and forfeits** arrive as rows against the bye: the reserved number
+``BYE``, or a bye name (the hand-kept corpus writes ``Bye``). Either way the
+bye side is written ``Bye`` here and never becomes an entrant; the command
+turns the row into a bye (the real player won) or a forfeit (the bye won).
+``bye_rows`` says so: a payload logged before it entered "Bye" as an ordinary
+player, and still replays that way.
 """
 
 import csv
 import io
 
+from coco_ratings.core import is_bye
+
+from tournaments.models import BYE_PLAYER_NAME, BYE_PLAYER_NUMBER
 from tournaments.results_export import (
     HEADERS as CSV_HEADERS,
     LEGACY_HEADERS as CSV_LEGACY_HEADERS,
@@ -69,6 +80,8 @@ def _parse_json_bundle(text: str) -> tuple[str, list[dict]]:
     by_number = {p.player_number: p for p in bundle.players}
 
     def name_of(player_number: str) -> str:
+        if player_number.casefold() == BYE_PLAYER_NUMBER.casefold():
+            return BYE_PLAYER_NAME
         p = by_number.get(player_number)
         if p is None:
             raise ImportParseError(
@@ -94,7 +107,10 @@ def _parse_json_bundle(text: str) -> tuple[str, list[dict]]:
             }
             for r in d.results
         ]
-        divisions.append({"name": d.name, "entrants": entrants, "results": results})
+        divisions.append({
+            "name": d.name, "entrants": entrants, "results": results,
+            "bye_rows": True,
+        })
     return bundle.name, divisions
 
 
@@ -134,13 +150,19 @@ def _parse_csv(text: str) -> dict:
         wnumber, onumber = (cells[6], cells[7]) if numbered else ("", "")
         if not winner or not opponent:
             raise ImportParseError(f"Row {i}: winner and opponent names are required.")
+        winner_bye, opponent_bye = is_bye(winner, wnumber), is_bye(opponent, onumber)
+        if winner_bye and opponent_bye:
+            raise ImportParseError(f"Row {i}: both sides are the bye.")
         try:
             round_num, wscore, oscore = int(round_s), int(wscore_s), int(oscore_s)
         except ValueError:
             raise ImportParseError(
                 f"Row {i}: round and scores must be whole numbers."
             ) from None
-        for name, number in ((winner, wnumber), (opponent, onumber)):
+        for name, number, bye in ((winner, wnumber, winner_bye),
+                                  (opponent, onumber, opponent_bye)):
+            if bye:
+                continue  # the bye is not an entrant
             names.setdefault(name.lower(), name)
             if number:
                 numbers.setdefault(name.lower(), number)
@@ -148,8 +170,8 @@ def _parse_csv(text: str) -> dict:
             "round": round_num,
             # Canonicalize to the first-seen casing so result names match entrant
             # names exactly (the command keys entrants by name).
-            "winner": names[winner.lower()],
-            "loser": names[opponent.lower()],
+            "winner": BYE_PLAYER_NAME if winner_bye else names[winner.lower()],
+            "loser": BYE_PLAYER_NAME if opponent_bye else names[opponent.lower()],
             "winner_score": wscore,
             "loser_score": oscore,
             # The CSV never recorded who went first; default and note the limit
@@ -184,4 +206,7 @@ def _parse_csv(text: str) -> dict:
         {"player": name, "rating": ratings[name], "number": i}
         for i, name in enumerate(ordered, start=1)
     ]
-    return {"name": "Division 1", "entrants": entrants, "results": results}
+    return {
+        "name": "Division 1", "entrants": entrants, "results": results,
+        "bye_rows": True,
+    }

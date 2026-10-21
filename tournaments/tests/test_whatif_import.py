@@ -262,3 +262,80 @@ class ImportReplayRoundTripTests(TestCase):
         self.assertNotEqual(ctx.tournament.pk, tournament.pk)
         replayed = ctx.tournament.divisions.get(name="Open")
         self.assertEqual(division_digest(replayed), recorded)
+
+
+class ByeRowTests(TestCase):
+    """Byes and forfeits arrive as rows against the bye; they become bye and
+    forfeit slips, and the bye never becomes an entrant."""
+
+    CSV = (
+        "Submitted On,Round,Winner,Winners Score,Opponent,Opponents Score,"
+        "Winner Number,Opponent Number\n"
+        ",1,Alice,420,Bob,388,,\n"
+        ",1,Cara,50,Bye,0,,BYE\n"
+        ",2,Alice,400,Cara,350,,\n"
+        ",2,Bye,50,Bob,0,BYE,\n"
+    )
+
+    def setUp(self):
+        self.owner = User.objects.create_user(username="owner", password="pw")
+        self.tournament = Tournament.objects.create(
+            name="What-if", location="sandbox",
+            start_date="2026-07-16", owner=self.owner, is_fake=True,
+        )
+
+    def test_the_csv_parser_keeps_the_bye_out_of_the_entrants(self):
+        _, (division,) = parse_import(self.CSV)
+        self.assertEqual(
+            sorted(e["player"] for e in division["entrants"]), ["Alice", "Bob", "Cara"]
+        )
+        self.assertTrue(division["bye_rows"])
+        self.assertIn(("Cara", "Bye"), [(r["winner"], r["loser"]) for r in division["results"]])
+
+    def test_the_legacy_corpus_spelling_is_a_bye_too(self):
+        text = (
+            "Submitted On,Round,Winner,Winners Score,Opponent,Opponents Score\n"
+            ",1,Alice,420,Bob,388\n,1,Cara,50,Bye,0\n"
+        )
+        _, (division,) = parse_import(text)
+        self.assertNotIn("Bye", [e["player"] for e in division["entrants"]])
+
+    def test_a_bundle_result_against_BYE_parses(self):
+        bundle = _bundle([{
+            "name": "Open",
+            "entrants": [{"number": 1, "player_number": "P1"}],
+            "results": [{
+                "round": 1, "winner": "P1", "winner_score": 50,
+                "loser": "BYE", "loser_score": 0, "winner_started": False,
+            }],
+        }])
+        _, (division,) = parse_import(bundle)
+        self.assertEqual(division["results"][0]["loser"], "Bye")
+
+    def test_the_command_makes_bye_and_forfeit_slips(self):
+        _, (payload,) = parse_import(self.CSV)
+        summary = import_division(self.tournament, self.owner, payload)
+        division = self.tournament.divisions.get()
+        self.assertEqual(division.entrants.count(), 3)
+        # The rows said who had the bye, so nothing was inferred.
+        self.assertEqual(summary["inferred_byes"], [])
+
+        bye = division.result_slips.get(round=1, loser__player__is_bye=True)
+        self.assertEqual((bye.winner.player.name, bye.winner_score), ("Cara", 50))
+        self.assertFalse(bye.pairing.forfeit)
+        forfeit = division.result_slips.get(round=2, winner__player__is_bye=True)
+        self.assertEqual(forfeit.loser.player.name, "Bob")
+        self.assertTrue(forfeit.pairing.forfeit)
+        self.assertTrue(forfeit.winner_started)  # the bye is the notional starter
+
+    def test_it_replays_to_the_same_digest(self):
+        _, (payload,) = parse_import(self.CSV)
+        tournament = create_tournament(None, self.owner, {
+            "name": "What-if: byes", "location": "sandbox",
+            "start_date": "2026-07-16", "is_fake": True,
+            "default_division": {"name": payload["name"]},
+        })
+        import_division(tournament, self.owner, payload)
+        recorded = division_digest(tournament.divisions.get())
+        ctx = replay(events_from_tournament(tournament), verify=True)
+        self.assertEqual(division_digest(ctx.tournament.divisions.get()), recorded)

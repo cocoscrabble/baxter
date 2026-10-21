@@ -117,7 +117,7 @@ class DerivedForfeitTests(TestCase):
         self.assertEqual(standing.losses, 2)    # the two forfeits
         self.assertEqual(standing.spread, 40 - 2 * BYE_WINNER_SCORE)
 
-    def test_the_forfeits_are_not_rated_and_not_exported(self):
+    def test_the_forfeits_are_not_rated_but_are_exported(self):
         self.play(1)
         self.withdraw()
         self.play(2)
@@ -131,10 +131,11 @@ class DerivedForfeitTests(TestCase):
             r for d in ExportTournament.from_db(self.division.tournament).divisions
             for r in d.results
         ]
-        self.assertNotIn(
+        # Exported, though: a forfeit is a loss in the record, and the bye's
+        # reserved number is what keeps it out of the rating formula.
+        self.assertIn(
             self.entrant.key, [r.loser for r in results if r.winner == "BYE"]
         )
-        self.assertTrue(all("BYE" not in (r.winner, r.loser) for r in results))
 
     def test_rejoining_keeps_the_forfeits_and_pairs_the_later_rounds(self):
         self.play(1)

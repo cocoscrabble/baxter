@@ -97,9 +97,12 @@ class ExportDivision:
                 ExportEntrant.from_db(e)
                 for e in division.entrants.select_related("player")
             ],
+            # Every result, byes and forfeits included: they are part of the
+            # record. The bye appears by its reserved number, BYE, which is how
+            # a reader tells them apart (it is not in ``players``).
             results=[
                 ExportResult.from_db(r)
-                for r in division.result_slips.played().select_related(
+                for r in division.result_slips.select_related(
                     "winner__player", "loser__player"
                 )
             ],
