@@ -323,6 +323,27 @@ database (`migrate`, then `loaddata`) on a checkout at the revision in the
 file name. Then every re-export and comparison below runs locally against
 production's data.
 
+**Checked against production, 2026-10-21** (export at baxter `559c4f96`).
+Five real divisions have results. Every played game matches its file exactly,
+in both directions. The only differences are unplayed games, which are
+missing from three files:
+
+| File | Missing from the file |
+|---|---|
+| `pdx2032-sept2026` | 20 byes, one a round, 50–0 |
+| `vancouver-sept2026` | 6 byes **and 22 forfeits**, all at **100** (the division's `bye_spread`). Brandi Garden and Desiree Caruso withdrew after round 3 and forfeit rounds 4–14. This, not a playoff, is the cause of the short rounds |
+| `charlottesville-2026` | 7 byes, one a round, 50–0 |
+| `seattle-jul2026`, `providence-sept2026` | nothing (even fields) |
+
+So 6a is three files, and the rows to add are known exactly. The 100-point
+spread in Vancouver is what the director set. Confirm that it is meant to
+reach the ratings site's spread column before backfilling.
+
+**Hold the backfill until the first rating milestone is cut.** Adding these
+rows today would move published ratings: the current engine counts byes as
+career games (decision 4). After the cut, they are recorded `amendments` that
+change only W/L, spread and career games.
+
 **6a. Baxter-produced files.** `pdx2032-sept2026` and `vancouver-sept2026`
 are the only files with number columns. Re-export both from production Baxter
 with the phase-4 exporter and replace the files. The diff must only **add**
