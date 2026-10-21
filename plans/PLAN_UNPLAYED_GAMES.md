@@ -1,6 +1,26 @@
 # Plan: Unplayed games (byes and forfeits) in the ratings database
 
-**Status: proposed** — drafted 2026-10-20; decision 4 settled the same day.
+**Status: implemented** (2026-10-21) except 6b, the pre-2026 legacy gaps.
+The rating milestone (`../ratings/plans/rating-milestones.md`) was cut first,
+so nothing here moved a published rating.
+
+- ratings `3acfaf9` (phase 1): the bye is not a player.
+- ratings `d03e914` (phase 2): `rated_games` vs `career_games`, in the
+  engine, `CurrentRating` and the roster.
+- ratings `fed6bd6` (6a): 55 rows backfilled as milestone amendments.
+- baxter (phases 4–5): `rated_games` seeds the live projection; the CSV
+  export, the registry bundle and the what-if import carry byes and
+  forfeits.
+
+**To ship:** push `../ratings` first (deploys cocodb). Then run
+`uv lock --upgrade-package coco-ratings` here, since Baxter's code needs the
+new `core` (`Player(rated_games=...)`, `is_bye`), and push Baxter.
+
+**Decided while implementing:** what-if payloads gained `bye_rows`, so a
+`division_imported` event logged before this (which entered "Bye" as a
+player) replays unchanged. The backfill kept every existing row
+byte-for-byte: the re-export differed from one existing PDX row only in its
+timestamp, which the reader ignores. Phase 3 (display) was dropped.
 Spans this repo and `../ratings`. Code references are pinned at baxter
 `dab0590` and ratings `532aaef`.
 
