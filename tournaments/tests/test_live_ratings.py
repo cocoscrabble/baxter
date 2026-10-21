@@ -38,7 +38,7 @@ class ProjectionTestCase(TestCase):
         self._entrant_number = 0
 
     def player(self, name, rating=1600, deviation=80.0, games=200,
-               last_played=date(2026, 5, 1), number=None):
+               last_played=date(2026, 5, 1), number=None, rated_games=None):
         self._entrant_number += 1
         return Player.objects.create(
             name=name,
@@ -46,6 +46,7 @@ class ProjectionTestCase(TestCase):
             rating=rating,
             deviation=deviation,
             career_games=games,
+            rated_games=games if rated_games is None else rated_games,
             last_played=last_played,
         )
 
@@ -164,6 +165,21 @@ class SeedTests(ProjectionTestCase):
         ann_player.save()
 
         self.assertEqual(project_ratings(self.division)[ann.key], before)
+
+    def test_the_multiplier_counts_played_games_not_byes(self):
+        """Two players with the same 900-game record, one of them mostly byes
+        and forfeits. Only played games are experience: the one with 100 of
+        them moves at full rate, the other is damped by half."""
+        mostly_byes = self.enter(self.player("Byeful", games=900, rated_games=100))
+        veteran = self.enter(self.player("Veteran", games=900, rated_games=900))
+        opp1 = self.enter(self.player("Opp1"))
+        opp2 = self.enter(self.player("Opp2"))
+        self.game(1, mostly_byes, opp1)
+        self.game(1, veteran, opp2)
+        p = project_ratings(self.division)
+        self.assertAlmostEqual(
+            p[mostly_byes.key].delta, 2 * p[veteran.key].delta, delta=1
+        )
 
     def test_deviation_is_aged_to_the_tournament_date(self):
         """Deviation grows with inactivity; skipping that makes the projection

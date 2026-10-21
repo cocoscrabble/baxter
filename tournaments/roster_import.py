@@ -14,7 +14,7 @@ What it writes:
 - ``rating`` is the CoCo rating, which this database owns and Baxter mirrors. A
   ``null`` rating means "no rated games yet", stored as 0 — Baxter's long-
   standing convention for "no CoCo rating" (``Player.effective_rating``).
-- ``deviation``, ``career_games`` and ``last_played`` are the rest of the rating
+- ``deviation``, ``career_games``, ``rated_games`` and ``last_played`` are the rest of the rating
   seed, needed by the live projection.
 - ``wespa_rating`` is untouched. It is not the central database's to know, and a
   pull must not clear it.
@@ -164,6 +164,12 @@ def parse_roster(raw):
                 "rating": int(entry["rating"]) if entry.get("rating") is not None else 0,
                 "deviation": entry.get("deviation"),
                 "career_games": int(entry.get("career_games") or 0),
+                # Played games only, which the rating formula needs. A roster
+                # from before cocodb split the two counts has only
+                # career_games, which is what the formula used to read.
+                "rated_games": int(
+                    entry.get("rated_games", entry.get("career_games")) or 0
+                ),
                 "last_played": _parse_date(entry.get("last_played"), number),
             }
         )
@@ -182,7 +188,9 @@ def _parse_date(value, number):
 
 
 # What a pull owns. wespa_rating is pointedly not here.
-SYNCED_FIELDS = ("name", "rating", "deviation", "career_games", "last_played")
+SYNCED_FIELDS = (
+    "name", "rating", "deviation", "career_games", "rated_games", "last_played",
+)
 
 
 @transaction.atomic
@@ -370,8 +378,11 @@ def resolve_number(pending, actor=None):
 
     # Now that they are on the registry's number, take the registry's data.
     player.refresh_from_db()
+    row = dict(pending.row)
+    # Held back by a pull from before the roster carried rated_games.
+    row.setdefault("rated_games", row.get("career_games", 0))
     for name in SYNCED_FIELDS:
-        setattr(player, name, pending.row[name])
+        setattr(player, name, row[name])
     player.is_provisional = False
     save_players([player], [*SYNCED_FIELDS, "is_provisional"], actor=actor)
     return player

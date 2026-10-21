@@ -124,6 +124,9 @@ def _seed(entrant, as_of):
         # maximum is what an unknown one means.
         init_rating_deviation=entrant.deviation or MAX_DEVIATION,
         career_games=entrant.career_games,
+        # The multiplier reads played games only; byes and forfeits are no
+        # evidence of experience.
+        rated_games=entrant.rated_games,
         last_played=entrant.last_played or _NEVER,
     )
     # set_init_rating decides is_unrated from the rating itself (< 100), so an

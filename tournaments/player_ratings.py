@@ -28,7 +28,8 @@ from .models import Player
 
 # What an entrant's seed is derived from (``entrant_sync.current_seed``).
 RATING_FIELDS = frozenset(
-    {"rating", "wespa_rating", "deviation", "career_games", "last_played"}
+    {"rating", "wespa_rating", "deviation", "career_games", "rated_games",
+     "last_played"}
 )
 
 
