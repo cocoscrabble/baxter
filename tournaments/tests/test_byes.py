@@ -1,5 +1,8 @@
 """Bye handling: a synthetic bye is added at pairing time for an odd field."""
 
+import csv
+import io
+
 from collections import Counter
 from datetime import date
 
@@ -443,10 +446,10 @@ class NotPlayedPredicateTests(TestCase):
         )
         self.assertEqual(results, [])
 
-    def test_a_forfeit_stays_out_of_the_results_csv(self):
-        # This export already tested both sides, so it is a guard on the
-        # consolidation onto ``is_played`` rather than a fix. Asserting the real
-        # game *is* there keeps it from passing vacuously.
+    def test_a_forfeit_is_exported_as_a_loss_to_the_bye(self):
+        # A forfeit is part of the absentee's record, so the CSV carries it,
+        # with the bye's reserved name and number marking it unplayed for the
+        # ratings reader (plans/PLAN_UNPLAYED_GAMES.md decision 5).
         real = self.division.pairings.filter(round=1).exclude(
             second__player__is_bye=True
         ).first()
@@ -462,7 +465,13 @@ class NotPlayedPredicateTests(TestCase):
             reverse("division_results_export", kwargs=self.division.slug_kwargs())
         ).content.decode()
         self.assertIn(real.first.name, body)
-        self.assertNotIn("Bye", body)
+        forfeit = self.bye_slip
+        rows = [r for r in csv.reader(io.StringIO(body)) if r[1:2] == ["1"]]
+        self.assertIn(
+            ["1", "Bye", str(forfeit.winner_score), forfeit.loser.name,
+             str(forfeit.loser_score), "BYE", forfeit.loser.key],
+            [r[1:] for r in rows],
+        )
 
 
 class WithdrawalDoesNotStallPairingTests(TestCase):

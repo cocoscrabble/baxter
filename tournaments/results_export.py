@@ -35,6 +35,15 @@ fractional part = time of day). The ratings reader takes that column
 positionally and ignores its value, but real spreadsheet exports carry a serial
 there, so we reproduce one from each result's ``created_at``.
 
+**Byes and forfeits are rows too.** They are part of each player's record (a
+bye is a win by the division's ``bye_spread``, a forfeit a loss by it), so they
+are exported like any other result, with the bye on the other side written as
+name ``Bye`` and number ``BYE``. That marker is exact (every unplayed game in
+Baxter is against the bye entrant; a printed game that becomes a forfeit is
+split into two such rows), and it is what tells the ratings reader to keep the
+row out of the formula. A reader that predates that still reads them the way it
+reads the hand-kept corpus's ``Bye`` rows. See plans/PLAN_UNPLAYED_GAMES.md.
+
 This module is deliberately free of Django imports so it can be exercised in
 isolation; callers build a list of :class:`ResultRow` and hand it to
 :func:`render_results_csv`, which returns the CSV text.
