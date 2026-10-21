@@ -1077,6 +1077,73 @@ class DivisionEntrantsEmbedView(PubliclyVisibleDivisionMixin, DetailView):
         return context
 
 
+def playerdb_url(player):
+    """The player's public page on the CoCo player database, or "" if they
+    have none (a guest on a T- number has never been seen there).
+
+    Built the way cocodb builds it (``Player.get_absolute_url``): the bare
+    number, since its URLs predate zero-padding, and a slug of the name. The
+    slug is decorative there and a stale one redirects, so a rename is harmless.
+    """
+    number = player.player_number or ""
+    if not number.isdigit():
+        return ""
+    return (
+        f"{settings.PLAYERDB_URL.rstrip('/')}/player/{int(number)}/"
+        f"{slugify(player.name)}/"
+    )
+
+
+@method_decorator(xframe_options_exempt, name="dispatch")
+class DivisionStandingsEmbedView(PubliclyVisibleDivisionMixin, DetailView):
+    """The standings as a bare fragment, in the format the CoCo site already
+    uses for results: rank, player (linked to their CoCo page), record, spread,
+    the rating they came in on and the projected new one.
+
+    Built like ``DivisionEntrantsEmbedView``, and for the same reasons: it is
+    loaded by the visitor's browser with the visitor's cookies, so it resolves
+    the division as anonymous and shows nothing editor-only; and it must be
+    frameable. Withdrawn players stay in, unmarked, as the format has no place
+    to mark them.
+
+    The new rating is the live projection (``project_ratings``): non-binding
+    until the official run, like the Ratings tab it comes from. A player with
+    nothing to project shows their entry rating in both columns.
+    """
+
+    model = Division
+    template_name = "tournaments/division_standings_embed.html"
+    context_object_name = "division"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        division = self.object
+        standings = division_standings(division, division.current_round())
+        entrants = {
+            e.key: e for e in division.entrants.select_related("player")
+        }
+        projections = project_ratings(division)
+        rows = []
+        for p in standings:
+            entrant = entrants.get(p.key)
+            projection = projections.get(p.key)
+            if projection is not None:
+                old, new = projection.old_rating, projection.new_rating
+            else:
+                old = new = entrant.rating if entrant else ""
+            rows.append({
+                "rank": p.rank,
+                "name": p.name,
+                "url": playerdb_url(entrant.player) if entrant else "",
+                "record": p.record,
+                "spread": p.spread,
+                "old_rating": old,
+                "new_rating": new,
+            })
+        context["rows"] = rows
+        return context
+
+
 def division_standings(division, current_round):
     """Return the standings list after ``current_round``, annotated with each
     entrant's rank, seed number and dropped flag (as ``_standings_table.html``

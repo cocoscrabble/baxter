@@ -47,6 +47,9 @@ PAIRING_ENGINE = env("PAIRING_ENGINE", default="rust")
 # is running.
 ROSTER_API_URL = env("ROSTER_API_URL", default="")
 ROSTER_API_TOKEN = env("ROSTER_API_TOKEN", default="")
+# The same database's public player pages, which the embeddable standings link
+# each CoCo player to (/player/<bare number>/<slug>/).
+PLAYERDB_URL = env("PLAYERDB_URL", default="https://playerdb.cocoscrabble.org")
 
 # The WESPA rating list (plans/PLAN_WESPA.md). Unlike the roster there is no
 # token, so this works out of the box; it is a setting so a mirror that moves,
