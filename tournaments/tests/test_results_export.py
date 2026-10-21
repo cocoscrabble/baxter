@@ -118,19 +118,27 @@ class DivisionResultsExportViewTests(TestCase):
         # No "(number)" suffix leaked into the join key.
         self.assertNotIn("(", clash[2])
 
-    def test_byes_are_omitted(self):
-        bye_player = Player.get_bye()
-        bye_entrant = Entrant.objects.create(
-            division=self.division, player=bye_player, number=99,
-        )
+    def test_byes_and_forfeits_are_exported_against_the_reserved_bye(self):
+        """They are part of the record, so they are rows; the reserved name and
+        number are how the ratings reader keeps them out of the formula."""
+        bye_entrant = self.division.bye_entrant()
         ResultSlip.objects.create(
             division=self.division, round=2,
             winner=self.entrant1, winner_score=50,
-            loser=bye_entrant, loser_score=0, winner_started=True,
+            loser=bye_entrant, loser_score=0, winner_started=False,
+        )
+        ResultSlip.objects.create(
+            division=self.division, round=2,
+            winner=bye_entrant, winner_score=50,
+            loser=self.entrant2, loser_score=0, winner_started=True,
         )
         response = self.client.get(self._url())
         rows = list(csv.reader(StringIO(response.content.decode())))
-        self.assertEqual(len(rows), 2)  # header + the one real game
+        unplayed = [r[1:] for r in rows[1:] if r[1] == "2"]
+        self.assertCountEqual(unplayed, [
+            ["2", "Alice", "50", "Bye", "0", self.player1.player_number, "BYE"],
+            ["2", "Bye", "50", "Bob", "0", "BYE", self.player2.player_number],
+        ])
 
     def test_forbidden_for_non_editor(self):
         self.client.login(username="other", password="testpass123")
@@ -157,8 +165,8 @@ class RatingsReaderCompatibilityTests(SimpleTestCase):
             def __init__(self):
                 self.players = {}
 
-            def find_or_add_player(self, name):
-                return self.players.setdefault(name, Player(name))
+            def find_or_add_player(self, name, number=None):
+                return self.players.setdefault(name, Player(name, number=number))
 
         with tempfile.NamedTemporaryFile(
             "w", suffix=".csv", delete=False
@@ -183,6 +191,22 @@ class RatingsReaderCompatibilityTests(SimpleTestCase):
         self.assertEqual(
             self._read(text),
             {"Alice": (1.0, 1.0, -130), "Bob": (1.0, 1.0, 130)},
+        )
+
+    def test_byes_and_forfeits_count_in_the_record_and_make_no_player(self):
+        text = render_results_csv([
+            ResultRow(1, "Alice", 450, "Bob", 380,
+                      winner_number="0001", opponent_number="0002"),
+            ResultRow(2, "Alice", 50, "Bye", 0,
+                      winner_number="0001", opponent_number="BYE"),
+            ResultRow(2, "Bye", 50, "Bob", 0,
+                      winner_number="BYE", opponent_number="0002"),
+            ResultRow(3, "Alice", 0, "Bye", 0,
+                      winner_number="0001", opponent_number="BYE"),
+        ])
+        self.assertEqual(
+            self._read(text),
+            {"Alice": (2.5, 0.5, 120), "Bob": (0.0, 2.0, -120)},
         )
 
     def test_interleaving_the_number_columns_would_break_it(self):

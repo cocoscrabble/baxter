@@ -101,6 +101,7 @@ from .grids import BoardTableMapGrid, EntrantsGrid, FixedPairingsGrid, FixedTabl
 from coco_ratings.identity import canonical_player_number
 from .admin_log import logged
 from .models import (
+    BYE_PLAYER_NAME,
     BYE_PLAYER_NUMBER,
     EDIT_SCOPES,
     AdminAction,
@@ -1985,26 +1986,34 @@ class DivisionResultsExportView(LoginRequiredMixin, CanEditDivisionMixin, Detail
         slips = division.result_slips.select_related(
             "winner__player", "loser__player"
         ).order_by("round", "created_at")
-        rows = [
-            ResultRow(
+        def side(entrant):
+            # The plain name, not the disambiguated label: this column is a
+            # join key for coco-ratings, and the number columns beside it are
+            # what resolve a shared name. The bye is written with its reserved
+            # name and number, which is how the ratings reader knows the row
+            # is unplayed.
+            if entrant.player.is_bye:
+                return BYE_PLAYER_NAME, BYE_PLAYER_NUMBER
+            return entrant.name, entrant.key
+
+        rows = []
+        # Every slip, byes and forfeits included: they are part of each
+        # player's record (a bye is a win, a forfeit a loss), and the ratings
+        # side keeps them out of the formula itself
+        # (plans/PLAN_UNPLAYED_GAMES.md decision 5).
+        for slip in slips:
+            winner, winner_number = side(slip.winner)
+            opponent, opponent_number = side(slip.loser)
+            rows.append(ResultRow(
                 round=slip.round,
-                # The plain name, not the disambiguated label: this column is a
-                # join key for coco-ratings, and the number columns beside it are
-                # what resolve a shared name.
-                winner=slip.winner.name,
-                winner_number=slip.winner.key,
+                winner=winner,
+                winner_number=winner_number,
                 winner_score=slip.winner_score,
-                opponent=slip.loser.name,
-                opponent_number=slip.loser.key,
+                opponent=opponent,
+                opponent_number=opponent_number,
                 opponent_score=slip.loser_score,
                 submitted_on=slip.created_at,
-            )
-            for slip in slips
-            # A bye or forfeit is materialized as a result but isn't a played
-            # game; leave it out so a bye doesn't create a phantom "Bye" player
-            # in the ratings and a forfeit isn't rated as a 50–0 win.
-            if slip.is_played
-        ]
+            ))
 
         response = HttpResponse(render_results_csv(rows), content_type="text/csv")
         filename = slugify(f"{tournament.name}-{division.name}-results") + ".csv"
