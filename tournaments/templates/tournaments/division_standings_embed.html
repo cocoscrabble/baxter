@@ -1,0 +1,65 @@
+{% comment %}
+The standings in the exact format the CoCo website already uses for results
+(supplied as standings-embed.html), so it can be pasted or iframed there
+unchanged. Reproduced exactly, except for three CSS fixes to the original: the table rule
+was `.coco-results table { style="border-collapse: collapse;" }` (a selector
+that missed the table, holding an attribute instead of a declaration); the
+player cell said `style="coco-results-nobreak"` where it meant the class; and
+that class's rule used `word-wrap: none`, which is not a value, so it never
+stopped a name wrapping. Change it only to match a change on the CoCo site.
+{% endcomment %}<style type="text/css">
+  iframe {
+    border: none;
+  }
+  .coco-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  }
+  .coco-table-scroll iframe {
+  border: 0;
+  display: block;
+  max-width: none;
+  }
+  @media only screen and (max-width: 640px) {
+    .coco-table-scroll iframe {
+      pointer-events: none;
+    }
+  }
+  table.coco-results {
+    border-collapse: collapse;
+  }
+  .coco-results td {
+    font-size-adjust: 0.4;
+	vertical-align: bottom;
+    word-wrap: break-word;
+  }
+  td.coco-results-nobreak {
+    font-size-adjust: 0.4;
+	vertical-align: bottom;
+    white-space: nowrap;
+  }
+</style>
+
+<div class="coco-table-scroll" role="region" aria-label="Results" tabindex="0">
+
+<table border="0" class="coco-results" style="width:100%;padding:10px;">
+	 <tr style="border-bottom: 1px solid black;">
+		<td></td>
+		<td><b>Player&nbsp;</b></td>
+		<td><b>Record&nbsp;</b></td>
+		<td><b>Spread&nbsp;</b></td>
+		<td><b>Initial Rating&nbsp;</b></td>
+		<td><b>New Rating&nbsp;</b></td>
+    </tr>
+  
+{% for row in rows %}	<tr>
+		<td align="left">{{ row.rank }}.</td>
+		<td class="coco-results-nobreak" align="left">{% if row.url %}<a href="{{ row.url }}">{{ row.name }}</a>{% else %}{{ row.name }}{% endif %}</td>
+		<td align="left">{{ row.record }}</td>
+		<td align="left">{{ row.spread }}</td>
+		<td align="left">{{ row.old_rating }}</td>
+		<td align="left">{{ row.new_rating }}</td>
+	</tr>
+{% endfor %}  </table>
+</div>

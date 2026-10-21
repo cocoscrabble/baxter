@@ -7,4 +7,11 @@
 
 {% include "tournaments/_standings_content.html" %}
 
+{% if can_edit %}
+<p class="note">
+    There is an <a href="{% url 'division_standings_embed' division.tournament.slug division.slug %}">embeddable version</a>
+    of the latest standings, with ratings, for the CoCo website.
+</p>
+{% endif %}
+
 {% endblock %}
