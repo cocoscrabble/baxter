@@ -46,7 +46,10 @@ from .models import Division, Entrant, RoundPairings
 # a seed is worse than a stale one: the live projection damps by career games
 # and grows deviation from last_played, so a rating moved without them describes
 # a player who never existed.
-SEED_FIELDS = ("rating", "rating_source", "deviation", "career_games", "last_played")
+SEED_FIELDS = (
+    "rating", "rating_source", "deviation", "career_games", "rated_games",
+    "last_played",
+)
 
 
 def current_seed(player):
@@ -61,6 +64,7 @@ def current_seed(player):
         "rating_source": source,
         "deviation": player.deviation or 0.0,
         "career_games": player.career_games,
+        "rated_games": player.rated_games,
         "last_played": player.last_played,
     }
 

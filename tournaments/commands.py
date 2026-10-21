@@ -1023,7 +1023,12 @@ def refresh_entrant_ratings(tournament, actor, payload):
                 f"{division.name}."
             )
         for field in SEED_FIELDS:
-            value = row[field]
+            if field == "rated_games" and field not in row:
+                # Logged before the two counts were split: the one count it
+                # carried is what the formula read then.
+                value = row["career_games"]
+            else:
+                value = row[field]
             if field == "last_played" and isinstance(value, str):
                 value = date.fromisoformat(value)
             setattr(entrant, field, value)

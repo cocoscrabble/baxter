@@ -214,6 +214,24 @@ class EventTests(RefreshTestCase):
             "the recorded value, not what the player table says now",
         )
 
+    def test_a_payload_from_before_rated_games_still_applies(self):
+        # Logged before the formula's played-games count was split from
+        # career_games: the one count it carried is what the formula read.
+        from tournaments.commands import refresh_entrant_ratings
+
+        self.move_player(rating=1700, career_games=140)
+        self.client.post(self.url(), {"entrants": ["0233"]}, follow=True)
+        payload = self.tournament.events.get(
+            event_type="entrant_ratings_refreshed"
+        ).payload
+        for row in payload["entrants"]:
+            del row["rated_games"]
+        self.entrant.rated_games = 0
+        self.entrant.save()
+        refresh_entrant_ratings(self.tournament, self.owner, payload)
+        self.entrant.refresh_from_db()
+        self.assertEqual(self.entrant.rated_games, 140)
+
     def test_the_payload_is_json_serializable(self):
         # It is stored in a JSONField and read back by replay; a date would not
         # survive the round trip.

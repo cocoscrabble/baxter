@@ -555,7 +555,11 @@ class Player(models.Model):
     # ``rating``. Used by the live rating projection. NULL means the roster
     # has never told us, which the calculator reads as an unrated player.
     deviation = models.FloatField(null=True, blank=True)
+    # Every game in the player's record, byes and forfeits included.
     career_games = models.IntegerField(default=0)
+    # Played games only: the count the rating formula reads (its multiplier).
+    # The live projection uses this one. See plans/PLAN_UNPLAYED_GAMES.md.
+    rated_games = models.IntegerField(default=0)
     last_played = models.DateField(null=True, blank=True)
     # True for players created locally that the registry has not yet seen; their
     # player_number is a temporary T- value the registry replaces on upload.
@@ -722,6 +726,7 @@ class Entrant(models.Model):
     # The rest of the rating seed, frozen with the rating, for live ratings.
     deviation = models.FloatField(default=0.0)
     career_games = models.IntegerField(default=0)
+    rated_games = models.IntegerField(default=0)
     last_played = models.DateField(null=True, blank=True)
 
     # -- registration state -------------------------------------------------
@@ -885,6 +890,7 @@ class Entrant(models.Model):
         # player is worth, not rewriting their playing history.
         registration.setdefault("deviation", player.deviation or 0.0)
         registration.setdefault("career_games", player.career_games)
+        registration.setdefault("rated_games", player.rated_games)
         registration.setdefault("last_played", player.last_played)
         return cls.objects.create(
             division=division,
