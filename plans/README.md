@@ -110,4 +110,5 @@ Current plans:
   in W/L, spread and career games, but invisible to the rating formula (which
   gets a separate played-only `rated_games` count), and the bye never a player.
   Spans this repo (export every slip) and `../ratings` (reader + calculator),
-  plus a backfill of `results/`. **Proposed**, not started.
+  plus a backfill of `results/`. **Implemented** except the pre-2026
+  legacy gaps (6b).
