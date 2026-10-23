@@ -768,12 +768,12 @@ class DivisionRenameView(LoginRequiredMixin, CanEditDivisionMixin, View):
 class DivisionRootRedirectView(VisibleDivisionMixin, View):
     """The bare division URL — what the division name used to link to, before
     its overview page (the latest round's results) was retired in favour of the
-    Results tab. Kept so old links land on Entrants; a missing or hidden
+    Results tab. Kept so old links land on Standings; a missing or hidden
     division still 404s here rather than redirecting first."""
 
     def get(self, request, *args, **kwargs):
         self.get_object()
-        return redirect("division_entrants", **self.division.slug_kwargs())
+        return redirect("division_standings", **self.division.slug_kwargs())
 
 
 def results_newest_first(division, slips, limit=None):
