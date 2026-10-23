@@ -1016,6 +1016,13 @@ td a:hover {
     background: var(--surface-raised);
 }
 
+/* Standings grow with the field: use the page scrollbar rather than a
+   second vertical scrollbar inside the player list. Keep horizontal overflow
+   available for narrow screens and leave other bounded tables unchanged. */
+#standings-content .table-scroll {
+    max-height: none;
+}
+
 .table-scroll table {
     margin-bottom: 0;
 }
