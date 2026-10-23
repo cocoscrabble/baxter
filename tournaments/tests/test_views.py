@@ -725,10 +725,10 @@ class DivisionNavTests(TestCase):
     def setUpTestData(cls):
         setUpTournament(cls)
 
-    def test_bare_division_url_redirects_to_entrants(self):
-        entrants = reverse("division_entrants", kwargs=self.division.slug_kwargs())
-        response = self.client.get(entrants.removesuffix("entrants/"))
-        self.assertRedirects(response, entrants)
+    def test_bare_division_url_redirects_to_standings(self):
+        standings = reverse("division_standings", kwargs=self.division.slug_kwargs())
+        response = self.client.get(standings.removesuffix("standings/"))
+        self.assertRedirects(response, standings)
 
     def test_settings_link_shown_for_editor(self):
         self.client.login(username="owner", password="testpass123")
@@ -2709,7 +2709,7 @@ class DivisionEntrantsViewTests(TestCase):
 
     def test_public_navigation_keeps_common_pages_together(self):
         response = self.client.get(self.url)
-        content = response.content.decode()
+        content = response.content.decode().split('<div class="nav-tabs">', 1)[1].split("</div>", 1)[0]
         urls = [
             reverse("division_entrants", kwargs=self.division.slug_kwargs()),
             reverse("division_standings", kwargs=self.division.slug_kwargs()),
