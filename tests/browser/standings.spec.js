@@ -262,3 +262,36 @@ test("desktop standings fill the container without horizontal scrolling", async 
       .every(({ classes }) => classes.includes("standings-player")),
   ).toBe(true);
 });
+
+for (const width of [390, 1100]) {
+  for (const players of [32, 60]) {
+    test(`all ${players} standings rows fit without an internal scrollbar at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({width, height: 800});
+      await renderStandings(page, {includeFirsts: true});
+      await page.locator('.standings-table tbody').evaluate((body, count) => {
+        const row = body.firstElementChild.cloneNode(true);
+        body.replaceChildren(...Array.from({length: count}, (_, i) => {
+          const copy = row.cloneNode(true);
+          copy.querySelector('.standings-rank').textContent = `${i + 1}.`;
+          return copy;
+        }));
+      }, players);
+      const size = await page.getByTestId('standings-scroll').evaluate(el => ({
+        client: el.clientHeight, scroll: el.scrollHeight,
+      }));
+      expect(size.scroll).toBeLessThanOrEqual(size.client + 1);
+      await expect(page.locator('.standings-table tbody tr')).toHaveCount(players);
+      await page.locator('.standings-table tbody tr').last().scrollIntoViewIfNeeded();
+      await expect(page.locator('.standings-table tbody tr').last()).toBeInViewport();
+      // Tables outside Standings retain their bounded scrolling behavior.
+      const bounded = await page.evaluate(() => {
+        const el = document.createElement('div');
+        el.className = 'table-scroll';
+        el.innerHTML = '<div style="height:3000px"></div>';
+        document.body.append(el);
+        return el.scrollHeight > el.clientHeight;
+      });
+      expect(bounded).toBe(true);
+    });
+  }
+}
