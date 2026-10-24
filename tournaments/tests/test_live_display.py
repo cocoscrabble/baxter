@@ -108,6 +108,26 @@ class LiveDisplayTests(TestCase):
         current = response.context["live_sections"][0]["rows"]
         self.assertEqual([e.pairing.second for e in current], [self.entrant4])
 
+    def test_display_can_pin_early_rounds_and_preserve_them_on_poll(self):
+        for r in range(1, 6):
+            self._create_round(r, RoundPairings.PUBLISHED, [(self.entrant1, self.entrant2)])
+        url = self._url("live_pairings") + "?rounds=1&rounds=2"
+        response = self.client.get(url)
+        self.assertEqual(self._subtitles(response), ["Round 1", "Round 2"])
+        self.assertEqual(response.context["live_poll_url"], url)
+        self.assertContains(response, 'name="rounds" value="1" checked')
+        body = b"".join(self.client.get(url, headers={"Datastar-Request": "true"}).streaming_content).decode()
+        self.assertIn("Round 1", body)
+        self.assertIn("Round 2", body)
+        self.assertNotIn("Round 5", body)
+
+    def test_display_never_exposes_draft_or_unknown_rounds(self):
+        self._create_round(1, RoundPairings.PUBLISHED, [(self.entrant1, self.entrant2)])
+        self._create_round(2, RoundPairings.DRAFT, [(self.entrant1, self.entrant3)])
+        response = self.client.get(self._url("live_pairings"), {"rounds": ["2", "999", "bad"]})
+        self.assertEqual(self._subtitles(response), ["Round 1"])
+        self.assertEqual([c["round"] for c in response.context["live_round_choices"]], [1])
+
     def test_pairings_first_round_shows_alone(self):
         self._create_round(1, RoundPairings.PUBLISHED, [(self.entrant1, self.entrant2)])
         response = self.client.get(self._url("live_pairings"))

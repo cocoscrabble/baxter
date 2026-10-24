@@ -4,6 +4,9 @@ shows its score; an unplayed one a Submit result link unless ``readonly``.
 Shared by the public pairings pages and the live display.
 {% endcomment %}
 <table class="published-pairings-table{% if table_class %} {{ table_class }}{% endif %}">
+    {% if readonly %}
+    <colgroup><col style="width: 10%"><col style="width: 38%"><col style="width: 38%"><col style="width: 14%"></colgroup>
+    {% endif %}
     <thead>
         <tr>
             <th>Table</th>

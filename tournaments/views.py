@@ -156,7 +156,6 @@ from .pairings_view import (
     PairingsPresenter,
     PublishedPairingsPresenter,
     annotate_published_rounds,
-    latest_published_rounds,
 )
 from .playoff import (
     QUALIFIER_COUNTS,
@@ -1847,6 +1846,7 @@ class _LiveDisplayMixin(VisibleDivisionMixin):
         context["live_title"] = self.live_title
         context["live_empty_message"] = self.live_empty_message
         context["live_content_template"] = self.live_content_template
+        context["live_poll_url"] = self.request.path
         context["refresh_seconds"] = LIVE_REFRESH_SECONDS
         context["refreshed_at"] = timezone.now()
         return context
@@ -1876,18 +1876,41 @@ class LiveStandingsView(_LiveDisplayMixin, DetailView):
 
 
 class LivePairingsView(_LiveDisplayMixin, DetailView):
-    """The current round, and below it the round before, so players can still
-    check a result just entered after the next round goes up."""
+    """Latest two published rounds, or specific rounds chosen for this display."""
 
     live_title = "Pairings"
     live_content_template = "tournaments/_live_pairings.html"
     live_empty_message = "No pairings published yet."
-    live_col_ems = 38
+    live_col_ems = 50
+
+    def published_rounds(self, division):
+        return list(division.round_pairings_set.exclude(status=RoundPairings.DRAFT)
+                    .order_by("round").values_list("round", flat=True))
+
+    def selected_rounds(self, division):
+        published = self.published_rounds(division)
+        requested = set(self.request.GET.getlist("rounds"))
+        selected = [r for r in published if str(r) in requested]
+        # No selection (or a stale link) retains the automatic latest-two mode.
+        return selected or list(reversed(published[-2:]))
 
     def get_live_sections(self, division):
-        rounds = latest_published_rounds(division, 2)
+        rounds = self.selected_rounds(division)
         annotated = dict(annotate_published_rounds(division, rounds))
         return [(f"Round {r}", annotated.get(r, [])) for r in rounds]
+
+    def get_context_data(self, **kwargs):
+        from urllib.parse import urlencode
+
+        context = super().get_context_data(**kwargs)
+        selected = self.selected_rounds(self.object)
+        context["live_round_choices"] = [
+            {"round": r, "selected": r in selected}
+            for r in self.published_rounds(self.object)
+        ]
+        if self.request.GET.getlist("rounds"):
+            context["live_poll_url"] += "?" + urlencode([("rounds", r) for r in selected])
+        return context
 
 
 class LiveResultsView(_LiveDisplayMixin, DetailView):

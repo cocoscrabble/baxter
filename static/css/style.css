@@ -275,6 +275,40 @@ h3 { font-size: 1.02rem; margin: var(--space-md) 0 var(--space-sm); }
     background-color: transparent;
 }
 
+.live-table.published-pairings-table {
+    table-layout: fixed;
+    width: 100%;
+}
+
+.live-round-picker {
+    margin-left: auto;
+    position: relative;
+    font-size: 0.8em;
+}
+
+.live-round-picker form {
+    position: absolute;
+    right: 0;
+    z-index: 5;
+    min-width: 16em;
+    max-height: 70vh;
+    overflow: auto;
+    padding: 1em;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--surface-raised);
+}
+
+.live-round-picker label {
+    display: block;
+    white-space: nowrap;
+}
+
+.live-round-picker a {
+    display: block;
+    margin-top: 0.5em;
+}
+
 .live-updated {
     margin: 0.3em 0 0;
     font-size: 0.75em;
