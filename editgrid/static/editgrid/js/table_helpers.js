@@ -23,9 +23,8 @@ export const TABLE_DEFAULTS = {
     // height measurement above, freezes Firefox for seconds. "basic" renders all
     // rows up front with none of that measurement.
     renderVertical: "basic",
-    // Bound the grid to the viewport so its body scrolls internally (with a
-    // frozen header row) instead of pushing the Add Row / Save toolbar off-screen.
-    maxHeight: "calc(100vh - 200px)",
+    // Grow with the rows, like read-only tables; use the page for vertical
+    // scrolling while Tabulator keeps horizontal scrolling for wide grids.
 };
 
 // Every row carries a client-side `_rid` so we can match it against the snapshot

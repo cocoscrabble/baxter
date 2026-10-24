@@ -283,15 +283,15 @@ for (const width of [390, 1100]) {
       await expect(page.locator('.standings-table tbody tr')).toHaveCount(players);
       await page.locator('.standings-table tbody tr').last().scrollIntoViewIfNeeded();
       await expect(page.locator('.standings-table tbody tr').last()).toBeInViewport();
-      // Tables outside Standings retain their bounded scrolling behavior.
-      const bounded = await page.evaluate(() => {
+      // Other read-only tables also grow with their content.
+      const internallyScrolled = await page.evaluate(() => {
         const el = document.createElement('div');
         el.className = 'table-scroll';
         el.innerHTML = '<div style="height:3000px"></div>';
         document.body.append(el);
         return el.scrollHeight > el.clientHeight;
       });
-      expect(bounded).toBe(true);
+      expect(internallyScrolled).toBe(false);
     });
   }
 }

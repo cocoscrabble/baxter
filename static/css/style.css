@@ -1005,22 +1005,13 @@ td a:hover {
     border-radius: var(--radius-sm);
 }
 
-/* Bounded scroll region: long tables scroll internally so page-level controls
-   stay on screen. Header row sticks to the top of the scroll box (no dependency
-   on the sticky-header height). */
+/* Tables grow with their rows and use page scrolling. Only wide tables need
+   an internal scrollbar, horizontally; do not cap their height to the viewport. */
 .table-scroll {
-    max-height: calc(100vh - var(--header-h) - 96px);
-    overflow: auto;
+    overflow-x: auto;
     border: 1px solid var(--color-border);
     border-radius: var(--radius);
     background: var(--surface-raised);
-}
-
-/* Standings grow with the field: use the page scrollbar rather than a
-   second vertical scrollbar inside the player list. Keep horizontal overflow
-   available for narrow screens and leave other bounded tables unchanged. */
-#standings-content .table-scroll {
-    max-height: none;
 }
 
 .table-scroll table {
