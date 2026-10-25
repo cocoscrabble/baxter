@@ -107,10 +107,21 @@ class BaseEditGridView(View):
                 self.grid.persist(parent, prepared)
                 self.grid.after_save(parent)
                 self.on_saved(parent, rows, before)
-        return guard.response
+        notices = self.save_notices(parent, before)
+        if not notices:
+            return guard.response
+        return JsonResponse({**json.loads(guard.response.content), "notices": notices})
 
     def save_context(self):
         return contextlib.nullcontext()
+
+    def save_notices(self, parent, before):
+        """Warnings to show beside the grid after a successful save.
+
+        A list of ``{"text": ..., "action": {"label", "url", "fields"}}``, the
+        action optional: the client renders it as a button posting ``fields`` as
+        a form to ``url``. ``before`` is as for ``on_saved``."""
+        return []
 
     def on_saved(self, parent, rows, before):
         """Hook called after a successful save, inside the transaction.

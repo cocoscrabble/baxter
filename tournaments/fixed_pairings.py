@@ -192,3 +192,43 @@ def remove_fixed_pairings(division, keep_ids) -> str | None:
     division.round_pairings_set.revert_published_to_draft(rounds)
     regenerate_pairings(division)
     return None
+
+
+def boards_missing_fixtures(division, before, after) -> list[tuple[int, bool]]:
+    """Printed rounds a fixed-pairings grid save did not reach.
+
+    ``before``/``after`` are the grid's portable rows (round + player numbers).
+    The grid only re-pairs drafts, so a fixture changed for a round already
+    published leaves its board as printed. Returns ``(round, has_results)`` for
+    each such round whose board lacks one of its fixtures now — a removed
+    fixture leaves the board valid, so only a missing one is reported.
+    """
+    from .models import RoundPairings
+
+    def pins(rows):
+        out = {}
+        for r in rows:
+            out.setdefault(r["round_number"], set()).add(
+                frozenset((r["entrant1"], r["entrant2"]))
+            )
+        return out
+
+    old, new = pins(before), pins(after)
+    touched = {r for r in old.keys() | new.keys() if old.get(r) != new.get(r)}
+    printed = set(
+        division.round_pairings_set.filter(round__in=touched)
+        .exclude(status=RoundPairings.DRAFT)
+        .values_list("round", flat=True)
+    )
+    played = rounds_with_results(division, printed)
+    stale = []
+    for round_number in sorted(printed):
+        board = {
+            frozenset((p.first.player.player_number, p.second.player.player_number))
+            for p in division.pairings.filter(round=round_number).select_related(
+                "first__player", "second__player"
+            )
+        }
+        if not new.get(round_number, set()) <= board:
+            stale.append((round_number, round_number in played))
+    return stale
