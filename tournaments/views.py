@@ -1426,6 +1426,17 @@ class UnpublishRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
                 error = None if unpublished else (
                     f"Round {round_number} can't be unpublished. Use Reset round to discard its results."
                 )
+                if unpublished and data.get("repair") in (True, "1", "true"):
+                    # From the fixed-pairings grid: the board predates its
+                    # fixtures, so draw the round again rather than keep it.
+                    try:
+                        regenerate_pairings(division)
+                        notice = (
+                            f"Round {round_number} was unpublished and re-paired "
+                            "with its fixed pairings. Check it and publish again."
+                        )
+                    except PairingError as exc:
+                        error = str(exc)
         except ValueError as exc:
             error = str(exc)
         return _pairings_body_response(
@@ -3364,6 +3375,32 @@ class BulkImportEntrantsView(LoginRequiredMixin, CanEditDivisionMixin, View):
 class DivisionFixedPairingsEditView(DivisionEditGridView):
     grid = FixedPairingsGrid()
     active_tab = "fixed_pairings"
+
+    def save_notices(self, division, before):
+        # The save re-pairs drafts only; say so for a printed round it missed.
+        from .fixed_pairings import boards_missing_fixtures
+
+        after = self.grid.to_portable(self.grid.rows_for(division), division)
+        notices = []
+        for round_number, has_results in boards_missing_fixtures(division, before, after):
+            if has_results:
+                notices.append({"text": (
+                    f"Round {round_number} has results, so its board is unchanged. "
+                    "To re-pair it, reset the round on Pair Rounds (this discards its results)."
+                )})
+                continue
+            notices.append({
+                "text": (
+                    f"Round {round_number} is already published, so its board does not "
+                    "have these fixed pairings yet."
+                ),
+                "action": {
+                    "label": f"Unpublish and re-pair round {round_number}",
+                    "url": reverse("unpublish_round", kwargs=division.slug_kwargs()),
+                    "fields": {"round": round_number, "repair": "1"},
+                },
+            })
+        return notices
 
 
 class DivisionFixedTablesEditView(DivisionEditGridView):

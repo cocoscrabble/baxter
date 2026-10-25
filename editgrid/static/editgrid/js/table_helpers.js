@@ -255,6 +255,7 @@ export function wireSaveButton({ table, gridId, serializeRow, beforeSave }) {
             statusEl,
         }).then(result => {
             if (result && result.ok) {
+                showNotices(gridId, cfg, result.body.notices || []);
                 if (result.body && typeof result.body.version === "number") {
                     setEditVersion(gridId, result.body.version);
                 }
@@ -266,6 +267,42 @@ export function wireSaveButton({ table, gridId, serializeRow, beforeSave }) {
             // postJson already shows the server's "reload" message in save-status.
         });
     });
+}
+
+// Show the server's post-save warnings (``save_notices``) under the toolbar,
+// replacing any from the previous save. A notice's action is a plain form POST,
+// so it works through the server's no-JS path and lands on whatever page that
+// redirects to.
+function showNotices(gridId, cfg, notices) {
+    const box = control(gridId, "notices");
+    if (!box) return;
+    box.replaceChildren();
+    for (const notice of notices) {
+        const div = document.createElement("div");
+        div.className = "eg-notice";
+        const text = document.createElement("span");
+        text.textContent = notice.text;
+        div.append(text);
+        if (notice.action) {
+            const form = document.createElement("form");
+            form.method = "post";
+            form.action = notice.action.url;
+            const fields = { csrfmiddlewaretoken: cfg.csrfToken, ...notice.action.fields };
+            for (const [name, value] of Object.entries(fields)) {
+                const input = document.createElement("input");
+                input.type = "hidden";
+                input.name = name;
+                input.value = value;
+                form.append(input);
+            }
+            const button = document.createElement("button");
+            button.type = "submit";
+            button.textContent = notice.action.label;
+            form.append(button);
+            div.append(form);
+        }
+        box.append(div);
+    }
 }
 
 // Wire the Add Row button. `template` is a row dict, or a function (table) => dict

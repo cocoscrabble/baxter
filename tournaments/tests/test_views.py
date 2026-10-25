@@ -1830,6 +1830,65 @@ class InlineFixedPairingTests(TestCase):
         rp.refresh_from_db()
         self.assertNotEqual(rp.status, RoundPairings.DRAFT)
 
+    def _publish_round1(self):
+        self.client.get(reverse("division_pair_rounds", kwargs=self.division.slug_kwargs()))
+        self.client.post(
+            reverse("publish_round", kwargs=self.division.slug_kwargs()), {"round": 1}
+        )
+        self.assertEqual(
+            self.division.round_pairings_set.get(round=1).status, RoundPairings.PUBLISHED
+        )
+
+    def _save_fixture(self, a, b):
+        response = self.client.post(
+            reverse("division_fixed_pairings", kwargs=self.division.slug_kwargs()),
+            json.dumps({"rows": [{"round_number": 1, "entrant1": a.pk, "entrant2": b.pk}]}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        return response.json().get("notices", [])
+
+    def test_grid_offers_to_repair_a_published_round_it_missed(self):
+        self.client.login(username="owner", password="testpass123")
+        self._publish_round1()
+        notices = self._save_fixture(self.entrant1, self.entrant4)
+        self.assertEqual(len(notices), 1)
+        self.assertIn("already published", notices[0]["text"])
+        action = notices[0]["action"]
+        # The board still stands until the director takes the offer.
+        self.assertEqual(
+            self.division.round_pairings_set.get(round=1).status, RoundPairings.PUBLISHED
+        )
+        self.client.post(action["url"], action["fields"])
+        self.assertEqual(
+            self.division.round_pairings_set.get(round=1).status, RoundPairings.DRAFT
+        )
+        board = {
+            frozenset((p.first_id, p.second_id))
+            for p in self.division.pairings.filter(round=1)
+        }
+        self.assertIn(frozenset((self.entrant1.pk, self.entrant4.pk)), board)
+
+    def test_grid_is_quiet_when_the_board_already_has_the_fixture(self):
+        self.client.login(username="owner", password="testpass123")
+        self._publish_round1()
+        p = self.division.pairings.filter(round=1).first()
+        self.assertEqual(self._save_fixture(p.first, p.second), [])
+
+    def test_grid_only_warns_for_a_played_round(self):
+        self.client.login(username="owner", password="testpass123")
+        self._publish_round1()
+        p = self.division.pairings.filter(round=1).exclude(
+            first=self.entrant1).exclude(second=self.entrant1).first()
+        ResultSlip.objects.create(
+            division=self.division, round=1, winner=p.first, loser=p.second,
+            winner_score=400, loser_score=300, winner_started=True,
+        )
+        notices = self._save_fixture(self.entrant1, p.first)
+        self.assertEqual(len(notices), 1)
+        self.assertIn("has results", notices[0]["text"])
+        self.assertNotIn("action", notices[0])
+
     def test_datastar_add_creates_pairing_and_renders_it(self):
         self.client.login(username="owner", password="testpass123")
         response = self._datastar_post(

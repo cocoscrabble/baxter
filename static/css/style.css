@@ -1823,6 +1823,22 @@ h3 + .note {
     font-weight: 600;
 }
 
+/* A warning about what an edit-grid save did not change, with its fix. */
+.eg-notice {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    margin: 0 0 var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--color-in-progress-light);
+    color: var(--color-in-progress);
+    border: 1px solid var(--color-in-progress);
+    border-radius: var(--radius);
+}
+.eg-notice form { margin: 0; }
+
 /* Stronger styling once the data has actually gone stale (someone saved). */
 .presence-banner.is-stale {
     background: var(--color-error-bg);
