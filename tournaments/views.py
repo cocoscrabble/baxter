@@ -1314,6 +1314,38 @@ def _repaired_before_start(request, division, select_round=None):
     )
 
 
+def _unseen_drafts(request, division, round_numbers=None, select_round=None):
+    """Pair any round about to be published that has no boards yet.
+
+    Its draft is gone — a fixed-pairings save or a reset drops it — so
+    publishing now would print a round nobody has seen, or an empty one if it
+    cannot be paired. Either way the director gets the round back: the new
+    drafts to check, or the pairing error. Returns that response, or None to go
+    ahead and publish. A round that still has no boards once paired (a playoff
+    window every series clinched early) is publishable as it stands.
+    """
+    needing = PairingsPresenter(division).rounds_needing_generation
+    if round_numbers is not None:
+        needing = [r for r in needing if r in round_numbers]
+    if not needing:
+        return None
+    try:
+        regenerate_pairings(division)
+    except PairingError as e:
+        return _pairings_body_response(
+            request, division, select_round=select_round, error=str(e)
+        )
+    paired = set(
+        division.pairings.filter(round__in=needing).values_list("round", flat=True)
+    )
+    if not paired:
+        return None
+    return _pairings_body_response(
+        request, division, select_round=select_round,
+        notice="This round had to be re-paired since it was last shown. Check it and publish again.",
+    )
+
+
 class PublishPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
     """Publish every draft round at once."""
 
@@ -1322,6 +1354,9 @@ class PublishPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
         repaired = _repaired_before_start(request, division)
         if repaired is not None:
             return repaired
+        unseen = _unseen_drafts(request, division)
+        if unseen is not None:
+            return unseen
         publish_all_rounds(division.tournament, request.user, {"division": division.name})
         return _pairings_body_response(request, division)
 
@@ -1353,6 +1388,9 @@ class PublishRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
         repaired = _repaired_before_start(request, division, round_number)
         if repaired is not None:
             return repaired
+        unseen = _unseen_drafts(request, division, [round_number], round_number)
+        if unseen is not None:
+            return unseen
         publish_round(
             division.tournament, request.user,
             {"division": division.name, "round": round_number},

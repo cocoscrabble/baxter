@@ -544,6 +544,23 @@ class FixedPairingsGrid(EditGrid):
     portable_player_fields = ("entrant1", "entrant2")
     portable_identity_fields = ("round_number", "entrant1", "entrant2")
 
+    def _fixture_signature(self, division):
+        return frozenset(
+            division.fixed_pairings.values_list("round_number", "entrant1_id", "entrant2_id")
+        )
+
+    def persist(self, division, prepared):
+        before = self._fixture_signature(division)
+        super().persist(division, prepared)
+        if self._fixture_signature(division) != before:
+            # The drafts were paired without these fixtures, and publishing one
+            # would print a board that ignores them. Drop them for the lazy
+            # re-pair on the next Pair Rounds render, as the entrants grid does
+            # (and for the same reason: not regenerating inside the save).
+            division.round_pairings_set.filter(
+                status=RoundPairings.DRAFT
+            ).delete()
+
     def portable_label(self, row, names):
         first = names.get(row.get("entrant1"), row.get("entrant1"))
         second = names.get(row.get("entrant2"), row.get("entrant2"))
