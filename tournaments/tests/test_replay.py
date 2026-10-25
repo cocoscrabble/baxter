@@ -1100,6 +1100,8 @@ class FixedByeReplayTests(LoggedTournamentMixin, TestCase):
             {"round_number": 2, "entrant1": bye.pk, "entrant2": bob.pk},
         ]})
         self.assertEqual(division.fixed_pairings.count(), 2)
+        # The grid save dropped the draft; viewing the round re-pairs it.
+        self.client.get(reverse("division_pair_rounds", kwargs=division.slug_kwargs()))
         self.client.post(
             reverse("publish_round", kwargs=division.slug_kwargs()), {"round": 1}
         )

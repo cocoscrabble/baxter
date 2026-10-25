@@ -1777,6 +1777,59 @@ class InlineFixedPairingTests(TestCase):
         )
         self.assertEqual(response.status_code, 403)
 
+    def test_grid_save_repairs_the_draft_with_the_new_fixtures(self):
+        # Seattle October one-day: fixtures saved in the grid left the old draft
+        # standing, and publishing it printed a board that ignored them.
+        self.client.login(username="owner", password="testpass123")
+        pair_rounds = reverse("division_pair_rounds", kwargs=self.division.slug_kwargs())
+        self.client.get(pair_rounds)
+
+        def round1():
+            return {
+                frozenset((p.first_id, p.second_id))
+                for p in self.division.pairings.filter(round=1)
+            }
+
+        pin = frozenset((self.entrant1.pk, self.entrant4.pk))
+        self.assertNotIn(pin, round1())
+        response = self.client.post(
+            reverse("division_fixed_pairings", kwargs=self.division.slug_kwargs()),
+            json.dumps({"rows": [
+                {"round_number": 1, "entrant1": self.entrant1.pk, "entrant2": self.entrant4.pk}
+            ]}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.client.get(pair_rounds)
+        self.assertIn(pin, round1())
+
+    def test_publish_hands_back_a_round_nobody_has_seen(self):
+        # After a fixtures save the draft is gone; publishing straight away must
+        # not print an empty round, nor one the director never looked at.
+        self.client.login(username="owner", password="testpass123")
+        self.client.get(reverse("division_pair_rounds", kwargs=self.division.slug_kwargs()))
+        self.client.post(
+            reverse("division_fixed_pairings", kwargs=self.division.slug_kwargs()),
+            json.dumps({"rows": [
+                {"round_number": 1, "entrant1": self.entrant1.pk, "entrant2": self.entrant4.pk}
+            ]}),
+            content_type="application/json",
+        )
+        publish = reverse("publish_round", kwargs=self.division.slug_kwargs())
+        self.client.post(publish, {"round": 1})
+        rp = self.division.round_pairings_set.get(round=1)
+        self.assertEqual(rp.status, RoundPairings.DRAFT)
+        self.assertTrue(
+            self.division.pairings.filter(
+                round=1, first__in=[self.entrant1, self.entrant4],
+                second__in=[self.entrant1, self.entrant4],
+            ).exists()
+        )
+        # Now it has been shown, the second press publishes it.
+        self.client.post(publish, {"round": 1})
+        rp.refresh_from_db()
+        self.assertNotEqual(rp.status, RoundPairings.DRAFT)
+
     def test_datastar_add_creates_pairing_and_renders_it(self):
         self.client.login(username="owner", password="testpass123")
         response = self._datastar_post(
@@ -1890,12 +1943,8 @@ class InlineFixedPairingTests(TestCase):
 
     def test_publish_all_publishes_every_draft(self):
         self.client.login(username="owner", password="testpass123")
-        RoundPairings.objects.create(
-            division=self.division, round=1, status=RoundPairings.DRAFT
-        )
-        RoundPairings.objects.create(
-            division=self.division, round=2, status=RoundPairings.DRAFT
-        )
+        self.client.get(reverse("division_pair_rounds", kwargs=self.division.slug_kwargs()))
+        self.assertTrue(self.division.round_pairings_set.exists())
         response = self._datastar_post("publish_pairings", {})
         self.assertEqual(response.status_code, 200)
         statuses = set(
