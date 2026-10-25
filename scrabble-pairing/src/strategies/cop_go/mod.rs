@@ -25,7 +25,11 @@
 //!   player themselves, so it also counts in upstream's bye tally, as a bye
 //!   they have in effect already had.
 //! - **Fixed pairings** become upstream's partly paired round: its prepaired
-//!   games, placed as given.
+//!   games, placed as given. A round the pins pair *completely* is not sent
+//!   upstream at all: upstream reads a fully paired round as already played
+//!   (refusing the final round as `ALL_ROUNDS_PAIRED`, pairing the next one
+//!   otherwise), and there is nothing left to decide, so the pins are the
+//!   answer.
 //! - **Config** values are per rounds remaining, picked upstream's way; place
 //!   prizes are clamped to the field so a small division is not refused; control
 //!   loss applies in the last `CONTROL_LOSS_DEFAULT_ROUNDS_LEFT` rounds unless
@@ -287,15 +291,28 @@ pub fn request_json(input: &crate::model::PairingInput, round: i32) -> Result<St
     serde_json::to_string(&value).map_err(|e| e.to_string())
 }
 
+/// The pinned row, when this round's fixed pairings leave nobody in the field
+/// unpaired — the round is decided, and upstream would misread it as played.
+fn fully_pinned(ctx: &Ctx, rp: &RoundPairing, req: &Request) -> Option<Vec<i32>> {
+    ctx.fixed_pairings.get(&rp.round).filter(|p| !p.is_empty())?;
+    let row = req.division_pairings.last()?;
+    let removed: HashSet<i32> = req.removed_players.iter().copied().collect();
+    let complete = (0..row.len() as i32).all(|i| removed.contains(&i) || row[i as usize] >= 0);
+    complete.then(|| row.clone())
+}
+
 /// Pair one round with COP.
 pub fn pair_cop(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings, String> {
     let cfg = ctx
         .cop_config
         .ok_or_else(|| "COP round configured but no cop_config supplied".to_string())?;
     let (req, names) = build_request(ctx, rp, cfg)?;
-    let answer = cop::cop_pair(&req)
-        .pairings
-        .map_err(|e| format!("COP: {}", e.message.trim()))?;
+    let answer = match fully_pinned(ctx, rp, &req) {
+        Some(row) => row,
+        None => cop::cop_pair(&req)
+            .pairings
+            .map_err(|e| format!("COP: {}", e.message.trim()))?,
+    };
 
     let standings = ctx.standings(rp.start_round);
     let by_name: HashMap<&str, &Player> = standings.iter().map(|p| (p.name.as_str(), p)).collect();
@@ -427,6 +444,31 @@ mod tests {
             assert!(g.contains(&(pin.0.to_string(), pin.1.to_string())), "{pin:?} broken: {g:?}");
         }
         assert_eq!(paired_once(&g).len(), 6);
+    }
+
+    /// Every game of the round fixed: the pins are the round, final or not.
+    #[test]
+    fn a_fully_pinned_round_is_the_pins() {
+        let pins = r#","fixed_pairings":{"2":[["P1","P6"],["P2","P5"],["P3","P4"]]}"#;
+        let want: Vec<(String, String)> = [("P1", "P6"), ("P2", "P5"), ("P3", "P4")]
+            .iter()
+            .map(|(a, b)| (a.to_string(), b.to_string()))
+            .collect();
+        // The final round (upstream: ALL_ROUNDS_PAIRED) and one with rounds after it.
+        for rounds in [2, 5] {
+            assert_eq!(games(&input(6, rounds, &R1, pins), 2), want, "{rounds} rounds");
+        }
+    }
+
+    #[test]
+    fn a_fully_pinned_round_still_leaves_out_the_withdrawn() {
+        let mut inp = input(6, 2, &R1, r#","fixed_pairings":{"2":[["P1","P6"],["P3","P4"]]}"#);
+        inp.players[1].dropped = true;
+        inp.players[4].dropped = true;
+        assert_eq!(
+            games(&inp, 2),
+            vec![("P1".into(), "P6".into()), ("P3".into(), "P4".into())]
+        );
     }
 
     #[test]
