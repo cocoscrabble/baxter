@@ -1943,7 +1943,10 @@ class LivePairingsView(_LiveDisplayMixin, DetailView):
     live_title = "Pairings"
     live_content_template = "tournaments/_live_pairings.html"
     live_empty_message = "No pairings published yet."
-    live_col_ems = 50
+    # Table number and two names, no result column: the pairings get the
+    # width, and so the type. A name longer than its share ends in an ellipsis
+    # (style.css) rather than spilling into the next column.
+    live_col_ems = 38
 
     def published_rounds(self, division):
         return list(division.round_pairings_set.exclude(status=RoundPairings.DRAFT)

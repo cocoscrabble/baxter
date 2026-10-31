@@ -1,10 +1,14 @@
 {% comment %}
 One round of published pairings: ``rows`` of AnnotatedPairing. A played game
 shows its score; an unplayed one a Submit result link unless ``readonly``.
-Shared by the public pairings pages and the live display.
+``hide_result`` drops that column altogether (the live display, where the
+pairings get the whole width). Shared by the public pairings pages and the
+live display.
 {% endcomment %}
 <table class="published-pairings-table{% if table_class %} {{ table_class }}{% endif %}">
-    {% if readonly %}
+    {% if hide_result %}
+    <colgroup><col style="width: 12%"><col style="width: 44%"><col style="width: 44%"></colgroup>
+    {% elif readonly %}
     <colgroup><col style="width: 10%"><col style="width: 38%"><col style="width: 38%"><col style="width: 14%"></colgroup>
     {% endif %}
     <thead>
@@ -12,7 +16,7 @@ Shared by the public pairings pages and the live display.
             <th>Table</th>
             <th>1st Player</th>
             <th>2nd Player</th>
-            <th class="no-print">{% if readonly %}Result{% endif %}</th>
+            {% if not hide_result %}<th class="no-print">{% if readonly %}Result{% endif %}</th>{% endif %}
         </tr>
     </thead>
     <tbody>
@@ -21,7 +25,8 @@ Shared by the public pairings pages and the live display.
             <td class="pairing-table-number">{{ entry.pairing.table_label|default:entry.pairing.table }}</td>
             <td class="pairing-player pairing-first">{{ entry.pairing.first.display_name }} (#{{ entry.pairing.first.number }})</td>
             <td class="pairing-player pairing-second">{% if entry.absence %}<span class="tag tag-{{ entry.absence }}">{{ entry.absence }}</span>{% else %}{{ entry.pairing.second.display_name }} (#{{ entry.pairing.second.number }}){% endif %}</td>
-            {% if entry.result %}
+            {% if hide_result %}
+            {% elif entry.result %}
             <td class="pairing-action num">{{ entry.result }}</td>
             {% elif entry.absence or readonly %}
             {# Nothing to submit: a bye and a forfeit are recorded at publish, #}

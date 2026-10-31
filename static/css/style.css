@@ -280,6 +280,11 @@ h3 { font-size: 1.02rem; margin: var(--space-md) 0 var(--space-sm); }
     width: 100%;
 }
 
+.live-table.published-pairings-table td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .live-round-picker {
     margin-left: auto;
     position: relative;
