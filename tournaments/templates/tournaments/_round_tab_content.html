@@ -58,7 +58,7 @@
     </table>
     </div>
     {% else %}
-    {% include "tournaments/_empty_state.html" with message="No pairings data for this round." %}
+    {% include "tournaments/_empty_state.html" with message=empty_round_message|default:"No pairings data for this round." %}
     {% endif %}
 
 {% elif selected_status == 'error_no_pairings' %}
@@ -127,7 +127,7 @@
         </tbody>
     </table>
     {% else %}
-    {% include "tournaments/_empty_state.html" with message="Pairings not yet generated for this round." %}
+    {% include "tournaments/_empty_state.html" with message=empty_round_message|default:"Pairings not yet generated for this round." %}
     {% endif %}
     </div>
     </div>

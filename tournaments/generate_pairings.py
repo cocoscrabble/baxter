@@ -29,6 +29,7 @@ from .pairing.engine import pair_with_engine
 from .pairing.round_pairing import RP
 from .playoff import (
     build_bracket,
+    close_empty_rounds,
     playoff_for,
     prune_unnecessary_pairings,
     sync_series,
@@ -255,6 +256,11 @@ def publish_rounds(division, round_numbers=None, *, regenerate=True):
             rp = division.round_pairings_set.filter(round=round_num).first()
             if rp:
                 rp.update_status()
+        playoff = playoff_for(division)
+        if published and playoff is not None:
+            # A window round whose series all clinched before it was published
+            # has no games, so no result will ever finish it.
+            close_empty_rounds(division, playoff.bracket())
     return published
 
 

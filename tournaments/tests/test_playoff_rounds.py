@@ -29,6 +29,7 @@ from tournaments.models import (
     Tournament,
 )
 from tournaments.pairing.round_pairing import blocks_to_round_pairings
+from tournaments.pairings_view import PairingsPresenter
 from tournaments.playoff import (
     CHAMPIONSHIP,
     SEMIFINAL,
@@ -281,9 +282,12 @@ class SeriesLifecycleTests(PlayoffRoundsTestCase):
         publish_rounds(self.division, [6])
         self.assertEqual(self.pairings_in(6), [])
         self.assertFalse(self.division.result_slips.filter(round=6).exists())
-        refresh_after_results(self.division)
+        # Publishing alone closes it: no result will ever arrive to do so. Left
+        # published, it was the round the pairings page opened on for good,
+        # with the championship window stuck behind it.
         rp = self.division.round_pairings_set.get(round=6)
         self.assertEqual(rp.status, RoundPairings.FINISHED)
+        self.assertEqual(PairingsPresenter(self.division).selected_round, 7)
 
     def test_a_correction_retires_a_published_game_it_makes_unnecessary(self):
         # The only way a *published* playoff game becomes unnecessary: a game is
