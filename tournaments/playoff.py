@@ -553,6 +553,38 @@ def _resolve(source: Source, config: PlayoffConfig, done: dict) -> str | None:
     return None
 
 
+def source_label(source: Source) -> str:
+    """Where a participant comes from, for a series still waiting on them."""
+    match source:
+        case Seed(n=n):
+            return f"Seed {n}"
+        case Winner(key=key, position=position):
+            return f"Winner of {series_label(key, position)}"
+        case Loser(key=key, position=position):
+            return f"Loser of {series_label(key, position)}"
+    return ""
+
+
+def series_sides(bracket: "Bracket", series: "Series") -> list[tuple[str | None, str]]:
+    """Both sides of a series as ``(player key or None, source label)``.
+
+    Once both players are known the order is high seed first, as everywhere
+    else; until then it is the template's, so a half-resolved championship
+    reads "P1" over "Winner of Semifinal 2" in the order the bracket draws them.
+    """
+    spec = next(
+        s
+        for window in BRACKETS[bracket.config.qualifier_count]
+        for s in window
+        if (s.key, s.position) == (series.key, series.position)
+    )
+    done = {(s.key, s.position): s for s in bracket.series}
+    sides = [(_resolve(src, bracket.config, done), source_label(src)) for src in (spec.a, spec.b)]
+    if series.high is not None and series.low is not None and sides[0][0] != series.high:
+        sides.reverse()
+    return sides
+
+
 def _order_by_seed(config: PlayoffConfig, a: str | None, b: str | None):
     """(high, low) by qualification seed. Either may be None."""
     if a is None or b is None:

@@ -24,6 +24,7 @@
         <a href="{% url 'live_pairings' division.tournament.slug division.slug %}" class="nav-menu-item">Pairings</a>
         <a href="{% url 'live_results' division.tournament.slug division.slug %}" class="nav-menu-item">Recent results</a>
         <a href="{% url 'live_statistics' division.tournament.slug division.slug %}" class="nav-menu-item">Statistics</a>
+        {% if division.playoff %}<a href="{% url 'live_playoff' division.tournament.slug division.slug %}" class="nav-menu-item">Playoff</a>{% endif %}
     </div>
 </details>
 {% if can_edit %}

@@ -1,0 +1,54 @@
+{% comment %}
+The live bracket: a column per stage window, then the places settled so far.
+Landscape puts the columns side by side, portrait stacks them. The layout
+counts are views.live_bracket_layout's, in the same variables
+_live_content.html uses, so style.css sizes the type the same way.
+{% endcomment %}
+<div id="live-content" style="--live-rows: {{ live_layout.rows }}; --live-cols: {{ live_layout.cols }}; --live-col-rows: {{ live_layout.col_rows }}; --live-col-ems: {{ live_layout.col_ems }}; --live-overhead: {{ live_layout.overhead }}; --live-col-overhead: {{ live_layout.col_overhead }};">
+{% if live_columns %}
+<div class="live-bracket">
+{% for column in live_columns %}
+<section class="live-bracket-column">
+<h2 class="live-subtitle">{{ column.title }}</h2>
+{% for card in column.cards %}
+<article class="live-series live-series-{{ card.status }}">
+    <header class="live-series-head">
+        <span>{{ card.label }}</span>
+        {% if card.status == "tied" %}<span class="live-series-alert">Needs a decider</span>
+        {% else %}<span>{% if card.max_games == 1 %}Single game{% else %}Best of {{ card.max_games }}{% endif %}</span>{% endif %}
+    </header>
+    {% for side in card.sides %}
+    <div class="live-series-player{% if side.won %} live-series-winner{% endif %}">
+        {% if side.name %}
+        <span class="live-series-name">{% if side.seed %}<span class="live-series-seed">{{ side.seed }}</span>{% endif %}{{ side.name }}</span>
+        {% else %}
+        <span class="live-series-name live-series-tbd">{{ side.source }}</span>
+        {% endif %}
+        <span class="live-series-score">{% if side.score is not None %}{{ side.score|floatformat:"-1" }}{% endif %}</span>
+    </div>
+    {% endfor %}
+    <ol class="live-series-games">
+        {% for game in card.games %}
+        <li class="live-chip live-chip-{{ game.status }}">{% if game.status == "played" %}{{ game.high_score }}–{{ game.low_score }}{% elif game.status == "not_needed" %}—{% else %}Rd {{ game.round }}{% endif %}</li>
+        {% endfor %}
+    </ol>
+</article>
+{% endfor %}
+{% if column.places %}
+<ol class="live-places">
+    {% for place in column.places %}
+    <li class="{% if place.place == 1 and place.name %}live-champion{% elif not place.name %}live-place-open{% endif %}">
+        <span class="live-place-number">{{ place.place }}</span>
+        <span>{% if place.name %}{{ place.name }}{% else %}—{% endif %}</span>
+    </li>
+    {% endfor %}
+</ol>
+{% endif %}
+</section>
+{% endfor %}
+</div>
+{% else %}
+{% include "tournaments/_empty_state.html" with message=live_empty_message %}
+{% endif %}
+<p class="live-updated">Updated {{ refreshed_at|time:"g:i:s A" }}</p>
+</div>
