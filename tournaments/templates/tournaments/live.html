@@ -40,5 +40,5 @@ the timer.
 {% block main_attrs %} data-on-interval__duration.{{ refresh_seconds }}s="@get('{{ live_poll_url|escapejs }}')"{% endblock %}
 
 {% block content %}
-{% include "tournaments/_live_content.html" %}
+{% include live_fragment_template %}
 {% endblock %}

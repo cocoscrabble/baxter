@@ -315,6 +315,166 @@ h3 { font-size: 1.02rem; margin: var(--space-md) 0 var(--space-sm); }
     color: var(--color-muted);
 }
 
+/* The live bracket (_live_playoff.html). Its heights are views.LIVE_CARD_EMS
+   and friends: a card is 0.4em padding top and bottom, a 0.8em header line,
+   two 1.75em player rows, and a line of 0.75em chips per four games — change
+   them together. Columns sit side by side in landscape, stacked in portrait;
+   the type size comes from the same variables as the table pages. */
+.live-bracket {
+    display: grid;
+    row-gap: 0.6em;
+}
+
+@media (orientation: landscape) {
+    .live-bracket {
+        grid-template-columns: repeat(var(--live-cols, 1), minmax(0, 1fr));
+        column-gap: 2cqw;
+        align-items: start;
+    }
+}
+
+.live-series {
+    margin-bottom: 0.5em;
+    padding: 0.4em 0.6em;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--surface-raised);
+}
+
+.live-series-pending {
+    border-style: dashed;
+}
+
+/* Over: settled, so let the series still being played stand out. */
+.live-series-clinched {
+    background: var(--color-bg-subtle);
+}
+
+.live-series-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 1em;
+    font-size: 0.8em;
+    line-height: 1.45;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.live-series-alert {
+    color: var(--color-error-text);
+    font-weight: 700;
+}
+
+.live-series-player {
+    display: flex;
+    justify-content: space-between;
+    gap: 1em;
+    padding: 0.15em 0;
+    line-height: 1.45;
+    white-space: nowrap;
+}
+
+.live-series-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.live-series-seed {
+    display: inline-block;
+    min-width: 1.6em;
+    color: var(--color-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.live-series-tbd {
+    color: var(--color-muted);
+    font-style: italic;
+}
+
+.live-series-score {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.live-series-winner {
+    font-weight: 700;
+}
+
+.live-series-winner .live-series-name::after {
+    content: " ▸";
+    color: var(--color-published);
+}
+
+.live-series-games {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25em 0.3em;
+    margin: 0.3em 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.live-chip {
+    padding: 0.1em 0.4em;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    font-size: 0.75em;
+    line-height: 1.45;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* The game the room is about to play, or is playing. */
+.live-chip-scheduled {
+    border-color: var(--color-published);
+    color: var(--color-published);
+    font-weight: 700;
+}
+
+.live-chip-pending {
+    border-style: dashed;
+    color: var(--color-muted);
+}
+
+.live-chip-not_needed {
+    color: var(--color-muted);
+    border-color: transparent;
+}
+
+.live-places {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.live-places li {
+    display: flex;
+    gap: 0.6em;
+    padding: 0.15em 0;
+    line-height: 1.45;
+    white-space: nowrap;
+}
+
+.live-place-number {
+    min-width: 1.6em;
+    color: var(--color-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.live-place-open {
+    color: var(--color-muted);
+}
+
+.live-champion {
+    font-weight: 700;
+}
+
+.live-champion::after {
+    content: "🏆";
+    margin-left: 0.3em;
+}
+
 .pairings-updated {
     margin: 0 0 var(--space-md);
     font-size: 0.85rem;

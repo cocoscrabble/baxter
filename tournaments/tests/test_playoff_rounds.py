@@ -963,3 +963,66 @@ class ExportTests(PlayoffRoundsTestCase):
         self.assertEqual(len(exported.results), played)
         # The unnecessary third games are in neither the export nor the DB.
         self.assertFalse(Pairing.objects.filter(division=self.division, round=6).exists())
+
+
+class LivePlayoffTests(PlayoffRoundsTestCase):
+    """The venue-screen bracket (``LivePlayoffView``)."""
+
+    def url(self):
+        return reverse("live_playoff", kwargs=self.division.slug_kwargs())
+
+    def columns(self):
+        return self.client.get(self.url()).context["live_columns"]
+
+    def card(self, columns, label):
+        return next(c for col in columns for c in col.get("cards", []) if c["label"] == label)
+
+    def test_a_division_without_a_playoff_says_so(self):
+        response = self.client.get(self.url())
+        self.assertEqual(response.context["live_columns"], [])
+        self.assertContains(response, "This division has no playoff.")
+
+    def test_a_series_waiting_on_another_names_where_its_players_come_from(self):
+        self.make_playoff()
+        self.record(4, "P1", "P4")
+        self.record(5, "P1", "P4")
+        final = self.card(self.columns(), "Championship")
+        sides = [(s["name"], s["source"]) for s in final["sides"]]
+        self.assertEqual(sides, [("P1", "Winner of Semifinal 1"), (None, "Winner of Semifinal 2")])
+        # Not started: a placeholder per game it could need, by round.
+        self.assertEqual([g["round"] for g in final["games"]], [7, 8, 9])
+        self.assertEqual({g["status"] for g in final["games"]}, {"pending"})
+
+    def test_a_live_series_shows_its_score_and_games(self):
+        self.make_playoff()
+        self.record(4, "P1", "P4", 500, 350)
+        semi = self.card(self.columns(), "Semifinal 1")
+        self.assertEqual([(s["name"], s["seed"], s["score"]) for s in semi["sides"]],
+                         [("P1", 1, 1.0), ("P4", 4, 0.0)])
+        self.assertEqual([g["status"] for g in semi["games"]], ["played", "scheduled", "pending"])
+        self.assertContains(self.client.get(self.url()), "500–350")
+
+    def test_placements_appear_once_the_bracket_places_someone(self):
+        self.make_playoff()
+        for round_num in (4, 5):
+            self.record(round_num, "P1", "P4")
+            self.record(round_num, "P2", "P3")
+        self.assertEqual(len(self.columns()), 2)
+        self.record(7, "P3", "P4")
+        self.record(8, "P3", "P4")
+        columns = self.columns()
+        self.assertEqual(columns[-1]["title"], "Final placements")
+        self.assertEqual([p.name for p in columns[-1]["places"]][2:], ["P3", "P4"])
+
+    def test_the_poll_returns_the_bracket_fragment(self):
+        self.make_playoff()
+        response = self.client.get(self.url(), headers={"Datastar-Request": "true"})
+        body = b"".join(response.streaming_content).decode()
+        self.assertIn('id="live-content"', body)
+        self.assertIn("Semifinal 1", body)
+
+    def test_the_live_menu_offers_it_only_with_a_playoff(self):
+        standings = reverse("division_standings", kwargs=self.division.slug_kwargs())
+        self.assertNotContains(self.client.get(standings), self.url())
+        self.make_playoff()
+        self.assertContains(self.client.get(standings), self.url())

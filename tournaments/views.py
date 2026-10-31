@@ -170,6 +170,7 @@ from .playoff import (
     schedule_conflicts,
     selectable_qualification_rounds,
     series_keys,
+    series_sides,
     validate_config,
 )
 from .scorecards import ScorecardResult, ScorecardSpec, make_rounds, render_scorecards
@@ -1863,34 +1864,46 @@ class _LiveDisplayMixin(VisibleDivisionMixin):
     # across the columns (see ``live_shape``).
     live_tiles = False
 
+    # The fragment each poll morphs in, and the full page wraps.
+    live_fragment_template = "tournaments/_live_content.html"
+
     def get_live_sections(self, division):
         """``[(subtitle, rows), ...]``, top to bottom. Empty sections are dropped."""
         raise NotImplementedError
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
+    def get_live_content(self, division):
+        """The fragment's own context: what it shows, and the layout counts its
+        type size is computed from. The default lays out tables of rows; a page
+        with another shape (the playoff bracket) supplies its own."""
         sections = [
             (subtitle, rows)
-            for subtitle, rows in self.get_live_sections(self.object)
+            for subtitle, rows in self.get_live_sections(division)
             if rows
         ]
         sizes = [len(rows) for _, rows in sections]
         cols = live_columns(sizes, self.live_col_ems, self.live_tiles)
         col_rows, col_overhead = live_shape(sizes, cols, self.live_tiles)
-        context["live_sections"] = [
-            {"subtitle": subtitle, "rows": rows, "columns": split_columns(rows, cols)}
-            for subtitle, rows in sections
-        ]
-        context["live_tiles"] = self.live_tiles
-        context["live_layout"] = {
-            "rows": sum(sizes),
-            "cols": cols,
-            "col_rows": col_rows,
-            "col_ems": self.live_col_ems,
-            # Portrait stacks every section; landscape may band them.
-            "overhead": live_overhead(len(sections)),
-            "col_overhead": col_overhead,
+        return {
+            "live_sections": [
+                {"subtitle": subtitle, "rows": rows, "columns": split_columns(rows, cols)}
+                for subtitle, rows in sections
+            ],
+            "live_tiles": self.live_tiles,
+            "live_layout": {
+                "rows": sum(sizes),
+                "cols": cols,
+                "col_rows": col_rows,
+                "col_ems": self.live_col_ems,
+                # Portrait stacks every section; landscape may band them.
+                "overhead": live_overhead(len(sections)),
+                "col_overhead": col_overhead,
+            },
         }
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(self.get_live_content(self.object))
+        context["live_fragment_template"] = self.live_fragment_template
         context["can_edit"] = False
         context["live_title"] = self.live_title
         context["live_empty_message"] = self.live_empty_message
@@ -1904,7 +1917,7 @@ class _LiveDisplayMixin(VisibleDivisionMixin):
         self.object = self.get_object()
         context = self.get_context_data(object=self.object)
         if is_datastar(request):
-            return fragment_response("tournaments/_live_content.html", context, request=request)
+            return fragment_response(self.live_fragment_template, context, request=request)
         return self.render_to_response(context)
 
 
@@ -1960,6 +1973,115 @@ class LivePairingsView(_LiveDisplayMixin, DetailView):
         if self.request.GET.getlist("rounds"):
             context["live_poll_url"] += "?" + urlencode([("rounds", r) for r in selected])
         return context
+
+
+# The bracket page's layout model, in ems of #live-content's type, mirroring
+# the .live-series rules in style.css (change them together). A series card is
+# its header line and two player rows, plus a line of game chips for every
+# LIVE_CHIPS_PER_LINE games; a column is a heading and its cards.
+LIVE_BRACKET_COL_EMS = 18
+LIVE_CARD_EMS = 6.2
+LIVE_CHIP_LINE_EMS = 1.6
+LIVE_CHIPS_PER_LINE = 4
+LIVE_CARD_GAP_EMS = 0.5
+LIVE_PLACE_ROW_EMS = 1.75
+LIVE_COLUMN_HEADING_EMS = 2.1
+LIVE_STACK_GAP_EMS = 0.6
+LIVE_UPDATED_EMS = 1.4
+
+
+def live_card_ems(max_games):
+    """How tall one series card is, gap included."""
+    lines = ceil_div(max_games, LIVE_CHIPS_PER_LINE)
+    return LIVE_CARD_EMS + lines * LIVE_CHIP_LINE_EMS + LIVE_CARD_GAP_EMS
+
+
+def live_bracket_layout(column_heights):
+    """The layout counts (see ``_live_content.html``) for columns side by side
+    on a landscape screen, stacked on a portrait one. Heights are in ems and
+    include each column's heading; there are no table rows to count."""
+    tallest = max(column_heights, default=0)
+    stacked = sum(column_heights) + LIVE_STACK_GAP_EMS * max(len(column_heights) - 1, 0)
+    return {
+        "rows": 0,
+        "cols": max(len(column_heights), 1),
+        "col_rows": 0,
+        "col_ems": LIVE_BRACKET_COL_EMS,
+        "overhead": stacked + LIVE_UPDATED_EMS,
+        "col_overhead": tallest + LIVE_UPDATED_EMS,
+    }
+
+
+def _live_series_card(bracket, series, row, names):
+    """One series for the live bracket: both sides (a name, or where the player
+    will come from), the series score, and a chip per game."""
+    sides = []
+    for (key, source), score, won in zip(
+        series_sides(bracket, series),
+        (row["high_score"], row["low_score"]),
+        (row["high_won"], row["low_won"]),
+    ):
+        seed = bracket.config.seed_of(key) if key else None
+        sides.append({
+            "name": names.get(key, key) if key else None,
+            "source": source,
+            "seed": seed,
+            "score": score if key and series.games else None,
+            "won": won,
+        })
+    if series.games:
+        games = row["games"]
+    else:
+        # Not under way yet: one placeholder per game the series could need.
+        games = [
+            {"number": n, "round": series.start_round + n - 1, "status": "pending"}
+            for n in range(1, series.max_games + 1)
+        ]
+    return {**row, "sides": sides, "games": games}
+
+
+class LivePlayoffView(_LiveDisplayMixin, DetailView):
+    """The bracket on a venue screen: a column per stage, a card per series with
+    its score and games, and the places the bracket has settled so far."""
+
+    live_title = "Playoff"
+    live_fragment_template = "tournaments/_live_playoff.html"
+    live_empty_message = "This division has no playoff."
+
+    def get_live_content(self, division):
+        playoff = playoff_for(division)
+        if playoff is None:
+            return {"live_columns": [], "live_layout": live_bracket_layout([])}
+        ctx = _playoff_context(division, playoff)
+        bracket, names = ctx["bracket"], ctx["names"]
+        series_by_window = {}
+        for series in bracket.series:
+            series_by_window.setdefault(series.window, []).append(series)
+        columns = []
+        for window in ctx["windows"]:
+            cards = [
+                _live_series_card(bracket, series, row, names)
+                for series, row in zip(series_by_window.get(window["index"], []), window["series"])
+            ]
+            columns.append({
+                "title": f"Rounds {window['rounds'][0]}–{window['rounds'][-1]}",
+                "cards": cards,
+                "height": LIVE_COLUMN_HEADING_EMS
+                + sum(live_card_ems(c["max_games"]) for c in cards),
+            })
+        # Only once the bracket has placed someone: a column of "not yet
+        # decided" would be most of the screen saying nothing.
+        places = ctx["bracket_placements"]
+        if any(p.source == "series" for p in places):
+            columns.append({
+                "title": "Final placements",
+                "places": places,
+                "height": LIVE_COLUMN_HEADING_EMS + len(places) * LIVE_PLACE_ROW_EMS,
+            })
+        return {
+            "live_columns": columns,
+            "live_layout": live_bracket_layout([c["height"] for c in columns]),
+        }
 
 
 class LiveResultsView(_LiveDisplayMixin, DetailView):
@@ -3954,6 +4076,7 @@ def _playoff_context(division, playoff):
         "playoff": playoff,
         "bracket": bracket,
         "windows": windows,
+        "names": names,
         "placements": placements,
         "bracket_placements": placements[: playoff.qualifier_count],
         "field_placements": placements[playoff.qualifier_count :],
