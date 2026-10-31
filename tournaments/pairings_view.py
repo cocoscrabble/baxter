@@ -130,6 +130,9 @@ _BADGE_LABELS = {
 }
 
 
+NO_GAMES_NEEDED = "Playoff (no games needed)"
+
+
 class PairingsPresenter:
     """View-state for the division pairings page."""
 
@@ -281,7 +284,7 @@ class PairingsPresenter:
                         series_label(series.key, series.position, game.number)
                     )
         return {
-            r: ", ".join(names) if names else "Playoff (no games needed)"
+            r: ", ".join(names) if names else NO_GAMES_NEEDED
             for r, names in labels.items()
         }
 
@@ -485,6 +488,12 @@ class PairingsPresenter:
         rows = self._rows_for_selected()
         if rows is not None:
             context["round_pairings"] = rows
+        elif self.playoff_round_labels.get(self.selected_round) == NO_GAMES_NEEDED:
+            # Not "not yet generated": every series this window held is
+            # decided, and publishing the round just closes it.
+            context["empty_round_message"] = (
+                "No games needed: every playoff series in this round is already decided."
+            )
         context["has_draft_rounds"] = self.has_draft_rounds
         context["has_published_rounds"] = self.has_published_rounds
         return context

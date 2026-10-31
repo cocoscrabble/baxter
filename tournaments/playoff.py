@@ -1086,12 +1086,10 @@ def prune_unnecessary_pairings(division, bracket):
 
     A playoff round can legitimately end up with no games at all (both semis
     clinched 2–0, so the window's last round has nothing left). That round is
-    marked finished here rather than in ``RoundPairings.update_status``, whose
-    ``total > 0`` guard exists to stop an *unpaired* round reading as finished
+    marked finished by ``close_empty_rounds`` rather than in
+    ``RoundPairings.update_status``, whose ``total > 0`` guard exists to stop an *unpaired* round reading as finished
     and must keep doing so.
     """
-    from tournaments.models import RoundPairings
-
     stale = []
     for pairing in division.pairings.filter(
         series__isnull=False, result__isnull=True
@@ -1106,6 +1104,19 @@ def prune_unnecessary_pairings(division, bracket):
             stale.append(pairing)
     for pairing in stale:
         pairing.delete()
+    close_empty_rounds(division, bracket)
+    return stale
+
+
+def close_empty_rounds(division, bracket):
+    """Mark finished any published playoff round left with nothing to play.
+
+    Runs after a result (via the pruner) and after a publish: a window round
+    published once its series had already clinched holds no games, so no result
+    will ever arrive to finish it, and left published it would sit as the
+    current round in front of the next window for good.
+    """
+    from tournaments.models import RoundPairings
 
     # A round can only be closed once nothing can appear in it any more: a game
     # still ``pending`` might become necessary (a series that goes 1–1 needs its
@@ -1123,7 +1134,6 @@ def prune_unnecessary_pairings(division, bracket):
         if not rp.pairings.exists():
             rp.status = RoundPairings.FINISHED
             rp.save(update_fields=["status"])
-    return stale
 
 
 def refresh_after_results(division):
