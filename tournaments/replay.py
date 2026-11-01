@@ -175,6 +175,8 @@ class ReplayContext:
         # The export header's players, by number: created on first entry when
         # this database does not have them (see ``events.export_jsonl``).
         self._players = {p["player_number"]: p for p in players or ()}
+        # Numbers the log assigns to a renamed guest (``note_renumbered``).
+        self._renumbered = set()
         self._actors = {}
         # Engine drift: recorded publishes today's engine would pair differently
         # (``generate_pairings.install_published``). Informational — the
@@ -211,6 +213,82 @@ class ReplayContext:
         if spec is None or Player.objects.filter(player_number=number).exists():
             return
         Player.objects.create(**spec)
+
+    def ensure_player_named(self, name):
+        """``ensure_player`` for an entry path that names its player instead
+        (a CSV row without a number, an imported division). Only an exact,
+        unique name in the header counts — the same guess the importer itself
+        makes — and only when this database has nobody by that name."""
+        from tournaments.models import Player
+
+        if not name or Player.objects.filter(name__iexact=name).exists():
+            return
+        specs = [p for p in self._players.values() if p["name"].casefold() == name.casefold()]
+        # A number the log itself assigns later belonged to a guest at this
+        # point: the importer mints that guest, and the renumber event renames
+        # it, as they did the first time.
+        if len(specs) == 1 and specs[0]["player_number"] not in self._renumbered:
+            self.ensure_player(specs[0]["player_number"])
+
+    def note_renumbered(self, events):
+        """Remember every number a ``player_number_changed`` in the log assigns."""
+        from tournaments.models import canonical_player_number
+
+        self._renumbered = {
+            canonical_player_number(str(e["payload"].get("new", "")))
+            for e in events
+            if e.get("event_type") == "player_number_changed"
+        }
+
+    def renumber_already_applied(self, payload):
+        """Whether a ``player_number_changed`` is one the header already shows.
+
+        The header lists players as the table has them *now*, so a guest the
+        log later renumbered (T-2 -> 0237) is created under the new number, and
+        the rename then has nothing to rename.
+        """
+        from tournaments.models import Player, canonical_player_number
+
+        old = canonical_player_number(str(payload.get("old", "")))
+        new = canonical_player_number(str(payload.get("new", "")))
+        return (
+            new in self._players
+            and not Player.objects.filter(player_number=old).exists()
+            and Player.objects.filter(player_number=new).exists()
+        )
+
+    def renumber_guest_minted_here(self, payload):
+        """Point a renumber at the guest this replay minted for that player.
+
+        A guest's temporary number is whatever was free in the database that
+        minted it, so the T-2 a log renames may be T-1 here. The header names
+        who the new number belongs to; a guest by that name is the one meant.
+        """
+        from tournaments.models import Player, canonical_player_number
+
+        old = canonical_player_number(str(payload.get("old", "")))
+        spec = self._players.get(canonical_player_number(str(payload.get("new", ""))))
+        if spec is None or Player.objects.filter(player_number=old).exists():
+            return payload
+        guests = list(Player.objects.filter(name__iexact=spec["name"], is_provisional=True))
+        if len(guests) != 1:
+            return payload
+        return {**payload, "old": guests[0].player_number}
+
+    def ensure_imported_players(self, event_type, payload):
+        """Create the header players a bulk entry event enters."""
+        if event_type == "entrants_bulk_imported":
+            from tournaments.import_entrants import parse_csv
+
+            rows, _errors = parse_csv(payload.get("csv", ""))
+            for number, name, _rating in rows:
+                if number:
+                    self.ensure_player(number)
+                else:
+                    self.ensure_player_named(name)
+        elif event_type == "division_imported":
+            for entrant in payload.get("entrants", []):
+                self.ensure_player_named(entrant.get("player"))
 
 
 def parse_jsonl(text):
@@ -404,6 +482,12 @@ def apply_event(ctx, event):
         ctx.ensure_player(payload.get("player"))
         if "rating" not in payload:
             ctx.unrecorded_ratings.add(payload.get("division"))
+    # The bulk paths enter many at once, from a CSV or an imported division.
+    ctx.ensure_imported_players(event_type, payload)
+    if event_type == "player_number_changed":
+        if ctx.renumber_already_applied(payload):
+            return
+        payload = ctx.renumber_guest_minted_here(payload)
 
     if event_type in NEEDS_REGEN and division is not None and "pairings" not in payload:
         regenerate_pairings(division)
@@ -434,6 +518,8 @@ def replay(events, *, verify=False, upto=None, players=None):
     from tournaments.generate_pairings import ENGINE_DRIFT
 
     ctx = ReplayContext(players)
+    events = list(events)
+    ctx.note_renumbered(events)
     token = ENGINE_DRIFT.set(ctx.drift)
     try:
         _replay_events(ctx, events, verify=verify, upto=upto)
