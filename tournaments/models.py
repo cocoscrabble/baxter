@@ -422,11 +422,10 @@ class DivisionSettings(models.Model):
     # -- how this division scores absences ----------------------------------
 
     # Points of spread awarded for a bye, and charged for a forfeit. **Not a
-    # constant, because it is jurisdictional**: 50 under NSA rules (the default,
-    # and what CoCo runs on), 75 under ABSP, 100 under WESPA and in Thailand,
-    # 300 in Poland — TSH carries the same number per `realm`. Baxter mirrors
-    # the WESPA rating list and enters WESPA-only visitors, so a WESPA event
-    # needs this to be 100 and had no way to say so.
+    # constant, because it is jurisdictional**: each rules body sets its own,
+    # and they change, so Baxter states no table of them — the director sets
+    # it from their tournament's rules. 50 is the default (what CoCo runs on).
+    # TSH carries the same number per `realm`.
     bye_spread = models.IntegerField(default=50)
 
     # What a withdrawal does to the rounds the entrant is no longer playing.
