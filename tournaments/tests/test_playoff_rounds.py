@@ -289,6 +289,21 @@ class SeriesLifecycleTests(PlayoffRoundsTestCase):
         self.assertEqual(rp.status, RoundPairings.FINISHED)
         self.assertEqual(PairingsPresenter(self.division).selected_round, 7)
 
+    def test_publishing_the_empty_round_moves_the_page_on(self):
+        self.make_playoff()
+        for round_num in (4, 5):
+            self.record(round_num, "P1", "P4")
+            self.record(round_num, "P2", "P3")
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("publish_round", kwargs=self.division.slug_kwargs()),
+            json.dumps({"round": 6}),
+            content_type="application/json",
+            headers={"Datastar-Request": "true"},
+        )
+        body = b"".join(response.streaming_content).decode()
+        self.assertIn("Publish round 7", body)
+
     def test_a_correction_retires_a_published_game_it_makes_unnecessary(self):
         # The only way a *published* playoff game becomes unnecessary: a game is
         # scheduled only once it is certainly needed, so it takes a correction
