@@ -312,8 +312,8 @@ class AbsenceSettingsForm(forms.Form):
     )
     bye_spread = forms.IntegerField(
         min_value=0, label="Bye spread",
-        help_text="Points awarded for a bye and charged for a forfeit. 50 under "
-        "NSA rules, 75 for ABSP, 100 for WESPA events.",
+        help_text="Points awarded for a bye and charged for a forfeit, as your "
+        "tournament's rules set it.",
     )
 
     @classmethod
