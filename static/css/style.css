@@ -1624,9 +1624,13 @@ dd {
 }
 
 /* ── Round Tabs ───────────────────────────────────────────── */
+/* Wraps rather than running off the page: a long schedule (20 rounds and a
+   playoff's six) is wider than a laptop, and a tab past the edge is a round
+   the director never sees. */
 .round-tabs {
     display: flex;
-    gap: 2px;
+    flex-wrap: wrap;
+    gap: 4px 2px;
     border-bottom: 2px solid var(--color-border);
     margin-bottom: 0;
 }
