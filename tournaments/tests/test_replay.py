@@ -953,6 +953,61 @@ class PortableExportTests(LoggedTournamentMixin, TestCase):
         self.assertEqual(division_digest(ctx.tournament.divisions.get()), recorded)
         self.assertEqual(Player.objects.get(player_number="0005").name, "Eve")
 
+    def _bulk_import(self, tournament, division, csv):
+        from tournaments.commands import bulk_import_entrants
+
+        bulk_import_entrants(tournament, self.owner, {"division": division.name, "csv": csv})
+
+    def _replay_elsewhere(self, tournament):
+        """Export, empty the player table, and replay with the header."""
+        header, events = self._export(tournament)
+        tournament.delete()
+        Player.objects.exclude(is_bye=True).delete()
+        return replay(events, verify=True, players=header["players"])
+
+    def test_a_bulk_import_replays_into_a_database_without_its_players(self):
+        # One row by number, one by name alone: both are found in the header.
+        tournament, division = self._build_logged_tournament()
+        Player.objects.create(name="Eve", player_number="0005", rating=1200)
+        Player.objects.create(name="Fay", player_number="0006", rating=1100)
+        self._bulk_import(tournament, division, "0005,Eve,1200\nFay\n")
+        recorded = division_digest(division)
+        ctx = self._replay_elsewhere(tournament)
+        self.assertEqual(division_digest(ctx.tournament.divisions.get()), recorded)
+        self.assertEqual(Player.objects.get(player_number="0006").name, "Fay")
+
+    def test_a_guest_renumbered_later_replays_under_the_header_number(self):
+        # The header has the player as they are now (0777); the log enters them
+        # as the guest they were, then renumbers. The rename is already done.
+        from tournaments.commands import change_player_number
+
+        tournament, division = self._build_logged_tournament()
+        self._bulk_import(tournament, division, "Zed,1000\n")
+        guest = Player.objects.get(name="Zed")
+        change_player_number(tournament, self.owner, {"old": guest.player_number, "new": "0777"})
+        ctx = self._replay_elsewhere(tournament)
+        names = {e.player.player_number: e.player.name for e in ctx.tournament.divisions.get().entrants.all()}
+        self.assertEqual(names["0777"], "Zed")
+
+    def test_a_renumber_finds_a_guest_minted_under_another_temp_number(self):
+        # The source database already had a guest, so Zed was minted as the
+        # second one; replayed elsewhere he is the first. The rename still lands.
+        from tournaments.commands import change_player_number
+        from tournaments.models import next_temp_player_number
+
+        tournament, division = self._build_logged_tournament()
+        Player.objects.create(name="Old guest", player_number=next_temp_player_number(),
+                              rating=0, is_provisional=True)
+        self._bulk_import(tournament, division, "Zed,1000\n")
+        guest = Player.objects.get(name="Zed")
+        change_player_number(tournament, self.owner, {"old": guest.player_number, "new": "0777"})
+        header, events = self._export(tournament)
+        tournament.delete()
+        Player.objects.exclude(is_bye=True).delete()
+        ctx = replay(events, players=header["players"])
+        entrant = ctx.tournament.divisions.get().entrants.get(player__name="Zed")
+        self.assertEqual(entrant.player.player_number, "0777")
+
     def test_an_entrant_keeps_the_rating_it_was_entered_with(self):
         # Entered at 1200; the player table has moved on by the time of replay.
         tournament, division = self._build_logged_tournament()
