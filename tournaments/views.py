@@ -1396,7 +1396,14 @@ class PublishRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
             division.tournament, request.user,
             {"division": division.name, "round": round_number},
         )
-        return _pairings_body_response(request, division, select_round=round_number)
+        # A playoff round with no games left finishes as it is published; show
+        # the round that comes next rather than one with nothing to do.
+        finished = division.round_pairings_set.filter(
+            round=round_number, status=RoundPairings.FINISHED
+        ).exists()
+        return _pairings_body_response(
+            request, division, select_round=None if finished else round_number
+        )
 
 
 class UnpublishRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
