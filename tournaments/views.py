@@ -2049,7 +2049,7 @@ class LivePlayoffView(_LiveDisplayMixin, DetailView):
 
     live_title = "Playoff"
     live_fragment_template = "tournaments/_live_playoff.html"
-    live_empty_message = "This division has no playoff."
+    live_empty_message = "This division has no playoff, or the playoff has not yet begun."
 
     def get_live_content(self, division):
         playoff = playoff_for(division)

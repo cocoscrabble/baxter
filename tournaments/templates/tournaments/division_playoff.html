@@ -6,7 +6,7 @@
 <h1>Playoff: {{ division.name }}</h1>
 
 {% if no_playoff %}
-  <p class="empty-state">This division has no playoff.</p>
+  <p class="empty-state">This division has no playoff, or the playoff has not yet begun.</p>
   {% if can_edit %}
   <p><a href="{% url 'division_playoff_setup' division.tournament.slug division.slug %}">Set one up</a>.</p>
   {% endif %}
@@ -80,7 +80,7 @@
               {% if game.status == "played" %}
                 {% if game.tied %}drawn{% else %}{{ game.winner }}{% endif %}
               {% elif game.status == "scheduled" %}scheduled
-              {% elif game.status == "not_needed" %}not necessary
+              {% elif game.status == "not_needed" %}not applicable
               {% else %}—{% endif %}
             </td>
           </tr>
