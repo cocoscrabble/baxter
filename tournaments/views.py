@@ -3898,11 +3898,14 @@ def _read_request_data(request):
 
 
 def _simulation_response(request, division):
+    """The whole pairings body, as after a publish: finishing a round makes the
+    next one pairable, so it is drafted here, and the editor controls (Publish,
+    the fixed-pairing editor) come with it. Rendering just the round's content
+    left the next round showing "not yet generated" with no Publish button
+    until the page was reloaded."""
     if is_datastar(request):
-        context = PairingsPresenter(division).as_context()
-        return fragment_response(
-            "tournaments/_round_tab_content.html", context, request=request
-        )
+        notice = _autogenerate_pairable_rounds(division)
+        return _pairings_body_response(request, division, notice=notice)
     return JsonResponse({"ok": True})
 
 
