@@ -53,7 +53,7 @@ SERIES_LABELS = {
     QUARTERFINAL: "Quarterfinal",
     SEMIFINAL: "Semifinal",
     CONSOLATION_SEMIFINAL: "5th–8th semifinal",
-    CHAMPIONSHIP: "Championship",
+    CHAMPIONSHIP: "Final",
     THIRD_PLACE: "Third place",
     FIFTH_PLACE: "Fifth place",
     SEVENTH_PLACE: "Seventh place",

@@ -697,7 +697,7 @@ class PlayoffViewTests(PlayoffRoundsTestCase):
         self.assertContains(response, "Final placements")
         # The third game of a clinched series is shown as unnecessary, not as a
         # bye or a zero score.
-        self.assertContains(response, "not necessary")
+        self.assertContains(response, "not applicable")
         self.assertNotContains(response, "Bye")
 
     def test_saving_the_results_grid_on_a_playoff_division(self):
@@ -980,13 +980,13 @@ class LivePlayoffTests(PlayoffRoundsTestCase):
     def test_a_division_without_a_playoff_says_so(self):
         response = self.client.get(self.url())
         self.assertEqual(response.context["live_columns"], [])
-        self.assertContains(response, "This division has no playoff.")
+        self.assertContains(response, "This division has no playoff, or the playoff has not yet begun.")
 
     def test_a_series_waiting_on_another_names_where_its_players_come_from(self):
         self.make_playoff()
         self.record(4, "P1", "P4")
         self.record(5, "P1", "P4")
-        final = self.card(self.columns(), "Championship")
+        final = self.card(self.columns(), "Final")
         sides = [(s["name"], s["source"]) for s in final["sides"]]
         self.assertEqual(sides, [("P1", "Winner of Semifinal 1"), (None, "Winner of Semifinal 2")])
         # Not started: a placeholder per game it could need, by round.
