@@ -37,17 +37,20 @@ from .playoff import (
 
 # The spread a bye or forfeit is scored at, when a division has no settings row
 # to say otherwise. Jurisdictional rather than universal — see
-# ``DivisionSettings.bye_spread``, which is what every live path reads.
+# ``DivisionSettings.bye_spread``/``forfeit_spread``, which every live path reads.
 BYE_WINNER_SCORE = 50
+FORFEIT_WINNER_SCORE = 100
 BYE_LOSER_SCORE = 0
 
 
-def absence_spread(division):
-    """Points awarded for a bye and charged for a forfeit in this division."""
+def absence_spread(division, *, forfeit=False):
+    """Points awarded for a bye (or, with ``forfeit``, charged for a forfeit)
+    in this division."""
     try:
-        return division.settings.bye_spread
+        settings = division.settings
     except DivisionSettings.DoesNotExist:
-        return BYE_WINNER_SCORE
+        return FORFEIT_WINNER_SCORE if forfeit else BYE_WINNER_SCORE
+    return settings.forfeit_spread if forfeit else settings.bye_spread
 
 
 def withdrawal_policy(division):
@@ -184,7 +187,7 @@ def materialize_absences(division, round_num):
 
     A bye and a forfeit are the same row with the winner the other way round.
     The byed player wins by the division's ``bye_spread``; the *absent* player
-    loses by it, to the bye entrant. Which one this is comes from ``Pairing.forfeit``, recorded
+    loses by its ``forfeit_spread``, to the bye entrant. Which one this is comes from ``Pairing.forfeit``, recorded
     when the round was paired — not from the entrant's current ``dropped``
     state, which a rejoin moves out from under an already-published round.
 
@@ -192,7 +195,6 @@ def materialize_absences(division, round_num):
     player is charged a start: ``winner_started`` is true exactly when the bye
     is the winner.
     """
-    spread = absence_spread(division)
     absences = (
         division.pairings.filter(round=round_num, result__isnull=True)
         .filter(Q(first__player__is_bye=True) | Q(second__player__is_bye=True))
@@ -215,7 +217,7 @@ def materialize_absences(division, round_num):
                 round=round_num,
                 pairing=p,
                 winner=winner,
-                winner_score=spread,
+                winner_score=absence_spread(division, forfeit=p.forfeit),
                 loser=loser,
                 loser_score=BYE_LOSER_SCORE,
                 winner_started=winner.player.is_bye,

@@ -36,7 +36,8 @@ positionally and ignores its value, but real spreadsheet exports carry a serial
 there, so we reproduce one from each result's ``created_at``.
 
 **Byes and forfeits are rows too.** They are part of each player's record (a
-bye is a win by the division's ``bye_spread``, a forfeit a loss by it), so they
+bye is a win by the division's ``bye_spread``, a forfeit a loss by its
+``forfeit_spread``), so they
 are exported like any other result, with the bye on the other side written as
 name ``Bye`` and number ``BYE``. That marker is exact (every unplayed game in
 Baxter is against the bye entrant; a printed game that becomes a forfeit is

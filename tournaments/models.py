@@ -421,12 +421,15 @@ class DivisionSettings(models.Model):
 
     # -- how this division scores absences ----------------------------------
 
-    # Points of spread awarded for a bye, and charged for a forfeit. **Not a
-    # constant, because it is jurisdictional**: each rules body sets its own,
-    # and they change, so Baxter states no table of them — the director sets
-    # it from their tournament's rules. 50 is the default (what CoCo runs on).
-    # TSH carries the same number per `realm`.
+    # Points of spread awarded for a bye, and charged for a forfeit. **Not
+    # constants, because they are jurisdictional**: each rules body sets its
+    # own, and they change, so Baxter states no table of them — the director
+    # sets them from their tournament's rules. They are separate because rules
+    # commonly charge a no-show more than they award a bye. 50 for a bye is
+    # what CoCo runs on; 100 for a forfeit is the common default. TSH carries
+    # the same numbers per `realm`.
     bye_spread = models.IntegerField(default=50)
+    forfeit_spread = models.IntegerField(default=100)
 
     # What a withdrawal does to the rounds the entrant is no longer playing.
     #
@@ -449,7 +452,7 @@ class DivisionSettings(models.Model):
     WITHDRAWAL_CHOICES = [
         # Paired around, and nothing recorded: the rounds simply are not theirs.
         (OMIT, "Leave the rounds blank"),
-        # A loss of ``bye_spread`` to the bye entrant, every round they miss.
+        # A loss of ``forfeit_spread`` to the bye entrant, every round they miss.
         (FORFEIT, "Record forfeit losses"),
     ]
     # A CharField rather than a boolean because TSH shows the space has four

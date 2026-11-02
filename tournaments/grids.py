@@ -55,8 +55,8 @@ def _entrant_pk_by_key(division):
 def _fill_absence_scores(rows, division):
     """Default the scores on a row whose opponent is the bye.
 
-    A bye and a forfeit have one score between them — the division's
-    ``bye_spread``, to the winning side — so making a director type both was
+    A bye and a forfeit each have one score — the division's ``bye_spread``
+    or ``forfeit_spread``, to the winning side — so making a director type both was
     the "all fields are required" wall that issue #57 names. A typed score is
     still honoured: TSH lets a one-off forfeit be scored differently from the
     tournament default, and so does this.
@@ -70,10 +70,11 @@ def _fill_absence_scores(rows, division):
     bye = next((e for e in _result_entrants(division) if e.player.is_bye), None)
     if bye is None:
         return rows
-    spread = absence_spread(division)
     filled = []
     for row in rows:
         if bye.pk in (row.get("winner"), row.get("loser")):
+            # The bye winning is a forfeit by the real player.
+            spread = absence_spread(division, forfeit=row.get("winner") == bye.pk)
             row = {
                 **row,
                 "winner_score": _or_default(row.get("winner_score"), spread),
