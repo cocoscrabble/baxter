@@ -312,8 +312,11 @@ class AbsenceSettingsForm(forms.Form):
     )
     bye_spread = forms.IntegerField(
         min_value=0, label="Bye spread",
-        help_text="Points awarded for a bye and charged for a forfeit, as your "
-        "tournament's rules set it.",
+        help_text="Points awarded for a bye, as your tournament's rules set it.",
+    )
+    forfeit_spread = forms.IntegerField(
+        min_value=0, label="Forfeit spread",
+        help_text="Points charged for a forfeit, as your tournament's rules set it.",
     )
 
     @classmethod
@@ -323,12 +326,16 @@ class AbsenceSettingsForm(forms.Form):
             initial = {
                 "withdrawal": settings.withdrawal,
                 "bye_spread": settings.bye_spread,
+                "forfeit_spread": settings.forfeit_spread,
             }
         except DivisionSettings.DoesNotExist:
             initial = {
                 "withdrawal": DivisionSettings.OMIT,
                 "bye_spread": DivisionSettings._meta.get_field(
                     "bye_spread"
+                ).default,
+                "forfeit_spread": DivisionSettings._meta.get_field(
+                    "forfeit_spread"
                 ).default,
             }
         return cls(data, initial=initial) if data is not None else cls(initial=initial)

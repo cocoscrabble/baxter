@@ -12,6 +12,7 @@ from django.test import TestCase
 from tournaments.forfeits import withdraw_entrant
 from tournaments.generate_pairings import (
     BYE_WINNER_SCORE,
+    FORFEIT_WINNER_SCORE,
     materialize_absences,
     publish_rounds,
     regenerate_pairings,
@@ -98,7 +99,7 @@ class DerivedForfeitTests(TestCase):
         for r in (3, 4):
             slip = self.forfeits_in(r).get()
             self.assertEqual(slip.loser_id, self.entrant.pk)
-            self.assertEqual((slip.winner_score, slip.loser_score), (BYE_WINNER_SCORE, 0))
+            self.assertEqual((slip.winner_score, slip.loser_score), (FORFEIT_WINNER_SCORE, 0))
             # The bye leads, so the absent player is charged no start.
             self.assertTrue(slip.winner_started)
 
@@ -115,7 +116,7 @@ class DerivedForfeitTests(TestCase):
         )
         self.assertEqual(standing.wins, 1)      # the round they played and won
         self.assertEqual(standing.losses, 2)    # the two forfeits
-        self.assertEqual(standing.spread, 40 - 2 * BYE_WINNER_SCORE)
+        self.assertEqual(standing.spread, 40 - 2 * FORFEIT_WINNER_SCORE)
 
     def test_the_forfeits_are_not_rated_but_are_exported(self):
         self.play(1)
@@ -286,7 +287,7 @@ class HandEnteredAbsenceTests(TestCase):
     def test_a_forfeit_can_be_entered_with_no_scores(self):
         self.assertEqual(self.save(self.rows() + [self.absence_row(forfeit=True)]), [])
         slip = self.division.result_slips.get(loser=self.absentee)
-        self.assertEqual((slip.winner_score, slip.loser_score), (50, 0))
+        self.assertEqual((slip.winner_score, slip.loser_score), (100, 0))
         # The bye leads, so the absentee is charged no start.
         self.assertTrue(slip.winner_started)
         self.assertTrue(slip.pairing.forfeit)
@@ -602,7 +603,7 @@ class HandEnteredAbsenceReplayTests(TestCase):
         self.assertEqual(division_digest(rebuilt), expected)
         forfeit = rebuilt.pairings.get(round=1, forfeit=True)
         self.assertEqual(forfeit.first.player.player_number, absentee.key)
-        self.assertEqual(forfeit.result.winner_score, 50)
+        self.assertEqual(forfeit.result.winner_score, 100)
 
 
 class HandEnteredGameReplayTests(TestCase):

@@ -77,7 +77,8 @@ pre-existing tournament with a withdrawal would fail `--verify`.
 What decides whether a withdrawal is *recorded* lives on the division:
 
 ```
-DivisionSettings.bye_spread   int, default 50       # the jurisdictional magnitude
+DivisionSettings.bye_spread      int, default 50    # the jurisdictional magnitudes
+DivisionSettings.forfeit_spread  int, default 100   # (separate since 2026-11, see below)
 DivisionSettings.withdrawal   omit (default) | forfeit
 ```
 
@@ -631,3 +632,21 @@ empty; the standings show the game rather than the forfeits; a player in two
 games in one round is refused by name; an unpaired round is refused; nothing is
 written when a later row fails; and the save replays under `verify=True` to the
 same digest, synthesized pairing, table number and orientation included.
+
+## Addendum: separate forfeit spread (2026-11)
+
+A forfeit is no longer charged the bye spread. `DivisionSettings.forfeit_spread`
+(default 100) sits beside `bye_spread` (default 50) on the absence settings
+form, since rulebooks commonly charge a no-show more than they award a bye.
+`absence_spread(division, forfeit=...)` picks between them for publish-time
+materialization and the results grid's default scores.
+
+- The migration copies each existing division's `bye_spread` into
+  `forfeit_spread`, so live divisions score exactly as before.
+- A `division_absence_settings_saved` payload logged before the field existed
+  has no `forfeit_spread` and replays with the bye spread, as it was scored.
+  A log that forfeited games without ever saving absence settings replays onto
+  the new default of 100 rather than 50 — accepted, like engine drift.
+- Retiring a printed bye into a forfeit (a withdrawal after publish) still turns
+  the slip round, but a slip still at the division's bye spread takes the
+  forfeit spread; a hand-set score survives.

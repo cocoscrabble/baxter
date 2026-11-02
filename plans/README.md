@@ -82,7 +82,7 @@ Current plans:
   the fetcher-shaped hole `PLAN_ENTRANTS.md` decision 11 left open.
   **Implemented** (all five phases).
 - `PLAN_FORFEITS.md` — forfeits and dropouts (issue #57): a withdrawn entrant
-  keeps accruing **forfeit slips** (a loss by the division's `bye_spread`
+  keeps accruing **forfeit slips** (a loss by the division's `forfeit_spread`
   against the bye entrant), derived at publish exactly as byes are, so "which
   rounds did they miss" needs no time field and withdraw-then-rejoin falls out
   for free. A game already printed when the player withdraws is **split** into a

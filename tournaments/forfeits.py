@@ -4,7 +4,7 @@ The two halves of a withdrawal live apart on purpose. ``Entrant.dropped`` is the
 per-entrant fact — this player is out — and the engine reads it to keep them out
 of the pairable field. ``DivisionSettings.withdrawal`` is the division's rule for
 what their absence *records*: nothing (``OMIT``), or a loss by the division's
-``bye_spread`` every round (``FORFEIT``). See plans/PLAN_FORFEITS.md §3.
+``forfeit_spread`` every round (``FORFEIT``). See plans/PLAN_FORFEITS.md §3.
 
 **Future rounds need nothing from this module.** They are derived at pair and
 publish time (``generate_pairings``): a dropped entrant gets a bye-shaped row in
@@ -29,7 +29,9 @@ from django.db import models
 
 from tournaments.events import EventResult, records_event
 from tournaments.generate_pairings import (
+    BYE_LOSER_SCORE,
     absence_row,
+    absence_spread,
     materialize_absences,
     withdrawal_policy,
 )
@@ -163,13 +165,18 @@ def _retire_bye(division, round_pairings, pairing, *, record_absence):
         materialize_absences(division, round_pairings.round)
     else:
         # Turned round rather than rewritten, so a spread the director set on
-        # this row by hand survives: retiring a bye changes its *direction*, not
-        # its magnitude. Rewriting it from ``bye_spread`` would quietly undo a
-        # per-row override.
+        # this row by hand survives. A slip still at the division's bye spread
+        # was never overridden, so it takes the forfeit spread instead.
         slip.winner, slip.loser = slip.loser, slip.winner
+        if (slip.winner_score, slip.loser_score) == (
+            absence_spread(division), BYE_LOSER_SCORE
+        ):
+            slip.winner_score = absence_spread(division, forfeit=True)
         # The bye leads either way, so the real player is charged no start.
         slip.winner_started = True
-        slip.save(update_fields=["winner", "loser", "winner_started"])
+        slip.save(
+            update_fields=["winner", "loser", "winner_score", "winner_started"]
+        )
     round_pairings.update_status()
     return {"round": round_pairings.round, "opponent": None}
 
@@ -204,7 +211,9 @@ def _invalidate_drafts(division):
 
 @records_event("division_absence_settings_saved")
 def save_absence_settings(tournament, actor, payload):
-    """payload: {division, withdrawal, bye_spread} — how absences are scored.
+    """payload: {division, withdrawal, bye_spread, forfeit_spread} — how
+    absences are scored. A payload logged before ``forfeit_spread`` existed
+    scored forfeits at ``bye_spread``, and replays that way.
 
     Its own command rather than a corner of ``division_settings_saved``, which
     is the *schedule's* writer: changing how a withdrawal is scored should not
@@ -215,7 +224,10 @@ def save_absence_settings(tournament, actor, payload):
     settings_obj, _ = DivisionSettings.objects.get_or_create(division=division)
     settings_obj.withdrawal = payload["withdrawal"]
     settings_obj.bye_spread = payload["bye_spread"]
-    settings_obj.save(update_fields=["withdrawal", "bye_spread"])
+    settings_obj.forfeit_spread = payload.get(
+        "forfeit_spread", payload["bye_spread"]
+    )
+    settings_obj.save(update_fields=["withdrawal", "bye_spread", "forfeit_spread"])
     # Draft rounds were laid out under the old rule, so they are stale — a
     # division switching to FORFEIT wants its forfeit rows, and one switching
     # away wants them gone.

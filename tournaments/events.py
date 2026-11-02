@@ -713,8 +713,9 @@ def describe_event(event, names=None) -> str:
         "division_settings_saved": lambda: f"Saved pairing schedule for {div}",
         "division_cop_config_saved": lambda: f"Saved COP settings for {div}",
         "division_absence_settings_saved": lambda: (
-            f"Set {div} to score absences as “{p.get('withdrawal', '')}” "
-            f"at {p.get('bye_spread', '')} points"
+            f"Set {div} to score absences as “{p.get('withdrawal', '')}”: "
+            f"byes at {p.get('bye_spread', '')} points, forfeits at "
+            f"{p.get('forfeit_spread', p.get('bye_spread', ''))}"
         ),
         "division_imported": lambda: f"Imported division “{p.get('name', '')}” from history",
         "entrants_saved": lambda: f"Saved entrants for {div} ({changes()})",
