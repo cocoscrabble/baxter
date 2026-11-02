@@ -2377,3 +2377,12 @@ h3 + .note {
     gap: var(--space-md);
     margin-top: var(--space-md);
 }
+
+/* Day picker above a round tab bar (_day_picker.html). */
+.day-picker {
+    margin-bottom: var(--space-xs);
+}
+.day-picker select {
+    width: auto;
+    margin-left: var(--space-xs);
+}

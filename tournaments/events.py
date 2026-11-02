@@ -37,6 +37,7 @@ EVENT_TYPES = frozenset(
         "division_restored",
         "division_settings_saved",
         "division_cop_config_saved",
+        "division_games_per_day_saved",
         "division_absence_settings_saved",
         "division_imported",
         "entrants_saved",
@@ -712,6 +713,9 @@ def describe_event(event, names=None) -> str:
         "division_restored": lambda: f"Restored division “{p.get('name', '')}”",
         "division_settings_saved": lambda: f"Saved pairing schedule for {div}",
         "division_cop_config_saved": lambda: f"Saved COP settings for {div}",
+        "division_games_per_day_saved": lambda: (
+            f"Set {div} to {p.get('games_per_day', '')} games per day"
+        ),
         "division_absence_settings_saved": lambda: (
             f"Set {div} to score absences as “{p.get('withdrawal', '')}”: "
             f"byes at {p.get('bye_spread', '')} points, forfeits at "

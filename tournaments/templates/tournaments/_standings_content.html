@@ -1,3 +1,4 @@
+{% load round_days %}
 <div id="standings-content">
 {% if division.playoff %}
 {% comment %}
@@ -11,11 +12,15 @@ numbers of games, and they are not the finishing order — the bracket is.
 </p>
 {% endif %}
 {% if rounds %}
+{% day_picker division rounds|last round %}
 <div class="round-tabs">
     {% for r in rounds %}
+    {% with day=r|round_day:division %}
     <a href="#"
        class="round-tab round-tab-finished{% if r == round %} active{% endif %}"
+       data-day="{{ day }}" data-show="$roundDay == '0' || $roundDay == '{{ day }}'"
        data-on:click__prevent="@get('{% url 'division_standings_round' division.tournament.slug division.slug r %}')">{{ r }}</a>
+    {% endwith %}
     {% endfor %}
 </div>
 {% endif %}

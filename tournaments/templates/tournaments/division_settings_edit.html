@@ -6,6 +6,17 @@
 <h1>Settings: {{ division.name }}</h1>
 
 <section class="page-section">
+    <h2>Schedule</h2>
+    <form method="post">
+        {% csrf_token %}
+        <div class="settings-fields">
+            {% for field in schedule_form %}{% include "tournaments/_settings_field.html" %}{% endfor %}
+        </div>
+        <button type="submit" name="schedule" value="1">Save schedule</button>
+    </form>
+</section>
+
+<section class="page-section">
     <h2>Byes and withdrawals</h2>
     <p class="note">
         How this division scores byes and forfeits, and what happens to the rounds a
