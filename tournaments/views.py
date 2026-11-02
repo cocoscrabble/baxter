@@ -43,6 +43,7 @@ from .forms import (
     AbsenceSettingsForm,
     CopConfigForm,
     FakeTournamentForm,
+    GamesPerDayForm,
     GuestForm,
     RegistrationForm,
     ResultSlipForm,
@@ -82,6 +83,7 @@ from .commands import (
     rename_division,
     restore_division,
     save_cop_config,
+    save_games_per_day,
     save_settings,
     simulate_match_cmd,
     simulate_round_cmd,
@@ -2308,6 +2310,20 @@ class DivisionSettingsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
         division = self.get_division()
         # Two independent forms on one page, told apart by the submit button's
         # name so neither validates the other's fields.
+        if "schedule" in request.POST:
+            schedule = GamesPerDayForm.for_division(division, request.POST)
+            if schedule.is_valid():
+                save_games_per_day(
+                    division.tournament, request.user,
+                    {"division": division.name, **schedule.cleaned_data},
+                )
+                messages.success(request, "Schedule saved.")
+                return redirect("division_settings", **division.slug_kwargs())
+            return render(
+                request, self.template_name,
+                self._context(division, CopConfigForm(initial=self._cop_config(division)),
+                              schedule=schedule),
+            )
         if "absence" in request.POST:
             absence = AbsenceSettingsForm.for_division(division, request.POST)
             if absence.is_valid():
@@ -2345,13 +2361,14 @@ class DivisionSettingsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
             return False
         return any(rp.get("pairing") == str(RP.COP) for rp in rps)
 
-    def _context(self, division, form, absence=None) -> dict:
+    def _context(self, division, form, absence=None, schedule=None) -> dict:
         return {
             "division": division,
             "active_tab": "settings",
             "can_edit": True,
             "form": form,
             "absence_form": absence or AbsenceSettingsForm.for_division(division),
+            "schedule_form": schedule or GamesPerDayForm.for_division(division),
             "uses_cop": self._uses_cop(division),
         }
 

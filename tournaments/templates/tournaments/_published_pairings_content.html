@@ -1,3 +1,4 @@
+{% load round_days %}
 {% if pairings_message %}
 {% include "tournaments/_empty_state.html" with message=pairings_message %}
 {% elif pairings %}
@@ -9,12 +10,16 @@
 {# so with no JS the full set of rounds still shows. #}
 <div id="pairings-content" data-signals="{pairRound: {{ current_round }}}">
 {% if pairings|length > 1 %}
+{% with last=pairings|last %}{% day_picker division last.0 current_round %}{% endwith %}
 <div class="round-tabs">
     {% for round_num, round_pairings in pairings %}
+    {% with day=round_num|round_day:division %}
     <a href="#"
        class="round-tab round-tab-finished{% if round_num == current_round %} active{% endif %}"
+       data-day="{{ day }}" data-show="$roundDay == '0' || $roundDay == '{{ day }}'"
        data-class="{active: $pairRound == {{ round_num }}}"
        data-on:click__prevent="$pairRound = {{ round_num }}">{{ round_num }}</a>
+    {% endwith %}
     {% endfor %}
 </div>
 {% endif %}

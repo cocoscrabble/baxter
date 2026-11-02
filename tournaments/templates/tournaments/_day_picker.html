@@ -1,0 +1,12 @@
+{% if days %}
+<div class="day-picker" data-signals__ifmissing="{roundDay: '{{ default_day }}'}">
+    <label>Show
+        <select data-bind="roundDay"
+            {% if selected_day %}data-init="if ($roundDay != '0' && $roundDay != '{{ selected_day }}') $roundDay = '{{ selected_day }}'"{% endif %}
+            data-on:change="showRoundDay(el.value)">
+            {% for d in days %}<option value="{{ d }}"{% if d == default_day %} selected{% endif %}>Day {{ d }}</option>{% endfor %}
+            <option value="0">All days</option>
+        </select>
+    </label>
+</div>
+{% endif %}

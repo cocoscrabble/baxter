@@ -3,6 +3,7 @@ import secrets
 from coco_ratings.identity import canonical_player_number
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.db.models.functions import Lower
 from django.urls import reverse
@@ -195,6 +196,17 @@ class Division(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def games_per_day(self):
+        try:
+            return self.settings.games_per_day
+        except DivisionSettings.DoesNotExist:
+            return DivisionSettings._meta.get_field("games_per_day").default
+
+    def day_of_round(self, round):
+        """The day (1-based) a round is played on."""
+        return (round - 1) // max(self.games_per_day, 1) + 1
 
     def slug_kwargs(self):
         """URL kwargs identifying this division: its tournament and own slug.
@@ -418,6 +430,13 @@ class DivisionSettings(models.Model):
     # Tuning for the Swiss family (swiss_weight, max_distance, spr_split). Empty
     # means the engine's built-in defaults, which are DEFAULT_SWISS_CONFIG.
     swiss_config = models.JSONField(default=dict)
+
+    # How many rounds are played on each day of the event. Per division, since
+    # divisions can play different numbers of games. Display only: it groups
+    # the round tabs by day, and nothing about pairing reads it.
+    games_per_day = models.PositiveSmallIntegerField(
+        default=7, validators=[MinValueValidator(1)]
+    )
 
     # -- how this division scores absences ----------------------------------
 

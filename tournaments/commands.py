@@ -442,6 +442,16 @@ def save_settings(tournament, actor, payload):
     return EventResult(payload=payload, division=division, result=settings_obj)
 
 
+@records_event("division_games_per_day_saved")
+def save_games_per_day(tournament, actor, payload):
+    """payload: {division, games_per_day} — how the round tabs group into days."""
+    division = _division(tournament, payload["division"])
+    settings_obj, _ = DivisionSettings.objects.get_or_create(division=division)
+    settings_obj.games_per_day = payload["games_per_day"]
+    settings_obj.save(update_fields=["games_per_day"])
+    return EventResult(payload=payload, division=division, result=settings_obj)
+
+
 @records_event("division_cop_config_saved")
 def save_cop_config(tournament, actor, payload):
     """payload: {division, cop_config} — COP's prize/tuning config for the division."""

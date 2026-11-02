@@ -341,6 +341,18 @@ class AbsenceSettingsForm(forms.Form):
         return cls(data, initial=initial) if data is not None else cls(initial=initial)
 
 
+class GamesPerDayForm(forms.Form):
+    games_per_day = forms.IntegerField(
+        min_value=1, label="Games per day",
+        help_text="Groups the round tabs by day on the pairing and standings pages.",
+    )
+
+    @classmethod
+    def for_division(cls, division, data=None):
+        initial = {"games_per_day": division.games_per_day}
+        return cls(data, initial=initial) if data is not None else cls(initial=initial)
+
+
 class CopConfigForm(forms.Form):
     """Prize + tuning config for the COP pairing strategy
     (DivisionSettings.cop_config). Stored as a scalar dict; the engine adapter
