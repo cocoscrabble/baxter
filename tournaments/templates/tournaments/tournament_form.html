@@ -32,6 +32,12 @@
         {{ form.start_date.errors }}
     </p>
     <p>
+        {{ form.time_zone.label_tag }}
+        {{ form.time_zone }}
+        <small>{{ form.time_zone.help_text }}</small>
+        {{ form.time_zone.errors }}
+    </p>
+    <p>
         <label>Owner:</label>
         <span>{% if tournament %}{{ tournament.owner.username }}{% else %}{{ user.username }}{% endif %}</span>
     </p>

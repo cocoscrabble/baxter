@@ -92,6 +92,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    "tournaments.middleware.TournamentTimezoneMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     # Last, as django-axes requires: it turns a lockout into the lockout page.
     "axes.middleware.AxesMiddleware",

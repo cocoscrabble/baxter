@@ -19,6 +19,7 @@ from django.db.models import Q
 
 from tournaments.events import EventResult, command_context, records_event
 from tournaments.models import (
+    DEFAULT_TIME_ZONE,
     Division,
     DivisionSettings,
     ResultSlip,
@@ -64,7 +65,7 @@ def _apply_seed(division, payload):
 
 @records_event("tournament_created")
 def create_tournament(tournament, actor, payload):
-    """payload: {name, location, start_date (ISO), editors: [username],
+    """payload: {name, location, start_date (ISO), time_zone, editors: [username],
     is_fake, default_division: {name, pairing_seed}}. ``actor`` becomes the
     owner. ``is_fake`` marks a sandbox tournament (e.g. a what-if import)."""
     t = Tournament.objects.create(
@@ -73,6 +74,8 @@ def create_tournament(tournament, actor, payload):
         start_date=date.fromisoformat(payload["start_date"]),
         owner=actor,
         is_fake=payload.get("is_fake", False),
+        # Absent from payloads written before tournaments had a zone.
+        time_zone=payload.get("time_zone", DEFAULT_TIME_ZONE),
     )
     editors = set(_resolve_editors(payload.get("editors", [])))
     editors.add(actor)
@@ -89,10 +92,12 @@ def create_tournament(tournament, actor, payload):
 
 @records_event("tournament_updated")
 def update_tournament(tournament, actor, payload):
-    """payload: {name, location, start_date (ISO), editors: [username]}."""
+    """payload: {name, location, start_date (ISO), time_zone, editors: [username]}."""
     tournament.name = payload["name"]
     tournament.location = payload["location"]
     tournament.start_date = date.fromisoformat(payload["start_date"])
+    # An update logged before tournaments had a zone leaves it alone.
+    tournament.time_zone = payload.get("time_zone", tournament.time_zone)
     tournament.save()
     editors = set(_resolve_editors(payload.get("editors", [])))
     editors.add(tournament.owner)
