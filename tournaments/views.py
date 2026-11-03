@@ -269,6 +269,14 @@ class FakeTournamentCreateView(LoginRequiredMixin, View):
         division = create_fake_tournament(
             request.user, num_players, num_rounds, name=form.cleaned_data["name"]
         )
+        if not num_rounds:
+            messages.success(
+                request,
+                f"Created test tournament “{division.tournament.name}” with "
+                f"{num_players} players and no regular rounds. Set up its "
+                "playoff below.",
+            )
+            return redirect("division_playoff_setup", **division.slug_kwargs())
         messages.success(
             request,
             f"Created test tournament “{division.tournament.name}” "

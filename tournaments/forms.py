@@ -260,7 +260,23 @@ class FakeTournamentForm(forms.Form):
 
     name = forms.CharField(max_length=200, label="Tournament name")
     num_players = forms.IntegerField(min_value=2, label="Number of players")
-    num_rounds = forms.IntegerField(min_value=1, label="Number of rounds")
+    # A playoff-only division has no regular rounds, so the round count is
+    # hidden (and ignored) when this is ticked.
+    playoff_only = forms.BooleanField(
+        required=False, label="Playoffs only",
+        widget=forms.CheckboxInput(attrs={"data-bind": "playoffOnly"}),
+    )
+    num_rounds = forms.IntegerField(
+        min_value=1, required=False, label="Number of rounds"
+    )
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("playoff_only"):
+            cleaned["num_rounds"] = 0
+        elif cleaned.get("num_rounds") is None and "num_rounds" not in self.errors:
+            self.add_error("num_rounds", "This field is required.")
+        return cleaned
 
     def clean_num_players(self):
         num = self.cleaned_data["num_players"]

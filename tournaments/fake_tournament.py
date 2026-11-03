@@ -39,6 +39,8 @@ def create_fake_tournament(user, num_players, num_rounds, name=None):
     field (1v2, 3v4, ...); the Swiss implementation can return a partial round,
     which never finishes and would stall the round-at-a-time loop.
 
+    ``num_rounds=0`` builds a playoff-only division: entrants, no schedule.
+
     The caller is responsible for validating that at least ``num_players``
     players exist. Odd fields are fine — the engine adds a bye each round.
     """
@@ -63,6 +65,11 @@ def create_fake_tournament(user, num_players, num_rounds, name=None):
         # One at a time rather than bulk_create, so each entrant pins the rating
         # it was seeded from (bulk_create would bypass Entrant.enter).
         Entrant.enter(division, player, i)
+
+    if not num_rounds:
+        # Playoffs only: entrants and nothing else, ready for a playoff that
+        # qualifies on round 0.
+        return division
 
     blocks = [{"pairing": str(RP.KotH), "rounds": num_rounds, "pair_from": 1}]
     DivisionSettings.objects.create(

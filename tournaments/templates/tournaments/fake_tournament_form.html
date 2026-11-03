@@ -8,9 +8,11 @@
 <h1>Create Test Tournament</h1>
 
 <p>Generates a tournament filled with random players, sets every round to King of
-the Hill, and simulates all but the final round &mdash; which is left ready to pair.</p>
+the Hill, and simulates all but the final round &mdash; which is left ready to pair.
+Tick <em>Playoffs only</em> for a division with no regular rounds, ready for a
+playoff seeded from the entrant list.</p>
 
-<form method="post">
+<form method="post" data-signals="{playoffOnly: {% if form.playoff_only.value %}true{% else %}false{% endif %}}">
     {% csrf_token %}
     <p>
         {{ form.name.label_tag }}
@@ -23,6 +25,9 @@ the Hill, and simulates all but the final round &mdash; which is left ready to p
         {{ form.num_players.errors }}
     </p>
     <p>
+        <label>{{ form.playoff_only }} {{ form.playoff_only.label }}</label>
+    </p>
+    <p data-show="!$playoffOnly">
         {{ form.num_rounds.label_tag }}
         {{ form.num_rounds }}
         {{ form.num_rounds.errors }}
