@@ -1041,3 +1041,107 @@ class LivePlayoffTests(PlayoffRoundsTestCase):
         self.assertNotContains(self.client.get(standings), self.url())
         self.make_playoff()
         self.assertContains(self.client.get(standings), self.url())
+
+
+class PlayoffOnlyDivisionTests(TestCase):
+    """A playoff run as its own event: a division with no regular rounds whose
+    playoff qualifies on round 0, seeded from the entrant list."""
+
+    setUp = PlayoffReplayTests.setUp
+    _post_json = PlayoffReplayTests._post_json
+    _play_round = PlayoffReplayTests._play_round
+
+    def _setup_division(self):
+        self.client.post(
+            reverse("tournament_create"),
+            {"name": "Final Four", "location": "Reno", "start_date": "2026-03-20",
+             "editor_usernames": ""},
+        )
+        tournament = Tournament.objects.get(name="Final Four")
+        division = tournament.divisions.get()
+        division.is_test = True
+        division.save(update_fields=["is_test"])
+        self._post_json(
+            "division_entrants_edit", division,
+            {"rows": [
+                {"number": i + 1, "player": p.pk, "dropped": False}
+                for i, p in enumerate(self.players)
+            ]},
+        )
+        return tournament, division
+
+    def _setup_url(self, division):
+        return reverse("division_playoff_setup", kwargs=division.slug_kwargs())
+
+    def test_setup_offers_only_round_zero_without_a_schedule(self):
+        _, division = self._setup_division()
+        response = self.client.get(self._setup_url(division))
+        self.assertEqual(response.context["rounds"], [0])
+        self.assertEqual(response.context["form"]["qualification_round"], 0)
+        # Seeded from the entrant list: highest rated first.
+        self.assertEqual(
+            [s["player"] for s in response.context["seeds"]],
+            ["Alice", "Bob", "Cara", "Dan"],
+        )
+        self.assertContains(response, "None: playoff only")
+
+    def test_a_playoff_only_division_plays_and_replays(self):
+        tournament, division = self._setup_division()
+        keys = {p.name: p.player_number for p in self.players}
+        # The director reseeds Dan to 1 — say he won the qualifying event.
+        response = self.client.post(self._setup_url(division), {
+            "action": "confirm",
+            "qualification_round": 0,
+            "qualifier_count": 4,
+            "timing": Playoff.POSTSCRIPT,
+            f"games_{SEMIFINAL}": 1,
+            f"games_{CHAMPIONSHIP}": 3,
+            f"games_{THIRD_PLACE}": 0,
+            "seed": [keys[n] for n in ("Dan", "Alice", "Bob", "Cara")],
+        })
+        self.assertRedirects(
+            response, reverse("division_playoff", kwargs=division.slug_kwargs())
+        )
+        playoff = playoff_for(division)
+        self.assertEqual(playoff.qualification_round, 0)
+        self.assertEqual(
+            [s["player"] for s in playoff.seeds], ["Dan", "Alice", "Bob", "Cara"]
+        )
+
+        self.client.get(reverse("division_pair_rounds", kwargs=division.slug_kwargs()))
+        # Round 1 is the semifinals: 1 v 4 and 2 v 3, and nothing else.
+        self.assertEqual(
+            {
+                frozenset({p.first.player.name, p.second.player.name})
+                for p in division.pairings.filter(round=1)
+            },
+            {frozenset({"Dan", "Cara"}), frozenset({"Alice", "Bob"})},
+        )
+        round_num = 1
+        while not playoff_for(division).bracket().get(CHAMPIONSHIP).decided:
+            self._play_round(division, round_num)
+            round_num += 1
+            self.assertLess(round_num, 6)
+
+        recorded = division_digest(division)
+        ctx = replay(events_from_tournament(tournament), verify=True)
+        self.assertEqual(division_digest(ctx.tournament.divisions.get()), recorded)
+
+    def test_round_zero_is_refused_once_the_division_has_a_schedule(self):
+        _, division = self._setup_division()
+        self._post_json(
+            "division_round_pairings", division,
+            {"blocks": [{"pairing": "KotH", "rounds": 2, "pair_from": 1}]},
+        )
+        response = self.client.post(self._setup_url(division), {
+            "action": "confirm",
+            "qualification_round": 0,
+            "qualifier_count": 2,
+            "timing": Playoff.POSTSCRIPT,
+            f"games_{CHAMPIONSHIP}": 3,
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(playoff_for(division))
+        self.assertTrue(
+            any("no qualifying rounds" in e for e in response.context["errors"])
+        )
