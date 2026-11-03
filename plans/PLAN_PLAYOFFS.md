@@ -604,3 +604,24 @@ bracket sizes other than 2/4/8; a confirmed-rollback flow for result corrections
 played downstream games (blocked instead); exporting bracket placements to the
 registry bundle (the bundle carries games; placements are derivable from the
 replayed log).
+
+## Addendum: playoff-only divisions (2026-11)
+
+A playoff can be run as its own event — a separate tournament for the
+qualifiers of an earlier one — by giving it a division with **no regular
+schedule** and a playoff that qualifies on **round 0**.
+
+- Round 0 is offered on the setup page only when the division has neither a
+  schedule nor results, and it is the default there ("None: playoff only").
+- The seed snapshot comes from `standings_after_round(pd, 0)`, which is the
+  entrant seeding (highest rated first). The director reorders it on the setup
+  page as usual, e.g. by finishing position in the qualifying event.
+- `PlayoffConfig.playoff_only` (`qualification_round == 0`) relaxes two checks:
+  `validate_config` accepts round 0 but only with postscript timing (concurrent
+  means everyone else keeps playing a schedule there is none of), and
+  `schedule_conflicts` skips the "qualifying round must be finished" check and
+  instead refuses a division that has a schedule.
+- Nothing else changes: a postscript bracket already builds its rounds outside
+  the configured schedule, starting at `qualification_round + 1`, so the
+  semifinals land in round 1. The event payload is unchanged (it already
+  carried `qualification_round`), so replay needs nothing new.

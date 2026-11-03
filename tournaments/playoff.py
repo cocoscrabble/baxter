@@ -281,6 +281,13 @@ class PlayoffConfig:
             seeds=tuple(s["key"] for s in playoff.seeds or []),
         )
 
+    @property
+    def playoff_only(self) -> bool:
+        """Qualifying on round 0: the playoff is the whole division (a playoff
+        run as its own event), seeded from the entrant seeding rather than from
+        standings, since nobody has played yet."""
+        return self.qualification_round == 0
+
     def seed_of(self, key: str) -> int | None:
         """1-based qualification seed, or None for a non-participant."""
         try:
@@ -300,10 +307,14 @@ def validate_config(config: PlayoffConfig) -> list[str]:
         return [
             f"Qualifier count must be one of {', '.join(map(str, QUALIFIER_COUNTS))}."
         ]
-    if config.qualification_round < 1:
-        errors.append("The qualification round must be at least 1.")
+    if config.qualification_round < 0:
+        errors.append("The qualification round cannot be negative.")
     if config.timing not in tuple(Timing):
         errors.append(f"Unknown timing mode {config.timing!r}.")
+    elif config.playoff_only and config.timing != Timing.POSTSCRIPT:
+        # Concurrent means "everyone else keeps playing the schedule"; a
+        # playoff-only division has no schedule for anyone to keep playing.
+        errors.append("A playoff with no qualifying rounds must be postscript.")
     if len(config.seeds) != config.qualifier_count:
         errors.append(
             f"Expected {config.qualifier_count} qualifiers, got {len(config.seeds)}."
@@ -929,7 +940,8 @@ def qualification_seeds(division, round_num, count):
 
 def selectable_qualification_rounds(division) -> list[int]:
     """Rounds a playoff may qualify on: every round the division has scheduled,
-    plus any round that has results beyond it.
+    plus any round that has results beyond it — or just round 0 (a playoff-only
+    division) when there are neither.
 
     The configured schedule is the point — a postscript playoff has to qualify on
     the *last* configured round, which is typically not played yet when the
@@ -937,7 +949,10 @@ def selectable_qualification_rounds(division) -> list[int]:
     division (results but no schedule) still offers something.
     """
     configured = set(division.configured_round_numbers(default=[]))
-    return sorted(configured | set(range(1, division.max_round() + 1)))
+    rounds = sorted(configured | set(range(1, division.max_round() + 1)))
+    # With no schedule, the playoff can be the whole division: round 0, seeded
+    # from the entrant seeding.
+    return rounds or [0]
 
 
 def finished_rounds(division) -> set[int]:
@@ -999,7 +1014,16 @@ def schedule_conflicts(division, config: PlayoffConfig) -> list[str]:
     bracket = build_bracket(config, [])
     playoff_rounds = list(bracket.rounds)
     errors = []
-    if last_configured and config.qualification_round > last_configured:
+    if config.playoff_only:
+        # Nothing to finish first; the only thing that can clash is a regular
+        # schedule, whose rounds the bracket would land on top of.
+        if last_configured:
+            errors.append(
+                "A playoff with no qualifying rounds is the whole division, but "
+                f"this division has a schedule of {last_configured} rounds. "
+                "Remove the schedule, or qualify on its last round."
+            )
+    elif last_configured and config.qualification_round > last_configured:
         errors.append(
             f"Round {config.qualification_round} is past the end of the "
             f"schedule (round {last_configured})."
@@ -1014,7 +1038,7 @@ def schedule_conflicts(division, config: PlayoffConfig) -> list[str]:
             "playoffs can only be created once the qualifying round is done."
         )
     if config.timing == Timing.POSTSCRIPT:
-        if last_configured > config.qualification_round:
+        if last_configured > config.qualification_round and not config.playoff_only:
             errors.append(
                 "A postscript playoff has to start where the main tournament "
                 f"ends: the schedule runs to round {last_configured}, so the "

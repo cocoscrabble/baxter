@@ -38,11 +38,11 @@
         <div class="settings-field-control">
           <select name="qualification_round" id="qualification_round"{% if has_results %} disabled{% endif %}>
             {% for r in rounds %}
-            <option value="{{ r }}"{% if r == form.qualification_round %} selected{% endif %}>{{ r }}</option>
+            <option value="{{ r }}"{% if r == form.qualification_round %} selected{% endif %}>{% if r == 0 %}None: playoff only{% else %}{{ r }}{% endif %}</option>
             {% endfor %}
           </select>
         </div>
-        <p class="settings-field-help"></p>
+        <p class="settings-field-help">{% if form.qualification_round == 0 %}This division has no regular rounds, so the playoff is the whole event, seeded from the entrant list. Add a schedule under Round Pairings to qualify on standings instead.{% endif %}</p>
       </div>
       <div class="settings-field">
         <label for="qualifier_count">Qualifiers</label>
@@ -55,6 +55,9 @@
         </div>
         <p class="settings-field-help"></p>
       </div>
+      {% if form.qualification_round == 0 %}
+      <input type="hidden" name="timing" value="{{ timings.0.0 }}">
+      {% else %}
       <div class="settings-field">
         <label for="timing">Timing</label>
         <div class="settings-field-control">
@@ -66,6 +69,7 @@
         </div>
         <p class="settings-field-help"></p>
       </div>
+      {% endif %}
     </div>
     {% if not has_results %}
     <button type="submit" name="action" value="preview" class="btn-secondary">Preview</button>
@@ -103,13 +107,20 @@
   <section class="page-section">
     <h2>Qualifiers</h2>
     <p class="note">
+      {% if form.qualification_round == 0 %}
+      Taken from the entrant seeding (highest rated first). Change a row to
+      seed the bracket differently, for example by finishing position in the
+      event the players qualified from. The order confirmed here is the one the
+      bracket keeps for good.
+      {% else %}
       Taken from the standings after round {{ form.qualification_round }}. Change
       a row to override it — worth doing when two players are exactly level,
       since the order confirmed here is the one the bracket keeps for good.
+      {% endif %}
     </p>
     <table>
       <thead>
-        <tr><th class="num">Seed</th><th>Player</th><th class="num">Record</th><th class="num">Spread</th></tr>
+        <tr><th class="num">Seed</th><th>Player</th>{% if form.qualification_round %}<th class="num">Record</th><th class="num">Spread</th>{% endif %}</tr>
       </thead>
       <tbody>
         {% for seed in seeds %}
@@ -122,8 +133,10 @@
               {% endfor %}
             </select>
           </td>
+          {% if form.qualification_round %}
           <td class="num">{{ seed.wins|floatformat:"-1" }}</td>
           <td class="num">{{ seed.spread }}</td>
+          {% endif %}
         </tr>
         {% endfor %}
       </tbody>

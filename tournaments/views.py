@@ -4313,8 +4313,8 @@ class PlayoffSetupView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixi
                 form = {
                     # Default to where a postscript playoff has to qualify:
                     # the last configured round, played or not.
-                    "qualification_round": (
-                        max(selectable_qualification_rounds(division), default=1)
+                    "qualification_round": max(
+                        selectable_qualification_rounds(division)
                     ),
                     "qualifier_count": count,
                     "timing": str(Timing.POSTSCRIPT),
@@ -4357,5 +4357,5 @@ class PlayoffSetupView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixi
             # Every configured round, not just the played ones — a postscript
             # playoff qualifies on the last round of the schedule, which is
             # normally still unplayed when the director sets the playoff up.
-            "rounds": selectable_qualification_rounds(division) or [1],
+            "rounds": selectable_qualification_rounds(division),
         }
