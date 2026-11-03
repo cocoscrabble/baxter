@@ -86,6 +86,42 @@ class CreateFakeTournamentTest(TestCase):
         self.assertFalse(division.round_pairings_set.filter(round=num_rounds).exists())
 
 
+class PlayoffOnlyFakeTournamentTest(TestCase):
+    """"Playoffs only" builds a division with entrants and no schedule, so its
+    playoff can qualify on round 0."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="u", password="p")
+        for i in range(6):
+            Player.objects.create(
+                name=f"Player {i}", player_number=str(i), rating=1500 + i
+            )
+        self.client.force_login(self.user)
+
+    def test_playoffs_only_skips_the_schedule_and_opens_playoff_setup(self):
+        response = self.client.post(
+            reverse("fake_tournament_create"),
+            {"name": "Final Four", "num_players": 4, "playoff_only": "on"},
+        )
+        division = Tournament.objects.get(name="Final Four").divisions.get()
+        self.assertRedirects(
+            response,
+            reverse("division_playoff_setup", kwargs=division.slug_kwargs()),
+        )
+        self.assertEqual(division.entrants.count(), 4)
+        self.assertEqual(division.configured_round_numbers(default=[]), [])
+        self.assertFalse(division.pairings.exists())
+
+    def test_rounds_are_still_required_without_playoffs_only(self):
+        response = self.client.post(
+            reverse("fake_tournament_create"),
+            {"name": "Swiss", "num_players": 4},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("num_rounds", response.context["form"].errors)
+        self.assertFalse(Tournament.objects.filter(name="Swiss").exists())
+
+
 class FakeTournamentDeleteTest(TestCase):
     @classmethod
     def setUpTestData(cls):
