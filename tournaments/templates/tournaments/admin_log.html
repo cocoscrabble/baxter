@@ -43,7 +43,7 @@ first. Changes to a tournament are in that tournament's own activity log.</p>
     <tbody>
         {% for action in page_obj.object_list %}
         <tr>
-            <td class="log-when">{{ action.created_at|date:"j M Y, H:i" }}</td>
+            <td class="log-when">{{ action.created_at|date:"j M Y, H:i T" }}</td>
             <td>{% if action.actor %}{{ action.actor.username }}{% elif action.actor_name %}{{ action.actor_name }}{% else %}<em>scheduled</em>{% endif %}</td>
             <td>{{ action.get_kind_display }}</td>
             <td>{% if action.ok %}<span class="round-status-badge badge-ok">OK</span>{% else %}<span class="round-status-badge badge-error">Failed</span>{% endif %}</td>

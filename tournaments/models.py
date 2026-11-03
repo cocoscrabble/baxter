@@ -47,6 +47,11 @@ def record_slug_alias(alias_model, *, scope, old_slug, new_slug, owner):
     alias_model.objects.update_or_create(**scope, slug=old_slug, defaults=owner)
 
 
+# Central time: where most of Baxter's events are. Observes daylight saving,
+# so it shows CST in winter and CDT in summer.
+DEFAULT_TIME_ZONE = "America/Chicago"
+
+
 class TournamentQuerySet(models.QuerySet):
     def with_whatif_flag(self):
         """Annotate each row with ``is_whatif``.
@@ -91,6 +96,9 @@ class Tournament(models.Model):
     # auto-simulated rounds). Used to offer a delete link and to let admins, not
     # just the owner, clean them up.
     is_fake = models.BooleanField(default=False)
+    # IANA zone the tournament's pages show times in (activated per request by
+    # TournamentTimezoneMiddleware). Storage stays UTC.
+    time_zone = models.CharField(max_length=64, default=DEFAULT_TIME_ZONE)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

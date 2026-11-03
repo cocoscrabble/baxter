@@ -228,6 +228,7 @@ def _tournament_payload(form):
         "name": form.cleaned_data["name"],
         "location": form.cleaned_data["location"],
         "start_date": form.cleaned_data["start_date"].isoformat(),
+        "time_zone": form.cleaned_data["time_zone"],
         "editors": [
             u.username for u in form.cleaned_data.get("editor_usernames", [])
         ],

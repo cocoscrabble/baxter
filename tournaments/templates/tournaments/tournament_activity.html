@@ -61,7 +61,7 @@ Activity
         <tr>
             <td class="num">{{ event.seq }}</td>
             {# Compact: the default format wraps to three lines in this table. #}
-            <td class="log-when">{{ event.created_at|date:"j M Y, H:i" }}</td>
+            <td class="log-when">{{ event.created_at|date:"j M Y, H:i T" }}</td>
             <td>
                 {% if event.actor %}{{ event.actor.username }}
                 {% elif event.actor_session %}<span title="anonymous submitter">guest·{{ event.actor_session|slice:":6" }}</span>

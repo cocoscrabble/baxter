@@ -3,7 +3,7 @@
 {% include "tournaments/_empty_state.html" with message=pairings_message %}
 {% elif pairings %}
 {% if last_updated %}
-<p class="pairings-updated">Last updated {{ last_updated|date:"M j, Y, g:i A" }}</p>
+<p class="pairings-updated">Last updated {{ last_updated|date:"M j, Y, g:i A T" }}</p>
 {% endif %}
 {# Tabbed like the standings page: one tab per published round, switched #}
 {# client-side. `data-show` leaves every round visible until datastar runs, #}

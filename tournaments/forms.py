@@ -6,6 +6,7 @@ from django.forms import formset_factory
 
 from .models import (
     DEFAULT_COP_CONFIG,
+    DEFAULT_TIME_ZONE,
     DivisionSettings,
     Entrant,
     Pairing,
@@ -33,6 +34,19 @@ def clean_multiline_text(text):
     return unique_lines
 
 
+def time_zone_choices():
+    """Every IANA zone a tournament can be in, as (value, label) pairs. The
+    region/city names only: the bare aliases (EST, US/Central, …) and the Etc/
+    offsets duplicate them and make the list harder to scan."""
+    from zoneinfo import available_timezones
+
+    zones = sorted(
+        z for z in available_timezones()
+        if "/" in z and not z.startswith(("Etc/", "SystemV/", "US/"))
+    )
+    return [("UTC", "UTC")] + [(z, z.replace("_", " ")) for z in zones]
+
+
 class TournamentForm(forms.ModelForm):
     """Form for creating and editing tournaments."""
 
@@ -43,9 +57,17 @@ class TournamentForm(forms.ModelForm):
         help_text="Enter usernames, one per line.",
     )
 
+    time_zone = forms.ChoiceField(
+        label="Time zone",
+        choices=time_zone_choices,
+        required=False,
+        initial=DEFAULT_TIME_ZONE,
+        help_text="Times on this tournament's pages are shown in this zone.",
+    )
+
     class Meta:
         model = Tournament
-        fields = ["name", "location", "start_date"]
+        fields = ["name", "location", "start_date", "time_zone"]
         widgets = {
             "start_date": forms.DateInput(attrs={"type": "date"}),
         }
@@ -58,6 +80,9 @@ class TournamentForm(forms.ModelForm):
                 pk=self.instance.owner.pk
             ).values_list("username", flat=True)
             self.fields["editor_usernames"].initial = "\n".join(editor_names)
+
+    def clean_time_zone(self):
+        return self.cleaned_data.get("time_zone") or DEFAULT_TIME_ZONE
 
     def clean_editor_usernames(self):
         """Validate that all usernames exist."""
