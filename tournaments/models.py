@@ -290,6 +290,13 @@ class Division(models.Model):
             for p in self.pairings.all()
         }
 
+    @property
+    def can_simulate(self):
+        """Whether results may be simulated here: a test division, or any
+        division of a generated test tournament (whose divisions are not
+        ``is_test``, so that they stay visible to everyone)."""
+        return self.is_test or self.tournament.is_fake
+
     def configured_round_numbers(self, default=range(1, 16)):
         """Return sorted round numbers configured in DivisionSettings, or a default range."""
         try:

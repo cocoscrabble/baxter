@@ -115,7 +115,7 @@
                 <th></th>
                 <th>Second Player</th>
                 <th class="num">Repeats</th>
-                <th>{% if division.is_test and selected_status == 'published' %}<button type="button" class="btn-sim" data-on:click="@post('{% url 'simulate_round' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {round: {{ selected_round }}}})">simulate all</button>{% endif %}</th>
+                <th>{% if division.can_simulate and selected_status == 'published' %}<button type="button" class="btn-sim" data-on:click="@post('{% url 'simulate_round' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {round: {{ selected_round }}}})">simulate all</button>{% endif %}</th>
             </tr>
         </thead>
         <tbody>

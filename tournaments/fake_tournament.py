@@ -61,6 +61,10 @@ def create_fake_tournament(user, num_players, num_rounds, name=None):
     # so fake tournaments only draw from the real roster.
     eligible = list(Player.objects.filter(is_provisional=False))
     players = random.sample(eligible, num_players)
+    # Number them as a real division would (Entrant.seeding_for): highest
+    # rated first. Random numbers were reseeded by the first publish from the
+    # Pair Rounds page, which then refused it as having stale drafts.
+    players.sort(key=lambda p: (-p.effective_rating[0], p.player_number))
     for i, player in enumerate(players, start=1):
         # One at a time rather than bulk_create, so each entrant pins the rating
         # it was seeded from (bulk_create would bypass Entrant.enter).
