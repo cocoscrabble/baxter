@@ -1,10 +1,11 @@
+import json
 from datetime import date
 
 from django.test import TestCase
 from django.urls import reverse
 
 from tournaments.fake_tournament import create_fake_tournament
-from tournaments.models import Player, RoundPairings, Tournament
+from tournaments.models import Entrant, Player, RoundPairings, Tournament
 from users.models import User
 
 
@@ -111,6 +112,48 @@ class PlayoffOnlyFakeTournamentTest(TestCase):
         self.assertEqual(division.entrants.count(), 4)
         self.assertEqual(division.configured_round_numbers(default=[]), [])
         self.assertFalse(division.pairings.exists())
+
+    def test_its_playoff_games_can_be_simulated(self):
+        from tournaments.playoff import CHAMPIONSHIP, playoff_for
+
+        self.client.post(
+            reverse("fake_tournament_create"),
+            {"name": "Final Four", "num_players": 4, "playoff_only": "on"},
+        )
+        division = Tournament.objects.get(name="Final Four").divisions.get()
+        kwargs = division.slug_kwargs()
+        self.client.post(
+            reverse("division_playoff_setup", kwargs=kwargs),
+            {"action": "confirm", "qualification_round": 0,
+             "qualifier_count": 4, "timing": "postscript"},
+        )
+        self.assertIsNotNone(playoff_for(division))
+        round_num = 1
+        while not playoff_for(division).bracket().get(CHAMPIONSHIP).decided:
+            self.assertLess(round_num, 10)
+            self.client.get(reverse("division_pair_rounds", kwargs=kwargs))
+            self.client.post(reverse("publish_round", kwargs=kwargs),
+                             {"round": round_num})
+            if round_num == 1:
+                page = self.client.get(
+                    reverse("division_pair_rounds", kwargs=kwargs)
+                    + f"?round={round_num}"
+                )
+                self.assertContains(page, "simulate all")
+            response = self.client.post(
+                reverse("simulate_round", kwargs=kwargs),
+                json.dumps({"round": round_num}), content_type="application/json",
+            )
+            self.assertNotEqual(response.status_code, 403)
+            round_num += 1
+
+    def test_entrants_are_numbered_by_rating(self):
+        division = create_fake_tournament(self.user, 4, 0)
+        self.assertEqual(
+            [[e.player.player_number, e.number]
+             for e in division.entrants.order_by("number")],
+            Entrant.seeding_for(division),
+        )
 
     def test_rounds_are_still_required_without_playoffs_only(self):
         response = self.client.post(

@@ -3964,7 +3964,7 @@ class SimulateMatchView(LoginRequiredMixin, CanEditDivisionMixin, View):
 
     def post(self, request, *args, **kwargs):
         division = self.get_division()
-        if not division.is_test:
+        if not division.can_simulate:
             return JsonResponse(
                 {"error": "Simulation is only available for test divisions."},
                 status=403,
@@ -4008,7 +4008,7 @@ class SimulateRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
 
     def post(self, request, *args, **kwargs):
         division = self.get_division()
-        if not division.is_test:
+        if not division.can_simulate:
             return JsonResponse(
                 {"error": "Simulation is only available for test divisions."},
                 status=403,
