@@ -23,18 +23,22 @@ class TournamentTimezoneMiddleware:
             timezone.deactivate()
 
     def process_view(self, request, view_func, view_args, view_kwargs):
-        from tournaments.models import Tournament
+        from tournaments.models import DEFAULT_TIME_ZONE, Tournament
 
         slug = view_kwargs.get("tournament_slug")
+        if not slug:
+            timezone.deactivate()
+            return None
         name = (
             Tournament.objects.filter(slug=slug)
             .values_list("time_zone", flat=True)
             .first()
-            if slug
-            else None
         )
+        # A tournament with no zone (or one zoneinfo does not know) shows
+        # Central, the same default a new tournament gets — not UTC.
         try:
-            timezone.activate(ZoneInfo(name)) if name else timezone.deactivate()
+            zone = ZoneInfo(name or DEFAULT_TIME_ZONE)
         except ZoneInfoNotFoundError, ValueError:
-            timezone.deactivate()
+            zone = ZoneInfo(DEFAULT_TIME_ZONE)
+        timezone.activate(zone)
         return None

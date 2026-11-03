@@ -57,3 +57,14 @@ class TournamentTimeZoneTests(TestCase):
             reverse("tournament_activity", kwargs=t.slug_kwargs())
         )
         self.assertContains(response, "10 Jan 2026, 10:00 EST")
+
+    def test_a_tournament_without_a_usable_zone_shows_central(self):
+        t = self._create()
+        TournamentEvent.objects.filter(tournament=t).update(
+            created_at=datetime(2026, 1, 10, 15, 0, tzinfo=dt_timezone.utc)
+        )
+        url = reverse("tournament_activity", kwargs=t.slug_kwargs())
+        for bad in ("", "Not/AZone"):
+            Tournament.objects.filter(pk=t.pk).update(time_zone=bad)
+            # 15:00 UTC in January is 09:00 CST.
+            self.assertContains(self.client.get(url), "10 Jan 2026, 09:00 CST")
