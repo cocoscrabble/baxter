@@ -152,16 +152,18 @@ class Tournament(models.Model):
         return user.pk == self.owner_id or self.editors.filter(pk=user.pk).exists()
 
     def can_delete(self, user):
-        """Who may delete this tournament. The owner always may; admins may delete
-        fake tournaments (the cleanup path), but not real ones."""
+        """Who may delete this tournament: its owner, or an Admin. Editors and
+        Supervisors may not, though they can edit it — a delete takes the event
+        log with it, so it is kept to the person the tournament belongs to and
+        the people who answer for the whole site. Every delete is recorded in
+        the admin log with a copy of the event log (``TournamentDeleteView``).
+        """
         if not user.is_authenticated:
             return False
         # ``owner_id`` rather than ``owner``: the tournament list asks this once
         # per row, and comparing the objects fetched the owner each time.
         if user.pk == self.owner_id:
             return True
-        if not self.is_fake:
-            return False
         from users.models import User
         return user.has_role_at_least(User.Role.ADMIN)
 
@@ -1554,6 +1556,7 @@ class AdminAction(models.Model):
     PLAYER_MERGE = "player_merge"
     PASSWORD_SET = "password_set"
     DATABASE_EXPORT = "database_export"
+    TOURNAMENT_DELETE = "tournament_delete"
     KINDS = [
         (ROSTER_PULL, "PlayerDB pull"),
         (ROSTER_RESOLUTION, "Guest number confirmed"),
@@ -1564,6 +1567,7 @@ class AdminAction(models.Model):
         (PLAYER_MERGE, "Guest merged"),
         (PASSWORD_SET, "Password set"),
         (DATABASE_EXPORT, "Database export"),
+        (TOURNAMENT_DELETE, "Tournament deleted"),
     ]
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -1578,6 +1582,13 @@ class AdminAction(models.Model):
     ok = models.BooleanField()
     summary = models.TextField(blank=True)
     error = models.TextField(blank=True)
+    # A file kept with the action, downloadable from the admin log. Today only
+    # a tournament delete sets it: the deleted tournament's event log as JSONL
+    # (``events.export_jsonl``), which is the one place it survives — the
+    # delete cascades the log away — and which ``replay_tournament`` can
+    # rebuild the tournament from, guests included (the header lists them).
+    attachment = models.TextField(blank=True)
+    attachment_name = models.CharField(max_length=255, blank=True)
 
     class Meta:
         ordering = ["-created_at", "-pk"]

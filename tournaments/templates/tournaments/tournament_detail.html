@@ -14,7 +14,7 @@
     <div class="page-head-actions">
         <a href="{% url 'tournament_edit' tournament.slug %}">Edit</a>
         <a href="{% url 'tournament_activity' tournament.slug %}">Activity</a>
-        {% if user == tournament.owner %}
+        {% if can_delete %}
         <a href="{% url 'tournament_delete' tournament.slug %}">Delete</a>
         {% endif %}
     </div>

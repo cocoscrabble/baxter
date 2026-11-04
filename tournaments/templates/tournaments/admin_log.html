@@ -10,8 +10,9 @@
 {% block content %}
 <h1>Admin log</h1>
 
-<p>Every action taken from the admin pages, and every scheduled pull, newest
-first. Changes to a tournament are in that tournament's own activity log.</p>
+<p>Every action taken from the admin pages, every scheduled pull, and every
+tournament deleted (with a copy of its activity log), newest first. Changes to a
+tournament are in that tournament's own activity log.</p>
 
 {# GET, so a filtered log is a link an admin can send to somebody. #}
 <form method="get" class="log-filters">
@@ -50,6 +51,7 @@ first. Changes to a tournament are in that tournament's own activity log.</p>
             <td>
                 {{ action.summary }}
                 {% if action.error %}<div class="error">{{ action.error }}</div>{% endif %}
+                {% if action.attachment %}<div><a href="{% url 'admin_action_attachment' action.pk %}">Download {{ action.attachment_name|default:"file" }}</a></div>{% endif %}
             </td>
         </tr>
         {% endfor %}

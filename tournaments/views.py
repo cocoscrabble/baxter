@@ -542,6 +542,7 @@ class TournamentDetailView(TournamentURLMixin, DetailView):
         user = self.request.user
         can_edit = self.object.can_edit(user)
         context["can_edit"] = can_edit
+        context["can_delete"] = self.object.can_delete(user)
         if can_edit:
             context.update(self.object.division_buckets())
         else:
@@ -684,8 +685,44 @@ class TournamentDeleteView(TournamentURLMixin, LoginRequiredMixin, CanDeleteTour
     context_object_name = "tournament"
     success_url = reverse_lazy("tournament_list")
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        tournament = self.object
+        # What the director is about to lose, so the confirmation says it.
+        context["division_count"] = Division.all_objects.filter(
+            tournament=tournament
+        ).count()
+        context["entrant_count"] = Entrant.objects.filter(
+            division__tournament=tournament
+        ).count()
+        context["result_count"] = ResultSlip.objects.filter(
+            division__tournament=tournament
+        ).count()
+        guests = Player.objects.filter(
+            is_provisional=True, is_bye=False,
+            entries__division__tournament=tournament,
+        ).distinct()
+        context["orphan_guests"] = sorted(
+            g.name for g in guests
+            if not g.entries.exclude(division__tournament=tournament).exists()
+        )
+        return context
+
     def post(self, request, *args, **kwargs):
-        delete_tournament(self.get_object(), request.user, {})
+        from tournaments.events import export_jsonl
+
+        tournament = self.get_object()
+        # Logged here rather than in the command: the command's own log is
+        # about to be deleted with it, so the admin log is the only record
+        # left, and it keeps the event log for a replay.
+        with logged(AdminAction.TOURNAMENT_DELETE, request.user) as entry:
+            entry.attachment = export_jsonl(tournament)
+            entry.attachment_name = f"{tournament.slug}-eventlog.jsonl"
+            entry.summary = f"Deleted {tournament.name} ({tournament.start_date})"
+            removed = delete_tournament(tournament, request.user, {})
+            if removed:
+                entry.summary += f", and guest(s) {', '.join(removed)}"
+        messages.success(request, f"Deleted {tournament.name}.")
         return redirect(self.success_url)
 
 
@@ -2973,6 +3010,23 @@ class DatabaseExportView(LoginRequiredMixin, IsAdminMixin, View):
         response["Content-Disposition"] = (
             f'attachment; filename="baxter-db-{stamp}-{rev}.json.gz"'
         )
+        return response
+
+
+class AdminActionAttachmentView(LoginRequiredMixin, IsAdminMixin, View):
+    """Download the file kept with an admin-log row — a deleted tournament's
+    event log. Admin-only like the log itself: it is a whole tournament's
+    history, including who did what."""
+
+    def get(self, request, pk):
+        action = get_object_or_404(AdminAction, pk=pk)
+        if not action.attachment:
+            raise Http404("Nothing kept with this action.")
+        response = HttpResponse(
+            action.attachment, content_type="application/x-ndjson"
+        )
+        name = action.attachment_name or f"admin-action-{action.pk}.jsonl"
+        response["Content-Disposition"] = f'attachment; filename="{name}"'
         return response
 
 
