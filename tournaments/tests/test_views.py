@@ -380,6 +380,88 @@ class TournamentDeleteViewTests(TestCase):
         self.assertRedirects(response, reverse("tournament_list"))
         self.assertFalse(Tournament.objects.filter(pk=self.tournament.pk).exists())
 
+    def _url(self):
+        return reverse(
+            "tournament_delete", kwargs={"tournament_slug": self.tournament.slug}
+        )
+
+    def test_admin_can_delete_a_real_tournament(self):
+        User.objects.create_user(
+            username="admin", password="testpass123", role=User.Role.ADMIN
+        )
+        self.client.login(username="admin", password="testpass123")
+        self.assertRedirects(self.client.post(self._url()), reverse("tournament_list"))
+        self.assertFalse(Tournament.objects.filter(pk=self.tournament.pk).exists())
+
+    def test_supervisor_can_edit_but_not_delete(self):
+        supervisor = User.objects.create_user(
+            username="sup", password="testpass123", role=User.Role.SUPERVISOR
+        )
+        self.assertTrue(self.tournament.can_edit(supervisor))
+        self.assertFalse(self.tournament.can_delete(supervisor))
+        self.client.login(username="sup", password="testpass123")
+        page = self.client.get(self.tournament.get_absolute_url()).content.decode()
+        self.assertNotIn(self._url(), page)
+
+    def _guests(self):
+        """A guest only here, a guest who also played elsewhere, and a
+        numbered player only here."""
+        orphan = Player.objects.create(
+            name="Orphan", player_number="T-1", rating=0, is_provisional=True
+        )
+        traveller = Player.objects.create(
+            name="Traveller", player_number="T-2", rating=0, is_provisional=True
+        )
+        numbered = Player.objects.create(name="Numbered", player_number="0999", rating=1200)
+        for n, p in enumerate([orphan, traveller, numbered], start=3):
+            Entrant.objects.create(division=self.division, player=p, number=n)
+        elsewhere = Tournament.objects.create(
+            name="Elsewhere", location="Y", start_date=date(2026, 4, 1), owner=self.owner
+        )
+        Entrant.objects.create(
+            division=Division.objects.create(name="Open", tournament=elsewhere),
+            player=traveller, number=1,
+        )
+        return orphan, traveller, numbered
+
+    def test_delete_removes_guests_who_played_nowhere_else(self):
+        orphan, traveller, numbered = self._guests()
+        self.client.login(username="owner", password="testpass123")
+        self.assertEqual(self.client.get(self._url()).context["orphan_guests"], ["Orphan"])
+        self.client.post(self._url())
+        self.assertFalse(Player.objects.filter(pk=orphan.pk).exists())
+        self.assertTrue(Player.objects.filter(pk=traveller.pk).exists())
+        self.assertTrue(Player.objects.filter(pk=numbered.pk).exists())
+        self.assertTrue(Player.objects.filter(pk=self.player1.pk).exists())
+
+    def test_delete_is_recorded_with_the_event_log(self):
+        from tournaments.models import AdminAction
+
+        self._guests()
+        self.client.login(username="owner", password="testpass123")
+        self.client.post(self._url())
+        action = AdminAction.objects.get(kind=AdminAction.TOURNAMENT_DELETE)
+        self.assertTrue(action.ok)
+        self.assertEqual(action.actor, self.owner)
+        self.assertIn("Test Tournament", action.summary)
+        self.assertIn("Orphan", action.summary)
+        self.assertEqual(action.attachment_name, "test-tournament-eventlog.jsonl")
+        header = json.loads(action.attachment.splitlines()[0])
+        self.assertEqual(header["tournament"], "Test Tournament")
+        # The header lists the guest, so a replay can recreate it.
+        self.assertIn("T-1", [p["player_number"] for p in header["players"]])
+
+        url = reverse("admin_action_attachment", args=[action.pk])
+        self.assertEqual(self.client.get(url).status_code, 403)
+        User.objects.create_user(
+            username="admin", password="testpass123", role=User.Role.ADMIN
+        )
+        self.client.login(username="admin", password="testpass123")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content.decode(), action.attachment)
+        self.assertIn(url, self.client.get(reverse("admin_log")).content.decode())
+
 
 class BulkImportEntrantsViewTests(TestCase):
     @classmethod

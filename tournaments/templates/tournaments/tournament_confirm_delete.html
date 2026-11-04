@@ -10,11 +10,22 @@
 {% block content %}
 <h1>Delete Tournament</h1>
 
-<p>Are you sure you want to delete "{{ tournament.name }}"?</p>
+<p>Delete “{{ tournament.name }}” and everything in it? This cannot be undone from here.</p>
+
+<ul>
+    <li>{{ division_count }} division{{ division_count|pluralize }}, {{ entrant_count }} entrant{{ entrant_count|pluralize }} and {{ result_count }} result{{ result_count|pluralize }}, with all pairings and playoffs</li>
+    <li>The tournament's activity log</li>
+    {% if orphan_guests %}
+    <li>Guest player{{ orphan_guests|pluralize }} who played nowhere else: {{ orphan_guests|join:", " }}</li>
+    {% endif %}
+</ul>
+
+<p>The deletion is recorded in the admin log, with a copy of the activity log
+an admin can use to rebuild the tournament.</p>
 
 <form method="post">
     {% csrf_token %}
-    <button type="submit">Delete</button>
+    <button type="submit" class="btn-danger">Delete tournament</button>
     <a href="{% url 'tournament_detail' tournament.slug %}">Cancel</a>
 </form>
 {% endblock %}

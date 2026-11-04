@@ -183,14 +183,13 @@ class FakeTournamentDeleteTest(TestCase):
         )
 
     def test_can_delete_permissions(self):
-        # Owner can delete either; admin can delete only the fake one; an
-        # unrelated user can delete neither.
+        # Owner and admin can delete either; an unrelated user neither.
         self.assertTrue(self.fake.can_delete(self.owner))
         self.assertTrue(self.fake.can_delete(self.admin))
         self.assertFalse(self.fake.can_delete(self.other))
 
         self.assertTrue(self.real.can_delete(self.owner))
-        self.assertFalse(self.real.can_delete(self.admin))
+        self.assertTrue(self.real.can_delete(self.admin))
         self.assertFalse(self.real.can_delete(self.other))
 
     def test_admin_can_delete_fake_tournament_via_view(self):
@@ -200,14 +199,6 @@ class FakeTournamentDeleteTest(TestCase):
         )
         self.assertRedirects(response, reverse("tournament_list"))
         self.assertFalse(Tournament.objects.filter(pk=self.fake.pk).exists())
-
-    def test_admin_cannot_delete_real_tournament_via_view(self):
-        self.client.login(username="admin_ft", password="p")
-        response = self.client.post(
-            reverse("tournament_delete", kwargs={"tournament_slug": self.real.slug})
-        )
-        self.assertEqual(response.status_code, 403)
-        self.assertTrue(Tournament.objects.filter(pk=self.real.pk).exists())
 
     def test_delete_link_shown_only_for_fake_tournaments(self):
         self.client.login(username="admin_ft", password="p")

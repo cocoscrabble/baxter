@@ -38,13 +38,18 @@ class Entry:
     summary: str = ""
     error: str = ""
     ok: bool = True
+    # A file to keep with the row (``AdminAction.attachment``). Set it before
+    # the action runs, so a failed action keeps it too.
+    attachment: str = ""
+    attachment_name: str = ""
 
     def fail(self, error):
         self.ok = False
         self.error = str(error)
 
 
-def record(kind, actor=None, *, ok, summary="", error=""):
+def record(kind, actor=None, *, ok, summary="", error="", attachment="",
+           attachment_name=""):
     """Write one row. ``actor`` None means nobody — a scheduled run."""
     return AdminAction.objects.create(
         kind=kind,
@@ -53,6 +58,8 @@ def record(kind, actor=None, *, ok, summary="", error=""):
         ok=ok,
         summary=summary,
         error=error,
+        attachment=attachment,
+        attachment_name=attachment_name,
     )
 
 
@@ -65,6 +72,10 @@ def logged(kind, actor=None):
         record(
             kind, actor, ok=False, summary=entry.summary,
             error=f"Unexpected error: {type(exc).__name__}: {exc}",
+            attachment=entry.attachment, attachment_name=entry.attachment_name,
         )
         raise
-    record(kind, actor, ok=entry.ok, summary=entry.summary, error=entry.error)
+    record(
+        kind, actor, ok=entry.ok, summary=entry.summary, error=entry.error,
+        attachment=entry.attachment, attachment_name=entry.attachment_name,
+    )

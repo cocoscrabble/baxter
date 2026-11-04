@@ -106,12 +106,38 @@ def update_tournament(tournament, actor, payload):
 
 
 def delete_tournament(tournament, actor, payload):
-    """Hard delete. Can't record an event — a tournament_deleted row would
-    cascade away with the tournament — so this runs in a command context (for
-    the write guard) without logging."""
-    with command_context():
+    """Hard delete: the tournament and everything under it (divisions, entrants,
+    results, pairings, playoffs, its event log) by cascade, plus the guests it
+    leaves orphaned. Returns the names of the guests removed.
+
+    Can't record an event — a tournament_deleted row would cascade away with
+    the tournament — so this runs in a command context (for the write guard)
+    without logging; the view records it in the admin log instead, with a copy
+    of the event log.
+
+    A guest is a provisional player (a ``T-`` number the central database has
+    never seen), minted at this tournament's registration desk. Once its last
+    entrant anywhere is gone it is a row nobody can reach and the next roster
+    pull would offer for confirmation, so it goes too. Numbered players are the
+    central database's and are never deleted here.
+    """
+    from django.db import transaction
+
+    from tournaments.models import Entrant, Player
+
+    guest_ids = set(
+        Entrant.all_objects.filter(
+            division__tournament=tournament,
+            player__is_provisional=True,
+            player__is_bye=False,
+        ).values_list("player_id", flat=True)
+    )
+    with transaction.atomic(), command_context():
         tournament.delete()
-    return None
+        orphans = Player.objects.filter(pk__in=guest_ids, entries__isnull=True)
+        removed = sorted(orphans.values_list("name", flat=True))
+        orphans.delete()
+    return removed
 
 
 # ---------------------------------------------------------------------------
