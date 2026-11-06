@@ -2,12 +2,13 @@
 <div id="pairings-area">
 {% if round_tabs %}
 {% with last_tab=round_tabs|last %}{% day_picker division last_tab.round selected_round %}{% endwith %}
+{# No roundDay signal means no day picker (a one-day schedule): show every tab. #}
 <div class="round-tabs">
     {% for tab in round_tabs %}
     {% with day=tab.round|round_day:division %}
     <a href="#"
        class="round-tab round-tab-{{ tab.status }}{% if tab.round == selected_round %} active{% endif %}"
-       data-day="{{ day }}" data-show="$roundDay == '0' || $roundDay == '{{ day }}'"
+       data-day="{{ day }}" data-show="!$roundDay || $roundDay == '0' || $roundDay == '{{ day }}'"
        data-on:click__prevent="@get('{% url 'round_pairings_tab' division.tournament.slug division.slug tab.round %}')">{{ tab.round }}</a>
     {% endwith %}
     {% endfor %}
