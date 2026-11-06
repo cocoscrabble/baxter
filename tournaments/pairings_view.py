@@ -525,9 +525,6 @@ class PublishedPairingsPresenter:
             context["pairings_message"] = "No pairings published yet."
             return context
         context["pairings"] = annotated
-        # The round shown by default: the latest published round (tabs let the
-        # viewer switch to any earlier one).
-        context["current_round"] = annotated[-1][0]
         return context
 
 
