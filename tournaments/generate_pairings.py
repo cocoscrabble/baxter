@@ -429,6 +429,16 @@ def unpublish_rounds(division, round_numbers=None):
             division.pairings.filter(round__in=to_unpublish, forfeit=True)
             .values_list("round", flat=True).distinct()
         )
+        # A board paired under a schedule entry that has since changed (the
+        # director switched the round's strategy while it was published) is
+        # stale: drop it too, so the round is drawn again under the new one.
+        schedule = getattr(division, "settings", None)
+        schedule = schedule.round_pairings if schedule else []
+        reset_rounds += [
+            rp.round
+            for rp in division.round_pairings_set.filter(round__in=to_unpublish)
+            if not rp.paired_under(schedule)
+        ]
         division.pairings.filter(round__in=reset_rounds).delete()
     return to_unpublish
 
@@ -635,6 +645,7 @@ def regenerate_pairings(division):
             return bye_entrant
         return entrant_by_key.get(key)
     start_round_by_round = {rp.round: rp.start_round for rp in pd.round_pairings}
+    schedule_by_round = {rp.round: rp for rp in pd.round_pairings}
     fixed_table_lookup = {
         (ft.entrant_id, ft.round_number): ft.table_label
         for ft in division.fixed_tables.all()
@@ -707,6 +718,12 @@ def regenerate_pairings(division):
                     entrant_by_key, series_rows, starts, repeats,
                 )
             continue
+
+        entry = schedule_by_round.get(round_num)
+        if entry is not None:
+            rp_obj.paired_with = str(entry.pairing)
+            rp_obj.paired_from = entry.start_round
+            rp_obj.save(update_fields=["paired_with", "paired_from"])
 
         start_round = start_round_by_round.get(round_num, 0)
         standings = standings_after_round(pd, start_round)

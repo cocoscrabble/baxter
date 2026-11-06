@@ -1493,6 +1493,16 @@ class UnpublishRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
                         )
                     except PairingError as exc:
                         error = str(exc)
+                elif unpublished and not division.pairings.filter(round=round_number).exists():
+                    # Unpublishing dropped the board: the round's schedule entry
+                    # changed while it was published. Draw it now, so the
+                    # director sees the new board rather than an empty round.
+                    error = _autogenerate_pairable_rounds(division)
+                    if not error:
+                        notice = (
+                            f"Round {round_number}'s pairing was changed while it was "
+                            "published, so it has been paired again. Check it and publish again."
+                        )
         except ValueError as exc:
             error = str(exc)
         return _pairings_body_response(

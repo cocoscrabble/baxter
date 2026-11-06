@@ -1096,10 +1096,28 @@ class RoundPairings(models.Model):
     )
     round = models.IntegerField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=DRAFT)
+    # The schedule entry the board was paired under: strategy and the round its
+    # standings came from. Blank for a board paired before this was kept, or one
+    # no schedule entry produced (a playoff-only round). Unpublishing compares it
+    # with the schedule, so a board whose strategy has since changed is drawn
+    # again rather than coming back as a draft (`unpublish_rounds`).
+    paired_with = models.CharField(max_length=40, blank=True, default="")
+    paired_from = models.IntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
 
     objects = RoundPairingsQuerySet.as_manager()
+
+    def paired_under(self, schedule):
+        """Whether this board came from ``schedule``'s entry for its round
+        (``RoundPairing`` dicts, as stored on the settings). A board with no
+        record is given the benefit of the doubt."""
+        if not self.paired_with:
+            return True
+        entry = next((r for r in schedule if r["round"] == self.round), None)
+        return entry is not None and (entry["pairing"], entry["start_round"]) == (
+            self.paired_with, self.paired_from,
+        )
 
     class Meta:
         unique_together = ["division", "round"]
