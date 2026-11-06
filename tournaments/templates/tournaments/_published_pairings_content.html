@@ -1,21 +1,32 @@
+{% load round_days %}
 {% if pairings_message %}
 {% include "tournaments/_empty_state.html" with message=pairings_message %}
 {% elif pairings %}
 {% if last_updated %}
 <p class="pairings-updated">Last updated {{ last_updated|date:"M j, Y, g:i A T" }}</p>
 {% endif %}
-{# Every open published round stays visible so a later publish cannot hide #}
-{# the Submit result buttons for games still being played in earlier rounds. #}
-<div id="pairings-content">
+{# One tab per round, switched client-side, opening on the earliest round #}
+{# still being played so a later publish cannot hide its Submit result links. #}
+{# `data-show` leaves every round visible until datastar runs, so with no JS #}
+{# the full set of rounds still shows. #}
+<div id="pairings-content" data-signals="{pairRound: {{ current_round }}}">
 {% if pairings|length > 1 %}
-<nav class="round-nav" aria-label="Published rounds">
-    {% for round_num, round_pairings in pairings %}
-    <a href="#round-{{ round_num }}">Round {{ round_num }}</a>
+{% with last=pairings|last %}{% day_picker division last.0 current_round %}{% endwith %}
+{# No roundDay signal means no day picker (a one-day schedule): show every tab. #}
+<div class="round-tabs">
+    {% for tab in round_tabs %}
+    {% with day=tab.round|round_day:division %}
+    <a href="#round-{{ tab.round }}"
+       class="round-tab round-tab-{{ tab.status }}{% if tab.round == current_round %} active{% endif %}"
+       data-day="{{ day }}" data-show="!$roundDay || $roundDay == '0' || $roundDay == '{{ day }}'"
+       data-class="{active: $pairRound == {{ tab.round }}}"
+       data-on:click__prevent="$pairRound = {{ tab.round }}">{{ tab.round }}</a>
+    {% endwith %}
     {% endfor %}
-</nav>
+</div>
 {% endif %}
 {% for round_num, round_pairings in pairings %}
-<section class="round-section" id="round-{{ round_num }}">
+<section class="round-section" id="round-{{ round_num }}" data-show="$pairRound == {{ round_num }}">
 <h2>Round {{ round_num }}</h2>
 {% include "tournaments/_published_pairings_table.html" with rows=round_pairings %}
 </section>

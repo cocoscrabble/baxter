@@ -500,31 +500,49 @@ class PairingsPresenter:
 
 
 class PublishedPairingsPresenter:
-    """View-state for the public published-pairings page (no tabs, no controls)."""
+    """View-state for the public pairings pages: one tab per round, no controls.
 
-    def __init__(self, division):
+    ``include_finished`` adds the rounds already played: the in-nav Pairings
+    tab does for a logged-in user. Logged-out visitors, and the standalone
+    page (also the printed sheet), see only the rounds still in play.
+    """
+
+    def __init__(self, division, include_finished=False):
         self.division = division
+        self.include_finished = include_finished
 
     def as_context(self) -> dict:
         context = {"division": self.division}
-        published = list(
+        open_statuses = [RoundPairings.PUBLISHED, RoundPairings.IN_PROGRESS]
+        statuses = open_statuses + ([RoundPairings.FINISHED] if self.include_finished else [])
+        shown = list(
             self.division.round_pairings_set
-            .filter(status__in=[RoundPairings.PUBLISHED, RoundPairings.IN_PROGRESS])
-            .values_list("round", "updated_at")
+            .filter(status__in=statuses)
+            .values_list("round", "status", "updated_at")
         )
-        if not published:
+        if not shown:
             context["pairings_message"] = "No pairings published yet."
             return context
-        published_rounds = {round_num for round_num, _ in published}
+        status_of = {round_num: status for round_num, status, _ in shown}
         context["last_updated"] = max(
-            (updated for _, updated in published if updated is not None),
+            (updated for _, _, updated in shown if updated is not None),
             default=None,
         )
-        annotated = annotate_published_rounds(self.division, published_rounds)
+        annotated = annotate_published_rounds(self.division, set(status_of))
         if not annotated:
             context["pairings_message"] = "No pairings published yet."
             return context
         context["pairings"] = annotated
+        context["round_tabs"] = [
+            {"round": round_num, "status": status_of[round_num]} for round_num, _ in annotated
+        ]
+        # Open on the earliest round still being played, not the latest: a
+        # later publish must not hide the Submit result links for games still
+        # going on in an earlier round. With every round played, the last one.
+        rounds = [round_num for round_num, _ in annotated]
+        context["current_round"] = next(
+            (r for r in rounds if status_of[r] in open_statuses), rounds[-1]
+        )
         return context
 
 
@@ -569,7 +587,7 @@ def annotate_published_rounds(division, rounds):
 def latest_published_rounds(division, count):
     """The latest ``count`` rounds that have left draft, newest first.
 
-    Unlike the published-pairings page this includes finished rounds: between
+    Unlike the standalone published-pairings page this includes finished rounds: between
     the last result of one round and the publish of the next, a live display
     should keep showing the round just played rather than go blank.
     """
