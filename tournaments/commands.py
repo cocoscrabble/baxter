@@ -490,6 +490,8 @@ def save_cop_config(tournament, actor, payload):
     settings_obj, _ = DivisionSettings.objects.get_or_create(division=division)
     settings_obj.cop_config = payload["cop_config"]
     settings_obj.save(update_fields=["cop_config"])
+    # A COP draft was paired under the old prizes and tuning.
+    _invalidate_drafts(division)
     return EventResult(payload=payload, division=division, result=settings_obj)
 
 
