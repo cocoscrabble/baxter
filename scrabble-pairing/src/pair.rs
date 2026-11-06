@@ -52,13 +52,24 @@ fn run_strategy(rp: &RoundPairing, ctx: &mut Ctx) -> Result<Pairings, String> {
 }
 
 /// Count how many byes each player has already received, from result history.
-fn byes_so_far(slips: &[ResultSlipData]) -> HashMap<String, i32> {
+/// Byes each player has had: from the slips, and from the rounds this run has
+/// already paired. A drafted round's bye has no slip yet (byes are recorded at
+/// publish), so without the drafts two rounds paired in one run could hand the
+/// same player both byes.
+fn byes_so_far(
+    slips: &[ResultSlipData],
+    drafted: &HashMap<i32, Vec<(String, String)>>,
+) -> HashMap<String, i32> {
     let mut byes: HashMap<String, i32> = HashMap::new();
-    for s in slips {
-        if s.winner_name.eq_ignore_ascii_case(BYE_NAME) {
-            *byes.entry(s.loser_name.clone()).or_insert(0) += 1;
-        } else if s.loser_name.eq_ignore_ascii_case(BYE_NAME) {
-            *byes.entry(s.winner_name.clone()).or_insert(0) += 1;
+    let games = slips
+        .iter()
+        .map(|s| (&s.winner_name, &s.loser_name))
+        .chain(drafted.values().flatten().map(|(a, b)| (a, b)));
+    for (a, b) in games {
+        if a.eq_ignore_ascii_case(BYE_NAME) {
+            *byes.entry(b.clone()).or_insert(0) += 1;
+        } else if b.eq_ignore_ascii_case(BYE_NAME) {
+            *byes.entry(a.clone()).or_insert(0) += 1;
         }
     }
     byes
@@ -72,6 +83,7 @@ fn bye_pairing(
     rp: &RoundPairing,
     fixed_pairs: &[(String, String)],
     inactive: &HashSet<String>,
+    drafted: &HashMap<i32, Vec<(String, String)>>,
 ) -> Option<(String, String)> {
     // A whole-block strategy builds its own bye (a phantom in the rotation).
     if rp.pairing.pairs_whole_block() {
@@ -91,7 +103,7 @@ fn bye_pairing(
     if eligible.len().is_multiple_of(2) {
         return None;
     }
-    let byes = byes_so_far(slips);
+    let byes = byes_so_far(slips, drafted);
     let fewest = eligible
         .iter()
         .map(|p| *byes.get(&p.name).unwrap_or(&0))
@@ -323,7 +335,7 @@ fn pair_round(
     let mut fixed_pairs: Vec<(String, String)> =
         fixed_map.get(&rp.round).cloned().unwrap_or_default();
 
-    if let Some(bye) = bye_pairing(players, slips, rp, &fixed_pairs, &inactive) {
+    if let Some(bye) = bye_pairing(players, slips, rp, &fixed_pairs, &inactive, drafted) {
         fixed_pairs.push(bye);
     }
 
@@ -630,6 +642,37 @@ mod tests {
 
     fn input(json: &str) -> PairingInput {
         serde_json::from_str(json).unwrap()
+    }
+
+    #[test]
+    fn a_bye_drafted_in_the_same_run_counts_toward_the_next() {
+        // Round 2 is paired off the seedings while round 1 is still a draft,
+        // so round 1's bye has no slip yet. It must still count, or the same
+        // lowest seed gets the bye in both rounds.
+        let players: Vec<String> = (1..=7)
+            .map(|i| format!(r#"{{"name": "P{i}", "rating": {}}}"#, 2000 - 10 * i))
+            .collect();
+        let inp = input(&format!(
+            r#"{{
+                "players": [{}],
+                "round_pairings": [
+                    {{"round": 1, "start_round": 0, "pairing": "KotH"}},
+                    {{"round": 2, "start_round": 0, "pairing": "Swiss"}}
+                ]
+            }}"#,
+            players.join(",")
+        ));
+        let out = pair(&inp);
+        let bye_of = |round: i32| -> String {
+            let r = out.iter().find(|r| r.round == round).expect("round paired");
+            let p = r
+                .pairings
+                .iter()
+                .find(|p| p.first == BYE_NAME || p.second == BYE_NAME)
+                .expect("a bye");
+            if p.first == BYE_NAME { p.second.clone() } else { p.first.clone() }
+        };
+        assert_ne!(bye_of(1), bye_of(2), "the same player had both byes");
     }
 
     #[test]
