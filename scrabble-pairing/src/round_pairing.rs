@@ -9,8 +9,11 @@ pub enum RP {
     KotH,
     QotH,
     Swiss,
-    /// Each score group's top half against its bottom half (`swiss.rs`).
+    /// Each score group's top half against its bottom half (`swiss.rs`),
+    /// repeats weighed as `SplitRepeats` says.
     SplitSwiss,
+    SplitSwissNoRepeats,
+    SplitSwissMinRepeats,
     SwissNoRepeats,
     SwissMinRepeats,
     RoundRobin,

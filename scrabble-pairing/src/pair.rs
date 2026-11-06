@@ -33,7 +33,13 @@ fn run_strategy(rp: &RoundPairing, ctx: &mut Ctx) -> Result<Pairings, String> {
         RP::KotH => basic::pair_koth(ctx, rp),
         RP::QotH => basic::pair_qoth(ctx, rp),
         RP::Swiss => swiss::pair_swiss(ctx, rp),
-        RP::SplitSwiss => swiss::pair_split_swiss(ctx, rp)?,
+        RP::SplitSwiss => swiss::pair_split_swiss(ctx, rp, swiss::SplitRepeats::Allowed)?,
+        RP::SplitSwissNoRepeats => {
+            swiss::pair_split_swiss(ctx, rp, swiss::SplitRepeats::Forbidden)?
+        }
+        RP::SplitSwissMinRepeats => {
+            swiss::pair_split_swiss(ctx, rp, swiss::SplitRepeats::Minimal)?
+        }
         RP::SwissNoRepeats => swiss::pair_swiss_no_repeats(ctx, rp)?,
         RP::SwissMinRepeats => swiss::pair_swiss_min_repeats(ctx, rp)?,
         RP::RoundRobin => roundrobin::pair_round_robin(ctx, rp)?,
