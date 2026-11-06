@@ -1638,17 +1638,17 @@ class DivisionPairingsRoundContentTests(TestCase):
         rounds_shown = [r for r, _ in response.context["pairings"]]
         self.assertEqual(rounds_shown, [1])
 
-    def test_pairings_rendered_as_round_tabs_defaulting_to_latest(self):
-        # Published rounds are shown as tabs (like standings), defaulting to the
-        # latest round via the pairRound signal.
+    def test_pairings_render_all_open_rounds_with_jump_links(self):
+        # Later rounds must not hide the submit links on earlier open rounds.
         self._create_round(1, RoundPairings.PUBLISHED, [(self.entrant1, self.entrant2)])
         self._create_round(2, RoundPairings.PUBLISHED, [(self.entrant1, self.entrant3)])
         response = self.client.get(
             reverse("division_pairings", kwargs=self.division.slug_kwargs())
         )
-        self.assertEqual(response.context["current_round"], 2)
-        self.assertContains(response, 'class="round-tabs"')
-        self.assertContains(response, "pairRound: 2")
+        self.assertContains(response, 'aria-label="Published rounds"')
+        self.assertContains(response, 'href="#round-1"')
+        self.assertContains(response, 'href="#round-2"')
+        self.assertNotContains(response, "pairRound")
         self.assertContains(response, 'class="published-pairings-table"')
         self.assertContains(response, 'class="pairing-table-number"')
         self.assertContains(response, 'class="pairing-player pairing-first"')
