@@ -16,8 +16,8 @@
 //! - **Removed players** are the withdrawn and those sitting this round out
 //!   (`inactive_players`); upstream drops removed players from its standings
 //!   while their past games still count for their opponents.
-//! - **History**: every round before the one being paired, from the slips and
-//!   the published boards. Results only up to `start_round` — upstream counts
+//! - **History**: every round before the one being paired, from the slips, the
+//!   published boards, and the drafts paired earlier in the same run. Results only up to `start_round` — upstream counts
 //!   rounds remaining from the results. A bye scores its spread, a forfeit
 //!   minus its spread; a round an active player has no result for (a late
 //!   entrant, say) is a loss by one — upstream has no "did not play", and
@@ -116,7 +116,7 @@ pub fn build_request(ctx: &Ctx, rp: &RoundPairing, cfg: &CopConfig) -> Result<(R
     let total_rounds = ctx.round_pairings.iter().map(|r| r.round).max().unwrap_or(0);
     let (round, start) = (rp.round, rp.start_round);
 
-    // Games per round, from results and published boards: (a, b), `None` = bye.
+    // Games per round, from results and boards: (a, b), `None` = bye.
     let mut games: HashMap<i32, Vec<(usize, Option<usize>)>> = HashMap::new();
     let mut add = |k: i32, a: &str, b: &str| -> Result<(), String> {
         let lookup = |s: &str| {
@@ -134,7 +134,10 @@ pub fn build_request(ctx: &Ctx, rp: &RoundPairing, cfg: &CopConfig) -> Result<(R
     for s in ctx.slips {
         add(s.round, &s.winner_name, &s.loser_name)?;
     }
-    for (&k, pairs) in ctx.published_pairings {
+    // A board without results counts as played: a published one, or a draft
+    // this run paired before this round (pairing off older standings while the
+    // round in between is still a draft, both are paired in one run).
+    for (&k, pairs) in ctx.published_pairings.iter().chain(ctx.drafted) {
         if !ctx.slips.iter().any(|s| s.round == k) {
             for (a, b) in pairs {
                 add(k, a, b)?;
@@ -271,6 +274,9 @@ pub fn request_json(input: &crate::model::PairingInput, round: i32) -> Result<St
         .unwrap_or_default();
     let mut rng = crate::rng::seeded(input.seed);
     let repeats = crate::standings::Repeats::default();
+    // Published history only: run a round whose predecessor is still a draft
+    // through the engine first, or the oracle will not see that draft.
+    let drafted = HashMap::new();
     let ctx = Ctx {
         players: &input.players,
         slips: &input.result_slips,
@@ -278,6 +284,7 @@ pub fn request_json(input: &crate::model::PairingInput, round: i32) -> Result<St
         excluded: &inactive,
         fixed_pairings: &input.fixed_pairings,
         published_pairings: &input.published_pairings,
+        drafted: &drafted,
         repeats: &repeats,
         rng: &mut rng,
         seed: input.seed,
@@ -521,6 +528,33 @@ mod tests {
         assert_eq!(activation_round(&inp, 2), 0);
         // A schedule shorter than the default window starts it at once.
         assert_eq!(activation_round(&input(6, 3, &R1, ""), 2), 0);
+    }
+
+    #[test]
+    fn a_round_drafted_in_the_same_run_counts_as_history() {
+        // COP paired off older standings while the round before it is still a
+        // draft — the two are paired in one run, so that round has no slips and
+        // no published board. Its games must still count, or COP repeats them
+        // (North American Collins 2026, round 4 after draft quads in round 3).
+        let players: Vec<String> = (1..=8)
+            .map(|i| format!(r#"{{"name":"P{i}","rating":{}}}"#, 2000 - 10 * i))
+            .collect();
+        let mut schedule = vec![r#"{"round":1,"start_round":0,"pairing":"KotH"}"#.to_string()];
+        schedule.extend((2..=8).map(|r| {
+            format!(r#"{{"round":{r},"start_round":{},"pairing":"COP"}}"#, (r - 2).max(0))
+        }));
+        let json = format!(
+            r#"{{"players":[{}],"round_pairings":[{}],
+                "cop_config":{{"place_prizes":2,"gibson_spreads":[250],"hopefulness":[0.02],
+                "control_loss_thresholds":[0.3],"simulations":300,"always_wins_simulations":100,
+                "disallow_repeat_byes":true}}}}"#,
+            players.join(","),
+            schedule.join(","),
+        );
+        let inp: PairingInput = serde_json::from_str(&json).expect("test input");
+        let r1: HashSet<_> = games(&inp, 1).into_iter().collect();
+        let repeated: Vec<_> = games(&inp, 2).into_iter().filter(|g| r1.contains(g)).collect();
+        assert!(repeated.is_empty(), "round 2 repeats round 1: {repeated:?}");
     }
 
     #[test]
