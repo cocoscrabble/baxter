@@ -29,7 +29,9 @@ class RP(StrEnum):
     QotH = ("QotH", "Queen of the Hill")
     COP = ("COP", "C-O Pairings")
     Swiss = ("Swiss", "Swiss")
-    SplitSwiss = ("SplitSwiss", "Swiss (Split Score Groups)")
+    SplitSwiss = ("SplitSwiss", "Split Swiss")
+    SplitSwissNoRepeats = ("SplitSwissNoRepeats", "Split Swiss without Repeats")
+    SplitSwissMinRepeats = ("SplitSwissMinRepeats", "Split Swiss with Minimal Repeats")
     SwissPlusRandom = ("SwissPlusRandom", "Swiss with Random")
     SwissNoRepeats = ("SwissNoRepeats", "Swiss without Repeats")
     SwissMinRepeats = ("SwissMinRepeats", "Swiss with Minimal Repeats")
@@ -72,6 +74,8 @@ ABBREV = {
     "QH": RP.QotH,
     "SW": RP.Swiss,
     "SS": RP.SplitSwiss,
+    "SSN": RP.SplitSwissNoRepeats,
+    "SSM": RP.SplitSwissMinRepeats,
     "SN": RP.SwissNoRepeats,
     "SM": RP.SwissMinRepeats,
     "RR": RP.RoundRobin,

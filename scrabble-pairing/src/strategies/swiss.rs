@@ -415,19 +415,31 @@ pub fn pair_swiss_min_repeats(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairin
     Ok(out)
 }
 
+/// How a split Swiss weighs repeats against score groups.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum SplitRepeats {
+    /// Score groups first: a repeat is a cost, paid to keep a group together.
+    Allowed,
+    /// No repeats at all; an error if the field cannot be paired without one.
+    Forbidden,
+    /// Fewest repeats first, then score groups.
+    Minimal,
+}
+
 /// Split Swiss: each score group's top half plays its bottom half — in a group
 /// of eight, 1-5, 2-6, 3-7, 4-8 — the usual Swiss (FIDE's Dutch system), where
 /// `Swiss` pairs the nearest opponent instead (1-2, 3-4).
 ///
 /// Paired as one matching over the whole field, with each cost dominating the
-/// ones after it: a repeated game, then prior meetings (a third meeting is worse
-/// than a second), then score-group distance, then how far a game is from the
-/// split. Within a group the split cost is, first, a game inside one half (the
-/// Dutch system reorders the bottom half before it swaps anyone across), then
-/// how far the two players' gap is from half the group. A game across groups (a
-/// player floated to even a group out) costs its standings distance, so
-/// floaters meet the nearest player there.
-pub fn pair_split_swiss(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings, String> {
+/// ones after it. `SplitRepeats` orders the first ones: score-group distance
+/// then repeats, or repeats then score-group distance, or no repeat edges at
+/// all. Repeats are a repeated game, then prior meetings (a third meeting is
+/// worse than a second). Last comes the split: within a group, first a game
+/// inside one half (the Dutch system reorders the bottom half before it swaps
+/// anyone across), then how far the two players' gap is from half the group.
+/// A game across groups (a player floated to even a group out) costs its
+/// standings distance, so a floater heads the next group's split.
+pub fn pair_split_swiss(ctx: &mut Ctx, rp: &RoundPairing, mode: SplitRepeats) -> Result<Pairings, String> {
     if rp.start_round < 1 {
         return Ok(pair_swiss_initial(&ctx.standings(0)));
     }
@@ -438,12 +450,15 @@ pub fn pair_split_swiss(ctx: &mut Ctx, rp: &RoundPairing) -> Result<Pairings, St
             rp.round
         ));
     }
-    pair_split_swiss_players(&players, ctx.repeats, rp.start_round).ok_or_else(|| {
-        format!("round {} has no complete split Swiss pairing", rp.round)
+    pair_split_swiss_players(&players, ctx.repeats, mode).ok_or_else(|| match mode {
+        SplitRepeats::Forbidden => {
+            format!("round {} has no repeat-free split Swiss pairing", rp.round)
+        }
+        _ => format!("round {} has no complete split Swiss pairing", rp.round),
     })
 }
 
-fn pair_split_swiss_players(players: &[Player], repeats: &Repeats, start_round: i32) -> Option<Pairings> {
+fn pair_split_swiss_players(players: &[Player], repeats: &Repeats, mode: SplitRepeats) -> Option<Pairings> {
     let n = players.len();
     // Each player's place in their score group, and that group's size.
     let mut place = vec![0usize; n];
@@ -459,23 +474,16 @@ fn pair_split_swiss_players(players: &[Player], repeats: &Repeats, start_round: 
         start = end;
     }
 
-    // Successive scales, each larger than the most every lower cost can add up
-    // to over a whole round, so a lower cost never outweighs a higher one.
-    let pairs_per_round = n as i128 / 2;
-    let max_split = 2 * n as i128;
-    let max_points = players.iter().map(points_key).max().unwrap_or(0) as i128;
-    let group_scale = pairs_per_round * max_split + 1;
-    let max_per_pair = group_scale * max_points + max_split;
-    let meetings_scale = pairs_per_round * max_per_pair + 1;
-    let max_meetings = start_round.max(0) as i128;
-    let repeat_scale = pairs_per_round * (meetings_scale * max_meetings + max_per_pair) + 1;
-
-    let mut edges: Vec<(usize, usize, i128)> = Vec::new();
+    // Each candidate game's costs, most important first.
+    let mut candidates: Vec<(usize, usize, [i128; 4])> = Vec::new();
     for i in 0..n {
         for j in (i + 1)..n {
             let meetings = repeats.get(&Pairing::new(players[i].clone(), players[j].clone())) as i128;
+            if meetings > 0 && mode == SplitRepeats::Forbidden {
+                continue;
+            }
             let (pi, pj) = (points_key(&players[i]), points_key(&players[j]));
-            let group_distance = pi.abs_diff(pj) as i128;
+            let group = pi.abs_diff(pj) as i128;
             let split = if pi == pj {
                 let half = group_size[i] / 2;
                 let same_half = (place[i] < half) == (place[j] < half);
@@ -484,13 +492,32 @@ fn pair_split_swiss_players(players: &[Player], repeats: &Repeats, start_round: 
             } else {
                 (j - i) as i128
             };
-            let cost = repeat_scale * i128::from(meetings > 0)
-                + meetings_scale * meetings
-                + group_scale * group_distance
-                + split;
-            edges.push((i, j, -WEIGHT_SCALE * cost + match_tiebreak(i, j)));
+            let repeated = i128::from(meetings > 0);
+            let costs = match mode {
+                SplitRepeats::Minimal => [repeated, meetings, group, split],
+                _ => [group, repeated, meetings, split],
+            };
+            candidates.push((i, j, costs));
         }
     }
+
+    // Weight each cost by more than the most every cost below it can add up
+    // to over a whole round, so a lower cost never outweighs a higher one.
+    let pairs_per_round = n as i128 / 2;
+    let mut scales = [0i128; 4];
+    let mut scale = 1i128;
+    for tier in (0..4).rev() {
+        scales[tier] = scale;
+        let max = candidates.iter().map(|c| c.2[tier]).max().unwrap_or(0);
+        scale *= pairs_per_round * max + 1;
+    }
+    let edges: Vec<(usize, usize, i128)> = candidates
+        .iter()
+        .map(|&(i, j, costs)| {
+            let cost: i128 = costs.iter().zip(scales).map(|(c, s)| c * s).sum();
+            (i, j, -WEIGHT_SCALE * cost + match_tiebreak(i, j))
+        })
+        .collect();
 
     let pairs = max_weight_matching_pairs(n, &edges);
     if pairs.len() != n / 2 {
@@ -564,7 +591,7 @@ mod tests {
             .map(|i| player(&format!("A{i}"), 2.0))
             .chain((1..=8).map(|i| player(&format!("B{i}"), 1.0)))
             .collect();
-        let out = pair_split_swiss_players(&field, &Repeats::default(), 2).unwrap();
+        let out = pair_split_swiss_players(&field, &Repeats::default(), SplitRepeats::Minimal).unwrap();
         assert_eq!(
             games(&out),
             expect(&[
@@ -579,7 +606,7 @@ mod tests {
         let field: Vec<Player> = (1..=8).map(|i| player(&format!("A{i}"), 2.0)).collect();
         let mut repeats = Repeats::default();
         met(&mut repeats, &field[0], &field[4]);
-        let out = pair_split_swiss_players(&field, &repeats, 2).unwrap();
+        let out = pair_split_swiss_players(&field, &repeats, SplitRepeats::Minimal).unwrap();
         let g = games(&out);
         assert!(!g.contains(&("A1".to_string(), "A5".to_string())), "{g:?}");
         // The cheapest way round it moves two games one place: 1-6, 2-5.
@@ -598,11 +625,56 @@ mod tests {
             .map(|i| player(&format!("A{i}"), 2.0))
             .chain((1..=5).map(|i| player(&format!("B{i}"), 1.0)))
             .collect();
-        let out = pair_split_swiss_players(&field, &Repeats::default(), 2).unwrap();
+        let out = pair_split_swiss_players(&field, &Repeats::default(), SplitRepeats::Minimal).unwrap();
         assert_eq!(
             games(&out),
             expect(&[("A1", "A3"), ("A2", "A4"), ("A5", "B3"), ("B1", "B4"), ("B2", "B5")])
         );
+    }
+
+    /// Four on two wins who have all met each other, four on one who have not.
+    fn exhausted_top_group() -> (Vec<Player>, Repeats) {
+        let field: Vec<Player> = (1..=4)
+            .map(|i| player(&format!("A{i}"), 2.0))
+            .chain((1..=4).map(|i| player(&format!("B{i}"), 1.0)))
+            .collect();
+        let mut repeats = Repeats::default();
+        for i in 0..4 {
+            for j in (i + 1)..4 {
+                met(&mut repeats, &field[i], &field[j]);
+            }
+        }
+        (field, repeats)
+    }
+
+    fn repeats_in(out: &Pairings, repeats: &Repeats) -> usize {
+        out.pairings.iter().filter(|p| repeats.get(p) > 0).count()
+    }
+
+    #[test]
+    fn split_swiss_keeps_a_score_group_together_at_the_cost_of_repeats() {
+        let (field, repeats) = exhausted_top_group();
+        let out = pair_split_swiss_players(&field, &repeats, SplitRepeats::Allowed).unwrap();
+        assert_eq!(repeats_in(&out, &repeats), 2, "{:?}", games(&out));
+    }
+
+    #[test]
+    fn split_swiss_min_and_no_repeats_cross_groups_instead() {
+        let (field, repeats) = exhausted_top_group();
+        for mode in [SplitRepeats::Minimal, SplitRepeats::Forbidden] {
+            let out = pair_split_swiss_players(&field, &repeats, mode).unwrap();
+            assert_eq!(repeats_in(&out, &repeats), 0, "{mode:?}: {:?}", games(&out));
+        }
+    }
+
+    #[test]
+    fn split_swiss_no_repeats_gives_up_rather_than_repeat() {
+        let field = vec![player("A1", 1.0), player("A2", 1.0)];
+        let mut repeats = Repeats::default();
+        met(&mut repeats, &field[0], &field[1]);
+        assert!(pair_split_swiss_players(&field, &repeats, SplitRepeats::Forbidden).is_none());
+        let out = pair_split_swiss_players(&field, &repeats, SplitRepeats::Minimal).unwrap();
+        assert_eq!(repeats_in(&out, &repeats), 1);
     }
 
     /// The repeat limit is raised to get a *particular* score group paired; it
