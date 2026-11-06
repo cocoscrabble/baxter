@@ -1793,9 +1793,14 @@ class _PublishedPairingsMixin(VisibleDivisionMixin):
     model = Division
     context_object_name = "division"
 
+    def include_finished(self):
+        return False
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context.update(PublishedPairingsPresenter(self.object).as_context())
+        context.update(PublishedPairingsPresenter(
+            self.object, include_finished=self.include_finished(),
+        ).as_context())
         return context
 
 
@@ -1810,6 +1815,11 @@ class DivisionPublishedPairingsView(DivisionNavMixin, _PublishedPairingsMixin, D
     division nav, visible to everyone (no editing controls)."""
     template_name = "tournaments/division_published_pairings.html"
     active_tab = "pairings"
+
+    def include_finished(self):
+        # Logged-out visitors are players looking for their next game, so
+        # they see only the rounds still in play.
+        return self.request.user.is_authenticated
 
 
 LIVE_REFRESH_SECONDS = 15

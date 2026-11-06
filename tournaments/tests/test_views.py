@@ -1638,21 +1638,40 @@ class DivisionPairingsRoundContentTests(TestCase):
         rounds_shown = [r for r, _ in response.context["pairings"]]
         self.assertEqual(rounds_shown, [1])
 
-    def test_pairings_render_all_open_rounds_with_jump_links(self):
-        # Later rounds must not hide the submit links on earlier open rounds.
+    def test_pairings_tabs_open_on_the_earliest_open_round(self):
+        # A later publish must not hide the submit links on an earlier open round.
         self._create_round(1, RoundPairings.PUBLISHED, [(self.entrant1, self.entrant2)])
         self._create_round(2, RoundPairings.PUBLISHED, [(self.entrant1, self.entrant3)])
         response = self.client.get(
             reverse("division_pairings", kwargs=self.division.slug_kwargs())
         )
-        self.assertContains(response, 'aria-label="Published rounds"')
-        self.assertContains(response, 'href="#round-1"')
-        self.assertContains(response, 'href="#round-2"')
-        self.assertNotContains(response, "pairRound")
+        self.assertEqual(response.context["current_round"], 1)
+        self.assertContains(response, 'class="round-tabs"')
+        self.assertContains(response, "pairRound: 1")
         self.assertContains(response, 'class="published-pairings-table"')
         self.assertContains(response, 'class="pairing-table-number"')
         self.assertContains(response, 'class="pairing-player pairing-first"')
         self.assertContains(response, 'class="pairing-player pairing-second"')
+
+    def test_pairings_tab_includes_finished_rounds_only_when_logged_in(self):
+        _, r1_pairings = self._create_round(
+            1, RoundPairings.FINISHED, [(self.entrant1, self.entrant2)],
+        )
+        self._create_slip(1, r1_pairings[0], self.entrant1, self.entrant2, 450, 380)
+        self._create_round(2, RoundPairings.PUBLISHED, [(self.entrant1, self.entrant3)])
+        response = self.client.get(
+            reverse("division_pairings", kwargs=self.division.slug_kwargs())
+        )
+        self.assertEqual([r for r, _ in response.context["pairings"]], [1, 2])
+        self.assertEqual(response.context["current_round"], 2)
+        self.assertContains(response, "round-tab-finished")
+        self.assertContains(response, "450 - 380")
+
+        self.client.logout()
+        response = self.client.get(
+            reverse("division_pairings", kwargs=self.division.slug_kwargs())
+        )
+        self.assertEqual([r for r, _ in response.context["pairings"]], [2])
 
     def test_played_pairing_shows_score_instead_of_submit_button(self):
         _, pairings = self._create_round(

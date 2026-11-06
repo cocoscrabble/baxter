@@ -19,8 +19,7 @@ class EarlierRoundResultsTests(TestCase):
         for route in ("division_pairings", "published_pairings"):
             response = self.client.get(reverse(route, kwargs=division.slug_kwargs()))
             self.assertContains(response, f'{url}?pairing={first.pk}')
-            self.assertContains(response, 'href="#round-1"')
-            self.assertNotContains(response, 'data-show="$pairRound')
+            self.assertEqual(response.context["current_round"], 1)
             self.assertEqual([r for r, _ in response.context["pairings"]], [1, 2])
         form = self.client.get(url, {"pairing": first.pk})
         self.assertEqual(int(form.context["form"].initial["round"]), 1)
