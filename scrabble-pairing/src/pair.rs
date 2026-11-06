@@ -273,6 +273,7 @@ fn pair_round(
     round_pairings: &[RoundPairing],
     fixed_map: &HashMap<i32, Vec<(String, String)>>,
     published_map: &HashMap<i32, Vec<(String, String)>>,
+    drafted: &HashMap<i32, Vec<(String, String)>>,
     inactive_map: &HashMap<i32, Vec<String>>,
     repeats: &Repeats,
     rng: &mut ChaCha8Rng,
@@ -308,6 +309,7 @@ fn pair_round(
             excluded: &inactive,
             fixed_pairings: fixed_map,
             published_pairings: published_map,
+            drafted,
             repeats,
             rng,
             seed,
@@ -341,6 +343,7 @@ fn pair_round(
             excluded: &excluded,
             fixed_pairings: fixed_map,
             published_pairings: published_map,
+            drafted,
             repeats,
             rng,
             seed,
@@ -535,6 +538,9 @@ pub fn pair(input: &PairingInput) -> Vec<RoundResult> {
         .collect();
 
     let mut repeats = Repeats::default();
+    // The games of each round this run pairs, for strategies that read their
+    // history by round (COP): a draft has no slips and no published board.
+    let mut drafted: HashMap<i32, Vec<(String, String)>> = HashMap::new();
     let mut starts = Starts::new();
     let mut rng = seeded(input.seed);
     let status = round_status(players, slips, &input.inactive_players);
@@ -561,6 +567,7 @@ pub fn pair(input: &PairingInput) -> Vec<RoundResult> {
                 &rps,
                 &fixed_pairings,
                 &input.published_pairings,
+                &drafted,
                 &input.inactive_players,
                 &repeats,
                 &mut rng,
@@ -585,6 +592,14 @@ pub fn pair(input: &PairingInput) -> Vec<RoundResult> {
         }
         match paired {
             Some(Ok(paired)) => {
+                drafted.insert(
+                    rp.round,
+                    paired
+                        .pairings
+                        .iter()
+                        .map(|p| (p.first.name.clone(), p.second.name.clone()))
+                        .collect(),
+                );
                 let games = paired
                     .pairings
                     .into_iter()

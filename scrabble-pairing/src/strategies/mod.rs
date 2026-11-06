@@ -39,6 +39,10 @@ pub struct Ctx<'a> {
     /// Already-published pairings of non-draft rounds, pinned by the round-robin
     /// solver (see `PairingInput::published_pairings`).
     pub published_pairings: &'a HashMap<i32, Vec<(String, String)>>,
+    /// Rounds this run has already paired (drafts: no slips, not published),
+    /// as (first, second). `repeats` holds the same games; this keeps them by
+    /// round, for COP, which reads its history round by round.
+    pub drafted: &'a HashMap<i32, Vec<(String, String)>>,
     pub repeats: &'a Repeats,
     pub rng: &'a mut ChaCha8Rng,
     /// `PairingInput::seed`, for strategies that seed their own generator
