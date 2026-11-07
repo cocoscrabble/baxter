@@ -1244,12 +1244,13 @@ td a:hover {
     max-width: 680px;
 }
 
-/* The Stats tab: one table per category, two abreast where there is room. */
-.stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr));
-    gap: var(--space-md) var(--space-lg);
-    align-items: start;
+/* The Stats tab: one category at a time, chosen by tab. */
+.round-tabs.stats-tabs {
+    margin-bottom: var(--space-md);
+}
+
+.stats-category {
+    max-width: 760px;
 }
 
 .stats-category h2 {

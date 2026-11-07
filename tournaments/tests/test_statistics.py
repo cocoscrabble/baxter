@@ -81,7 +81,7 @@ class StatisticsTests(TestCase):
         self.assertEqual(len(rows), 10)
         self.assertEqual(rows[0].score, 411)
 
-    def test_stats_page_lists_the_categories(self):
+    def test_stats_page_gives_every_category_a_tab(self):
         self._game(1, self.entrant1, self.entrant2, 500, 300)
         response = self.client.get(
             reverse("division_statistics", kwargs=self.division.slug_kwargs())
@@ -89,6 +89,8 @@ class StatisticsTests(TestCase):
         self.assertEqual(
             [c.title for c in response.context["categories"]],
             ["Highest wins", "Highest losses", "Lowest wins", "Lowest losses",
-             "Highest games", "Biggest blowouts", "Nailbiters"],
+             "Highest games", "Biggest blowouts", "Nailbiters", "Ties"],
         )
+        # Ties has no game yet: its tab stays, and says so.
+        self.assertContains(response, "No games yet.")
         self.assertContains(response, 'class="nav-tab active">Stats</a>')

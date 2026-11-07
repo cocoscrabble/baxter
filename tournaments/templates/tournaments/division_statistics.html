@@ -9,11 +9,25 @@
 
 {% if categories %}
 <p class="note">The top ten in each category, counting played games only — no byes or forfeits.</p>
-<div class="stats-grid">
+{# One tab per category, switched client-side. `data-show` leaves every #}
+{# table visible until datastar runs, so with no JS they all still show. #}
+<div data-signals="{statTable: 0}">
+<nav class="round-tabs stats-tabs" aria-label="Categories">
+    {% for category in categories %}
+    <a href="#stats-{{ forloop.counter0 }}"
+       class="round-tab{% if forloop.first %} active{% endif %}"
+       data-class="{active: $statTable == {{ forloop.counter0 }}}"
+       data-on:click__prevent="$statTable = {{ forloop.counter0 }}">{{ category.title }}</a>
+    {% endfor %}
+</nav>
 {% for category in categories %}
-<section class="stats-category">
+<section class="stats-category" id="stats-{{ forloop.counter0 }}" data-show="$statTable == {{ forloop.counter0 }}">
     <h2>{{ category.title }}</h2>
+    {% if category.rows %}
     {% include "tournaments/_stats_table.html" with rows=category.rows %}
+    {% else %}
+    {% include "tournaments/_empty_state.html" with message="No games yet." %}
+    {% endif %}
 </section>
 {% endfor %}
 </div>
