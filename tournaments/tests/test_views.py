@@ -1005,6 +1005,16 @@ class DivisionAllResultsViewTests(TestCase):
         edit_url = reverse("division_edit_results", kwargs=self.division.slug_kwargs())
         self.assertNotContains(response, f'href="{edit_url}"')
 
+    def test_submit_results_button_points_at_pairings_while_a_round_is_open(self):
+        url = reverse("division_all_results", kwargs=self.division.slug_kwargs())
+        pairings_url = reverse("division_pairings", kwargs=self.division.slug_kwargs())
+        button = f'<a href="{pairings_url}" class="btn-primary">Submit Results</a>'
+        self.assertNotContains(self.client.get(url), "Submit Results")
+        RoundPairings.objects.create(
+            division=self.division, round=1, status=RoundPairings.PUBLISHED
+        )
+        self.assertContains(self.client.get(url), button, html=True)
+
 
 @tag("slow")
 class DivisionSettingsEditViewTests(TestCase):

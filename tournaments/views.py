@@ -849,6 +849,11 @@ class DivisionAllResultsView(DivisionNavMixin, VisibleDivisionMixin, DetailView)
         context["result_slips"] = results_newest_first(
             self.object, self.object.result_slips.all()
         )
+        # Results are submitted from the pairings, so point there while a round
+        # is open for them.
+        context["has_open_rounds"] = self.object.round_pairings_set.filter(
+            status__in=[RoundPairings.PUBLISHED, RoundPairings.IN_PROGRESS]
+        ).exists()
         return context
 
 
