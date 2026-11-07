@@ -865,7 +865,10 @@ class DivisionStatisticsView(DivisionNavMixin, VisibleDivisionMixin, DetailView)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["categories"] = division_statistics(self.object)
+        # Every category gets a tab, an empty one saying so, as on the live
+        # page; with no games at all the page says that instead.
+        categories = division_statistics(self.object, keep_empty=True)
+        context["categories"] = categories if any(c.rows for c in categories) else []
         return context
 
 
