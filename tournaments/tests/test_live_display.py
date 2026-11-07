@@ -199,10 +199,20 @@ class LiveDisplayTests(TestCase):
         for name in ("live_standings", "live_pairings", "live_results"):
             self.assertContains(response, self._url(name))
 
-    def test_statistics_show_each_category_as_a_tile(self):
+    def test_statistics_show_one_category_per_tab(self):
         self._create_round(1, RoundPairings.FINISHED, [])
         self._slip(1, self.entrant1, self.entrant2, timezone.now())
         response = self.client.get(self._url("live_statistics"))
-        self.assertTrue(response.context["live_tiles"])
-        self.assertEqual(self._subtitles(response)[:2], ["Highest wins", "Highest losses"])
-        self.assertContains(response, "live-grid live-tiles")
+        self.assertEqual(self._subtitles(response), ["Highest wins"])
+        tabs = response.context["live_tabs"]
+        self.assertEqual([t["active"] for t in tabs][:2], [True, False])
+        # Ties has no game here, but keeps its tab.
+        self.assertIn("Ties", [t["title"] for t in tabs])
+
+    def test_an_empty_statistics_tab_says_so_and_keeps_polling_it(self):
+        self._create_round(1, RoundPairings.FINISHED, [])
+        self._slip(1, self.entrant1, self.entrant2, timezone.now())
+        url = self._url("live_statistics") + "?table=ties"
+        response = self.client.get(url)
+        self.assertContains(response, "No games yet.")
+        self.assertEqual(response.context["live_poll_url"], url)

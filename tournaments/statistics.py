@@ -88,9 +88,10 @@ def _row(slip, rank, side, value, value_label):
     )
 
 
-def division_statistics(division, limit=STATS_LIMIT) -> list[StatCategory]:
+def division_statistics(division, limit=STATS_LIMIT, keep_empty=False) -> list[StatCategory]:
     """The division's categories, each its top ``limit`` games. A category with
-    no games (no ties yet, say) is left out."""
+    no games (no ties yet, say) is left out, unless ``keep_empty`` (the live
+    page, which gives every category a tab of its own)."""
     slips = list(
         division.result_slips.played()
         .select_related("winner__player", "loser__player")
@@ -108,6 +109,6 @@ def division_statistics(division, limit=STATS_LIMIT) -> list[StatCategory]:
             if i == 0 or key(slip) != key(games[i - 1]):
                 rank = i + 1
             rows.append(_row(slip, rank, side, value, value_label))
-        if rows:
+        if rows or keep_empty:
             categories.append(StatCategory(title, rows))
     return categories

@@ -2186,13 +2186,41 @@ class LiveStatisticsView(_LiveDisplayMixin, DetailView):
     category a tile of its own."""
 
     live_title = "Statistics"
+    live_empty_message = "No games yet."
     live_content_template = "tournaments/_live_statistics.html"
     # Two names plus five figures; measured at 38 with long real names.
     live_col_ems = 38
     live_tiles = True
 
     def get_live_sections(self, division):
-        return [(c.title, c.rows) for c in division_statistics(division)]
+        # One category at a time, picked by tab: all of them at once left the
+        # type too small to read across a room. Every category has a tab, even
+        # before it has a game (the page then says so), so the set of tabs on
+        # a screen never shifts mid-event.
+        categories = division_statistics(division, keep_empty=True)
+        wanted = self.request.GET.get("table")
+        chosen = next(
+            (c for c in categories if slugify(c.title) == wanted),
+            categories[0] if categories else None,
+        )
+        self.live_tabs = [
+            {
+                "title": c.title,
+                "url": f"{self.request.path}?{urlencode({'table': slugify(c.title)})}",
+                "active": c is chosen,
+            }
+            for c in categories
+        ]
+        return [(chosen.title, chosen.rows)] if chosen else []
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["live_tabs"] = self.live_tabs
+        # Keep polling the table on show.
+        active = next((t for t in self.live_tabs if t["active"]), None)
+        if active:
+            context["live_poll_url"] = active["url"]
+        return context
 
 
 class DivisionScorecardsView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixin, DetailView):
