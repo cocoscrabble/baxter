@@ -182,6 +182,11 @@ h3 { font-size: 1.02rem; margin: var(--space-md) 0 var(--space-sm); }
     }
 }
 
+/* The statistics page's tabs, one per table: part of the header, sized with it. */
+.live-tabs {
+    margin: var(--space-sm) var(--pad-inline) 0;
+}
+
 .live-logo {
     height: 2.5em;
     width: auto;

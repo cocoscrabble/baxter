@@ -34,6 +34,14 @@ the timer.
     </details>
 {% endif %}
 </header>
+{# Outside #live-content, so the tabs keep the header's size rather than #}
+{# scaling with the table; the set of tabs never changes, so they need no #}
+{# refreshing. #}
+{% if live_tabs|length > 1 %}
+<nav class="round-tabs live-tabs" aria-label="Tables">
+    {% for tab in live_tabs %}<a href="{{ tab.url }}" class="round-tab{% if tab.active %} active{% endif %}">{{ tab.title }}</a>{% endfor %}
+</nav>
+{% endif %}
 {% endblock %}
 
 {% block main_class %}live-page{% endblock %}
