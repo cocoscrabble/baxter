@@ -35,6 +35,8 @@ class AnnotatedPairing:
     repeat_rounds: tuple[int, ...] = field(default_factory=tuple)
     # "Semifinal 1, game 2" for a playoff game; empty for an ordinary pairing.
     playoff_label: str = ""
+    # The director fixed who starts this (unpublished) playoff game.
+    start_fixed: bool = False
 
     @property
     def absence(self) -> str:
@@ -391,8 +393,20 @@ class PairingsPresenter:
                 is_fixed=key in self.fixed_lookup,
                 repeat_rounds=repeat_rounds,
                 playoff_label=_playoff_label(p),
+                start_fixed=self._start_fixed(p, round_num),
             ))
         return rows
+
+    @cached_property
+    def _playoff(self):
+        from tournaments.playoff import playoff_for
+
+        return playoff_for(self.division)
+
+    def _start_fixed(self, p, round_num):
+        if p.series_id is None or self._playoff is None:
+            return False
+        return self._playoff.fixed_start(round_num, p.first.key, p.second.key) is not None
 
     def _rows_for_selected(self):
         tab = self.selected_tab

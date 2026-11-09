@@ -60,6 +60,9 @@ from .fixed_pairings import (
 )
 from .match_simulation import simulate_match, simulate_round
 from .commands import (
+    StartFixError,
+    fix_playoff_start,
+    unfix_playoff_start,
     add_entrant,
     refresh_entrant_ratings,
     add_fixed_pairing_cmd,
@@ -1070,6 +1073,36 @@ class DivisionRejoinEntrantView(_EntrantAbsenceView):
         messages.success(
             request,
             f"{entrant.name} rejoined. The rounds they missed are unchanged.",
+        )
+
+
+class FixPlayoffStartView(LoginRequiredMixin, CanEditDivisionMixin, View):
+    """The director fixes who starts an unpublished playoff game, or hands it
+    back to the starts rule (``clear``)."""
+
+    def post(self, request, *args, **kwargs):
+        division = self.get_division()
+        data = (read_signals(request) or {}) if is_datastar(request) else request.POST
+        round_num, bad_round = _read_int(data, "round")
+        if bad_round:
+            return bad_round
+        command = (
+            unfix_playoff_start if data.get("clear") in (True, "1", "true")
+            else fix_playoff_start
+        )
+        error = None
+        try:
+            command(
+                division.tournament, request.user,
+                {"division": division.name, "round": round_num,
+                 "first": data.get("first", ""), "second": data.get("second", "")},
+            )
+        except (StartFixError, Entrant.DoesNotExist) as exc:
+            error = str(exc) or "That entrant is not in this division."
+        # Fixing drops the drafts; draw them again before showing the round.
+        error = error or _autogenerate_pairable_rounds(division)
+        return _pairings_body_response(
+            request, division, select_round=round_num, error=error
         )
 
 

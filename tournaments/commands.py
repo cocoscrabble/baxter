@@ -322,6 +322,75 @@ def _fixture_entrant(division, key):
     return _entrant(division, key)
 
 
+class StartFixError(ValueError):
+    """A playoff start that cannot be fixed (shown to the director)."""
+
+
+def _fixable_playoff(division, payload):
+    """The division's playoff, refusing a fix that could no longer take effect:
+    a published board is printed, and its start is what it is."""
+    from tournaments.models import RoundPairings
+    from tournaments.playoff import playoff_for
+
+    playoff = playoff_for(division)
+    if playoff is None:
+        raise StartFixError("This division has no playoff.")
+    if payload["first"] == payload["second"]:
+        raise StartFixError("A game needs two different players.")
+    printed = division.round_pairings_set.filter(round=payload["round"]).exclude(
+        status=RoundPairings.DRAFT
+    ).exists()
+    if printed:
+        raise StartFixError(
+            f"Round {payload['round']} is already published; its starts are on the boards."
+        )
+    return playoff
+
+
+@records_event("playoff_start_fixed")
+def fix_playoff_start(tournament, actor, payload):
+    """payload: {division, round, first, second} — players by number: ``first``
+    starts against ``second`` in that round's playoff game.
+
+    The director's override of the starts rule, on a game not yet published:
+    every redraw orients it so (``generate_pairings``), and once it is
+    published the board owns the start like any other. Drafts are dropped so
+    the next render redraws with it.
+    """
+    division = _division(tournament, payload["division"])
+    playoff = _fixable_playoff(division, payload)
+    _entrant(division, payload["first"])
+    _entrant(division, payload["second"])
+    pair = {payload["first"], payload["second"]}
+    kept = [
+        fix for fix in playoff.fixed_starts
+        if not (fix[0] == payload["round"] and {fix[1], fix[2]} == pair)
+    ]
+    playoff.fixed_starts = kept + [[payload["round"], payload["first"], payload["second"]]]
+    playoff.save(update_fields=["fixed_starts"])
+    _invalidate_drafts(division)
+    return EventResult(payload=payload, division=division, result=playoff)
+
+
+@records_event("playoff_start_unfixed")
+def unfix_playoff_start(tournament, actor, payload):
+    """payload: {division, round, first, second} — hand that game's start back
+    to the starts rule."""
+    division = _division(tournament, payload["division"])
+    playoff = _fixable_playoff(division, payload)
+    pair = {payload["first"], payload["second"]}
+    kept = [
+        fix for fix in playoff.fixed_starts
+        if not (fix[0] == payload["round"] and {fix[1], fix[2]} == pair)
+    ]
+    if len(kept) == len(playoff.fixed_starts):
+        return EventResult(payload=payload, division=division, result=playoff, record=False)
+    playoff.fixed_starts = kept
+    playoff.save(update_fields=["fixed_starts"])
+    _invalidate_drafts(division)
+    return EventResult(payload=payload, division=division, result=playoff)
+
+
 @records_event("fixed_pairing_added")
 def add_fixed_pairing_cmd(tournament, actor, payload):
     """payload: {division, round, player1, player2} — players by number."""

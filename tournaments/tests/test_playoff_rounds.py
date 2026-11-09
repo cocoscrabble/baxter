@@ -1145,3 +1145,89 @@ class PlayoffOnlyDivisionTests(TestCase):
         self.assertTrue(
             any("no qualifying rounds" in e for e in response.context["errors"])
         )
+
+
+class StartFixTests(PlayoffRoundsTestCase):
+    """A director fixing who starts an unpublished playoff game."""
+
+    def setUp(self):
+        super().setUp()
+        self.make_playoff(count=4)
+        self.round = MAIN_ROUNDS + 1
+        game = self.pairings_in(self.round)[0]
+        self.auto = (game.first.key, game.second.key)
+
+    def game(self):
+        pair = set(self.auto)
+        return next(
+            p for p in self.pairings_in(self.round)
+            if {p.first.key, p.second.key} == pair
+        )
+
+    def oriented(self):
+        game = self.game()
+        return (game.first.key, game.second.key)
+
+    def fix(self, first, second, clear=False):
+        from tournaments.commands import fix_playoff_start, unfix_playoff_start
+
+        command = unfix_playoff_start if clear else fix_playoff_start
+        command(self.tournament, self.user, {
+            "division": self.division.name, "round": self.round,
+            "first": first, "second": second,
+        })
+        regenerate_pairings(self.division)
+
+    def events(self, kind):
+        return self.tournament.events.filter(event_type=kind)
+
+    def test_a_fixed_start_holds_through_redraws_and_publish(self):
+        second, first = self.auto
+        self.fix(second, first)
+        self.assertEqual(self.oriented(), (second, first))
+        self.assertEqual(self.events("playoff_start_fixed").count(), 1)
+        regenerate_pairings(self.division)
+        self.assertEqual(self.oriented(), (second, first))
+        publish_rounds(self.division, [self.round])
+        self.assertEqual(self.oriented(), (second, first))
+
+    def test_unfixing_hands_the_start_back_to_the_rule(self):
+        first, second = self.auto
+        self.fix(second, first)
+        self.fix(second, first, clear=True)
+        self.assertEqual(self.oriented(), self.auto)
+        self.assertEqual(self.events("playoff_start_unfixed").count(), 1)
+        # Nothing left to unfix: nothing recorded.
+        self.fix(second, first, clear=True)
+        self.assertEqual(self.events("playoff_start_unfixed").count(), 1)
+
+    def test_a_published_round_cannot_be_fixed(self):
+        from tournaments.commands import StartFixError, fix_playoff_start
+
+        publish_rounds(self.division, [self.round])
+        first, second = self.auto
+        with self.assertRaises(StartFixError):
+            fix_playoff_start(self.tournament, self.user, {
+                "division": self.division.name, "round": self.round,
+                "first": second, "second": first,
+            })
+        self.assertEqual(self.oriented(), self.auto)
+
+    def test_a_fix_lapses_for_a_game_the_bracket_no_longer_draws(self):
+        playoff = playoff_for(self.division)
+        playoff.fixed_starts = [[self.round, "A", "B"]]
+        self.assertEqual(playoff.fixed_start(self.round, "B", "A"), "A")
+        self.assertIsNone(playoff.fixed_start(self.round, "A", "C"))
+        self.assertIsNone(playoff.fixed_start(self.round + 1, "A", "B"))
+
+    def test_the_pair_rounds_button_fixes_it(self):
+        self.client.force_login(self.user)
+        url = reverse("fix_playoff_start", kwargs=self.division.slug_kwargs())
+        page = self.client.get(
+            reverse("division_pair_rounds", kwargs=self.division.slug_kwargs())
+            + f"?round={self.round}"
+        )
+        self.assertContains(page, url)
+        first, second = self.auto
+        self.client.post(url, {"round": self.round, "first": second, "second": first})
+        self.assertEqual(self.oriented(), (second, first))

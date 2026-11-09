@@ -532,6 +532,19 @@ def _playoff_history(pd):
     return starts, repeats
 
 
+def _orient_playoff_game(starts, playoff, high, low, round_num):
+    """Who goes first in a playoff game: the start the director fixed, if any
+    (``Playoff.fixed_starts``), else the ordinary starts rule. Either way it is
+    recorded, so the series' later games follow on from it."""
+    fixed = playoff.fixed_start(round_num, high, low) if playoff else None
+    if fixed is None:
+        return starts.add(EnginePairing(EnginePlayer(high), EnginePlayer(low)), round_num)
+    other = low if fixed == high else high
+    oriented = EnginePairing(EnginePlayer(fixed), EnginePlayer(other))
+    starts.register(oriented, round_num)
+    return oriented
+
+
 def _add_missing_playoff_games(
     division, rp_obj, games, entrant_by_key, series_rows, starts, repeats
 ):
@@ -557,9 +570,8 @@ def _add_missing_playoff_games(
         second_entrant = entrant_by_key.get(series.low)
         if not first_entrant or not second_entrant:
             continue
-        oriented = starts.add(
-            EnginePairing(EnginePlayer(series.high), EnginePlayer(series.low)),
-            rp_obj.round,
+        oriented = _orient_playoff_game(
+            starts, playoff_for(division), series.high, series.low, rp_obj.round
         )
         if oriented.first.key != series.high:
             first_entrant, second_entrant = second_entrant, first_entrant
@@ -792,11 +804,8 @@ def regenerate_pairings(division):
                 continue
             # Who goes first: Baxter's ordinary starts rule, so a series
             # alternates and a participant's tournament-wide starts stay level.
-            oriented = starts.add(
-                EnginePairing(
-                    EnginePlayer(series.high), EnginePlayer(series.low)
-                ),
-                round_num,
+            oriented = _orient_playoff_game(
+                starts, playoff, series.high, series.low, round_num
             )
             if oriented.first.key != series.high:
                 first_entrant, second_entrant = second_entrant, first_entrant

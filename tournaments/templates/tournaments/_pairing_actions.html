@@ -33,6 +33,20 @@ there is nothing left to take.
     {% endfor %}
     {% endif %}
 {% endif %}
+{% if can_edit and selected_status == 'pairable' and entry.playoff_label %}
+{% comment %}
+Who starts an unpublished playoff game: the starts rule's choice until the
+director fixes it, and fixed it stays through every redraw until published
+(commands.fix_playoff_start). A published board never changes.
+{% endcomment %}
+{% if entry.start_fixed %}<span class="playoff-tag badge-pairable start-fixed-tag" title="The director fixed who starts this game">Start fixed</span>{% endif %}
+<button type="button" class="btn-secondary unimportant" title="Fix {{ entry.pairing.second.display_name }} to go first"
+    data-on:click="@post('{% url 'fix_playoff_start' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {round: {{ selected_round }}, first: '{{ entry.pairing.second.key }}', second: '{{ entry.pairing.first.key }}'}})">Swap start</button>
+{% if entry.start_fixed %}
+<button type="button" class="btn-secondary unimportant" title="Let the starts rule decide again"
+    data-on:click="@post('{% url 'fix_playoff_start' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {round: {{ selected_round }}, first: '{{ entry.pairing.first.key }}', second: '{{ entry.pairing.second.key }}', clear: true}})">Unfix</button>
+{% endif %}
+{% endif %}
 {% if not entry.result and division.can_simulate and selected_status != 'pairable' %}
 <button type="button" class="btn-sim" data-on:click="@post('{% url 'simulate_match' division.tournament.slug division.slug %}', {headers: $_csrfHdr, payload: {round: {{ selected_round }}, first: '{{ entry.pairing.first.key }}', second: '{{ entry.pairing.second.key }}'}})">simulate</button>
 {% endif %}

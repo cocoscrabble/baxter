@@ -1294,10 +1294,24 @@ class Playoff(models.Model):
     # qualification standings is resolved once, by the director, rather than
     # re-derived from an unstable sort.
     seeds = models.JSONField(default=list)
+    # Starts the director fixed on unpublished games: [round, first, second],
+    # players by number. Recorded intent, like the seeds: every redraw orients
+    # that game so, until it is published (``commands.fix_playoff_start``).
+    fixed_starts = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"{self.qualifier_count}-player playoff — {self.division}"
+
+    def fixed_start(self, round_num, key1, key2):
+        """Who the director fixed to start ``key1`` v ``key2`` in ``round_num``,
+        or None. A fix names both players, so it lapses if the bracket ends up
+        drawing someone else into that game."""
+        pair = {key1, key2}
+        for r, first, second in self.fixed_starts:
+            if r == round_num and {first, second} == pair:
+                return first
+        return None
 
     def config(self):
         """The plain-data config the derivation takes."""
