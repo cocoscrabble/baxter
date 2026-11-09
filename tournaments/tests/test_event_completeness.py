@@ -46,6 +46,7 @@ COMMAND_BACKED = {
     "DivisionWithdrawEntrantView",
     "DivisionRejoinEntrantView",
     "ForfeitGameView",
+    "FixPlayoffStartView",
     "DivisionRegisterView",
     "DivisionEditResultsView",
     "DivisionFixedPairingsEditView",

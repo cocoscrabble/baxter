@@ -72,6 +72,8 @@ EVENT_TYPES = frozenset(
         "playoff_created",
         "playoff_updated",
         "playoff_deleted",
+        "playoff_start_fixed",
+        "playoff_start_unfixed",
         # A synthesized full-state event for tournaments predating the log.
         "state_snapshot",
     }
@@ -756,6 +758,12 @@ def describe_event(event, names=None) -> str:
             *who("player"), p.get("round", ""), div
         ),
         "playoff_created": lambda: f"Created a {p.get('qualifier_count', '')}-player playoff in {div}",
+        "playoff_start_fixed": lambda: "Fixed {} to start against {} in {} round {}".format(
+            *who("first", "second"), div, p.get("round", "")
+        ),
+        "playoff_start_unfixed": lambda: "Unfixed the start of {} v {} in {} round {}".format(
+            *who("first", "second"), div, p.get("round", "")
+        ),
         "playoff_updated": lambda: f"Reconfigured the playoff in {div}",
         "playoff_deleted": lambda: f"Removed the playoff in {div}",
         "match_simulated": lambda: f"Simulated a match in {div} round {p.get('round', '')}",

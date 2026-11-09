@@ -2151,6 +2151,11 @@ h3 + .note {
     text-transform: uppercase;
 }
 
+/* An unpublished playoff game whose start the director fixed (Pair Rounds). */
+.start-fixed-tag {
+    margin-right: var(--space-xs);
+}
+
 /* A bracket-decided place, as opposed to one carried over from the standings. */
 .playoff-placed td {
     font-weight: 600;
