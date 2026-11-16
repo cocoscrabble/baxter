@@ -33,7 +33,11 @@ class Command(BaseCommand):
         if "testserver" not in settings.ALLOWED_HOSTS:
             settings.ALLOWED_HOSTS = list(settings.ALLOWED_HOSTS) + ["testserver"]
 
-        seeds = [options["seed"]] if options["seed"] is not None else range(options["seeds"])
+        seeds = (
+            [options["seed"]]
+            if options["seed"] is not None
+            else range(options["seeds"])
+        )
         failures = 0
         for seed in seeds:
             fuzzer = Fuzzer(seed)

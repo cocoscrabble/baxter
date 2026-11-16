@@ -79,5 +79,7 @@ class Command(BaseCommand):
             self.stdout.write(f"  Division: {division_name}")
 
         self.stdout.write(
-            self.style.SUCCESS(f"Successfully created tournament with {len(division_names)} divisions")
+            self.style.SUCCESS(
+                f"Successfully created tournament with {len(division_names)} divisions"
+            )
         )

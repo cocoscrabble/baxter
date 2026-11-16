@@ -4,28 +4,45 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('tournaments', '0041_player_rating_seed'),
+        ("tournaments", "0041_player_rating_seed"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='RosterSync',
+            name="RosterSync",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('source', models.CharField(choices=[('scheduled', 'Scheduled'), ('manual', 'Pulled by hand'), ('upload', 'Uploaded snapshot')], max_length=16)),
-                ('ok', models.BooleanField(default=False)),
-                ('error', models.TextField(blank=True)),
-                ('generated_at', models.CharField(blank=True, max_length=40)),
-                ('added', models.PositiveIntegerField(default=0)),
-                ('updated', models.PositiveIntegerField(default=0)),
-                ('unchanged', models.PositiveIntegerField(default=0)),
-                ('pending', models.JSONField(blank=True, default=list)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "source",
+                    models.CharField(
+                        choices=[
+                            ("scheduled", "Scheduled"),
+                            ("manual", "Pulled by hand"),
+                            ("upload", "Uploaded snapshot"),
+                        ],
+                        max_length=16,
+                    ),
+                ),
+                ("ok", models.BooleanField(default=False)),
+                ("error", models.TextField(blank=True)),
+                ("generated_at", models.CharField(blank=True, max_length=40)),
+                ("added", models.PositiveIntegerField(default=0)),
+                ("updated", models.PositiveIntegerField(default=0)),
+                ("unchanged", models.PositiveIntegerField(default=0)),
+                ("pending", models.JSONField(blank=True, default=list)),
             ],
             options={
-                'ordering': ['-created_at'],
+                "ordering": ["-created_at"],
             },
         ),
     ]

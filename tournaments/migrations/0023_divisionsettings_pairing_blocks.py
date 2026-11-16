@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("tournaments", "0022_alter_divisioneditversion_unique_together_and_more"),
     ]

@@ -31,12 +31,21 @@ class DivisionDigestTests(TestCase):
             division=division, round=1, status=RoundPairings.FINISHED
         )
         pairing = Pairing.objects.create(
-            division=division, round=1, round_pairings=rp,
-            first=e1, second=e2, table=1,
+            division=division,
+            round=1,
+            round_pairings=rp,
+            first=e1,
+            second=e2,
+            table=1,
         )
         ResultSlip.objects.create(
-            division=division, round=1, pairing=pairing,
-            winner=e1, winner_score=450, loser=e2, loser_score=380,
+            division=division,
+            round=1,
+            pairing=pairing,
+            winner=e1,
+            winner_score=450,
+            loser=e2,
+            loser_score=380,
             winner_started=True,
         )
 
@@ -44,9 +53,7 @@ class DivisionDigestTests(TestCase):
         # Create and delete rows so the auto-increment sequences advance, giving
         # the next-built division higher pks for the same logical state.
         for i in range(5):
-            junk = Division.objects.create(
-                name=f"junk{i}", tournament=self.tournament
-            )
+            junk = Division.objects.create(name=f"junk{i}", tournament=self.tournament)
             Entrant.objects.create(division=junk, player=self.filler, number=1)
             junk.delete()
 
@@ -105,9 +112,7 @@ class DivisionDigestTests(TestCase):
         # Exactly three elements — not the v2 tuple truncated. The backfill
         # verifies against digests recorded before the registration columns
         # existed, so anything extra here makes every one of them fail.
-        self.assertEqual(
-            state["entrants"], [[1, "Alice", False], [2, "Bob", False]]
-        )
+        self.assertEqual(state["entrants"], [[1, "Alice", False], [2, "Bob", False]])
         self.assertEqual(state["results"][0][1], "Alice")
         self.assertNotEqual(division_digest(d1), division_digest(d1, version=1))
 
@@ -188,7 +193,9 @@ class CrudCommandTests(TestCase):
         from tournaments.commands import delete_division, rename_division
 
         rename_division(
-            self.tournament, self.owner, {"old_name": "Open", "new_name": "Championship"}
+            self.tournament,
+            self.owner,
+            {"old_name": "Open", "new_name": "Championship"},
         )
         delete_division(self.tournament, self.owner, {"name": "Championship"})
         types = list(
@@ -231,9 +238,7 @@ class WriteGuardTests(TestCase):
 
         newcomer = Player.objects.create(name="Zed", player_number="777", rating=1200)
         with strict_write_guard(), derived_writes():
-            Entrant.objects.create(
-                division=self.division, player=newcomer, number=99
-            )
+            Entrant.objects.create(division=self.division, player=newcomer, number=99)
         self.assertTrue(self.division.entrants.filter(number=99).exists())
 
 
@@ -266,8 +271,10 @@ class GridEventTests(TestCase):
         # Two entrants into an empty division: the save is logged as what it
         # changed, so both are additions.
         added = event.payload["added"]
-        self.assertEqual((len(added), event.payload["changed"], event.payload["removed"]),
-                         (2, [], []))
+        self.assertEqual(
+            (len(added), event.payload["changed"], event.payload["removed"]),
+            (2, [], []),
+        )
         # Players are recorded by number, not pk — and the name rides along so
         # a replay into a fresh database can create them.
         self.assertEqual(
@@ -298,10 +305,24 @@ class GridDeltaEventTests(TestCase):
         applied — one director's edit to one row."""
         edits = edits or {}
         rows = [
-            {"number": 1, "player": self.player1.pk, "dropped": False,
-             "rating": 1600, "tentative": False, "paid": False, "playing_up": False},
-            {"number": 2, "player": self.player2.pk, "dropped": False,
-             "rating": 1500, "tentative": False, "paid": False, "playing_up": False},
+            {
+                "number": 1,
+                "player": self.player1.pk,
+                "dropped": False,
+                "rating": 1600,
+                "tentative": False,
+                "paid": False,
+                "playing_up": False,
+            },
+            {
+                "number": 2,
+                "player": self.player2.pk,
+                "dropped": False,
+                "rating": 1500,
+                "tentative": False,
+                "paid": False,
+                "playing_up": False,
+            },
         ]
         return [{**r, **edits.get(r["player"], {})} for r in rows]
 
@@ -336,8 +357,9 @@ class GridDeltaEventTests(TestCase):
         self.save(self.rows())
         self.save([r for r in self.rows() if r["player"] != self.player2.pk])
         payload = self.saves().last().payload
-        self.assertEqual([r["player"] for r in payload["removed"]],
-                         [self.player2.player_number])
+        self.assertEqual(
+            [r["player"] for r in payload["removed"]], [self.player2.player_number]
+        )
         self.assertEqual((payload["added"], payload["changed"]), ([], []))
 
     def test_the_activity_line_says_what_changed(self):

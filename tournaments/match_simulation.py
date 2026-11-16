@@ -24,7 +24,9 @@ def _random_outcome(r1: int, r2: int) -> tuple[bool, int, int]:
     return first_wins, winner_score, loser_score
 
 
-def _build_slip(division, round_num, first_entrant, second_entrant, pairing_obj) -> ResultSlip:
+def _build_slip(
+    division, round_num, first_entrant, second_entrant, pairing_obj
+) -> ResultSlip:
     # The pinned ratings, like every other consumer of a rating in a running
     # tournament (plans/PLAN_ENTRANTS.md decision 3).
     first_wins, winner_score, loser_score = _random_outcome(

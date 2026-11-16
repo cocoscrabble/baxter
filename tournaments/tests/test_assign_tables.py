@@ -30,7 +30,11 @@ class ParseBoardTableMapTests(SimpleTestCase):
 
     def test_legacy_list_form_defaults_label_to_table(self):
         # Maps stored before streamed tables existed have no "label" key.
-        raw = [{"board": 1, "table": 1}, {"board": 2, "table": 1}, {"board": 3, "table": 2}]
+        raw = [
+            {"board": 1, "table": 1},
+            {"board": 2, "table": 1},
+            {"board": 3, "table": 2},
+        ]
         self.assertEqual(
             parse_board_table_map(raw),
             {
@@ -73,13 +77,25 @@ class AssignTablesTests(SimpleTestCase):
 
     def test_streamed_separate_numbering(self):
         # 2 streamed (S1, S2), 1 single (1), then a double (2).
-        m = labelled([
-            (1, 1, "S1"), (2, 2, "S2"), (3, 3, "1"), (4, 4, "2"), (5, 4, "2"),
-        ])
+        m = labelled(
+            [
+                (1, 1, "S1"),
+                (2, 2, "S2"),
+                (3, 3, "1"),
+                (4, 4, "2"),
+                (5, 4, "2"),
+            ]
+        )
         result = assign_tables(["a", "b", "c", "d", "e"], {}, m)
         self.assertEqual(
             result,
-            {"a": (1, "S1"), "b": (2, "S2"), "c": (3, "1"), "d": (4, "2"), "e": (4, "2")},
+            {
+                "a": (1, "S1"),
+                "b": (2, "S2"),
+                "c": (3, "1"),
+                "d": (4, "2"),
+                "e": (4, "2"),
+            },
         )
 
     def test_fixed_by_label_claims_slot(self):

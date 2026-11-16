@@ -47,7 +47,9 @@ class LoginThrottlingTests(TestCase):
 
     def test_another_director_on_the_same_wifi_is_unaffected(self):
         self.fail(LIMIT)
-        self.assertEqual(self.attempt(username="other", password="right-pw").status_code, 302)
+        self.assertEqual(
+            self.attempt(username="other", password="right-pw").status_code, 302
+        )
 
     def test_the_same_director_elsewhere_is_unaffected(self):
         # Otherwise anyone could lock a director out by guessing at their name.

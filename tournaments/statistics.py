@@ -54,15 +54,30 @@ _CATEGORIES = [
     ("Highest losses", "", _decisive, lambda s: -s.loser_score, "loser", None),
     ("Lowest wins", "", _decisive, lambda s: s.winner_score, "winner", None),
     ("Lowest losses", "", _decisive, lambda s: s.loser_score, "loser", None),
-    ("Highest games", "Total", lambda _: True,
-     lambda s: -(s.winner_score + s.loser_score), "winner",
-     lambda s: s.winner_score + s.loser_score),
-    ("Biggest blowouts", "Spread", _decisive,
-     lambda s: -(s.winner_score - s.loser_score), "winner",
-     lambda s: s.winner_score - s.loser_score),
-    ("Nailbiters", "Spread", _decisive,
-     lambda s: s.winner_score - s.loser_score, "winner",
-     lambda s: s.winner_score - s.loser_score),
+    (
+        "Highest games",
+        "Total",
+        lambda _: True,
+        lambda s: -(s.winner_score + s.loser_score),
+        "winner",
+        lambda s: s.winner_score + s.loser_score,
+    ),
+    (
+        "Biggest blowouts",
+        "Spread",
+        _decisive,
+        lambda s: -(s.winner_score - s.loser_score),
+        "winner",
+        lambda s: s.winner_score - s.loser_score,
+    ),
+    (
+        "Nailbiters",
+        "Spread",
+        _decisive,
+        lambda s: s.winner_score - s.loser_score,
+        "winner",
+        lambda s: s.winner_score - s.loser_score,
+    ),
     ("Ties", "", lambda s: not _decisive(s), lambda s: -s.winner_score, "winner", None),
 ]
 
@@ -70,11 +85,17 @@ _CATEGORIES = [
 def _row(slip, rank, side, value, value_label):
     if side == "winner":
         player, score, opponent, opponent_score = (
-            slip.winner, slip.winner_score, slip.loser, slip.loser_score
+            slip.winner,
+            slip.winner_score,
+            slip.loser,
+            slip.loser_score,
         )
     else:
         player, score, opponent, opponent_score = (
-            slip.loser, slip.loser_score, slip.winner, slip.winner_score
+            slip.loser,
+            slip.loser_score,
+            slip.winner,
+            slip.winner_score,
         )
     return StatRow(
         rank=rank,
@@ -88,7 +109,9 @@ def _row(slip, rank, side, value, value_label):
     )
 
 
-def division_statistics(division, limit=STATS_LIMIT, keep_empty=False) -> list[StatCategory]:
+def division_statistics(
+    division, limit=STATS_LIMIT, keep_empty=False
+) -> list[StatCategory]:
     """The division's categories, each its top ``limit`` games. A category with
     no games (no ties yet, say) is left out, unless ``keep_empty`` (the live
     page, which gives every category a tab of its own)."""

@@ -37,7 +37,8 @@ def _cop_config_to_input(c: dict | None) -> dict | None:
         "control_loss_thresholds": arr(c.get("control_loss_threshold", 0.25)),
         # None: the engine's default, control loss in the last few rounds.
         "control_loss_activation_round": (
-            None if c.get("control_loss_activation_round") is None
+            None
+            if c.get("control_loss_activation_round") is None
             else int(c["control_loss_activation_round"])
         ),
         "simulations": int(c.get("simulations", 1000)),
@@ -92,12 +93,9 @@ def pairing_data_to_input(pd: PairingData) -> dict:
             str(k): [[a, b] for (a, b) in v] for k, v in pd.fixed_pairings.items()
         },
         "published_pairings": {
-            str(k): [[a, b] for (a, b) in v]
-            for k, v in pd.published_pairings.items()
+            str(k): [[a, b] for (a, b) in v] for k, v in pd.published_pairings.items()
         },
-        "inactive_players": {
-            str(k): list(v) for k, v in pd.inactive_players.items()
-        },
+        "inactive_players": {str(k): list(v) for k, v in pd.inactive_players.items()},
         "seed": pd.seed,
         "cop_config": _cop_config_to_input(pd.cop_config),
         # Omitted keys fall back to the engine's defaults, so a partial config

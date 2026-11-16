@@ -88,7 +88,10 @@ def _cases():
             # pre-tournament ratings file, and there is nothing to seed from.
             ratings = RESULTS / f"{slug}-ratings.csv"
             if (
-                slug and when and results.exists() and ratings.exists()
+                slug
+                and when
+                and results.exists()
+                and ratings.exists()
                 and _numeric_rounds(results)
             ):
                 rows[slug] = date.fromisoformat(when)
@@ -158,9 +161,14 @@ class ProjectionMatchesEngineTests(TestCase):
         t.calc_ratings()
         return {
             p.name: (
-                round(p.init_rating), round(p.new_rating),
+                round(p.init_rating),
+                round(p.new_rating),
                 round(p.new_rating_deviation, 2),
-                p.wins, p.losses, p.spread, len(p.games), p.is_unrated,
+                p.wins,
+                p.losses,
+                p.spread,
+                len(p.games),
+                p.is_unrated,
             )
             for section in t.sections
             for p in section.get_players()
@@ -209,19 +217,34 @@ class ProjectionMatchesEngineTests(TestCase):
                     continue
                 winner, loser = entrants[row[2].strip()], entrants[row[4].strip()]
                 pairing = Pairing.objects.create(
-                    division=division, round=round_num, round_pairings=rp,
-                    first=winner, second=loser, table=table,
+                    division=division,
+                    round=round_num,
+                    round_pairings=rp,
+                    first=winner,
+                    second=loser,
+                    table=table,
                 )
                 ResultSlip.objects.create(
-                    division=division, round=round_num, pairing=pairing,
-                    winner=winner, winner_score=int(row[3]),
-                    loser=loser, loser_score=int(row[5]), winner_started=True,
+                    division=division,
+                    round=round_num,
+                    pairing=pairing,
+                    winner=winner,
+                    winner_score=int(row[3]),
+                    loser=loser,
+                    loser_score=int(row[5]),
+                    winner_started=True,
                 )
 
         return {
             p.name: (
-                p.old_rating, p.new_rating, p.new_deviation,
-                p.wins, p.losses, p.spread, p.games, p.was_unrated,
+                p.old_rating,
+                p.new_rating,
+                p.new_deviation,
+                p.wins,
+                p.losses,
+                p.spread,
+                p.games,
+                p.was_unrated,
             )
             for p in project_ratings(division).values()
         }
@@ -231,8 +254,7 @@ class ProjectionMatchesEngineTests(TestCase):
         source = RESULTS / f"{slug}-results.csv"
         rows = list(csv.reader(source.open(encoding="utf-8-sig")))
         kept = [
-            r for r in rows
-            if not (len(r) > 4 and r[4].strip().casefold() == "bye")
+            r for r in rows if not (len(r) > 4 and r[4].strip().casefold() == "bye")
         ]
         if len(kept) == len(rows):
             return str(source)
@@ -250,6 +272,7 @@ class ProjectionMatchesEngineTests(TestCase):
                 expected = self._engine(slug, when)
                 actual = self._baxter(slug, when)
                 self.assertEqual(
-                    actual, expected,
+                    actual,
+                    expected,
                     f"{slug}: the projection disagrees with the rating engine",
                 )

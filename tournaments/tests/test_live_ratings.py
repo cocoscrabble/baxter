@@ -32,13 +32,19 @@ class ProjectionTestCase(TestCase):
         self.tournament = Tournament.objects.create(
             name="Champs", location="X", start_date=self.START, owner=self.owner
         )
-        self.division = Division.objects.create(
-            tournament=self.tournament, name="Open"
-        )
+        self.division = Division.objects.create(tournament=self.tournament, name="Open")
         self._entrant_number = 0
 
-    def player(self, name, rating=1600, deviation=80.0, games=200,
-               last_played=date(2026, 5, 1), number=None, rated_games=None):
+    def player(
+        self,
+        name,
+        rating=1600,
+        deviation=80.0,
+        games=200,
+        last_played=date(2026, 5, 1),
+        number=None,
+        rated_games=None,
+    ):
         self._entrant_number += 1
         return Player.objects.create(
             name=name,
@@ -55,17 +61,27 @@ class ProjectionTestCase(TestCase):
 
     def game(self, round, winner, loser, winner_score=450, loser_score=380):
         rp, _ = RoundPairings.objects.get_or_create(
-            division=self.division, round=round,
+            division=self.division,
+            round=round,
             defaults={"status": RoundPairings.FINISHED},
         )
         pairing = Pairing.objects.create(
-            division=self.division, round=round, round_pairings=rp,
-            first=winner, second=loser, table=1,
+            division=self.division,
+            round=round,
+            round_pairings=rp,
+            first=winner,
+            second=loser,
+            table=1,
         )
         return ResultSlip.objects.create(
-            division=self.division, round=round, pairing=pairing,
-            winner=winner, winner_score=winner_score,
-            loser=loser, loser_score=loser_score, winner_started=True,
+            division=self.division,
+            round=round,
+            pairing=pairing,
+            winner=winner,
+            winner_score=winner_score,
+            loser=loser,
+            loser_score=loser_score,
+            winner_started=True,
         )
 
 
@@ -89,9 +105,7 @@ class BasicProjectionTests(ProjectionTestCase):
         self.assertGreater(projections[ann.key].delta, 0)
         self.assertLess(projections[bea.key].delta, 0)
         # Evenly matched, so the moves mirror each other.
-        self.assertEqual(
-            projections[ann.key].delta, -projections[bea.key].delta
-        )
+        self.assertEqual(projections[ann.key].delta, -projections[bea.key].delta)
 
     def test_the_record_and_spread_come_back(self):
         ann = self.enter(self.player("Ann"))
@@ -222,8 +236,7 @@ class UnratedTests(ProjectionTestCase):
         run uses, not a single pass."""
         rated = self.enter(self.player("Rated", rating=1800))
         unrated = self.enter(
-            self.player("Unrated", rating=0, deviation=None, games=0,
-                        last_played=None)
+            self.player("Unrated", rating=0, deviation=None, games=0, last_played=None)
         )
         for round in (1, 2, 3):
             self.game(round, rated, unrated)
@@ -291,9 +304,7 @@ class LiveRatingsViewTests(ProjectionTestCase):
     def _url(self):
         from django.urls import reverse
 
-        return reverse(
-            "division_live_ratings", kwargs=self.division.slug_kwargs()
-        )
+        return reverse("division_live_ratings", kwargs=self.division.slug_kwargs())
 
     def test_an_empty_division_says_there_is_nothing_yet(self):
         response = self.client.get(self._url())
@@ -369,7 +380,8 @@ class NoRateableGamesTests(ProjectionTestCase):
         projection = project_ratings(self.division)[forfeiter.key]
         self.assertTrue(projection.was_unrated)
         self.assertEqual(
-            projection.new_rating, 1500,
+            projection.new_rating,
+            1500,
             "an unrated player who was never rated sits at the seed, not 0",
         )
 

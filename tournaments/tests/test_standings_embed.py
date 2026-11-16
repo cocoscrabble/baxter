@@ -28,9 +28,13 @@ class StandingsEmbedTests(TestCase):
             entrant.last_played = date(2026, 1, 1)
             entrant.save()
         ResultSlip.objects.create(
-            division=self.division, round=1,
-            winner=self.entrant2, winner_score=450,
-            loser=self.entrant1, loser_score=380, winner_started=True,
+            division=self.division,
+            round=1,
+            winner=self.entrant2,
+            winner_score=450,
+            loser=self.entrant1,
+            loser_score=380,
+            winner_started=True,
         )
 
     def _url(self):
@@ -56,7 +60,7 @@ class StandingsEmbedTests(TestCase):
     def test_a_row_carries_rank_link_record_spread_and_ratings(self):
         bob = project_ratings(self.division)[self.entrant2.key]
         self.assertIn(
-            '\t<tr>\n'
+            "\t<tr>\n"
             '\t\t<td align="left">1.</td>\n'
             '\t\t<td class="coco-results-nobreak" align="left">'
             '<a href="https://playerdb.example.org/player/2/bob/">Bob</a></td>\n'
@@ -64,7 +68,7 @@ class StandingsEmbedTests(TestCase):
             '\t\t<td align="left">70</td>\n'
             f'\t\t<td align="left">1500</td>\n'
             f'\t\t<td align="left">{bob.new_rating}</td>\n'
-            '\t</tr>\n',
+            "\t</tr>\n",
             self._body(),
         )
         self.assertGreater(bob.new_rating, 1500)

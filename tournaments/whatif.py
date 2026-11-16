@@ -35,9 +35,9 @@ class ExploreRow:
     game when the same *players* meet, not when the same names do.
     """
 
-    table: int | None      # board number; None for a bye row
+    table: int | None  # board number; None for a bye row
     first: str
-    first_record: str      # "3-2 (+235)" as of the pairing's basis round
+    first_record: str  # "3-2 (+235)" as of the pairing's basis round
     second: str
     second_record: str
     repeat_rounds: tuple[int, ...]  # earlier rounds this pair had already met
@@ -45,7 +45,7 @@ class ExploreRow:
     # to every other such row in mark_common, silently marking everything common.
     first_key: str
     second_key: str
-    common: bool = False   # this pair appears on both the what-if and actual side
+    common: bool = False  # this pair appears on both the what-if and actual side
 
 
 def explore_pairing(division, target_round, strategy, based_on, seed, pd=None):
@@ -103,9 +103,13 @@ def _order(real, rank, record, names):
     return [
         ExploreRow(
             table=i,
-            first=names.get(f, f), first_record=record.get(f, ""),
-            second=names.get(s, s), second_record=record.get(s, ""),
-            repeat_rounds=rr, first_key=f, second_key=s,
+            first=names.get(f, f),
+            first_record=record.get(f, ""),
+            second=names.get(s, s),
+            second_record=record.get(s, ""),
+            repeat_rounds=rr,
+            first_key=f,
+            second_key=s,
         )
         for i, (f, s, rr) in enumerate(real, start=1)
     ]
@@ -117,12 +121,18 @@ def _bye_rows(byes, record, names):
     for first, second in byes:
         if _is_bye(first):
             first, second = second, first
-        rows.append(ExploreRow(
-            table=None,
-            first=names.get(first, first), first_record=record.get(first, ""),
-            second=names.get(second, second), second_record="",
-            repeat_rounds=(), first_key=first, second_key=second,
-        ))
+        rows.append(
+            ExploreRow(
+                table=None,
+                first=names.get(first, first),
+                first_record=record.get(first, ""),
+                second=names.get(second, second),
+                second_record="",
+                repeat_rounds=(),
+                first_key=first,
+                second_key=second,
+            )
+        )
     return rows
 
 
@@ -185,6 +195,7 @@ def mark_common(whatif, actual):
     returning ``(whatif, actual)``. ``actual`` may be ``None``."""
     if not actual:
         return whatif, actual
+
     def pair(r):
         return frozenset({r.first_key, r.second_key})
 

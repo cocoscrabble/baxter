@@ -20,7 +20,9 @@ class TournamentExportTests(TestCase):
         )
         cls.division = Division.objects.create(name="A", tournament=cls.tournament)
 
-        cls.alice = Player.objects.create(player_number="A100", name="Alice", rating=1750)
+        cls.alice = Player.objects.create(
+            player_number="A100", name="Alice", rating=1750
+        )
         cls.bob = Player.objects.create(
             player_number="T-1", name="Bob", rating=0, is_provisional=True
         )
@@ -108,12 +110,12 @@ class ExportedRatingSnapshotTests(TestCase):
     def setUpTestData(cls):
         owner = User.objects.create_user(username="owner-snap", password="pw")
         cls.tournament = Tournament.objects.create(
-            name="Snapshot Open", location="X",
-            start_date=date(2026, 6, 4), owner=owner,
+            name="Snapshot Open",
+            location="X",
+            start_date=date(2026, 6, 4),
+            owner=owner,
         )
-        cls.division = Division.objects.create(
-            name="A", tournament=cls.tournament
-        )
+        cls.division = Division.objects.create(name="A", tournament=cls.tournament)
         cls.player = Player.objects.create(
             player_number="A200", name="Drifty", rating=1500
         )

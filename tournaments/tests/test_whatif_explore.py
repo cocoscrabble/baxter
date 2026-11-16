@@ -37,9 +37,13 @@ class ExploreBase(TestCase):
 
     def _slip(self, round_num, winner, loser, ws, ls):
         return ResultSlip.objects.create(
-            division=self.division, round=round_num,
-            winner=self.ent[winner], winner_score=ws,
-            loser=self.ent[loser], loser_score=ls, winner_started=True,
+            division=self.division,
+            round=round_num,
+            winner=self.ent[winner],
+            winner_score=ws,
+            loser=self.ent[loser],
+            loser_score=ls,
+            winner_started=True,
         )
 
     def _pairs(self, target, based_on, strategy="KotH", seed=0):
@@ -50,8 +54,12 @@ class ExploreBase(TestCase):
             for e in self.division.entrants.select_related("player")
         }
         return {
-            frozenset({names.get(p.first.key, p.first.key),
-                       names.get(p.second.key, p.second.key)})
+            frozenset(
+                {
+                    names.get(p.first.key, p.first.key),
+                    names.get(p.second.key, p.second.key),
+                }
+            )
             for p in explore_pairing(self.division, target, strategy, based_on, seed)
         }
 
@@ -87,7 +95,9 @@ class ExplorePairingTests(ExploreBase):
 
     def test_rows_carry_record_and_spread(self):
         # Each row shows the players' record + spread as of the basis round.
-        rows = decorate(self.division, 2, 1, explore_pairing(self.division, 2, "KotH", 1, 0))
+        rows = decorate(
+            self.division, 2, 1, explore_pairing(self.division, 2, "KotH", 1, 0)
+        )
         record = {}
         for r in rows:
             record[r.first] = r.first_record
@@ -194,7 +204,9 @@ class ExploreViewTests(ExploreBase):
 
     def test_renders_whatif_table(self):
         self.client.force_login(self.owner)
-        response = self.client.get(self.url, {"round": 2, "strategy": "Swiss", "based_on": 1})
+        response = self.client.get(
+            self.url, {"round": 2, "strategy": "Swiss", "based_on": 1}
+        )
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.context["explored"])
         self.assertContains(response, "What-if")

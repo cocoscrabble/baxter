@@ -56,16 +56,14 @@ class ForbiddenPageTests(TestCase):
         self.owner = User.objects.create_user(username="owner2", password="p")
         self.other = User.objects.create_user(username="other2", password="p")
         self.tournament = Tournament.objects.create(
-            name="Private Cup", location="x",
-            start_date=date(2026, 3, 15), owner=self.owner,
+            name="Private Cup",
+            location="x",
+            start_date=date(2026, 3, 15),
+            owner=self.owner,
         )
         self.tournament.editors.add(self.owner)
-        self.division = Division.objects.create(
-            tournament=self.tournament, name="Open"
-        )
-        self.url = reverse(
-            "division_edit_results", kwargs=self.division.slug_kwargs()
-        )
+        self.division = Division.objects.create(tournament=self.tournament, name="Open")
+        self.url = reverse("division_edit_results", kwargs=self.division.slug_kwargs())
 
     def test_a_non_editor_gets_the_page_not_a_bare_403(self):
         self.client.force_login(self.other)

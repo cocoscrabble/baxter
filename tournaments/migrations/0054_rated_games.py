@@ -16,20 +16,19 @@ def from_career_games(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('tournaments', '0053_admin_action_database_export'),
+        ("tournaments", "0053_admin_action_database_export"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='entrant',
-            name='rated_games',
+            model_name="entrant",
+            name="rated_games",
             field=models.IntegerField(default=0),
         ),
         migrations.AddField(
-            model_name='player',
-            name='rated_games',
+            model_name="player",
+            name="rated_games",
             field=models.IntegerField(default=0),
         ),
         migrations.RunPython(from_career_games, migrations.RunPython.noop),

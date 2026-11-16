@@ -31,7 +31,8 @@ class CompletenessTests(TestCase):
             and re.search(r"\bPlayer\.objects\.bulk_update\(", path.read_text())
         ]
         self.assertEqual(
-            offenders, [],
+            offenders,
+            [],
             "Write player ratings with player_ratings.save_players, so the "
             "entrants that follow them are refreshed.",
         )
@@ -41,19 +42,28 @@ class GateTests(TestCase):
     def setUp(self):
         owner = User.objects.create_user(username="td-gate", password="pw")
         tournament = create_tournament(
-            None, owner,
+            None,
+            owner,
             {
-                "name": "Soon", "location": "X", "start_date": "2026-12-01",
-                "editors": [], "default_division": {"name": "Open", "pairing_seed": 1},
+                "name": "Soon",
+                "location": "X",
+                "start_date": "2026-12-01",
+                "editors": [],
+                "default_division": {"name": "Open", "pairing_seed": 1},
             },
         )
         self.player = Player.objects.create(
             name="Alec", player_number="0233", rating=1500
         )
         self.entrant = add_entrant(
-            tournament, owner,
-            {"division": "Open", "player": "0233",
-             "rating": 1500, "rating_source": Entrant.COCO},
+            tournament,
+            owner,
+            {
+                "division": "Open",
+                "player": "0233",
+                "rating": 1500,
+                "rating_source": Entrant.COCO,
+            },
         )
 
     def test_a_rating_write_reaches_the_entrant(self):

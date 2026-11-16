@@ -38,23 +38,35 @@ class CompletedRoundResetTests(TestCase):
         # Jen's sequence: three published games, forfeit each one, then clear
         # the six absence results from the results grid.
         for pairing in list(self.division.pairings.filter(round=1)):
-            forfeit_game(self.division.tournament, self.owner, {
-                "division": self.division.name, "round": 1,
-                "player": pairing.first.key,
-            })
+            forfeit_game(
+                self.division.tournament,
+                self.owner,
+                {
+                    "division": self.division.name,
+                    "round": 1,
+                    "player": pairing.first.key,
+                },
+            )
         self.rp.refresh_from_db()
         self.assertEqual(self.rp.status, RoundPairings.FINISHED)
         self.assertEqual(self.division.result_slips.count(), 6)
         self.save_results([])
         self.assertEqual(self.rp.status, RoundPairings.PUBLISHED)
         self.assertEqual(self.division.result_slips.count(), 0)
-        self.assertIn("pairings", PublishedPairingsPresenter(self.division).as_context())
-        self.assertTrue(PairingsPresenter(self.division).select(1).as_context()["can_unpublish_selected"])
+        self.assertIn(
+            "pairings", PublishedPairingsPresenter(self.division).as_context()
+        )
+        self.assertTrue(
+            PairingsPresenter(self.division)
+            .select(1)
+            .as_context()["can_unpublish_selected"]
+        )
 
         for route in ("unpublish_round", "publish_round"):
             response = self.client.post(
                 reverse(route, kwargs=self.division.slug_kwargs()),
-                {"round": 1}, follow=True,
+                {"round": 1},
+                follow=True,
             )
             self.assertEqual(response.status_code, 200, response.content)
         self.rp = self.division.round_pairings_set.get(round=1)
@@ -66,21 +78,42 @@ class CompletedRoundResetTests(TestCase):
     def test_partial_deletion_reopens_finished_round_with_played_results(self):
         slips = []
         for pairing in self.division.pairings.filter(round=1):
-            slips.append(ResultSlip.objects.create(
-                division=self.division, round=1, pairing=pairing,
-                winner=pairing.first, loser=pairing.second,
-                winner_score=400, loser_score=350, winner_started=True,
-            ))
+            slips.append(
+                ResultSlip.objects.create(
+                    division=self.division,
+                    round=1,
+                    pairing=pairing,
+                    winner=pairing.first,
+                    loser=pairing.second,
+                    winner_score=400,
+                    loser_score=350,
+                    winner_started=True,
+                )
+            )
         self.rp.update_status()
         self.assertEqual(self.rp.status, RoundPairings.FINISHED)
         kept = slips[0]
-        self.save_results([{
-            "round": 1, "winner": kept.winner_id, "loser": kept.loser_id,
-            "winner_score": 400, "loser_score": 350, "winner_started": True,
-        }])
+        self.save_results(
+            [
+                {
+                    "round": 1,
+                    "winner": kept.winner_id,
+                    "loser": kept.loser_id,
+                    "winner_score": 400,
+                    "loser_score": 350,
+                    "winner_started": True,
+                }
+            ]
+        )
         self.assertEqual(self.rp.status, RoundPairings.IN_PROGRESS)
-        self.assertFalse(PairingsPresenter(self.division).select(1).as_context()["can_unpublish_selected"])
-        self.assertIn("pairings", PublishedPairingsPresenter(self.division).as_context())
+        self.assertFalse(
+            PairingsPresenter(self.division)
+            .select(1)
+            .as_context()["can_unpublish_selected"]
+        )
+        self.assertIn(
+            "pairings", PublishedPairingsPresenter(self.division).as_context()
+        )
         self.save_results([], version=1)
         self.assertEqual(self.rp.status, RoundPairings.PUBLISHED)
 
@@ -89,18 +122,30 @@ class CompletedRoundResetTests(TestCase):
 
         pairing = self.division.pairings.filter(round=1).first()
         ResultSlip.objects.create(
-            division=self.division, round=1, pairing=pairing,
-            winner=pairing.first, loser=pairing.second,
-            winner_score=400, loser_score=350, winner_started=True,
+            division=self.division,
+            round=1,
+            pairing=pairing,
+            winner=pairing.first,
+            loser=pairing.second,
+            winner_score=400,
+            loser_score=350,
+            winner_started=True,
         )
         self.rp.update_status()
         url = reverse("unpublish_round", kwargs=self.division.slug_kwargs())
         self.client.post(url, {"round": 1})
         self.assertEqual(self.division.result_slips.count(), 1)
         for n in (7, 8):
-            p = Player.objects.create(name=f"New {n}", player_number=str(n), rating=1500)
-            Entrant.objects.create(division=self.division, player=p, number=n,
-                                   rating=1500, rating_source="manual")
+            p = Player.objects.create(
+                name=f"New {n}", player_number=str(n), rating=1500
+            )
+            Entrant.objects.create(
+                division=self.division,
+                player=p,
+                number=n,
+                rating=1500,
+                rating_source="manual",
+            )
         response = self.client.post(url, {"round": 1, "reset": "1"}, follow=True)
         self.assertEqual(response.status_code, 200)
         self.rp = self.division.round_pairings_set.get(round=1)
@@ -113,20 +158,30 @@ class CompletedRoundResetTests(TestCase):
     def test_finished_round_reset_generates_in_the_live_fragment(self):
         for pairing in self.division.pairings.filter(round=1):
             ResultSlip.objects.create(
-                division=self.division, round=1, pairing=pairing,
-                winner=pairing.first, loser=pairing.second,
-                winner_score=400, loser_score=350, winner_started=True,
+                division=self.division,
+                round=1,
+                pairing=pairing,
+                winner=pairing.first,
+                loser=pairing.second,
+                winner_score=400,
+                loser_score=350,
+                winner_started=True,
             )
         self.rp.update_status()
-        self.assertEqual(self.division.round_pairings_set.get(round=1).status, RoundPairings.FINISHED)
+        self.assertEqual(
+            self.division.round_pairings_set.get(round=1).status, RoundPairings.FINISHED
+        )
         response = self.client.post(
             reverse("unpublish_round", kwargs=self.division.slug_kwargs()),
             json.dumps({"round": 1, "reset": True}),
-            content_type="application/json", headers={"datastar-request": "true"},
+            content_type="application/json",
+            headers={"datastar-request": "true"},
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.division.result_slips.count(), 0)
-        self.assertEqual(self.division.round_pairings_set.get(round=1).status, RoundPairings.DRAFT)
+        self.assertEqual(
+            self.division.round_pairings_set.get(round=1).status, RoundPairings.DRAFT
+        )
         self.assertEqual(self.division.pairings.filter(round=1).count(), 3)
         body = b"".join(response.streaming_content).decode()
         self.assertIn("Publish round 1", body)
@@ -137,29 +192,43 @@ class CompletedRoundResetTests(TestCase):
 
         for pairing in self.division.pairings.filter(round=1):
             ResultSlip.objects.create(
-                division=self.division, round=1, pairing=pairing,
-                winner=pairing.first, loser=pairing.second,
-                winner_score=400, loser_score=350, winner_started=True,
+                division=self.division,
+                round=1,
+                pairing=pairing,
+                winner=pairing.first,
+                loser=pairing.second,
+                winner_score=400,
+                loser_score=350,
+                winner_started=True,
             )
         self.rp.update_status()
         regenerate_pairings(self.division)
         publish_rounds(self.division, [2])
         before = division_digest(self.division)
         with self.assertRaisesMessage(ValueError, "later rounds first"):
-            reset_round(self.division.tournament, self.owner,
-                        {"division": self.division.name, "round": 1})
+            reset_round(
+                self.division.tournament,
+                self.owner,
+                {"division": self.division.name, "round": 1},
+            )
         self.assertEqual(division_digest(self.division), before)
 
     def test_reset_warns_only_when_it_unstarts_the_division(self):
         for pairing in self.division.pairings.filter(round=1):
             ResultSlip.objects.create(
-                division=self.division, round=1, pairing=pairing,
-                winner=pairing.first, loser=pairing.second,
-                winner_score=400, loser_score=350, winner_started=True,
+                division=self.division,
+                round=1,
+                pairing=pairing,
+                winner=pairing.first,
+                loser=pairing.second,
+                winner_score=400,
+                loser_score=350,
+                winner_started=True,
             )
         self.rp.update_status()
         regenerate_pairings(self.division)
         publish_rounds(self.division, [2])
+
         def flag(r):
             presenter = PairingsPresenter(self.division).select(r)
             return presenter.as_context()["reset_restarts_division"]
@@ -172,9 +241,16 @@ class CompletedRoundResetTests(TestCase):
         from tournaments.models import Entrant, Player
 
         p = Player.objects.create(name="Late", player_number="900", rating=2100)
-        late = Entrant.objects.create(division=self.division, player=p, number=7,
-                                      rating=2100, rating_source="manual")
-        reseed_entrants(self.division.tournament, self.owner, {"division": self.division.name})
+        late = Entrant.objects.create(
+            division=self.division,
+            player=p,
+            number=7,
+            rating=2100,
+            rating_source="manual",
+        )
+        reseed_entrants(
+            self.division.tournament, self.owner, {"division": self.division.name}
+        )
         late.refresh_from_db()
         self.assertEqual(late.number, 7)  # under way: appended
 
@@ -182,25 +258,43 @@ class CompletedRoundResetTests(TestCase):
         self.client.post(url, {"round": 1, "reset": "1"}, follow=True)
         late.refresh_from_db()
         self.assertEqual(late.number, 1)
-        self.assertTrue(self.division.tournament.events.filter(event_type="entrants_reseeded").exists())
+        self.assertTrue(
+            self.division.tournament.events.filter(
+                event_type="entrants_reseeded"
+            ).exists()
+        )
 
         # The drafts were drawn off the new seeding, so publish goes straight through.
-        self.client.post(reverse("publish_round", kwargs=self.division.slug_kwargs()),
-                         {"round": 1}, follow=True)
-        self.assertEqual(self.division.round_pairings_set.get(round=1).status, RoundPairings.PUBLISHED)
-        self.assertTrue(self.division.pairings.filter(round=1).filter(
-            models.Q(first=late) | models.Q(second=late)).exists())
+        self.client.post(
+            reverse("publish_round", kwargs=self.division.slug_kwargs()),
+            {"round": 1},
+            follow=True,
+        )
+        self.assertEqual(
+            self.division.round_pairings_set.get(round=1).status,
+            RoundPairings.PUBLISHED,
+        )
+        self.assertTrue(
+            self.division.pairings.filter(round=1)
+            .filter(models.Q(first=late) | models.Q(second=late))
+            .exists()
+        )
 
     def test_resetting_a_draft_round_says_there_is_nothing_to_reset(self):
         response = self.client.post(
             reverse("unpublish_round", kwargs=self.division.slug_kwargs()),
-            {"round": 2, "reset": "1"}, follow=True,
+            {"round": 2, "reset": "1"},
+            follow=True,
         )
         self.assertContains(response, "nothing to reset")
-        self.assertFalse(self.division.tournament.events.filter(event_type="round_reset").exists())
+        self.assertFalse(
+            self.division.tournament.events.filter(event_type="round_reset").exists()
+        )
 
     def test_status_refresh_does_not_publish_a_draft(self):
-        draft = self.division.round_pairings_set.filter(status=RoundPairings.DRAFT).first()
+        draft = self.division.round_pairings_set.filter(
+            status=RoundPairings.DRAFT
+        ).first()
         if draft is None:
             draft = RoundPairings.objects.create(division=self.division, round=2)
         draft.update_status()
@@ -215,15 +309,24 @@ class CompletedRoundResetReplayTests(LoggedTournamentMixin, TestCase):
 
         tournament, division = self._build_logged_tournament()
         for pairing in list(division.pairings.filter(round=1)):
-            forfeit_game(tournament, self.owner, {
-                "division": division.name, "round": 1,
-                "player": pairing.first.key,
-            })
+            forfeit_game(
+                tournament,
+                self.owner,
+                {
+                    "division": division.name,
+                    "round": 1,
+                    "player": pairing.first.key,
+                },
+            )
         response = self._post_json("division_edit_results", division, {"rows": []})
         self.assertEqual(response.status_code, 200)
-        self.client.post(reverse("unpublish_round", kwargs=division.slug_kwargs()), {"round": 1})
+        self.client.post(
+            reverse("unpublish_round", kwargs=division.slug_kwargs()), {"round": 1}
+        )
         self.client.get(reverse("division_pair_rounds", kwargs=division.slug_kwargs()))
-        self.client.post(reverse("publish_round", kwargs=division.slug_kwargs()), {"round": 1})
+        self.client.post(
+            reverse("publish_round", kwargs=division.slug_kwargs()), {"round": 1}
+        )
         recorded = division_digest(division)
         ctx = replay(events_from_tournament(tournament), verify=True)
         self.assertEqual(division_digest(ctx.tournament.divisions.get()), recorded)
@@ -236,14 +339,28 @@ class CompletedRoundResetReplayTests(LoggedTournamentMixin, TestCase):
 
         tournament, division = self._build_logged_tournament()
         pairing = division.pairings.filter(round=1).first()
-        response = self._post_json("division_edit_results", division, {"rows": [{
-            "round": 1, "winner": pairing.first_id, "loser": pairing.second_id,
-            "winner_score": 400, "loser_score": 350, "winner_started": True,
-        }]})
+        response = self._post_json(
+            "division_edit_results",
+            division,
+            {
+                "rows": [
+                    {
+                        "round": 1,
+                        "winner": pairing.first_id,
+                        "loser": pairing.second_id,
+                        "winner_score": 400,
+                        "loser_score": 350,
+                        "winner_started": True,
+                    }
+                ]
+            },
+        )
         self.assertEqual(response.status_code, 200)
         reset_round(tournament, self.owner, {"division": division.name, "round": 1})
         regenerate_pairings(division)
         publish_round(tournament, self.owner, {"division": division.name, "round": 1})
         ctx = replay(events_from_tournament(tournament), verify=True)
-        self.assertEqual(division_digest(ctx.tournament.divisions.get()), division_digest(division))
+        self.assertEqual(
+            division_digest(ctx.tournament.divisions.get()), division_digest(division)
+        )
         self.assertEqual(ctx.drift, [])

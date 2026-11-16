@@ -29,8 +29,9 @@ def roster(*players, generated_at="2026-08-22T14:03:00Z"):
     }
 
 
-def entry(number, name, rating=1600, deviation=80.0, games=100,
-          last_played="2026-03-14"):
+def entry(
+    number, name, rating=1600, deviation=80.0, games=100, last_played="2026-03-14"
+):
     return {
         "player_number": number,
         "name": name,
@@ -60,8 +61,16 @@ class ParseTests(TestCase):
     def test_a_null_rating_becomes_zero(self):
         """Baxter has always spelled 'no CoCo rating' as 0."""
         _, rows = parse_roster(
-            roster(entry("7", "Nellie", rating=None, deviation=None,
-                         games=0, last_played=None))
+            roster(
+                entry(
+                    "7",
+                    "Nellie",
+                    rating=None,
+                    deviation=None,
+                    games=0,
+                    last_played=None,
+                )
+            )
         )
         self.assertEqual(rows[0]["rating"], 0)
         self.assertIsNone(rows[0]["deviation"])
@@ -138,8 +147,12 @@ class ImportTests(TestCase):
     def test_a_pull_clears_provisional(self):
         """A player the central database knows is not provisional any more."""
         Player.objects.create(
-            player_number="0233", name="Alec", rating=1600,
-            deviation=80.0, career_games=100, last_played=date(2026, 3, 14),
+            player_number="0233",
+            name="Alec",
+            rating=1600,
+            deviation=80.0,
+            career_games=100,
+            last_played=date(2026, 3, 14),
             is_provisional=True,
         )
         result = import_roster(roster(entry("0233", "Alec")))
@@ -148,8 +161,11 @@ class ImportTests(TestCase):
 
     def test_a_guest_the_roster_never_heard_of_is_left_alone(self):
         guest = Player.objects.create(
-            player_number="T-7", name="Gwen Guest", rating=0,
-            wespa_rating=1450, is_provisional=True,
+            player_number="T-7",
+            name="Gwen Guest",
+            rating=0,
+            wespa_rating=1450,
+            is_provisional=True,
         )
         import_roster(roster(entry("0233", "Alec")))
         guest.refresh_from_db()
@@ -164,9 +180,7 @@ class ImportTests(TestCase):
             player_number="0233", name="Alec", rating=1500, wespa_rating=1780
         )
         import_roster(roster(entry("0233", "Alec")))
-        self.assertEqual(
-            Player.objects.get(player_number="0233").wespa_rating, 1780
-        )
+        self.assertEqual(Player.objects.get(player_number="0233").wespa_rating, 1780)
 
     def test_the_bye_is_not_a_candidate(self):
         bye = Player.get_bye()
@@ -196,9 +210,7 @@ class SeedFreezingTests(TestCase):
         self.tournament = Tournament.objects.create(
             name="Live", location="X", start_date=date(2026, 5, 1), owner=owner
         )
-        self.division = Division.objects.create(
-            tournament=self.tournament, name="Open"
-        )
+        self.division = Division.objects.create(tournament=self.tournament, name="Open")
 
     def test_an_entrant_freezes_the_whole_seed_not_just_the_rating(self):
         import_roster(roster(entry("0233", "Alec")))
@@ -227,8 +239,16 @@ class SeedFreezingTests(TestCase):
         )
 
         import_roster(
-            roster(entry("0233", "Alec", rating=1900, deviation=60.0,
-                         games=200, last_played="2026-08-01"))
+            roster(
+                entry(
+                    "0233",
+                    "Alec",
+                    rating=1900,
+                    deviation=60.0,
+                    games=200,
+                    last_played="2026-08-01",
+                )
+            )
         )
 
         entrant.refresh_from_db()
@@ -242,8 +262,16 @@ class SeedFreezingTests(TestCase):
 
     def test_an_unrated_player_freezes_as_unrated(self):
         import_roster(
-            roster(entry("0007", "Nellie", rating=None, deviation=None,
-                         games=0, last_played=None))
+            roster(
+                entry(
+                    "0007",
+                    "Nellie",
+                    rating=None,
+                    deviation=None,
+                    games=0,
+                    last_played=None,
+                )
+            )
         )
         player = Player.objects.get(player_number="0007")
         entrant = Entrant.enter(self.division, player, 1)
@@ -452,14 +480,16 @@ class HeldBackTests(TestCase):
     def setUp(self):
         self.owner = User.objects.create_user(username="td-held", password="pw")
         self.tournament = Tournament.objects.create(
-            name="Champs", location="X",
-            start_date=date(2026, 5, 1), owner=self.owner,
+            name="Champs",
+            location="X",
+            start_date=date(2026, 5, 1),
+            owner=self.owner,
         )
-        self.division = Division.objects.create(
-            tournament=self.tournament, name="Open"
-        )
+        self.division = Division.objects.create(tournament=self.tournament, name="Open")
         self.guest = Player.objects.create(
-            name="Joe Thorngren", player_number="T-4", rating=0,
+            name="Joe Thorngren",
+            player_number="T-4",
+            rating=0,
             is_provisional=True,
         )
         self.entrant = Entrant.enter(self.division, self.guest, 1)
@@ -481,7 +511,9 @@ class HeldBackTests(TestCase):
     def test_two_guests_sharing_a_name_are_not_matched(self):
         """Exactly the case a human has to disambiguate."""
         Player.objects.create(
-            name="Joe Thorngren", player_number="T-9", rating=0,
+            name="Joe Thorngren",
+            player_number="T-9",
+            rating=0,
             is_provisional=True,
         )
         result = import_roster(roster(entry("0301", "Joe Thorngren")))
@@ -492,7 +524,9 @@ class HeldBackTests(TestCase):
         """Both have real numbers, so they are not the same human and the
         roster is right to add the one Baxter has not seen."""
         Player.objects.create(
-            name="Ada Real", player_number="0500", rating=1500,
+            name="Ada Real",
+            player_number="0500",
+            rating=1500,
             is_provisional=False,
         )
         result = import_roster(roster(entry("0600", "Ada Real")))
@@ -514,23 +548,37 @@ class ResolutionTests(TestCase):
         from tournaments.commands import create_tournament
 
         self.tournament = create_tournament(
-            None, self.owner,
+            None,
+            self.owner,
             {
-                "name": "Champs", "location": "X", "start_date": "2026-05-01",
-                "editors": [], "default_division": {"name": "Open", "pairing_seed": 1},
+                "name": "Champs",
+                "location": "X",
+                "start_date": "2026-05-01",
+                "editors": [],
+                "default_division": {"name": "Open", "pairing_seed": 1},
             },
         )
         self.division = self.tournament.divisions.get()
         self.guest = Player.objects.create(
-            name="Joe Thorngren", player_number="T-4", rating=0,
+            name="Joe Thorngren",
+            player_number="T-4",
+            rating=0,
             is_provisional=True,
         )
         self.entrant = Entrant.enter(self.division, self.guest, 1)
 
     def _pending(self):
         result = import_roster(
-            roster(entry("0301", "Joe Thorngren", rating=1400,
-                         deviation=90.0, games=12, last_played="2026-08-01"))
+            roster(
+                entry(
+                    "0301",
+                    "Joe Thorngren",
+                    rating=1400,
+                    deviation=90.0,
+                    games=12,
+                    last_played="2026-08-01",
+                )
+            )
         )
         return result.pending[0]
 
@@ -577,10 +625,14 @@ class ResolutionTests(TestCase):
         from tournaments.roster_import import resolve_number
 
         second = create_tournament(
-            None, self.owner,
+            None,
+            self.owner,
             {
-                "name": "Other", "location": "X", "start_date": "2026-06-01",
-                "editors": [], "default_division": {"name": "Open", "pairing_seed": 1},
+                "name": "Other",
+                "location": "X",
+                "start_date": "2026-06-01",
+                "editors": [],
+                "default_division": {"name": "Open", "pairing_seed": 1},
             },
         )
         Entrant.enter(second.divisions.get(), self.guest, 1)
@@ -625,9 +677,7 @@ class ResolutionTests(TestCase):
         self.guest.refresh_from_db()
         self.assertEqual(self.guest.player_number, "0301")
         self.assertEqual(
-            self.tournament.events.filter(
-                event_type="player_number_changed"
-            ).count(),
+            self.tournament.events.filter(event_type="player_number_changed").count(),
             0,
         )
 
@@ -640,7 +690,9 @@ class ResolutionViewTests(TestCase):
         self.client.force_login(self.admin)
         self.url = reverse("roster_import")
         self.guest = Player.objects.create(
-            name="Joe Thorngren", player_number="T-4", rating=0,
+            name="Joe Thorngren",
+            player_number="T-4",
+            rating=0,
             is_provisional=True,
         )
 
@@ -693,8 +745,6 @@ class ResolutionViewTests(TestCase):
             username="td-only", password="pw", role="director"
         )
         self.client.force_login(director)
-        self.client.post(
-            self.url, {"action": "resolve", "pending": "T-4:0301"}
-        )
+        self.client.post(self.url, {"action": "resolve", "pending": "T-4:0301"})
         self.guest.refresh_from_db()
         self.assertEqual(self.guest.player_number, "T-4")

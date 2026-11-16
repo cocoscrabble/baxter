@@ -257,16 +257,27 @@ def sheet_inputs(xlsx: Path) -> Path:
 
 def _run_one(inputs: Path, round_no: int, weight: int, distance: int, timeout: float):
     cmd = [
-        "node", str(SHEET_RUNNER), str(inputs),
-        "--through", str(round_no - 1), "--round", str(round_no),
-        "--sweep-weights", str(weight), "--sweep-distances", str(distance),
+        "node",
+        str(SHEET_RUNNER),
+        str(inputs),
+        "--through",
+        str(round_no - 1),
+        "--round",
+        str(round_no),
+        "--sweep-weights",
+        str(weight),
+        "--sweep-distances",
+        str(distance),
         # Put the field back to what it was: the Entrants tab records only the
         # final one, so without this the sheet cannot re-derive any round played
         # before a withdrawal.
-        "--active-at", str(round_no),
+        "--active-at",
+        str(round_no),
     ]
     try:
-        out = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout).stdout
+        out = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=timeout
+        ).stdout
     except subprocess.TimeoutExpired:
         return None
     for line in out.splitlines():
@@ -327,13 +338,18 @@ def load_inference_cache(xlsx: Path) -> dict:
             return cached
     return {
         "source": xlsx.name,
-        "grid": {"weights": list(CANDIDATE_WEIGHTS), "distances": list(CANDIDATE_DISTANCES)},
+        "grid": {
+            "weights": list(CANDIDATE_WEIGHTS),
+            "distances": list(CANDIDATE_DISTANCES),
+        },
         "rounds": {},
     }
 
 
 def save_inference_cache(xlsx: Path, cache: dict) -> None:
-    inference_cache_path(xlsx).write_text(json.dumps(cache, indent=2, sort_keys=True) + "\n")
+    inference_cache_path(xlsx).write_text(
+        json.dumps(cache, indent=2, sort_keys=True) + "\n"
+    )
 
 
 def infer_settings(
@@ -388,9 +404,24 @@ def infer_settings(
         # Rate first: a settings pair is right when its Swiss portion reproduces
         # exactly. Among exact fits prefer the one explaining the most matchups,
         # then the wider slice.
-        scored.append((hit / len(swiss), len(swiss), distance, run["swiss_weight"], hit, len(swiss)))
+        scored.append(
+            (
+                hit / len(swiss),
+                len(swiss),
+                distance,
+                run["swiss_weight"],
+                hit,
+                len(swiss),
+            )
+        )
     if not scored:
-        return dict(ENGINE_DEFAULTS), {k: [] for k in ENGINE_DEFAULTS}, 0, 0, (0, attempted)
+        return (
+            dict(ENGINE_DEFAULTS),
+            {k: [] for k in ENGINE_DEFAULTS},
+            0,
+            0,
+            (0, attempted),
+        )
 
     # Rate first, then the widest slice — that much is evidence. Beyond that the
     # round genuinely cannot tell the settings apart (R11 of the NOLA event fits
@@ -459,7 +490,9 @@ class RoundReport:
 
     @property
     def identical(self) -> bool:
-        return {r.key() for r in self.sheet_swiss} == {r.key() for r in self.baxter_swiss}
+        return {r.key() for r in self.sheet_swiss} == {
+            r.key() for r in self.baxter_swiss
+        }
 
     @property
     def agree(self) -> int:
@@ -665,7 +698,9 @@ def build_round(
         split_applied=split_applied,
         sheet_settings=dict(tournament.settings.swiss),
         standings=standings,
-        group_index={n: (gi, i) for gi, g in enumerate(groups) for i, n in enumerate(g)},
+        group_index={
+            n: (gi, i) for gi, g in enumerate(groups) for i, n in enumerate(g)
+        },
         swiss_names=swiss_names,
         fixed=fixed,
         sheet_swiss=sheet_swiss,
@@ -707,8 +742,11 @@ def render_round_text(out, rep: RoundReport) -> None:
     print(f"  stored in the workbook  : {stored}", file=out)
     print(f"  baxter paired this with : {used}", file=out)
 
-    print(f"\n  Standings after round {rep.start_round}"
-          f"   (grp = win group / index within it)", file=out)
+    print(
+        f"\n  Standings after round {rep.start_round}"
+        f"   (grp = win group / index within it)",
+        file=out,
+    )
     for i, p in enumerate(rep.standings):
         gi, gj = rep.group_index.get(p.name, ("?", "?"))
         mark = " " if p.name in rep.swiss_names else "."
@@ -719,8 +757,11 @@ def render_round_text(out, rep: RoundReport) -> None:
             file=out,
         )
     if not rep.is_swiss_only:
-        print(f"\n   ' ' = Swiss-paired (top {rep.spr_split} of the unfixed field)"
-              f",  '.' = random portion", file=out)
+        print(
+            f"\n   ' ' = Swiss-paired (top {rep.spr_split} of the unfixed field)"
+            f",  '.' = random portion",
+            file=out,
+        )
 
     def print_rest(label, rows):
         if not rows:
@@ -731,16 +772,24 @@ def render_round_text(out, rep: RoundReport) -> None:
 
     if rep.identical and rep.sheet_swiss:
         # Nothing to compare: list the agreed matchups once rather than twice.
-        print("\n  PAIRINGS WERE IDENTICAL — sheet and Baxter produced the same "
-              f"{len(rep.sheet_swiss)} Swiss matchups", file=out)
+        print(
+            "\n  PAIRINGS WERE IDENTICAL — sheet and Baxter produced the same "
+            f"{len(rep.sheet_swiss)} Swiss matchups",
+            file=out,
+        )
         for r in rep.sheet_swiss:
             print(fmt(r, "=", width), file=out)
         print(f"    {'-' * 46} swiss slice: {totals(rep.sheet_swiss)}", file=out)
-        print_rest("sheet: rest of field / fixed pairings (not compared)", rep.sheet_rest)
+        print_rest(
+            "sheet: rest of field / fixed pairings (not compared)", rep.sheet_rest
+        )
         print_rest(rep_rest_label(rep), rep.baxter_rest)
     else:
-        print(f"\n  PAIRINGS DIFFERED — {rep.agree} of {len(rep.sheet_swiss)} sheet "
-              "matchups reproduced", file=out)
+        print(
+            f"\n  PAIRINGS DIFFERED — {rep.agree} of {len(rep.sheet_swiss)} sheet "
+            "matchups reproduced",
+            file=out,
+        )
         for label, swiss_rows, rest_rows in (
             ("SHEET  (Code.ts)", rep.sheet_swiss, rep.sheet_rest),
             (f"BAXTER ({rep.baxter_engine})", rep.baxter_swiss, rep.baxter_rest),
@@ -759,7 +808,9 @@ def render_round_text(out, rep: RoundReport) -> None:
         sheet_only, baxter_only = rep.only(rep.sheet_swiss), rep.only(rep.baxter_swiss)
         if sheet_only or baxter_only:
             print("\n  DIFFERENCES (matchups unique to each)", file=out)
-            for i, (tag, rows) in enumerate((("sheet", sheet_only), ("baxter", baxter_only))):
+            for i, (tag, rows) in enumerate(
+                (("sheet", sheet_only), ("baxter", baxter_only))
+            ):
                 if i:
                     print(file=out)
                 for r in rows:
@@ -778,7 +829,10 @@ def render_round_text(out, rep: RoundReport) -> None:
 def render_text(out, reports: list[RoundReport], meta: dict) -> None:
     print(f"Swiss comparison for {meta['file']}", file=out)
     print(f"  sheet settings : {meta['sheet_settings']}", file=out)
-    print(f"  baxter config  : {meta['baxter_config']}, spr_split {meta['split']}", file=out)
+    print(
+        f"  baxter config  : {meta['baxter_config']}, spr_split {meta['split']}",
+        file=out,
+    )
     print(f"  rounds compared: {meta['rounds']}", file=out)
     for warning in meta.get("warnings", []):
         print(f"\n  !! {warning}", file=out)
@@ -786,8 +840,11 @@ def render_text(out, reports: list[RoundReport], meta: dict) -> None:
     for rep in reports:
         render_round_text(out, rep)
 
-    print(f"\n\n{'=' * 100}\nSUMMARY (Swiss slice only; random portion excluded)"
-          f"\n{'=' * 100}", file=out)
+    print(
+        f"\n\n{'=' * 100}\nSUMMARY (Swiss slice only; random portion excluded)"
+        f"\n{'=' * 100}",
+        file=out,
+    )
     print(
         "  NOTE: settings are inferred per round from the pairings the sheet\n"
         "        produced, because the workbook stores only the final config.\n"
@@ -1033,7 +1090,7 @@ def render_round_html(rep: RoundReport) -> str:
 
     if rep.identical and rep.sheet_swiss:
         body = (
-            f'<p><b>Pairings were identical</b> — sheet and Baxter produced the same '
+            f"<p><b>Pairings were identical</b> — sheet and Baxter produced the same "
             f"{len(rep.sheet_swiss)} Swiss matchups.</p>"
             + pair_table(rep.sheet_swiss, rep.shared)
             + totals_line(rep.sheet_swiss)
@@ -1088,7 +1145,7 @@ def render_round_html(rep: RoundReport) -> str:
     badge = BADGE[rep.verdict]
     return (
         f'<details class="round" id="r{rep.round_no}" data-verdict="{esc(rep.verdict)}"'
-        f'{"" if rep.identical else " open"}>'
+        f"{'' if rep.identical else ' open'}>"
         f"<summary>Round {rep.round_no}"
         f'<span class="tag">{esc(rep.code)} &middot; {esc(rep.strategy)} &middot; '
         f"off round {rep.start_round} &middot; split {rep.spr_split}</span>"
@@ -1248,7 +1305,9 @@ def build_reports(tournament, args, config) -> tuple[list, dict]:
             "distances": list(CANDIDATE_DISTANCES),
         }
     known = len(cache["rounds"])
-    reports = [build_round(tournament, r, args.spr_split, config, cache) for r in rounds]
+    reports = [
+        build_round(tournament, r, args.spr_split, config, cache) for r in rounds
+    ]
     if len(cache["rounds"]) != known:
         save_inference_cache(tournament.path, cache)
 
@@ -1357,21 +1416,28 @@ def main() -> None:
                 "html" if args.out.suffix.lower() == ".html" else "text"
             )
             if fmt_name == "both":
-                raise SystemExit("--format both needs the reports/ directory, not --out")
+                raise SystemExit(
+                    "--format both needs the reports/ directory, not --out"
+                )
             write_report(reports, meta, args.out, fmt_name)
             print(f"wrote {args.out}")
             continue
 
         out_dir = workbook.parent / "reports"
         out_dir.mkdir(exist_ok=True)
-        for fmt_name in ("text", "html") if (args.format or "both") == "both" else [args.format]:
+        for fmt_name in (
+            ("text", "html") if (args.format or "both") == "both" else [args.format]
+        ):
             suffix = ".html" if fmt_name == "html" else ".txt"
             target = out_dir / (workbook.stem + suffix)
             write_report(reports, meta, target, fmt_name)
             print(f"wrote {target}")
 
     if failures:
-        print(f"\n{len(failures)} workbook(s) skipped: {', '.join(failures)}", file=sys.stderr)
+        print(
+            f"\n{len(failures)} workbook(s) skipped: {', '.join(failures)}",
+            file=sys.stderr,
+        )
 
 
 if __name__ == "__main__":

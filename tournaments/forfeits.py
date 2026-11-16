@@ -168,14 +168,13 @@ def _retire_bye(division, round_pairings, pairing, *, record_absence):
         # was never overridden, so it takes the forfeit spread instead.
         slip.winner, slip.loser = slip.loser, slip.winner
         if (slip.winner_score, slip.loser_score) == (
-            absence_spread(division), BYE_LOSER_SCORE
+            absence_spread(division),
+            BYE_LOSER_SCORE,
         ):
             slip.winner_score = absence_spread(division, forfeit=True)
         # The bye leads either way, so the real player is charged no start.
         slip.winner_started = True
-        slip.save(
-            update_fields=["winner", "loser", "winner_score", "winner_started"]
-        )
+        slip.save(update_fields=["winner", "loser", "winner_score", "winner_started"])
     round_pairings.update_status()
     return {"round": round_pairings.round, "opponent": None}
 
@@ -190,9 +189,7 @@ def _resolve_open_rounds(division, entrant, *, record_absence):
     """Repair every printed round the entrant is no longer going to play."""
     resolved = []
     for rp in _open_rounds(division):
-        change = resolve_absence(
-            division, rp, entrant, record_absence=record_absence
-        )
+        change = resolve_absence(division, rp, entrant, record_absence=record_absence)
         if change is not None:
             resolved.append(change)
     return resolved
@@ -223,9 +220,7 @@ def save_absence_settings(tournament, actor, payload):
     settings_obj, _ = DivisionSettings.objects.get_or_create(division=division)
     settings_obj.withdrawal = payload["withdrawal"]
     settings_obj.bye_spread = payload["bye_spread"]
-    settings_obj.forfeit_spread = payload.get(
-        "forfeit_spread", payload["bye_spread"]
-    )
+    settings_obj.forfeit_spread = payload.get("forfeit_spread", payload["bye_spread"])
     settings_obj.save(update_fields=["withdrawal", "bye_spread", "forfeit_spread"])
     # Draft rounds were laid out under the old rule, so they are stale — a
     # division switching to FORFEIT wants its forfeit rows, and one switching
@@ -249,9 +244,7 @@ def withdraw_entrant(tournament, actor, payload):
     record_absence = withdrawal_policy(division) == DivisionSettings.FORFEIT
     entrant.dropped = True
     entrant.save(update_fields=["dropped"])
-    resolved = _resolve_open_rounds(
-        division, entrant, record_absence=record_absence
-    )
+    resolved = _resolve_open_rounds(division, entrant, record_absence=record_absence)
     _invalidate_drafts(division)
     return EventResult(
         payload={**payload, "resolved": resolved},

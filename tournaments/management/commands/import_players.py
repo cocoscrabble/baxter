@@ -10,7 +10,9 @@ class Command(BaseCommand):
     help = "Import players from a CSV file"
 
     def add_arguments(self, parser):
-        parser.add_argument("csv_file", help="Path to CSV file with Name,Number,Rating columns")
+        parser.add_argument(
+            "csv_file", help="Path to CSV file with Name,Number,Rating columns"
+        )
         parser.add_argument(
             "--update",
             action="store_true",

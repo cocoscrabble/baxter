@@ -4,15 +4,27 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('tournaments', '0052_tournamentevent_digest_version'),
+        ("tournaments", "0052_tournamentevent_digest_version"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='adminaction',
-            name='kind',
-            field=models.CharField(choices=[('roster_pull', 'PlayerDB pull'), ('roster_resolution', 'Guest number confirmed'), ('wespa_pull', 'WESPA pull'), ('wespa_link', 'WESPA link'), ('wespa_unlink', 'WESPA unlink'), ('player_import', 'Player import'), ('player_merge', 'Guest merged'), ('password_set', 'Password set'), ('database_export', 'Database export')], max_length=32),
+            model_name="adminaction",
+            name="kind",
+            field=models.CharField(
+                choices=[
+                    ("roster_pull", "PlayerDB pull"),
+                    ("roster_resolution", "Guest number confirmed"),
+                    ("wespa_pull", "WESPA pull"),
+                    ("wespa_link", "WESPA link"),
+                    ("wespa_unlink", "WESPA unlink"),
+                    ("player_import", "Player import"),
+                    ("player_merge", "Guest merged"),
+                    ("password_set", "Password set"),
+                    ("database_export", "Database export"),
+                ],
+                max_length=32,
+            ),
         ),
     ]

@@ -118,7 +118,8 @@ class CompletenessTests(TestCase):
                 continue
             with self.subTest(view=name):
                 self.assertIn(
-                    url, listed,
+                    url,
+                    listed,
                     f"{name} is admin-only but not linked from /manage/, so the "
                     f"only way to reach it is to know the URL",
                 )
@@ -148,14 +149,23 @@ class RosterStatusTests(TestCase):
             name="Joe Thorngren", player_number="T-4", rating=0, is_provisional=True
         )
         RosterSync.objects.create(
-            source=RosterSync.SCHEDULED, ok=True,
-            pending=[{
-                "local_number": "T-4", "roster_number": "0301",
-                "name": "Joe Thorngren",
-                "row": {"player_number": "0301", "name": "Joe Thorngren",
-                        "rating": 1400, "deviation": None, "career_games": 0,
-                        "last_played": None},
-            }],
+            source=RosterSync.SCHEDULED,
+            ok=True,
+            pending=[
+                {
+                    "local_number": "T-4",
+                    "roster_number": "0301",
+                    "name": "Joe Thorngren",
+                    "row": {
+                        "player_number": "0301",
+                        "name": "Joe Thorngren",
+                        "rating": 1400,
+                        "deviation": None,
+                        "career_games": 0,
+                        "last_played": None,
+                    },
+                }
+            ],
         )
         response = self.client.get(self.url)
         self.assertContains(response, "need")
@@ -163,7 +173,8 @@ class RosterStatusTests(TestCase):
 
     def test_a_failing_scheduled_pull_is_flagged(self):
         RosterSync.objects.create(
-            source=RosterSync.SCHEDULED, ok=False,
+            source=RosterSync.SCHEDULED,
+            ok=False,
             error="The central database rejected the token.",
         )
         self.assertContains(self.client.get(self.url), "rejected the token")

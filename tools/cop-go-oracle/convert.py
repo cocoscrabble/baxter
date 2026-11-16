@@ -134,10 +134,15 @@ def convert(req):
             if i < opp:
                 a, b = scores[i], scores[opp]
                 winner, loser = (i, opp) if a >= b else (opp, i)
-                slips.append(_slip(
-                    round_idx + 1, names[winner], names[loser],
-                    scores[winner], scores[loser],
-                ))
+                slips.append(
+                    _slip(
+                        round_idx + 1,
+                        names[winner],
+                        names[loser],
+                        scores[winner],
+                        scores[loser],
+                    )
+                )
 
     to_pair = len(results) + 1
     fixed = {}

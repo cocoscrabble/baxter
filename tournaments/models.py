@@ -16,6 +16,7 @@ def random_pairing_seed():
     the Rust engine's u64 seed."""
     return secrets.randbelow(2**63)
 
+
 # Slugs that would shadow a sibling static route's own detail page (the static
 # routes themselves always win at request time thanks to URL ordering; this set
 # only stops a generated slug from making an object's own page unreachable).
@@ -31,7 +32,7 @@ def unique_slug(base, queryset, max_length, fallback):
     n = 2
     while candidate in RESERVED_SLUGS or queryset.filter(slug=candidate).exists():
         suffix = f"-{n}"
-        candidate = f"{root[:max_length - len(suffix)]}{suffix}"
+        candidate = f"{root[: max_length - len(suffix)]}{suffix}"
         n += 1
     return candidate
 
@@ -125,8 +126,11 @@ class Tournament(models.Model):
         super().save(*args, **kwargs)
         if old_slug and old_slug != self.slug:
             record_slug_alias(
-                TournamentSlugAlias, scope={},
-                old_slug=old_slug, new_slug=self.slug, owner={"tournament": self},
+                TournamentSlugAlias,
+                scope={},
+                old_slug=old_slug,
+                new_slug=self.slug,
+                owner={"tournament": self},
             )
 
     def get_absolute_url(self):
@@ -145,6 +149,7 @@ class Tournament(models.Model):
         if not user.is_authenticated:
             return False
         from users.models import User
+
         if user.has_role_at_least(User.Role.SUPERVISOR):
             return True
         # ``owner_id``, not ``owner``: comparing the objects dereferences the FK,
@@ -165,6 +170,7 @@ class Tournament(models.Model):
         if user.pk == self.owner_id:
             return True
         from users.models import User
+
         return user.has_role_at_least(User.Role.ADMIN)
 
     def division_buckets(self):
@@ -237,8 +243,11 @@ class Division(models.Model):
         super().save(*args, **kwargs)
         if old_slug and old_slug != self.slug:
             record_slug_alias(
-                DivisionSlugAlias, scope={"tournament": self.tournament},
-                old_slug=old_slug, new_slug=self.slug, owner={"division": self},
+                DivisionSlugAlias,
+                scope={"tournament": self.tournament},
+                old_slug=old_slug,
+                new_slug=self.slug,
+                owner={"division": self},
             )
 
     def soft_delete(self):
@@ -264,9 +273,7 @@ class Division(models.Model):
         bye counted (a player 6-1 after seven rounds shown as 7-1). A round's
         byes count once any game in it is in.
         """
-        return (
-            self.result_slips.played().aggregate(r=models.Max("round"))["r"] or 0
-        )
+        return self.result_slips.played().aggregate(r=models.Max("round"))["r"] or 0
 
     def under_way(self):
         """Whether any round has left draft.
@@ -278,9 +285,7 @@ class Division(models.Model):
         (``entrant_sync.refresh_before_start``). It used to live with the second, which
         made the first look like a detail of rating sync.
         """
-        return self.round_pairings_set.exclude(
-            status=RoundPairings.DRAFT
-        ).exists()
+        return self.round_pairings_set.exclude(status=RoundPairings.DRAFT).exists()
 
     def bye_entrant(self):
         """Get or create this division's bye entrant (one per division, all
@@ -758,9 +763,7 @@ class Entrant(models.Model):
     # whenever those move (entrant_sync.refresh_upcoming), always by a logged
     # command carrying the values -- never re-derived on read.
     rating = models.IntegerField(default=0)
-    rating_source = models.CharField(
-        max_length=8, choices=RATING_SOURCES, default=NONE
-    )
+    rating_source = models.CharField(max_length=8, choices=RATING_SOURCES, default=NONE)
     # The rest of the rating seed, frozen with the rating, for live ratings.
     deviation = models.FloatField(default=0.0)
     career_games = models.IntegerField(default=0)
@@ -822,9 +825,10 @@ class Entrant(models.Model):
         or not the bye is a competitor.
         """
         return (
-            cls.all_objects.filter(division=division).aggregate(
-                m=models.Max("number")
-            )["m"] or 0
+            cls.all_objects.filter(division=division).aggregate(m=models.Max("number"))[
+                "m"
+            ]
+            or 0
         ) + 1
 
     @classmethod
@@ -900,7 +904,13 @@ class Entrant(models.Model):
 
     @classmethod
     def enter(
-        cls, division, player, number, *, rating=None, rating_source=None,
+        cls,
+        division,
+        player,
+        number,
+        *,
+        rating=None,
+        rating_source=None,
         **registration,
     ):
         """Enter ``player`` in ``division``, pinning their rating.
@@ -971,8 +981,7 @@ class ResultSlipQuerySet(models.QuerySet):
         (plans/PLAN_FORFEITS.md §4), there is no forfeit that does not carry it.
         """
         return self.exclude(
-            models.Q(winner__player__is_bye=True)
-            | models.Q(loser__player__is_bye=True)
+            models.Q(winner__player__is_bye=True) | models.Q(loser__player__is_bye=True)
         )
 
     def not_played(self):
@@ -982,8 +991,7 @@ class ResultSlipQuerySet(models.QuerySet):
         round delete them and let publish write them again.
         """
         return self.filter(
-            models.Q(winner__player__is_bye=True)
-            | models.Q(loser__player__is_bye=True)
+            models.Q(winner__player__is_bye=True) | models.Q(loser__player__is_bye=True)
         )
 
 
@@ -1116,7 +1124,8 @@ class RoundPairings(models.Model):
             return True
         entry = next((r for r in schedule if r["round"] == self.round), None)
         return entry is not None and (entry["pairing"], entry["start_round"]) == (
-            self.paired_with, self.paired_from,
+            self.paired_with,
+            self.paired_from,
         )
 
     class Meta:
@@ -1134,9 +1143,9 @@ class RoundPairings(models.Model):
         # game, so it doesn't make a round "in progress" — only a contested
         # result does. Both still count toward `with_results` for reaching
         # FINISHED below.
-        real_results = ResultSlip.objects.filter(
-            pairing__round_pairings=self
-        ).played().count()
+        real_results = (
+            ResultSlip.objects.filter(pairing__round_pairings=self).played().count()
+        )
         if self.status == RoundPairings.DRAFT:
             return  # Refreshing results must never publish an unseen board.
         if total > 0 and with_results == total:
@@ -1151,7 +1160,6 @@ class RoundPairings(models.Model):
         if status != self.status:
             self.status = status
             self.save(update_fields=["status"])
-
 
 
 class Pairing(models.Model):
@@ -1607,8 +1615,11 @@ class AdminAction(models.Model):
     # None for a scheduled pull. SET_NULL so deleting an account keeps its
     # history; ``actor_name`` is what the page shows then.
     actor = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True,
-        on_delete=models.SET_NULL, related_name="+",
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
     )
     actor_name = models.CharField(max_length=150, blank=True)
     ok = models.BooleanField()

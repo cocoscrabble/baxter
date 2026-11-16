@@ -80,10 +80,9 @@ class LocalPlayerSource(PlayerSource):
         query = (query or "").strip()
         if not query:
             return []
-        matches = (
-            Player.objects.filter(is_bye=False, name__icontains=query)
-            .order_by("name", "player_number")[: self.LIMIT]
-        )
+        matches = Player.objects.filter(is_bye=False, name__icontains=query).order_by(
+            "name", "player_number"
+        )[: self.LIMIT]
         return [self._record(p) for p in matches]
 
     def fetch(self, player_number):

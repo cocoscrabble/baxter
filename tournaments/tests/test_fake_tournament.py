@@ -22,16 +22,16 @@ class CreateFakeTournamentTest(TestCase):
         provisional_ids = set()
         for i in range(4):
             p = Player.objects.create(
-                name=f"Prov {i}", player_number=f"T-{i}", rating=1500,
+                name=f"Prov {i}",
+                player_number=f"T-{i}",
+                rating=1500,
                 is_provisional=True,
             )
             provisional_ids.add(p.pk)
 
         division = create_fake_tournament(self.user, num_players=6, num_rounds=2)
 
-        entrant_player_ids = set(
-            division.entrants.values_list("player_id", flat=True)
-        )
+        entrant_player_ids = set(division.entrants.values_list("player_id", flat=True))
         self.assertEqual(entrant_player_ids & provisional_ids, set())
 
     def test_fills_entrants_and_sets_all_rounds_koth(self):
@@ -88,7 +88,7 @@ class CreateFakeTournamentTest(TestCase):
 
 
 class PlayoffOnlyFakeTournamentTest(TestCase):
-    """"Playoffs only" builds a division with entrants and no schedule, so its
+    """ "Playoffs only" builds a division with entrants and no schedule, so its
     playoff can qualify on round 0."""
 
     def setUp(self):
@@ -124,16 +124,21 @@ class PlayoffOnlyFakeTournamentTest(TestCase):
         kwargs = division.slug_kwargs()
         self.client.post(
             reverse("division_playoff_setup", kwargs=kwargs),
-            {"action": "confirm", "qualification_round": 0,
-             "qualifier_count": 4, "timing": "postscript"},
+            {
+                "action": "confirm",
+                "qualification_round": 0,
+                "qualifier_count": 4,
+                "timing": "postscript",
+            },
         )
         self.assertIsNotNone(playoff_for(division))
         round_num = 1
         while not playoff_for(division).bracket().get(CHAMPIONSHIP).decided:
             self.assertLess(round_num, 10)
             self.client.get(reverse("division_pair_rounds", kwargs=kwargs))
-            self.client.post(reverse("publish_round", kwargs=kwargs),
-                             {"round": round_num})
+            self.client.post(
+                reverse("publish_round", kwargs=kwargs), {"round": round_num}
+            )
             if round_num == 1:
                 page = self.client.get(
                     reverse("division_pair_rounds", kwargs=kwargs)
@@ -142,7 +147,8 @@ class PlayoffOnlyFakeTournamentTest(TestCase):
                 self.assertContains(page, "simulate all")
             response = self.client.post(
                 reverse("simulate_round", kwargs=kwargs),
-                json.dumps({"round": round_num}), content_type="application/json",
+                json.dumps({"round": round_num}),
+                content_type="application/json",
             )
             self.assertNotEqual(response.status_code, 403)
             round_num += 1
@@ -150,8 +156,10 @@ class PlayoffOnlyFakeTournamentTest(TestCase):
     def test_entrants_are_numbered_by_rating(self):
         division = create_fake_tournament(self.user, 4, 0)
         self.assertEqual(
-            [[e.player.player_number, e.number]
-             for e in division.entrants.order_by("number")],
+            [
+                [e.player.player_number, e.number]
+                for e in division.entrants.order_by("number")
+            ],
             Entrant.seeding_for(division),
         )
 
@@ -177,7 +185,9 @@ class FakeTournamentDeleteTest(TestCase):
             Player.objects.create(
                 name=f"FT {i}", player_number=f"FT{i}", rating=1500 + i
             )
-        cls.fake = create_fake_tournament(cls.owner, num_players=4, num_rounds=2).tournament
+        cls.fake = create_fake_tournament(
+            cls.owner, num_players=4, num_rounds=2
+        ).tournament
         cls.real = Tournament.objects.create(
             name="Real", location="X", start_date=date.today(), owner=cls.owner
         )
@@ -204,8 +214,10 @@ class FakeTournamentDeleteTest(TestCase):
         self.client.login(username="admin_ft", password="p")
         html = self.client.get(reverse("tournament_list")).content.decode()
         self.assertIn(
-            reverse("tournament_delete", kwargs={"tournament_slug": self.fake.slug}), html
+            reverse("tournament_delete", kwargs={"tournament_slug": self.fake.slug}),
+            html,
         )
         self.assertNotIn(
-            reverse("tournament_delete", kwargs={"tournament_slug": self.real.slug}), html
+            reverse("tournament_delete", kwargs={"tournament_slug": self.real.slug}),
+            html,
         )

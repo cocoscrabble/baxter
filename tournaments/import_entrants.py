@@ -23,9 +23,10 @@ from tournaments.models import (
 @dataclass
 class ImportResult:
     """Result of a bulk import operation."""
-    created: list = field(default_factory=list)   # dicts with name, player_number
-    matched: list = field(default_factory=list)    # player names matched to existing
-    skipped: list = field(default_factory=list)    # player names already in division
+
+    created: list = field(default_factory=list)  # dicts with name, player_number
+    matched: list = field(default_factory=list)  # player names matched to existing
+    skipped: list = field(default_factory=list)  # player names already in division
     added: int = 0
 
 
@@ -91,12 +92,12 @@ def _resolve_one(number, name, row_number):
     if number:
         player = Player.objects.filter(player_number=number).first()
         if player is None:
-            return None, (
-                f"Row {row_number}: no player with number '{number}'."
-            )
+            return None, (f"Row {row_number}: no player with number '{number}'.")
         return player, None
 
-    candidates = list(Player.objects.filter(name__iexact=name).order_by("player_number"))
+    candidates = list(
+        Player.objects.filter(name__iexact=name).order_by("player_number")
+    )
     if len(candidates) > 1:
         listed = ", ".join(f"{p.name} (#{p.player_number})" for p in candidates)
         return None, (
@@ -147,7 +148,9 @@ def resolve_players(parsed_rows, existing_entrant_keys):
                 rating=rating,
                 is_provisional=True,
             )
-            result.created.append({"name": player.name, "player_number": player.player_number})
+            result.created.append(
+                {"name": player.name, "player_number": player.player_number}
+            )
 
         players_to_add.append(player)
 
@@ -165,8 +168,7 @@ def import_entrants(division, text):
         return None, errors
 
     existing_entrant_keys = set(
-        e.player.player_number
-        for e in division.entrants.select_related("player")
+        e.player.player_number for e in division.entrants.select_related("player")
     )
 
     players_to_add, result, errors = resolve_players(parsed, existing_entrant_keys)

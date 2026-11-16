@@ -6,31 +6,61 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('tournaments', '0031_divisionsettings_pairing_seed'),
+        ("tournaments", "0031_divisionsettings_pairing_seed"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='TournamentEvent',
+            name="TournamentEvent",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('seq', models.PositiveIntegerField()),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('actor_session', models.CharField(blank=True, max_length=64)),
-                ('event_type', models.CharField(max_length=50)),
-                ('schema_version', models.PositiveSmallIntegerField(default=1)),
-                ('payload', models.JSONField()),
-                ('digest', models.CharField(blank=True, max_length=64)),
-                ('actor', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL)),
-                ('division', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='tournaments.division')),
-                ('tournament', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='events', to='tournaments.tournament')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("seq", models.PositiveIntegerField()),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("actor_session", models.CharField(blank=True, max_length=64)),
+                ("event_type", models.CharField(max_length=50)),
+                ("schema_version", models.PositiveSmallIntegerField(default=1)),
+                ("payload", models.JSONField()),
+                ("digest", models.CharField(blank=True, max_length=64)),
+                (
+                    "actor",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "division",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        to="tournaments.division",
+                    ),
+                ),
+                (
+                    "tournament",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="events",
+                        to="tournaments.tournament",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['tournament', 'seq'],
-                'unique_together': {('tournament', 'seq')},
+                "ordering": ["tournament", "seq"],
+                "unique_together": {("tournament", "seq")},
             },
         ),
     ]

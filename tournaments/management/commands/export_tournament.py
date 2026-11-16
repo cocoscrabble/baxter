@@ -10,7 +10,8 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("tournament_id", type=int, help="Tournament ID")
         parser.add_argument(
-            "-o", "--output",
+            "-o",
+            "--output",
             help="Write the JSON to this file instead of stdout.",
         )
 
@@ -27,8 +28,10 @@ class Command(BaseCommand):
         if output:
             with open(output, "w", encoding="utf-8") as f:
                 f.write(text)
-            self.stdout.write(self.style.SUCCESS(
-                f"Exported tournament '{tournament.name}' to {output}"
-            ))
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"Exported tournament '{tournament.name}' to {output}"
+                )
+            )
         else:
             self.stdout.write(text)

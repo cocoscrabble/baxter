@@ -63,9 +63,12 @@ class PullTests(TestCase):
         self.assertEqual(action.error, "The central database rejected the token.")
 
     def test_a_crashed_pull_is_logged_and_still_raises(self):
-        with served(roster(entry("0233", "Alec"))), patch(
-            "tournaments.roster_sync.import_roster",
-            side_effect=RuntimeError("disk full"),
+        with (
+            served(roster(entry("0233", "Alec"))),
+            patch(
+                "tournaments.roster_sync.import_roster",
+                side_effect=RuntimeError("disk full"),
+            ),
         ):
             with self.assertRaises(RuntimeError):
                 run_sync(RosterSync.SCHEDULED)
@@ -74,15 +77,19 @@ class PullTests(TestCase):
         self.assertIn("RuntimeError: disk full", action.error)
 
     def test_a_hand_pull_names_who_ran_it(self):
-        admin = User.objects.create_user(username="admin-log", password="pw", role="admin")
+        admin = User.objects.create_user(
+            username="admin-log", password="pw", role="admin"
+        )
         with patch(
             "tournaments.wespa_sync.fetch_wespa",
             return_value=document(row(7, "Bea Fox", 1450)),
         ):
             wespa_sync.run_sync(WespaSync.MANUAL, actor=admin)
         action = AdminAction.objects.get()
-        self.assertEqual((action.kind, action.actor, action.ok),
-                         (AdminAction.WESPA_PULL, admin, True))
+        self.assertEqual(
+            (action.kind, action.actor, action.ok),
+            (AdminAction.WESPA_PULL, admin, True),
+        )
 
 
 class ViewActionTests(TestCase):
@@ -96,10 +103,14 @@ class ViewActionTests(TestCase):
         taken = WespaPlayer.objects.create(wespa_id=7, name="Bea Fox", rating=1450)
         Player.objects.create(name="Bea", player_number="0001", rating=0, wespa_id=7)
         other = Player.objects.create(name="Bea Fox", player_number="0002", rating=0)
-        self.client.post(reverse("wespa_import"), {
-            "action": "link", "player_number": other.player_number,
-            "wespa_id": taken.wespa_id,
-        })
+        self.client.post(
+            reverse("wespa_import"),
+            {
+                "action": "link",
+                "player_number": other.player_number,
+                "wespa_id": taken.wespa_id,
+            },
+        )
         action = AdminAction.objects.get()
         self.assertEqual((action.kind, action.ok), (AdminAction.WESPA_LINK, False))
         self.assertIn("already linked", action.error)
@@ -107,18 +118,25 @@ class ViewActionTests(TestCase):
     def test_a_rejected_player_import_is_logged_as_failed(self):
         from django.core.files.uploadedfile import SimpleUploadedFile
 
-        self.client.post(reverse("player_import"), {
-            "players_file": SimpleUploadedFile("players.json", b"not json"),
-        })
+        self.client.post(
+            reverse("player_import"),
+            {
+                "players_file": SimpleUploadedFile("players.json", b"not json"),
+            },
+        )
         action = AdminAction.objects.get()
         self.assertEqual((action.kind, action.ok), (AdminAction.PLAYER_IMPORT, False))
         self.assertIn("not valid JSON", action.error)
 
     def test_a_password_set_is_logged_without_the_password(self):
         director = User.objects.create_user(username="td-log", password="pw")
-        self.client.post(reverse("user_set_password", args=[director.pk]), {
-            "new_password1": "Zebra-crossing-42", "new_password2": "Zebra-crossing-42",
-        })
+        self.client.post(
+            reverse("user_set_password", args=[director.pk]),
+            {
+                "new_password1": "Zebra-crossing-42",
+                "new_password2": "Zebra-crossing-42",
+            },
+        )
         action = AdminAction.objects.get()
         self.assertEqual((action.kind, action.ok), (AdminAction.PASSWORD_SET, True))
         self.assertIn("td-log", action.summary)
@@ -126,9 +144,13 @@ class ViewActionTests(TestCase):
 
     def test_a_mistyped_password_is_not_an_action(self):
         director = User.objects.create_user(username="td-log", password="pw")
-        self.client.post(reverse("user_set_password", args=[director.pk]), {
-            "new_password1": "Zebra-crossing-42", "new_password2": "different",
-        })
+        self.client.post(
+            reverse("user_set_password", args=[director.pk]),
+            {
+                "new_password1": "Zebra-crossing-42",
+                "new_password2": "different",
+            },
+        )
         self.assertFalse(AdminAction.objects.exists())
 
 
@@ -141,7 +163,9 @@ class PageTests(TestCase):
             kind=AdminAction.ROSTER_PULL, ok=True, summary="Scheduled: fine"
         )
         AdminAction.objects.create(
-            kind=AdminAction.WESPA_PULL, ok=False, summary="Scheduled",
+            kind=AdminAction.WESPA_PULL,
+            ok=False,
+            summary="Scheduled",
             error="The WESPA list could not be reached.",
         )
 

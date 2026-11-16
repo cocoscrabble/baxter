@@ -32,9 +32,7 @@ class ParseCsvTests(TestCase):
         parsed, errors = parse_csv("0233,Alice,1600\n7,Bob,1500\n")
         self.assertEqual(errors, [])
         # The number is canonicalized on the way in, as everywhere else.
-        self.assertEqual(
-            parsed, [("0233", "Alice", 1600), ("0007", "Bob", 1500)]
-        )
+        self.assertEqual(parsed, [("0233", "Alice", 1600), ("0007", "Bob", 1500)])
 
     def test_wrong_column_count(self):
         parsed, errors = parse_csv("a,b,c,d\n")
@@ -79,7 +77,9 @@ class ParseCsvTests(TestCase):
 class ResolvePlayersTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.alice = Player.objects.create(name="Alice", player_number="001", rating=1600)
+        cls.alice = Player.objects.create(
+            name="Alice", player_number="001", rating=1600
+        )
 
     def test_resolves_by_number_not_name(self):
         """A row carrying a number picks that person, whatever the name says."""
@@ -98,9 +98,7 @@ class ResolvePlayersTests(TestCase):
         self.assertTrue(any("no player with number '9999'" in e for e in errors))
 
     def test_an_ambiguous_bare_name_aborts_and_lists_the_candidates(self):
-        other = Player.objects.create(
-            name="Alice", player_number="0500", rating=1400
-        )
+        other = Player.objects.create(name="Alice", player_number="0500", rating=1400)
         players, result, errors = resolve_players(
             [("", "Alice", 1600)], existing_entrant_keys=set()
         )
@@ -111,9 +109,7 @@ class ResolvePlayersTests(TestCase):
         self.assertIn(f"#{other.player_number}", errors[0])
 
     def test_two_same_named_players_import_when_numbered(self):
-        other = Player.objects.create(
-            name="Alice", player_number="0500", rating=1400
-        )
+        other = Player.objects.create(name="Alice", player_number="0500", rating=1400)
         players, result, errors = resolve_players(
             [
                 (self.alice.player_number, "Alice", 0),
@@ -165,10 +161,15 @@ class ImportEntrantsTests(TestCase):
     def setUpTestData(cls):
         cls.owner = User.objects.create_user(username="owner", password="testpass123")
         cls.tournament = Tournament.objects.create(
-            name="Test", location="Test", start_date=date(2026, 3, 15), owner=cls.owner,
+            name="Test",
+            location="Test",
+            start_date=date(2026, 3, 15),
+            owner=cls.owner,
         )
         cls.division = Division.objects.create(name="Open", tournament=cls.tournament)
-        cls.alice = Player.objects.create(name="Alice", player_number="001", rating=1600)
+        cls.alice = Player.objects.create(
+            name="Alice", player_number="001", rating=1600
+        )
         Entrant.objects.create(division=cls.division, player=cls.alice, number=1)
 
     def test_full_import_new_players(self):

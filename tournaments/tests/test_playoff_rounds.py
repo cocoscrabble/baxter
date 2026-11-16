@@ -62,7 +62,9 @@ class PlayoffRoundsTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="td", password="pw")
         self.tournament = Tournament.objects.create(
-            name="NACC", location="Toronto", start_date=date(2026, 8, 1),
+            name="NACC",
+            location="Toronto",
+            start_date=date(2026, 8, 1),
             owner=self.user,
         )
         self.division = Division.objects.create(
@@ -99,8 +101,13 @@ class PlayoffRoundsTestCase(TestCase):
                     (first, second) if first.number < second.number else (second, first)
                 )
                 ResultSlip.objects.create(
-                    division=self.division, round=round_num, pairing=pairing,
-                    winner=winner, winner_score=450, loser=loser, loser_score=400,
+                    division=self.division,
+                    round=round_num,
+                    pairing=pairing,
+                    winner=winner,
+                    winner_score=450,
+                    loser=loser,
+                    loser_score=400,
                     winner_started=winner.pk == pairing.first_id,
                 )
             rp = self.division.round_pairings_set.get(round=round_num)
@@ -109,11 +116,14 @@ class PlayoffRoundsTestCase(TestCase):
 
     # -- helpers ---------------------------------------------------------
 
-    def make_playoff(self, count=4, timing=Playoff.POSTSCRIPT,
-                     qualification_round=None, **games):
+    def make_playoff(
+        self, count=4, timing=Playoff.POSTSCRIPT, qualification_round=None, **games
+    ):
         stage_games = default_stage_games(count, 3)
         stage_games.update(games)
-        qual = self.played_rounds if qualification_round is None else qualification_round
+        qual = (
+            self.played_rounds if qualification_round is None else qualification_round
+        )
         seeds = qualification_seeds(self.division, qual, count)
         payload = {
             "division": self.division.name,
@@ -143,8 +153,7 @@ class PlayoffRoundsTestCase(TestCase):
     def keys_in(self, round_num):
         """``names_in`` by player number — what a bracket's participants are."""
         return {
-            frozenset({p.first.key, p.second.key})
-            for p in self.pairings_in(round_num)
+            frozenset({p.first.key, p.second.key}) for p in self.pairings_in(round_num)
         }
 
     def record(self, round_num, winner, loser, winner_score=450, loser_score=400):
@@ -157,13 +166,18 @@ class PlayoffRoundsTestCase(TestCase):
         publish_rounds(self.division, [round_num])
         names = {winner, loser}
         pairing = next(
-            p for p in self.pairings_in(round_num)
+            p
+            for p in self.pairings_in(round_num)
             if {p.first.player.name, p.second.player.name} == names
         )
         slip = ResultSlip.objects.create(
-            division=self.division, round=round_num, pairing=pairing,
-            winner=self.entrants[winner], winner_score=winner_score,
-            loser=self.entrants[loser], loser_score=loser_score,
+            division=self.division,
+            round=round_num,
+            pairing=pairing,
+            winner=self.entrants[winner],
+            winner_score=winner_score,
+            loser=self.entrants[loser],
+            loser_score=loser_score,
             winner_started=self.entrants[winner].pk == pairing.first_id,
         )
         pairing.round_pairings.update_status()
@@ -199,8 +213,12 @@ class GenerationTests(PlayoffRoundsTestCase):
     def test_semifinal_games_are_generated_for_the_reserved_rounds(self):
         self.make_playoff()
         # Games 1 and 2 of both semifinals are certainly necessary.
-        self.assertEqual(self.names_in(4), {frozenset({"P1", "P4"}), frozenset({"P2", "P3"})})
-        self.assertEqual(self.names_in(5), {frozenset({"P1", "P4"}), frozenset({"P2", "P3"})})
+        self.assertEqual(
+            self.names_in(4), {frozenset({"P1", "P4"}), frozenset({"P2", "P3"})}
+        )
+        self.assertEqual(
+            self.names_in(5), {frozenset({"P1", "P4"}), frozenset({"P2", "P3"})}
+        )
         # Game 3 waits until game 2 is in.
         self.assertEqual(self.names_in(6), set())
 
@@ -214,17 +232,25 @@ class GenerationTests(PlayoffRoundsTestCase):
         }
         self.assertEqual(playing, {"P1", "P2", "P3", "P4"})
         self.assertFalse(
-            self.division.pairings.filter(round__gte=4, first__player__is_bye=True).exists()
+            self.division.pairings.filter(
+                round__gte=4, first__player__is_bye=True
+            ).exists()
         )
         self.assertFalse(
-            self.division.pairings.filter(round__gte=4, second__player__is_bye=True).exists()
+            self.division.pairings.filter(
+                round__gte=4, second__player__is_bye=True
+            ).exists()
         )
         # …and nobody is marked withdrawn to achieve it.
-        self.assertFalse(Entrant.all_objects.filter(division=self.division, dropped=True).exists())
+        self.assertFalse(
+            Entrant.all_objects.filter(division=self.division, dropped=True).exists()
+        )
 
     def test_series_rows_are_created_and_linked_to_their_pairings(self):
         self.make_playoff()
-        self.assertEqual(PlayoffSeries.objects.filter(playoff__division=self.division).count(), 4)
+        self.assertEqual(
+            PlayoffSeries.objects.filter(playoff__division=self.division).count(), 4
+        )
         semi = PlayoffSeries.objects.get(key=SEMIFINAL, position=0)
         self.assertEqual(semi.high.player.name, "P1")
         self.assertEqual(semi.low.player.name, "P4")
@@ -253,7 +279,9 @@ class GenerationTests(PlayoffRoundsTestCase):
         delete_playoff(self.tournament, self.user, {"division": self.division.name})
         regenerate_pairings(self.division)
         self.assertFalse(self.division.pairings.filter(round__gte=4).exists())
-        self.assertFalse(PlayoffSeries.objects.filter(playoff__division=self.division).exists())
+        self.assertFalse(
+            PlayoffSeries.objects.filter(playoff__division=self.division).exists()
+        )
 
 
 class SeriesLifecycleTests(PlayoffRoundsTestCase):
@@ -311,7 +339,7 @@ class SeriesLifecycleTests(PlayoffRoundsTestCase):
         self.make_playoff()
         self.record(4, "P1", "P4")
         self.record(4, "P2", "P3")
-        game2 = self.record(5, "P4", "P1")   # semifinal 1 level at 1–1…
+        game2 = self.record(5, "P4", "P1")  # semifinal 1 level at 1–1…
         self.record(5, "P2", "P3")
         publish_rounds(self.division, [6])
         self.assertIn(frozenset({"P1", "P4"}), self.names_in(6))  # …so game 3 exists
@@ -361,12 +389,8 @@ class SeriesLifecycleTests(PlayoffRoundsTestCase):
             self.record(round_num, "P3", "P4")
         bracket = playoff_for(self.division).bracket()
         self.assertTrue(bracket.complete)
-        self.assertEqual(
-            bracket.get(CHAMPIONSHIP).winner, self.entrants["P2"].key
-        )
-        self.assertEqual(
-            bracket.get(THIRD_PLACE).winner, self.entrants["P3"].key
-        )
+        self.assertEqual(bracket.get(CHAMPIONSHIP).winner, self.entrants["P2"].key)
+        self.assertEqual(bracket.get(THIRD_PLACE).winner, self.entrants["P3"].key)
 
 
 class CorrectionGuardTests(PlayoffRoundsTestCase):
@@ -380,7 +404,8 @@ class CorrectionGuardTests(PlayoffRoundsTestCase):
     def test_a_correction_that_rewrites_a_played_bracket_is_refused(self):
         self.played_semis_and_a_final_game()
         pairing = next(
-            p for p in self.pairings_in(5)
+            p
+            for p in self.pairings_in(5)
             if {p.first.player.name, p.second.player.name} == {"P1", "P4"}
         )
         # Reversing this game leaves the semifinal level, so P1 is no longer in
@@ -394,7 +419,8 @@ class CorrectionGuardTests(PlayoffRoundsTestCase):
     def test_a_harmless_correction_is_allowed(self):
         self.played_semis_and_a_final_game()
         pairing = next(
-            p for p in self.pairings_in(5)
+            p
+            for p in self.pairings_in(5)
             if {p.first.player.name, p.second.player.name} == {"P1", "P4"}
         )
         # Same winner, corrected score: nothing downstream changes.
@@ -438,8 +464,11 @@ class ConcurrentTests(PlayoffRoundsTestCase):
 
     def make_concurrent(self, count=4):
         playoff = self.make_playoff(
-            count=count, timing=Playoff.CONCURRENT,
-            semifinal=1, championship=1, third_place=1,
+            count=count,
+            timing=Playoff.CONCURRENT,
+            semifinal=1,
+            championship=1,
+            third_place=1,
         )
         # Read the qualifiers off the snapshot rather than assuming them: with an
         # odd field the earlier byes move the standings around.
@@ -472,12 +501,7 @@ class ConcurrentTests(PlayoffRoundsTestCase):
         self.assertFalse(
             Entrant.all_objects.filter(division=self.division, dropped=True).exists()
         )
-        byed = {
-            name
-            for pair in self.names_in(4)
-            if "Bye" in pair
-            for name in pair
-        }
+        byed = {name for pair in self.names_in(4) if "Bye" in pair for name in pair}
         self.assertEqual(byed & set(self.qualifiers), set())
 
     def test_the_round_after_a_mixed_round_still_pairs(self):
@@ -505,7 +529,8 @@ class ConcurrentTests(PlayoffRoundsTestCase):
         self.make_concurrent()
         # A bye carries no table, so it sorts to table 0 ahead of every board.
         boards = [
-            p for p in self.pairings_in(4)
+            p
+            for p in self.pairings_in(4)
             if not (p.first.player.is_bye or p.second.player.is_bye)
         ]
         self.assertTrue(all(p.series_id is not None for p in boards[:2]))
@@ -551,9 +576,11 @@ class ConcurrentOddFieldTests(ConcurrentTests):
 
     def test_exactly_one_non_qualifier_is_byed(self):
         self.make_concurrent()
-        bye_pairings = self.division.pairings.filter(round=4).filter(
-            Q(first__player__is_bye=True) | Q(second__player__is_bye=True)
-        ).select_related("first__player", "second__player")
+        bye_pairings = (
+            self.division.pairings.filter(round=4)
+            .filter(Q(first__player__is_bye=True) | Q(second__player__is_bye=True))
+            .select_related("first__player", "second__player")
+        )
         self.assertEqual(bye_pairings.count(), 1)
         byed = bye_pairings.first()
         names = {byed.first.player.name, byed.second.player.name}
@@ -621,10 +648,14 @@ class PrintedRoundTests(PlayoffRoundsTestCase):
     def shorten_schedule(self, rounds):
         from tournaments.commands import save_settings
 
-        save_settings(self.tournament, self.user, {
-            "division": self.division.name,
-            "blocks": [{"pairing": "Swiss", "rounds": rounds, "pair_from": 1}],
-        })
+        save_settings(
+            self.tournament,
+            self.user,
+            {
+                "division": self.division.name,
+                "blocks": [{"pairing": "Swiss", "rounds": rounds, "pair_from": 1}],
+            },
+        )
 
     def test_a_playoff_over_a_published_round_is_refused(self):
         publish_rounds(self.division, [4])
@@ -905,8 +936,12 @@ class PlayoffReplayTests(TestCase):
     def test_a_full_playoff_replays_to_the_same_digest(self):
         self.client.post(
             reverse("tournament_create"),
-            {"name": "Champs", "location": "Reno", "start_date": "2026-03-15",
-             "editor_usernames": ""},
+            {
+                "name": "Champs",
+                "location": "Reno",
+                "start_date": "2026-03-15",
+                "editor_usernames": "",
+            },
         )
         tournament = Tournament.objects.get(name="Champs")
         division = tournament.divisions.get()
@@ -915,14 +950,18 @@ class PlayoffReplayTests(TestCase):
         division.save(update_fields=["is_test"])
 
         self._post_json(
-            "division_entrants_edit", division,
-            {"rows": [
-                {"number": i + 1, "player": p.pk, "dropped": False}
-                for i, p in enumerate(self.players)
-            ]},
+            "division_entrants_edit",
+            division,
+            {
+                "rows": [
+                    {"number": i + 1, "player": p.pk, "dropped": False}
+                    for i, p in enumerate(self.players)
+                ]
+            },
         )
         self._post_json(
-            "division_round_pairings", division,
+            "division_round_pairings",
+            division,
             {"blocks": [{"pairing": "KotH", "rounds": 2, "pair_from": 1}]},
         )
         self.client.get(reverse("division_pair_rounds", kwargs=division.slug_kwargs()))
@@ -932,7 +971,8 @@ class PlayoffReplayTests(TestCase):
         # Top two qualify for a best-of-three championship after round 2.
         seeds = qualification_seeds(division, 2, 2)
         create_playoff(
-            tournament, self.owner,
+            tournament,
+            self.owner,
             {
                 "division": division.name,
                 "qualification_round": 2,
@@ -951,9 +991,7 @@ class PlayoffReplayTests(TestCase):
         self.assertTrue(bracket.get(CHAMPIONSHIP).decided)
 
         events = events_from_tournament(tournament)
-        self.assertIn(
-            "playoff_created", [e["event_type"] for e in events]
-        )
+        self.assertIn("playoff_created", [e["event_type"] for e in events])
         ctx = replay(events, verify=True)
         replayed = ctx.tournament.divisions.get()
         self.assertEqual(division_digest(replayed), recorded)
@@ -977,7 +1015,9 @@ class ExportTests(PlayoffRoundsTestCase):
         played = self.division.result_slips.count()
         self.assertEqual(len(exported.results), played)
         # The unnecessary third games are in neither the export nor the DB.
-        self.assertFalse(Pairing.objects.filter(division=self.division, round=6).exists())
+        self.assertFalse(
+            Pairing.objects.filter(division=self.division, round=6).exists()
+        )
 
 
 class LivePlayoffTests(PlayoffRoundsTestCase):
@@ -990,12 +1030,16 @@ class LivePlayoffTests(PlayoffRoundsTestCase):
         return self.client.get(self.url()).context["live_columns"]
 
     def card(self, columns, label):
-        return next(c for col in columns for c in col.get("cards", []) if c["label"] == label)
+        return next(
+            c for col in columns for c in col.get("cards", []) if c["label"] == label
+        )
 
     def test_a_division_without_a_playoff_says_so(self):
         response = self.client.get(self.url())
         self.assertEqual(response.context["live_columns"], [])
-        self.assertContains(response, "This division has no playoff, or the playoff has not yet begun.")
+        self.assertContains(
+            response, "This division has no playoff, or the playoff has not yet begun."
+        )
 
     def test_a_series_waiting_on_another_names_where_its_players_come_from(self):
         self.make_playoff()
@@ -1003,7 +1047,9 @@ class LivePlayoffTests(PlayoffRoundsTestCase):
         self.record(5, "P1", "P4")
         final = self.card(self.columns(), "Final")
         sides = [(s["name"], s["source"]) for s in final["sides"]]
-        self.assertEqual(sides, [("P1", "Winner of Semifinal 1"), (None, "Winner of Semifinal 2")])
+        self.assertEqual(
+            sides, [("P1", "Winner of Semifinal 1"), (None, "Winner of Semifinal 2")]
+        )
         # Not started: a placeholder per game it could need, by round.
         self.assertEqual([g["round"] for g in final["games"]], [7, 8, 9])
         self.assertEqual({g["status"] for g in final["games"]}, {"pending"})
@@ -1012,9 +1058,13 @@ class LivePlayoffTests(PlayoffRoundsTestCase):
         self.make_playoff()
         self.record(4, "P1", "P4", 500, 350)
         semi = self.card(self.columns(), "Semifinal 1")
-        self.assertEqual([(s["name"], s["seed"], s["score"]) for s in semi["sides"]],
-                         [("P1", 1, 1.0), ("P4", 4, 0.0)])
-        self.assertEqual([g["status"] for g in semi["games"]], ["played", "scheduled", "pending"])
+        self.assertEqual(
+            [(s["name"], s["seed"], s["score"]) for s in semi["sides"]],
+            [("P1", 1, 1.0), ("P4", 4, 0.0)],
+        )
+        self.assertEqual(
+            [g["status"] for g in semi["games"]], ["played", "scheduled", "pending"]
+        )
         self.assertContains(self.client.get(self.url()), "500–350")
 
     def test_placements_appear_once_the_bracket_places_someone(self):
@@ -1054,19 +1104,26 @@ class PlayoffOnlyDivisionTests(TestCase):
     def _setup_division(self):
         self.client.post(
             reverse("tournament_create"),
-            {"name": "Final Four", "location": "Reno", "start_date": "2026-03-20",
-             "editor_usernames": ""},
+            {
+                "name": "Final Four",
+                "location": "Reno",
+                "start_date": "2026-03-20",
+                "editor_usernames": "",
+            },
         )
         tournament = Tournament.objects.get(name="Final Four")
         division = tournament.divisions.get()
         division.is_test = True
         division.save(update_fields=["is_test"])
         self._post_json(
-            "division_entrants_edit", division,
-            {"rows": [
-                {"number": i + 1, "player": p.pk, "dropped": False}
-                for i, p in enumerate(self.players)
-            ]},
+            "division_entrants_edit",
+            division,
+            {
+                "rows": [
+                    {"number": i + 1, "player": p.pk, "dropped": False}
+                    for i, p in enumerate(self.players)
+                ]
+            },
         )
         return tournament, division
 
@@ -1089,16 +1146,19 @@ class PlayoffOnlyDivisionTests(TestCase):
         tournament, division = self._setup_division()
         keys = {p.name: p.player_number for p in self.players}
         # The director reseeds Dan to 1 — say he won the qualifying event.
-        response = self.client.post(self._setup_url(division), {
-            "action": "confirm",
-            "qualification_round": 0,
-            "qualifier_count": 4,
-            "timing": Playoff.POSTSCRIPT,
-            f"games_{SEMIFINAL}": 1,
-            f"games_{CHAMPIONSHIP}": 3,
-            f"games_{THIRD_PLACE}": 0,
-            "seed": [keys[n] for n in ("Dan", "Alice", "Bob", "Cara")],
-        })
+        response = self.client.post(
+            self._setup_url(division),
+            {
+                "action": "confirm",
+                "qualification_round": 0,
+                "qualifier_count": 4,
+                "timing": Playoff.POSTSCRIPT,
+                f"games_{SEMIFINAL}": 1,
+                f"games_{CHAMPIONSHIP}": 3,
+                f"games_{THIRD_PLACE}": 0,
+                "seed": [keys[n] for n in ("Dan", "Alice", "Bob", "Cara")],
+            },
+        )
         self.assertRedirects(
             response, reverse("division_playoff", kwargs=division.slug_kwargs())
         )
@@ -1130,16 +1190,20 @@ class PlayoffOnlyDivisionTests(TestCase):
     def test_round_zero_is_refused_once_the_division_has_a_schedule(self):
         _, division = self._setup_division()
         self._post_json(
-            "division_round_pairings", division,
+            "division_round_pairings",
+            division,
             {"blocks": [{"pairing": "KotH", "rounds": 2, "pair_from": 1}]},
         )
-        response = self.client.post(self._setup_url(division), {
-            "action": "confirm",
-            "qualification_round": 0,
-            "qualifier_count": 2,
-            "timing": Playoff.POSTSCRIPT,
-            f"games_{CHAMPIONSHIP}": 3,
-        })
+        response = self.client.post(
+            self._setup_url(division),
+            {
+                "action": "confirm",
+                "qualification_round": 0,
+                "qualifier_count": 2,
+                "timing": Playoff.POSTSCRIPT,
+                f"games_{CHAMPIONSHIP}": 3,
+            },
+        )
         self.assertEqual(response.status_code, 200)
         self.assertIsNone(playoff_for(division))
         self.assertTrue(
@@ -1160,7 +1224,8 @@ class StartFixTests(PlayoffRoundsTestCase):
     def game(self):
         pair = set(self.auto)
         return next(
-            p for p in self.pairings_in(self.round)
+            p
+            for p in self.pairings_in(self.round)
             if {p.first.key, p.second.key} == pair
         )
 
@@ -1172,10 +1237,16 @@ class StartFixTests(PlayoffRoundsTestCase):
         from tournaments.commands import fix_playoff_start, unfix_playoff_start
 
         command = unfix_playoff_start if clear else fix_playoff_start
-        command(self.tournament, self.user, {
-            "division": self.division.name, "round": self.round,
-            "first": first, "second": second,
-        })
+        command(
+            self.tournament,
+            self.user,
+            {
+                "division": self.division.name,
+                "round": self.round,
+                "first": first,
+                "second": second,
+            },
+        )
         regenerate_pairings(self.division)
 
     def events(self, kind):
@@ -1207,10 +1278,16 @@ class StartFixTests(PlayoffRoundsTestCase):
         publish_rounds(self.division, [self.round])
         first, second = self.auto
         with self.assertRaises(StartFixError):
-            fix_playoff_start(self.tournament, self.user, {
-                "division": self.division.name, "round": self.round,
-                "first": second, "second": first,
-            })
+            fix_playoff_start(
+                self.tournament,
+                self.user,
+                {
+                    "division": self.division.name,
+                    "round": self.round,
+                    "first": second,
+                    "second": first,
+                },
+            )
         self.assertEqual(self.oriented(), self.auto)
 
     def test_a_fix_lapses_for_a_game_the_bracket_no_longer_draws(self):

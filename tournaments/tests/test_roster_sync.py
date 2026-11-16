@@ -23,6 +23,7 @@ from users.models import User
 
 from .test_roster_import import entry, roster
 
+
 def served(doc):
     """Patch the fetch to return ``doc``."""
     return patch(
@@ -41,8 +42,9 @@ def refused(message="The central database rejected the token."):
 class RunSyncTests(TestCase):
     def test_a_good_pull_applies_it_and_records_what_it_did(self):
         Player.objects.create(name="Alec", player_number="0233", rating=1500)
-        with served(roster(entry("0233", "Alec", rating=1700),
-                           entry("0301", "Nellie"))):
+        with served(
+            roster(entry("0233", "Alec", rating=1700), entry("0301", "Nellie"))
+        ):
             record = run_sync(RosterSync.SCHEDULED)
 
         self.assertTrue(record.ok)
@@ -99,7 +101,9 @@ class HeldBackSurvivalTests(TestCase):
 
     def setUp(self):
         self.guest = Player.objects.create(
-            name="Joe Thorngren", player_number="T-4", rating=0,
+            name="Joe Thorngren",
+            player_number="T-4",
+            rating=0,
             is_provisional=True,
         )
         self.doc = roster(entry("0301", "Joe Thorngren", rating=1400))
@@ -117,8 +121,7 @@ class HeldBackSurvivalTests(TestCase):
         # And a director coming along afterwards can still see it.
         held = pending_resolutions()
         self.assertEqual(len(held), 1)
-        self.assertEqual((held[0].local_number, held[0].roster_number),
-                         ("T-4", "0301"))
+        self.assertEqual((held[0].local_number, held[0].roster_number), ("T-4", "0301"))
 
     def test_a_later_failure_does_not_hide_them(self):
         with served(self.doc):
@@ -126,8 +129,11 @@ class HeldBackSurvivalTests(TestCase):
         with refused():
             run_sync(RosterSync.SCHEDULED)
 
-        self.assertEqual(len(pending_resolutions()), 1,
-                         "the last good pull still has something to say")
+        self.assertEqual(
+            len(pending_resolutions()),
+            1,
+            "the last good pull still has something to say",
+        )
 
     def test_a_later_good_pull_supersedes_them(self):
         with served(self.doc):
@@ -151,7 +157,9 @@ class ConfirmingWhatCronFoundTests(TestCase):
             username="admin-sync", password="pw", role="admin", is_staff=True
         )
         self.guest = Player.objects.create(
-            name="Joe Thorngren", player_number="T-4", rating=0,
+            name="Joe Thorngren",
+            player_number="T-4",
+            rating=0,
             is_provisional=True,
         )
         with served(roster(entry("0301", "Joe Thorngren", rating=1400))):
@@ -241,7 +249,9 @@ class CommandTests(TestCase):
 
     def test_held_back_rows_are_not_a_failure_but_are_named(self):
         Player.objects.create(
-            name="Joe Thorngren", player_number="T-4", rating=0,
+            name="Joe Thorngren",
+            player_number="T-4",
+            rating=0,
             is_provisional=True,
         )
         with served(roster(entry("0301", "Joe Thorngren"))):
@@ -325,22 +335,30 @@ class LiveTournamentTests(TestCase):
 
         owner = User.objects.create_user(username="td-cron", password="pw")
         self.player = Player.objects.create(
-            name="Alec", player_number="0233", rating=1500, deviation=80.0,
+            name="Alec",
+            player_number="0233",
+            rating=1500,
+            deviation=80.0,
             career_games=100,
         )
         tournament = create_tournament(
-            None, owner,
+            None,
+            owner,
             {
-                "name": "Live", "location": "X", "start_date": "2026-05-01",
-                "editors": [], "default_division": {"name": "Open", "pairing_seed": 1},
+                "name": "Live",
+                "location": "X",
+                "start_date": "2026-05-01",
+                "editors": [],
+                "default_division": {"name": "Open", "pairing_seed": 1},
             },
         )
         self.division = tournament.divisions.get()
         self.entrant = Entrant.enter(self.division, self.player, 1)
 
     def pull(self):
-        with served(roster(entry("0233", "Alec", rating=1900, deviation=40.0,
-                                 games=500))):
+        with served(
+            roster(entry("0233", "Alec", rating=1900, deviation=40.0, games=500))
+        ):
             run_sync(RosterSync.SCHEDULED)
         self.entrant.refresh_from_db()
         return (self.entrant.rating, self.entrant.deviation, self.entrant.career_games)

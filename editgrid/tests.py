@@ -72,7 +72,9 @@ class GridDeltaTests(TestCase):
         before = [{"id": 1, "v": "a"}, {"id": 2, "v": "b"}, {"id": 3, "v": "c"}]
         after = [{"id": 1, "v": "a"}, {"id": 2, "v": "B"}, {"id": 4, "v": "d"}]
         rebuilt = self.grid.apply_delta(before, self.grid.delta(before, after))
-        self.assertEqual(sorted(rebuilt, key=lambda r: r["id"]), sorted(after, key=lambda r: r["id"]))
+        self.assertEqual(
+            sorted(rebuilt, key=lambda r: r["id"]), sorted(after, key=lambda r: r["id"])
+        )
 
     def test_removing_a_row_that_is_not_there_raises(self):
         delta = {"added": [], "changed": [], "removed": [{"id": 9, "v": "x"}]}
@@ -81,10 +83,13 @@ class GridDeltaTests(TestCase):
 
     def test_changing_a_row_that_moved_underneath_raises(self):
         delta = {
-            "added": [], "removed": [],
+            "added": [],
+            "removed": [],
             "changed": [{"from": {"id": 1, "v": "a"}, "to": {"id": 1, "v": "z"}}],
         }
-        with self.assertRaisesMessage(ValueError, "not what the change was recorded over"):
+        with self.assertRaisesMessage(
+            ValueError, "not what the change was recorded over"
+        ):
             self.grid.apply_delta([{"id": 1, "v": "drifted"}], delta)
 
     def test_an_unchecked_field_may_have_moved_underneath(self):
@@ -92,17 +97,22 @@ class GridDeltaTests(TestCase):
             delta_unchecked_fields = ("rating",)
 
         delta = {
-            "added": [], "removed": [],
-            "changed": [{
-                "from": {"id": 1, "v": "a", "rating": 1666},
-                "to": {"id": 1, "v": "z", "rating": 1666},
-            }],
+            "added": [],
+            "removed": [],
+            "changed": [
+                {
+                    "from": {"id": 1, "v": "a", "rating": 1666},
+                    "to": {"id": 1, "v": "z", "rating": 1666},
+                }
+            ],
         }
         # The rating moved since (1693 now): applied, and lands as recorded.
         rebuilt = Grid().apply_delta([{"id": 1, "v": "a", "rating": 1693}], delta)
         self.assertEqual(rebuilt, [{"id": 1, "v": "z", "rating": 1666}])
         # Any other field still has to match.
-        with self.assertRaisesMessage(ValueError, "not what the change was recorded over"):
+        with self.assertRaisesMessage(
+            ValueError, "not what the change was recorded over"
+        ):
             Grid().apply_delta([{"id": 1, "v": "drifted", "rating": 1666}], delta)
 
     def test_adding_a_row_that_is_already_there_raises(self):
@@ -114,8 +124,13 @@ class GridDeltaTests(TestCase):
 class GridContextTests(TestCase):
     def test_json_properties_serialize_rows_and_lookups(self):
         ctx = GridContext(
-            dom_id="t", rows=[{"a": 1}], lookups={"x": [2]},
-            version=3, key=KEY, presence_url="/p/", js_module="m.js",
+            dom_id="t",
+            rows=[{"a": 1}],
+            lookups={"x": [2]},
+            version=3,
+            key=KEY,
+            presence_url="/p/",
+            js_module="m.js",
         )
         self.assertEqual(ctx.rows_json, '[{"a": 1}]')
         self.assertEqual(ctx.lookups_json, '{"x": [2]}')

@@ -168,7 +168,9 @@ def code_revision() -> str:
         return rev
     try:
         return (
-            subprocess.check_output(["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL)
+            subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL
+            )
             .decode()
             .strip()
         )
@@ -337,9 +339,7 @@ def division_state(division, version: int = DIGEST_VERSION) -> dict:
         if version == 1:
             return row
         if version == 2:
-            return row + [
-                e.rating, e.rating_source, e.tentative, e.paid, e.playing_up
-            ]
+            return row + [e.rating, e.rating_source, e.tentative, e.paid, e.playing_up]
         return row + [e.tentative, e.paid, e.playing_up]
 
     entrants = sorted(
@@ -352,8 +352,8 @@ def division_state(division, version: int = DIGEST_VERSION) -> dict:
     from tournaments.models import RoundPairings
 
     rounds = []
-    for rp in (
-        division.round_pairings_set.exclude(status=RoundPairings.DRAFT).order_by("round")
+    for rp in division.round_pairings_set.exclude(status=RoundPairings.DRAFT).order_by(
+        "round"
     ):
         pairings = sorted(
             [
@@ -380,9 +380,7 @@ def division_state(division, version: int = DIGEST_VERSION) -> dict:
     from tournaments.pairing.base import PairingData, standings_after_round
 
     pd = PairingData.for_division(division)
-    standings = standings_after_round(
-        pd, division.max_round(), include_dropped=True
-    )
+    standings = standings_after_round(pd, division.max_round(), include_dropped=True)
     state = {
         "entrants": entrants,
         "rounds": rounds,
@@ -413,6 +411,7 @@ def division_state(division, version: int = DIGEST_VERSION) -> dict:
             def who(key):
                 return names.get(key, key) if key else key
         else:
+
             def who(key):
                 return key
 
@@ -424,8 +423,15 @@ def division_state(division, version: int = DIGEST_VERSION) -> dict:
             "seeds": [who(k) for k in playoff.config().seeds],
             "series": [
                 [
-                    s.key, s.position, who(s.high), who(s.low), s.max_games,
-                    s.start_round, s.status, who(s.winner), s.decided_by,
+                    s.key,
+                    s.position,
+                    who(s.high),
+                    who(s.low),
+                    s.max_games,
+                    s.start_round,
+                    s.status,
+                    who(s.winner),
+                    s.decided_by,
                     [[g.number, g.round, g.status] for g in s.games],
                 ]
                 for s in bracket.series
@@ -517,8 +523,9 @@ def _logged_players(tournament) -> list[dict]:
         for e in tournament.events.filter(event_type="entrant_added")
     }
     numbers |= set(
-        Entrant.all_objects.filter(division__tournament=tournament)
-        .values_list("player__player_number", flat=True)
+        Entrant.all_objects.filter(division__tournament=tournament).values_list(
+            "player__player_number", flat=True
+        )
     )
     return [
         {
@@ -528,8 +535,9 @@ def _logged_players(tournament) -> list[dict]:
             "wespa_rating": p.wespa_rating,
             "is_provisional": p.is_provisional,
         }
-        for p in Player.objects.filter(player_number__in=numbers, is_bye=False)
-        .order_by("player_number")
+        for p in Player.objects.filter(
+            player_number__in=numbers, is_bye=False
+        ).order_by("player_number")
     ]
 
 
@@ -584,7 +592,13 @@ def build_snapshot(tournament) -> dict:
             board_table_map = settings_obj.board_table_map
             cop_config = settings_obj.cop_config
         except Exception:
-            seed, blocks, round_pairings, board_table_map, cop_config = 0, [], [], [], {}
+            seed, blocks, round_pairings, board_table_map, cop_config = (
+                0,
+                [],
+                [],
+                [],
+                {},
+            )
         rounds = []
         for rp in division.round_pairings_set.exclude(
             status=RoundPairings.DRAFT
@@ -615,7 +629,9 @@ def build_snapshot(tournament) -> dict:
                 "loser_score": r.loser_score,
                 "winner_started": r.winner_started,
             }
-            for r in division.result_slips.select_related("winner__player", "loser__player")
+            for r in division.result_slips.select_related(
+                "winner__player", "loser__player"
+            )
         ]
         divisions.append(
             {
@@ -638,8 +654,7 @@ def build_snapshot(tournament) -> dict:
             "start_date": tournament.start_date.isoformat(),
             "owner": tournament.owner.username,
             "editors": [
-                u.username
-                for u in tournament.editors.exclude(pk=tournament.owner.pk)
+                u.username for u in tournament.editors.exclude(pk=tournament.owner.pk)
             ],
             "is_fake": tournament.is_fake,
         },
@@ -682,7 +697,7 @@ def describe_event(event, names=None) -> str:
         return ", ".join(counted) or "no changes"
 
     def resolved():
-        """" (N round(s) repaired)" — what a withdrawal did to printed rounds."""
+        """ " (N round(s) repaired)" — what a withdrawal did to printed rounds."""
         n = len(p.get("resolved", []))
         return f" ({n} printed round{'s' if n != 1 else ''} repaired)" if n else ""
 
@@ -710,7 +725,9 @@ def describe_event(event, names=None) -> str:
         "tournament_updated": lambda: "Updated tournament details",
         "tournament_deleted": lambda: "Deleted the tournament",
         "division_created": lambda: f"Created division “{p.get('name', '')}”",
-        "division_renamed": lambda: f"Renamed “{p.get('old_name', '')}” to “{p.get('new_name', '')}”",
+        "division_renamed": lambda: (
+            f"Renamed “{p.get('old_name', '')}” to “{p.get('new_name', '')}”"
+        ),
         "division_deleted": lambda: f"Deleted division “{p.get('name', '')}”",
         "division_restored": lambda: f"Restored division “{p.get('name', '')}”",
         "division_settings_saved": lambda: f"Saved pairing schedule for {div}",
@@ -723,7 +740,9 @@ def describe_event(event, names=None) -> str:
             f"byes at {p.get('bye_spread', '')} points, forfeits at "
             f"{p.get('forfeit_spread', p.get('bye_spread', ''))}"
         ),
-        "division_imported": lambda: f"Imported division “{p.get('name', '')}” from history",
+        "division_imported": lambda: (
+            f"Imported division “{p.get('name', '')}” from history"
+        ),
         "entrants_saved": lambda: f"Saved entrants for {div} ({changes()})",
         "entrants_bulk_imported": lambda: f"Imported entrants for {div}",
         "results_saved": lambda: f"Saved results for {div} ({changes()})",
@@ -739,16 +758,22 @@ def describe_event(event, names=None) -> str:
         # v1 payloads spelled these name1/name2; who() shows either verbatim
         # when it cannot resolve them, so both forms read the same.
         "fixed_pairing_added": lambda: "Fixed {} vs {} in {} round {}".format(
-            *who("player1" if "player1" in p else "name1",
-                 "player2" if "player2" in p else "name2"),
+            *who(
+                "player1" if "player1" in p else "name1",
+                "player2" if "player2" in p else "name2",
+            ),
             div,
             p.get("round", ""),
         ),
-        "fixed_pairing_removed": lambda: f"Removed a fixed pairing in {div} round {p.get('round', '')}",
+        "fixed_pairing_removed": lambda: (
+            f"Removed a fixed pairing in {div} round {p.get('round', '')}"
+        ),
         "fixed_pairings_removed": lambda: f"Removed fixed pairings in {div}",
         "rounds_published": lambda: f"Published rounds {p.get('rounds', '')} in {div}",
         "round_published": lambda: f"Published round {p.get('round', '')} in {div}",
-        "round_reset": lambda: f"Reset round {p.get('round', '')} and discarded its results in {div}",
+        "round_reset": lambda: (
+            f"Reset round {p.get('round', '')} and discarded its results in {div}"
+        ),
         "round_unpublished": lambda: f"Unpublished round {p.get('round', '')} in {div}",
         "entrant_withdrawn": lambda: "{} withdrew from {}{}".format(
             *who("player"), div, resolved()
@@ -757,16 +782,24 @@ def describe_event(event, names=None) -> str:
         "game_forfeited": lambda: "{} forfeited round {} in {}".format(
             *who("player"), p.get("round", ""), div
         ),
-        "playoff_created": lambda: f"Created a {p.get('qualifier_count', '')}-player playoff in {div}",
-        "playoff_start_fixed": lambda: "Fixed {} to start against {} in {} round {}".format(
-            *who("first", "second"), div, p.get("round", "")
+        "playoff_created": lambda: (
+            f"Created a {p.get('qualifier_count', '')}-player playoff in {div}"
         ),
-        "playoff_start_unfixed": lambda: "Unfixed the start of {} v {} in {} round {}".format(
-            *who("first", "second"), div, p.get("round", "")
+        "playoff_start_fixed": lambda: (
+            "Fixed {} to start against {} in {} round {}".format(
+                *who("first", "second"), div, p.get("round", "")
+            )
+        ),
+        "playoff_start_unfixed": lambda: (
+            "Unfixed the start of {} v {} in {} round {}".format(
+                *who("first", "second"), div, p.get("round", "")
+            )
         ),
         "playoff_updated": lambda: f"Reconfigured the playoff in {div}",
         "playoff_deleted": lambda: f"Removed the playoff in {div}",
-        "match_simulated": lambda: f"Simulated a match in {div} round {p.get('round', '')}",
+        "match_simulated": lambda: (
+            f"Simulated a match in {div} round {p.get('round', '')}"
+        ),
         "round_simulated": lambda: f"Simulated round {p.get('round', '')} in {div}",
         "player_created": lambda: (
             f"Created player {p.get('name', '')} (#{p.get('player_number', '')})"
@@ -780,8 +813,7 @@ def describe_event(event, names=None) -> str:
             f"from the player table"
         ),
         "entrants_reseeded": lambda: (
-            f"Renumbered {len(p.get('seeding') or [])} entrant(s) in {div} "
-            f"by rating"
+            f"Renumbered {len(p.get('seeding') or [])} entrant(s) in {div} by rating"
         ),
         "player_number_changed": lambda: (
             f"Changed a player number from {p.get('old', '')} to {p.get('new', '')}"
@@ -792,7 +824,8 @@ def describe_event(event, names=None) -> str:
         # A snapshot is the whole tournament, so it names no division — and
         # "…snapshot for " with nothing after it is what that used to read as.
         "state_snapshot": lambda: (
-            f"Recorded a state snapshot for {div}" if div
+            f"Recorded a state snapshot for {div}"
+            if div
             else "Recorded a state snapshot of the tournament"
         ),
     }
@@ -999,7 +1032,9 @@ def event_detail(event, names=None, summary="") -> dict:
             for row in rows
         ]
         return {"lines": lines, "more": len(payload["rows"]) - len(rows)}
-    if event.event_type in ("round_published", "rounds_published") and payload.get("pairings"):
+    if event.event_type in ("round_published", "rounds_published") and payload.get(
+        "pairings"
+    ):
         return _published_detail(payload["pairings"], names)
     if grid is None or not _is_delta(payload):
         # A command payload: one compact line of what it recorded.
@@ -1009,9 +1044,7 @@ def event_detail(event, names=None, summary="") -> dict:
 
     def summary_of(row):
         return (
-            grid.portable_summary(row, names)
-            or grid.portable_label(row, names)
-            or ""
+            grid.portable_summary(row, names) or grid.portable_label(row, names) or ""
         )
 
     def change_of(before, after):
@@ -1074,11 +1107,14 @@ def _published_detail(pairings, names=None) -> dict:
     for round_key in sorted(pairings, key=int):
         for row in pairings[round_key]:
             table = f"T{row['table_label'] or row['table']}  " if row["table"] else ""
-            lines.append((
-                "", "",
-                f"R{round_key}  {table}{who(row['first'])} – {who(row['second'])}"
-                + ("  (forfeit)" if row.get("forfeit") else ""),
-            ))
+            lines.append(
+                (
+                    "",
+                    "",
+                    f"R{round_key}  {table}{who(row['first'])} – {who(row['second'])}"
+                    + ("  (forfeit)" if row.get("forfeit") else ""),
+                )
+            )
     shown = lines[:MAX_DETAIL_ROWS]
     return {"lines": shown, "more": len(lines) - len(shown)}
 
@@ -1171,6 +1207,7 @@ def _snapshot_note(payload) -> str:
         f"{entrants} entrant(s), {results} result(s). Download the log to read it."
     )
 
+
 # ---------------------------------------------------------------------------
 # Development write guard
 # ---------------------------------------------------------------------------
@@ -1202,9 +1239,7 @@ class strict_write_guard:
 def _write_guard(sender, **kwargs):
     if in_command_context() or not _guard_strict.get():
         return
-    raise RuntimeError(
-        f"event-log guard: {sender.__name__} written outside a command"
-    )
+    raise RuntimeError(f"event-log guard: {sender.__name__} written outside a command")
 
 
 def connect_write_guard():

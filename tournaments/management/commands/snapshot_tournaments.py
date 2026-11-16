@@ -23,6 +23,4 @@ class Command(BaseCommand):
             if snapshot_existing(tournament) is not None:
                 made += 1
                 self.stdout.write(f"snapshotted “{tournament}”")
-        self.stdout.write(
-            self.style.SUCCESS(f"Recorded {made} snapshot(s).")
-        )
+        self.stdout.write(self.style.SUCCESS(f"Recorded {made} snapshot(s)."))

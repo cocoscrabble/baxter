@@ -109,10 +109,6 @@ class StartsTests(TestCase):
         self.assertEqual(p.first.name, "Bob")
 
 
-
-
-
-
 # ── DB-backed tests ──────────────────────────────────────
 
 
@@ -155,12 +151,6 @@ class PairingDBTestBase(TestCase):
             loser_score=l_score,
             winner_started=winner_started,
         )
-
-
-
-
-
-
 
 
 # ── standings_after_round with excluded_keys ────────────────────────────────
@@ -227,13 +217,7 @@ class StandingsSpreadTiebreakTests(TestCase):
         self.assertEqual(order, ["Alice", "Carol", "Dave", "Bob"])
 
 
-
-
-
-
 # ── DB-backed integration tests ──────────────────────────────────────────────
-
-
 
 
 class RoundRobinFixedPairingLifecycleTests(PairingDBTestBase):
@@ -243,11 +227,17 @@ class RoundRobinFixedPairingLifecycleTests(PairingDBTestBase):
     refused."""
 
     def _rr_config(self):
-        rp = [{"round": i, "pairing": RP.RoundRobin, "start_round": 1} for i in range(1, 4)]
-        return DivisionSettings.objects.create(division=self.division, round_pairings=rp)
+        rp = [
+            {"round": i, "pairing": RP.RoundRobin, "start_round": 1}
+            for i in range(1, 4)
+        ]
+        return DivisionSettings.objects.create(
+            division=self.division, round_pairings=rp
+        )
 
     def _publish_all(self):
         from tournaments.fixed_pairings import regenerate_pairings
+
         regenerate_pairings(self.division)
         self.division.round_pairings_set.update(status=RoundPairings.PUBLISHED)
 
@@ -260,8 +250,12 @@ class RoundRobinFixedPairingLifecycleTests(PairingDBTestBase):
     def _play_round(self, r):
         for p in self.division.pairings.filter(round=r):
             ResultSlip.objects.create(
-                division=self.division, round=r,
-                winner=p.first, winner_score=400, loser=p.second, loser_score=350,
+                division=self.division,
+                round=r,
+                winner=p.first,
+                winner_score=400,
+                loser=p.second,
+                loser_score=350,
                 winner_started=True,
             )
         self.division.round_pairings_set.filter(round=r).update(
@@ -278,6 +272,7 @@ class RoundRobinFixedPairingLifecycleTests(PairingDBTestBase):
 
     def test_add_honors_pairing_and_keeps_round_robin(self):
         from tournaments.fixed_pairings import add_fixed_pairing
+
         self._rr_config()
         self._publish_all()
 
@@ -290,6 +285,7 @@ class RoundRobinFixedPairingLifecycleTests(PairingDBTestBase):
 
     def test_mid_event_add_to_later_round(self):
         from tournaments.fixed_pairings import add_fixed_pairing
+
         self._rr_config()
         self._publish_all()
         round1_before = self._round_pairs(1)
@@ -298,7 +294,8 @@ class RoundRobinFixedPairingLifecycleTests(PairingDBTestBase):
         # Two players who have not met in round 1, fixed into (unplayed) round 3.
         unmet = next(
             (a, b)
-            for a in range(4) for b in range(4)
+            for a in range(4)
+            for b in range(4)
             if a < b
             and frozenset({self.entrants[a].player.name, self.entrants[b].player.name})
             not in round1_before
@@ -317,6 +314,7 @@ class RoundRobinFixedPairingLifecycleTests(PairingDBTestBase):
 
     def test_add_rejected_for_played_round(self):
         from tournaments.fixed_pairings import add_fixed_pairing
+
         self._rr_config()
         self._publish_all()
         self._play_round(1)
@@ -329,6 +327,7 @@ class RoundRobinFixedPairingLifecycleTests(PairingDBTestBase):
 
     def test_add_rejected_for_already_played_pair(self):
         from tournaments.fixed_pairings import add_fixed_pairing
+
         self._rr_config()
         self._publish_all()
         # Take a pair that actually played in round 1 and try to re-time it.
@@ -354,9 +353,14 @@ class RoundRobinFixedPairingLifecycleTests(PairingDBTestBase):
 
         played_pairing = self.division.pairings.filter(round=1).first()
         ResultSlip.objects.create(
-            division=self.division, round=1, pairing=played_pairing,
-            winner=played_pairing.first, winner_score=400,
-            loser=played_pairing.second, loser_score=350, winner_started=True,
+            division=self.division,
+            round=1,
+            pairing=played_pairing,
+            winner=played_pairing.first,
+            winner_score=400,
+            loser=played_pairing.second,
+            loser_score=350,
+            winner_started=True,
         )
         rp1 = self.division.round_pairings_set.get(round=1)
         rp1.update_status()
@@ -370,11 +374,11 @@ class RoundRobinFixedPairingLifecycleTests(PairingDBTestBase):
         # Two players who have not met, fixed into the (still draft) round 3.
         unmet = next(
             (a, b)
-            for a in range(4) for b in range(4)
+            for a in range(4)
+            for b in range(4)
             if a < b
-            and frozenset(
-                {self.entrants[a].player.name, self.entrants[b].player.name}
-            ) not in round1
+            and frozenset({self.entrants[a].player.name, self.entrants[b].player.name})
+            not in round1
         )
         ok, err = add_fixed_pairing(
             self.division, 3, self.entrants[unmet[0]].pk, self.entrants[unmet[1]].pk
@@ -386,21 +390,25 @@ class RoundRobinFixedPairingLifecycleTests(PairingDBTestBase):
         # The fixed pairing is honored in round 3.
         self.assertIn(
             frozenset(
-                {self.entrants[unmet[0]].player.name, self.entrants[unmet[1]].player.name}
+                {
+                    self.entrants[unmet[0]].player.name,
+                    self.entrants[unmet[1]].player.name,
+                }
             ),
             self._round_pairs(3),
         )
         # The unplayed round-1 game appears only in round 1, never duplicated.
-        appearances = sum(
-            1 for r in (1, 2, 3) if unplayed in self._round_pairs(r)
-        )
+        appearances = sum(1 for r in (1, 2, 3) if unplayed in self._round_pairs(r))
         self.assertEqual(appearances, 1)
         self._assert_complete_round_robin()
 
     def _charlottesville_config(self):
         from tournaments.fixed_pairings import regenerate_pairings
 
-        rp = [{"round": i, "pairing": RP.Charlottesville, "start_round": 1} for i in range(1, 3)]
+        rp = [
+            {"round": i, "pairing": RP.Charlottesville, "start_round": 1}
+            for i in range(1, 3)
+        ]
         DivisionSettings.objects.create(division=self.division, round_pairings=rp)
         regenerate_pairings(self.division)
         self.division.round_pairings_set.update(status=RoundPairings.PUBLISHED)
@@ -436,12 +444,16 @@ class RoundRobinFixedPairingLifecycleTests(PairingDBTestBase):
         # banner, not raise an uncaught PairingError (500).
         self._rr_config()
         DBFixedPairing.objects.create(
-            division=self.division, round_number=1,
-            entrant1=self.entrants[0], entrant2=self.entrants[1],
+            division=self.division,
+            round_number=1,
+            entrant1=self.entrants[0],
+            entrant2=self.entrants[1],
         )
         DBFixedPairing.objects.create(
-            division=self.division, round_number=1,
-            entrant1=self.entrants[0], entrant2=self.entrants[2],
+            division=self.division,
+            round_number=1,
+            entrant1=self.entrants[0],
+            entrant2=self.entrants[2],
         )
         self.client.login(username="owner", password="testpass123")
         url = (
@@ -465,8 +477,13 @@ class FixedTableIntegrationTests(PairingDBTestBase):
     """
 
     def _koth_config(self, num_rounds):
-        rp = [{"round": i, "pairing": RP.KotH, "start_round": i - 1} for i in range(1, num_rounds + 1)]
-        return DivisionSettings.objects.create(division=self.division, round_pairings=rp)
+        rp = [
+            {"round": i, "pairing": RP.KotH, "start_round": i - 1}
+            for i in range(1, num_rounds + 1)
+        ]
+        return DivisionSettings.objects.create(
+            division=self.division, round_pairings=rp
+        )
 
     def _add_fixed_table(self, round_number, entrant_idx, table_number):
         return DBFixedTable.objects.create(
@@ -478,6 +495,7 @@ class FixedTableIntegrationTests(PairingDBTestBase):
 
     def _regenerate(self):
         from tournaments.generate_pairings import regenerate_pairings
+
         regenerate_pairings(self.division)
         return list(
             DBPairing.objects.filter(division=self.division)
@@ -522,7 +540,7 @@ class FixedTableIntegrationTests(PairingDBTestBase):
         # Bob has all→table 1, but round 1 specific→table 2. Specific wins.
         self._koth_config(1)
         self._add_fixed_table(-1, 1, 1)  # Bob → table 1 (all)
-        self._add_fixed_table(1, 1, 2)   # Bob → table 2 (round 1 specific)
+        self._add_fixed_table(1, 1, 2)  # Bob → table 2 (round 1 specific)
         pairings = self._regenerate()
         self.assertEqual(self._table_for(pairings, "Alice", "Bob"), 2)
 
@@ -539,7 +557,7 @@ class FixedTableIntegrationTests(PairingDBTestBase):
         # Alice has all→table 2; Bob has specific→table 1. Specific wins.
         self._koth_config(1)
         self._add_fixed_table(-1, 0, 2)  # Alice → table 2 (all)
-        self._add_fixed_table(1, 1, 1)   # Bob → table 1 (specific)
+        self._add_fixed_table(1, 1, 1)  # Bob → table 1 (specific)
         pairings = self._regenerate()
         self.assertEqual(self._table_for(pairings, "Alice", "Bob"), 1)
 
@@ -567,6 +585,7 @@ class RoundPairingsLifecycleTests(PairingDBTestBase):
 
     def _regenerate(self):
         from tournaments.generate_pairings import regenerate_pairings
+
         regenerate_pairings(self.division)
 
     def _complete_round(self, round_num):
@@ -594,7 +613,9 @@ class RoundPairingsLifecycleTests(PairingDBTestBase):
         self._complete_round(1)
         self._regenerate()
         rps = RoundPairings.objects.filter(division=self.division).order_by("round")
-        self.assertEqual(rps.count(), 1)  # Only round 2 (round 1 is finished, skipped by pair())
+        self.assertEqual(
+            rps.count(), 1
+        )  # Only round 2 (round 1 is finished, skipped by pair())
         self.assertEqual(rps.first().round, 2)
 
     def test_round_pairings_unique_constraint(self):
@@ -726,9 +747,13 @@ class RoundPairingsLifecycleTests(PairingDBTestBase):
         rp.save()
         pairing = rp.pairings.first()
         ResultSlip.objects.create(
-            division=self.division, round=1, pairing=pairing,
-            winner=self.entrants[0], winner_score=450,
-            loser=self.entrants[1], loser_score=380,
+            division=self.division,
+            round=1,
+            pairing=pairing,
+            winner=self.entrants[0],
+            winner_score=450,
+            loser=self.entrants[1],
+            loser_score=380,
             winner_started=True,
         )
         pairing.round_pairings.update_status()
@@ -743,15 +768,23 @@ class RoundPairingsLifecycleTests(PairingDBTestBase):
         rp.save()
         pairings = list(rp.pairings.all())
         ResultSlip.objects.create(
-            division=self.division, round=1, pairing=pairings[0],
-            winner=pairings[0].first, winner_score=450,
-            loser=pairings[0].second, loser_score=380,
+            division=self.division,
+            round=1,
+            pairing=pairings[0],
+            winner=pairings[0].first,
+            winner_score=450,
+            loser=pairings[0].second,
+            loser_score=380,
             winner_started=True,
         )
         ResultSlip.objects.create(
-            division=self.division, round=1, pairing=pairings[1],
-            winner=pairings[1].first, winner_score=400,
-            loser=pairings[1].second, loser_score=350,
+            division=self.division,
+            round=1,
+            pairing=pairings[1],
+            winner=pairings[1].first,
+            winner_score=400,
+            loser=pairings[1].second,
+            loser_score=350,
             winner_started=True,
         )
         pairings[0].round_pairings.update_status()
@@ -766,9 +799,13 @@ class RoundPairingsLifecycleTests(PairingDBTestBase):
         rp.save()
         pairing = rp.pairings.first()
         rs = ResultSlip.objects.create(
-            division=self.division, round=1, pairing=pairing,
-            winner=self.entrants[0], winner_score=450,
-            loser=self.entrants[1], loser_score=380,
+            division=self.division,
+            round=1,
+            pairing=pairing,
+            winner=self.entrants[0],
+            winner_score=450,
+            loser=self.entrants[1],
+            loser_score=380,
             winner_started=True,
         )
         pairing.round_pairings.update_status()
@@ -782,6 +819,7 @@ class RoundPairingsLifecycleTests(PairingDBTestBase):
 
     def test_unpublish_reverts_published_round_to_draft(self):
         from tournaments.generate_pairings import publish_rounds, unpublish_rounds
+
         self._koth_config(1)
         self._regenerate()
         publish_rounds(self.division, [1])
@@ -793,15 +831,21 @@ class RoundPairingsLifecycleTests(PairingDBTestBase):
 
     def test_unpublish_blocked_when_round_has_results(self):
         from tournaments.generate_pairings import publish_rounds, unpublish_rounds
+
         self._koth_config(1)
         self._regenerate()
         publish_rounds(self.division, [1])
         rp = RoundPairings.objects.get(division=self.division, round=1)
         pairing = rp.pairings.first()
         ResultSlip.objects.create(
-            division=self.division, round=1, pairing=pairing,
-            winner=pairing.first, winner_score=450,
-            loser=pairing.second, loser_score=380, winner_started=True,
+            division=self.division,
+            round=1,
+            pairing=pairing,
+            winner=pairing.first,
+            winner_score=450,
+            loser=pairing.second,
+            loser_score=380,
+            winner_started=True,
         )
         rp.update_status()
         self.assertEqual(unpublish_rounds(self.division, [1]), [])
@@ -810,6 +854,7 @@ class RoundPairingsLifecycleTests(PairingDBTestBase):
 
     def test_unpublish_ignores_draft_round(self):
         from tournaments.generate_pairings import unpublish_rounds
+
         self._koth_config(1)
         self._regenerate()  # round 1 is DRAFT
         self.assertEqual(unpublish_rounds(self.division, [1]), [])
@@ -822,7 +867,9 @@ class RoundPairingsLifecycleTests(PairingDBTestBase):
         # front, so this empty-but-published state is reachable; wrongly marking
         # it finished makes later rounds (which depend on it) look pairable.
         rp = RoundPairings.objects.create(
-            division=self.division, round=1, status=RoundPairings.PUBLISHED,
+            division=self.division,
+            round=1,
+            status=RoundPairings.PUBLISHED,
         )
         self.assertEqual(rp.pairings.count(), 0)
         rp.update_status()
@@ -838,6 +885,7 @@ class RoundRobinUnplayedRoundsTests(PairingDBTestBase):
 
     def _regenerate(self):
         from tournaments.generate_pairings import regenerate_pairings
+
         regenerate_pairings(self.division)
 
     def test_all_round_robin_rounds_pair_before_any_results(self):
@@ -887,10 +935,6 @@ class RoundRobinUnplayedRoundsTests(PairingDBTestBase):
             self.assertEqual(len(names), 4)  # every entrant paired exactly once
 
 
-
-
-
-
 class PublishedStartLedgerTests(PairingDBTestBase):
     """A published round is already printed, so its games and its first/second
     assignments are history from that moment — not from when its results arrive.
@@ -903,18 +947,21 @@ class PublishedStartLedgerTests(PairingDBTestBase):
 
     def _regenerate(self):
         from tournaments.generate_pairings import regenerate_pairings
+
         regenerate_pairings(self.division)
 
     def _publish(self, *rounds):
         from tournaments.generate_pairings import publish_rounds
+
         publish_rounds(self.division, list(rounds))
 
     def _oriented(self, rnd):
         """{(first, second): repeats} for a round."""
         return {
             (p.first.player.name, p.second.player.name): p.repeats
-            for p in self.division.pairings.filter(round=rnd)
-            .select_related("first__player", "second__player")
+            for p in self.division.pairings.filter(round=rnd).select_related(
+                "first__player", "second__player"
+            )
         }
 
     def _entrant(self, name):
@@ -928,10 +975,12 @@ class PublishedStartLedgerTests(PairingDBTestBase):
         # Published pairings reach the engine as player numbers.
         self.assertEqual(
             pd.published_pairings,
-            {1: [
-                (self._entrant("Alice").key, self._entrant("Bob").key),
-                (self._entrant("Carol").key, self._entrant("Dave").key),
-            ]},
+            {
+                1: [
+                    (self._entrant("Alice").key, self._entrant("Bob").key),
+                    (self._entrant("Carol").key, self._entrant("Dave").key),
+                ]
+            },
         )
 
     def test_draft_rounds_are_not_in_published_pairings(self):
@@ -945,10 +994,12 @@ class PublishedStartLedgerTests(PairingDBTestBase):
         # have chosen. Regenerating must build round 2 on what was published —
         # Alice and Bob have each started once (so the higher seed leads the
         # tie), and neither pair has met before.
-        self._schedule([
-            {"round": 1, "start_round": 0, "pairing": "KotH"},
-            {"round": 2, "start_round": 0, "pairing": "KotH"},
-        ])
+        self._schedule(
+            [
+                {"round": 1, "start_round": 0, "pairing": "KotH"},
+                {"round": 2, "start_round": 0, "pairing": "KotH"},
+            ]
+        )
         self._regenerate()
         self._publish(1)
         edited = [("Alice", "Carol"), ("Bob", "Dave")]
@@ -961,9 +1012,7 @@ class PublishedStartLedgerTests(PairingDBTestBase):
         self._regenerate()
 
         self.assertEqual(set(self._oriented(1)), set(edited))
-        self.assertEqual(
-            self._oriented(2), {("Alice", "Bob"): 1, ("Carol", "Dave"): 1}
-        )
+        self.assertEqual(self._oriented(2), {("Alice", "Bob"): 1, ("Carol", "Dave"): 1})
 
     def test_partial_round_contributes_every_saved_start_once(self):
         # Round 1 is published in full but only Alice-Bob has been played.
@@ -971,10 +1020,12 @@ class PublishedStartLedgerTests(PairingDBTestBase):
         # one apiece, so round 2's pin between them is a tie the higher seed
         # wins. Counting Alice twice (result and pairing) would flip it, and
         # ignoring the unplayed pairing would flip it too.
-        self._schedule([
-            {"round": 1, "start_round": 0, "pairing": "KotH"},
-            {"round": 2, "start_round": 0, "pairing": "KotH"},
-        ])
+        self._schedule(
+            [
+                {"round": 1, "start_round": 0, "pairing": "KotH"},
+                {"round": 2, "start_round": 0, "pairing": "KotH"},
+            ]
+        )
         self._regenerate()
         self._publish(1)
         self.assertEqual(set(self._oriented(1)), {("Alice", "Bob"), ("Carol", "Dave")})
@@ -997,10 +1048,12 @@ class PublishedStartLedgerTests(PairingDBTestBase):
         # started once, Bob, Dave and Eve have not.
         eve = DBPlayer.objects.create(name="Eve", player_number="005", rating=1300)
         Entrant.objects.create(division=self.division, player=eve, number=5)
-        self._schedule([
-            {"round": 1, "start_round": 0, "pairing": "KotH"},
-            {"round": 2, "start_round": 0, "pairing": "KotH"},
-        ])
+        self._schedule(
+            [
+                {"round": 1, "start_round": 0, "pairing": "KotH"},
+                {"round": 2, "start_round": 0, "pairing": "KotH"},
+            ]
+        )
         self._regenerate()
         self._publish(1)
         # The bye row is stored real-player-first for display, but reaches the
@@ -1025,9 +1078,9 @@ class PublishedStartLedgerTests(PairingDBTestBase):
         # The whole block is generated up front, so publishing round 1 must not
         # disturb the rounds after it: a regenerated schedule has to match the
         # one an uninterrupted pass produced, orientation included.
-        self._schedule([
-            {"round": r, "start_round": 0, "pairing": "RoundRobin"} for r in (1, 2, 3)
-        ])
+        self._schedule(
+            [{"round": r, "start_round": 0, "pairing": "RoundRobin"} for r in (1, 2, 3)]
+        )
         self._regenerate()
         before = {r: self._oriented(r) for r in (1, 2, 3)}
         self._publish(1)
@@ -1051,6 +1104,7 @@ class CopConfigLazySeedTests(PairingDBTestBase):
 
     def _regen(self):
         from tournaments.generate_pairings import regenerate_pairings
+
         regenerate_pairings(self.division)
 
     def _cop_config(self):
@@ -1060,10 +1114,13 @@ class CopConfigLazySeedTests(PairingDBTestBase):
         # Not DEFAULT_COP_CONFIG: this seed is unlogged, so replay re-derives it,
         # and it has to come out the same after the defaults move.
         from tournaments.models import DEFAULT_COP_CONFIG, LEGACY_DEFAULT_COP_CONFIG
-        self._schedule([
-            {"round": 1, "start_round": 0, "pairing": "Swiss"},
-            {"round": 2, "start_round": 1, "pairing": "COP"},
-        ])
+
+        self._schedule(
+            [
+                {"round": 1, "start_round": 0, "pairing": "Swiss"},
+                {"round": 2, "start_round": 1, "pairing": "COP"},
+            ]
+        )
         self._regen()
         self.assertEqual(self._cop_config(), LEGACY_DEFAULT_COP_CONFIG)
         self.assertNotEqual(self._cop_config(), DEFAULT_COP_CONFIG)
@@ -1076,15 +1133,21 @@ class CopConfigLazySeedTests(PairingDBTestBase):
     def test_cop_round_pairs_after_seeding(self):
         # End-to-end through the production path: a pairable COP round pairs
         # (rather than erroring) once defaults are seeded.
-        self._schedule([
-            {"round": 1, "start_round": 0, "pairing": "Swiss"},
-            {"round": 2, "start_round": 1, "pairing": "COP"},
-        ])
+        self._schedule(
+            [
+                {"round": 1, "start_round": 0, "pairing": "Swiss"},
+                {"round": 2, "start_round": 1, "pairing": "COP"},
+            ]
+        )
         self._regen()  # pairs round 1
         for p in self.division.pairings.filter(round=1):
             ResultSlip.objects.create(
-                division=self.division, round=1,
-                winner=p.first, winner_score=400, loser=p.second, loser_score=350,
+                division=self.division,
+                round=1,
+                winner=p.first,
+                winner_score=400,
+                loser=p.second,
+                loser_score=350,
                 winner_started=True,
             )
         self.division.round_pairings_set.filter(round=1).update(
@@ -1095,6 +1158,7 @@ class CopConfigLazySeedTests(PairingDBTestBase):
 
     def test_existing_config_is_preserved(self):
         from tournaments.models import default_cop_config
+
         custom = {**default_cop_config(), "place_prizes": 5, "simulations": 200}
         DivisionSettings.objects.update_or_create(
             division=self.division,
@@ -1185,12 +1249,12 @@ class SharedNameIdentityTests(TestCase):
     def setUpTestData(cls):
         cls.owner = User.objects.create_user(username="td2", password="testpass123")
         cls.tournament = Tournament.objects.create(
-            name="Clash", location="Toronto",
-            start_date=date(2026, 5, 1), owner=cls.owner,
+            name="Clash",
+            location="Toronto",
+            start_date=date(2026, 5, 1),
+            owner=cls.owner,
         )
-        cls.division = Division.objects.create(
-            name="Open", tournament=cls.tournament
-        )
+        cls.division = Division.objects.create(name="Open", tournament=cls.tournament)
         # Two John Smiths and a third player they both keep meeting.
         cls.entrants = {}
         for number, (label, name, rating) in enumerate(
@@ -1211,9 +1275,12 @@ class SharedNameIdentityTests(TestCase):
 
     def _slip(self, round, winner, loser, w_score=450, l_score=400):
         return ResultSlip.objects.create(
-            division=self.division, round=round,
-            winner=self.entrants[winner], winner_score=w_score,
-            loser=self.entrants[loser], loser_score=l_score,
+            division=self.division,
+            round=round,
+            winner=self.entrants[winner],
+            winner_score=w_score,
+            loser=self.entrants[loser],
+            loser_score=l_score,
             winner_started=True,
         )
 
@@ -1236,9 +1303,7 @@ class SharedNameIdentityTests(TestCase):
         pd = PairingData.for_division(self.division)
         repeats = Repeats()
         for slip in pd.result_slips:
-            repeats.add(
-                Pairing(Player(slip.winner_key), Player(slip.loser_key))
-            )
+            repeats.add(Pairing(Player(slip.winner_key), Player(slip.loser_key)))
         mary = self.entrants["mary"].key
         self.assertEqual(
             repeats.get(Pairing(Player(self.entrants["john_a"].key), Player(mary))), 1
@@ -1316,9 +1381,7 @@ class RatingEditInvalidatesDraftsTests(PairingDBTestBase):
         DivisionSettings.objects.update_or_create(
             division=self.division,
             defaults={
-                "round_pairings": [
-                    {"round": 1, "start_round": 0, "pairing": "KotH"}
-                ]
+                "round_pairings": [{"round": 1, "start_round": 0, "pairing": "KotH"}]
             },
         )
 
@@ -1382,18 +1445,17 @@ class RatingEditInvalidatesDraftsTests(PairingDBTestBase):
         nothing must not flip the whole division to ``manual`` — which would
         make every entrant immune to a later sync."""
         before = {
-            e.pk: (e.rating, e.rating_source)
-            for e in self.division.entrants.all()
+            e.pk: (e.rating, e.rating_source) for e in self.division.entrants.all()
         }
         self.assertEqual(
-            {src for _, src in before.values()}, {"coco"},
+            {src for _, src in before.values()},
+            {"coco"},
             "fixture precondition: everyone is cascaded from their CoCo rating",
         )
         response = self._save(self._rows())
         self.assertEqual(response.status_code, 200, response.content)
         after = {
-            e.pk: (e.rating, e.rating_source)
-            for e in self.division.entrants.all()
+            e.pk: (e.rating, e.rating_source) for e in self.division.entrants.all()
         }
         self.assertEqual(after, before)
 
@@ -1447,10 +1509,13 @@ class ScheduleChangeInvalidatesDraftsTests(TestCase):
 
         owner = User.objects.create_user(username="sched", password="pw")
         division = make_division(owner, 9, 9, pairing="RoundRobin", first_number=900)
-        payload = {"division": division.name, "blocks": [
-            {"pairing": "RoundRobin", "rounds": 9, "pair_from": 1},
-            {"pairing": "RoundRobin", "rounds": 9, "pair_from": 1},
-        ]}
+        payload = {
+            "division": division.name,
+            "blocks": [
+                {"pairing": "RoundRobin", "rounds": 9, "pair_from": 1},
+                {"pairing": "RoundRobin", "rounds": 9, "pair_from": 1},
+            ],
+        }
         save_settings(division.tournament, owner, payload)
         division = Division.objects.get(pk=division.pk)  # drop cached settings
         regenerate_pairings(division)

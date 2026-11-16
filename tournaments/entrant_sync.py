@@ -47,7 +47,11 @@ from .models import Division, Entrant, RoundPairings
 # and grows deviation from last_played, so a rating moved without them describes
 # a player who never existed.
 SEED_FIELDS = (
-    "rating", "rating_source", "deviation", "career_games", "rated_games",
+    "rating",
+    "rating_source",
+    "deviation",
+    "career_games",
+    "rated_games",
     "last_played",
 )
 
@@ -186,8 +190,7 @@ def upcoming_divisions(players=None):
         Division.objects.filter(entrants__isnull=False)
         .exclude(
             round_pairings_set__status__in=[
-                s for s, _ in RoundPairings.STATUS_CHOICES
-                if s != RoundPairings.DRAFT
+                s for s, _ in RoundPairings.STATUS_CHOICES if s != RoundPairings.DRAFT
             ]
         )
         .select_related("tournament")
@@ -197,7 +200,8 @@ def upcoming_divisions(players=None):
         return list(divisions)
     wanted = {p.pk for p in players}
     return [
-        d for d in divisions
+        d
+        for d in divisions
         if wanted.intersection(d.entrants.values_list("player_id", flat=True))
     ]
 

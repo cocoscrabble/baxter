@@ -107,9 +107,16 @@ class WindowTests(SimpleTestCase):
 
     def test_stage_lengths_are_independent(self):
         bracket = build_bracket(
-            config(count=8, quarterfinal=1, semifinal=3, championship=5,
-                   third_place=3, consolation_semifinal=3, fifth_place=3,
-                   seventh_place=3),
+            config(
+                count=8,
+                quarterfinal=1,
+                semifinal=3,
+                championship=5,
+                third_place=3,
+                consolation_semifinal=3,
+                fifth_place=3,
+                seventh_place=3,
+            ),
             [],
         )
         self.assertEqual(bracket.get(QUARTERFINAL, 0).max_games, 1)
@@ -158,7 +165,9 @@ class SchedulingTests(SimpleTestCase):
 
     def test_full_length_series_clinches_on_the_last_game(self):
         results = [
-            slip(11, "P1", "P4"), slip(12, "P4", "P1"), slip(13, "P4", "P1"),
+            slip(11, "P1", "P4"),
+            slip(12, "P4", "P1"),
+            slip(13, "P4", "P1"),
         ]
         semi = build_bracket(config(count=4), results).get(SEMIFINAL, 0)
         self.assertEqual(semi.status, SeriesStatus.CLINCHED)
@@ -169,7 +178,8 @@ class SchedulingTests(SimpleTestCase):
         # A withdrawal mid-bracket is recorded as a result, not as a dropped
         # entrant — which is what keeps the series from stalling forever.
         results = [
-            slip(11, "P1", "P4", 100, 0), slip(12, "P1", "P4", 100, 0),
+            slip(11, "P1", "P4", 100, 0),
+            slip(12, "P1", "P4", 100, 0),
         ]
         semi = build_bracket(config(count=4), results).get(SEMIFINAL, 0)
         self.assertEqual(semi.status, SeriesStatus.CLINCHED)
@@ -193,8 +203,11 @@ class AdvancementTests(SimpleTestCase):
     def semis_done(self):
         """P1 beats P4 2–0; P3 beats P2 2–1."""
         return [
-            slip(11, "P1", "P4"), slip(12, "P1", "P4"),
-            slip(11, "P2", "P3"), slip(12, "P3", "P2"), slip(13, "P3", "P2"),
+            slip(11, "P1", "P4"),
+            slip(12, "P1", "P4"),
+            slip(11, "P2", "P3"),
+            slip(12, "P3", "P2"),
+            slip(13, "P3", "P2"),
         ]
 
     def test_winners_advance_and_losers_go_to_third_place(self):
@@ -222,8 +235,10 @@ class AdvancementTests(SimpleTestCase):
             ("P1", "P4"),
         )
         self.assertEqual(
-            (bracket.get(CONSOLATION_SEMIFINAL, 0).high,
-             bracket.get(CONSOLATION_SEMIFINAL, 0).low),
+            (
+                bracket.get(CONSOLATION_SEMIFINAL, 0).high,
+                bracket.get(CONSOLATION_SEMIFINAL, 0).low,
+            ),
             ("P5", "P8"),
         )
         # The semifinal window schedules games for all eight qualifiers.
@@ -256,8 +271,8 @@ class TieTests(SimpleTestCase):
 
     def test_level_series_is_decided_on_spread_within_the_series(self):
         results = [
-            slip(11, "P1", "P4", 500, 400),   # P1 +100
-            slip(12, "P4", "P1", 450, 400),   # P4 +50
+            slip(11, "P1", "P4", 500, 400),  # P1 +100
+            slip(12, "P4", "P1", 450, 400),  # P4 +50
             draw(13, "P1", "P4"),
         ]
         semi = build_bracket(config(count=4), results).get(SEMIFINAL, 0)
@@ -305,8 +320,10 @@ class PlacementTests(SimpleTestCase):
         return {p.name: i + 1 for i, p in enumerate(players)}
 
     def placed(self, bracket, standings=None, numbers=None):
-        standings = standings if standings is not None else self.standings_for(
-            bracket.config.seeds
+        standings = (
+            standings
+            if standings is not None
+            else self.standings_for(bracket.config.seeds)
         )
         numbers = numbers if numbers is not None else self.numbers_for(standings)
         return final_placements(bracket, standings, numbers)
@@ -318,10 +335,17 @@ class PlacementTests(SimpleTestCase):
         So the runner-up P1 finishes the playoff 3–3 while third-placed P3
         finishes 3–2 — the 2023 NACC Division Two shape."""
         return [
-            slip(11, "P1", "P4"), slip(12, "P4", "P1"), slip(13, "P1", "P4"),
-            slip(11, "P2", "P3"), slip(12, "P3", "P2"), slip(13, "P2", "P3"),
-            slip(14, "P2", "P1"), slip(15, "P1", "P2"), slip(16, "P2", "P1"),
-            slip(14, "P3", "P4"), slip(15, "P3", "P4"),
+            slip(11, "P1", "P4"),
+            slip(12, "P4", "P1"),
+            slip(13, "P1", "P4"),
+            slip(11, "P2", "P3"),
+            slip(12, "P3", "P2"),
+            slip(13, "P2", "P3"),
+            slip(14, "P2", "P1"),
+            slip(15, "P1", "P2"),
+            slip(16, "P2", "P1"),
+            slip(14, "P3", "P4"),
+            slip(15, "P3", "P4"),
         ]
 
     def test_bracket_beats_aggregate_record(self):
@@ -370,8 +394,11 @@ class PlacementTests(SimpleTestCase):
         # Postscript, no consolation half and no third-place series: the
         # semifinal losers take 3–4 and the quarterfinal losers 5–8, by seed.
         cfg = config(
-            count=8, third_place=0, consolation_semifinal=0,
-            fifth_place=0, seventh_place=0,
+            count=8,
+            third_place=0,
+            consolation_semifinal=0,
+            fifth_place=0,
+            seventh_place=0,
         )
         results = []
         for round_num in (11, 12):
@@ -390,8 +417,9 @@ class PlacementTests(SimpleTestCase):
         # Semifinal losers, later elimination, ordered by seed.
         self.assertEqual([places[3], places[4]], ["P3", "P4"])
         # Quarterfinal losers, by seed.
-        self.assertEqual([places[5], places[6], places[7], places[8]],
-                         ["P5", "P6", "P7", "P8"])
+        self.assertEqual(
+            [places[5], places[6], places[7], places[8]], ["P5", "P6", "P7", "P8"]
+        )
         self.assertEqual(placements[4].source, "seed")
 
     def test_an_undecided_series_leaves_its_places_unresolved(self):
@@ -408,9 +436,13 @@ class PlacementTests(SimpleTestCase):
         self.assertIn("needs a decider", placements[0].note)
 
     def test_main_field_follows_the_bracket_and_breaks_ties_on_number(self):
-        bracket = build_bracket(config(count=2), [
-            slip(11, "P1", "P2"), slip(12, "P1", "P2"),
-        ])
+        bracket = build_bracket(
+            config(count=2),
+            [
+                slip(11, "P1", "P2"),
+                slip(12, "P1", "P2"),
+            ],
+        )
         # Two main-field players dead level on wins *and* spread: the tiebreak
         # is entrant number, so the order is deterministic either way round.
         alice, bob = Player("Alice"), Player("Bob")
@@ -431,9 +463,7 @@ class ConfigTests(SimpleTestCase):
     def test_valid_configs_pass(self):
         self.assertEqual(validate_config(config(count=4)), [])
         self.assertEqual(validate_config(config(count=8, quarterfinal=1)), [])
-        self.assertEqual(
-            validate_config(config(count=8, timing=Timing.CONCURRENT)), []
-        )
+        self.assertEqual(validate_config(config(count=8, timing=Timing.CONCURRENT)), [])
 
     def test_even_series_length_is_rejected(self):
         errors = validate_config(config(count=4, semifinal=2))

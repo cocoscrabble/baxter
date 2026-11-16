@@ -36,8 +36,15 @@ LOGO_PATH = os.path.join(os.path.dirname(__file__), "assets", "coco_logo.png")
 
 # Column widths in twentieths of a point (dxa).
 COL_WIDTHS = [1081, 2604, 900, 900, 1620, 1710, 1530]
-HEADERS = ["Round", "Opponent", "Won", "Lost",
-           "Player Score", "Opponent Score", "Spread"]
+HEADERS = [
+    "Round",
+    "Opponent",
+    "Won",
+    "Lost",
+    "Player Score",
+    "Opponent Score",
+    "Spread",
+]
 ROW_HEIGHT = 346  # dxa; every grid row uses this so the table stays uniform.
 
 # Image geometry (EMU), reproduced from the reference scorecard.
@@ -129,6 +136,7 @@ def make_rounds(round_numbers, *, undivided_first=True):
 
 # --- low-level docx helpers -------------------------------------------------
 
+
 def _set_run_font(run, size, *, bold=False):
     run.font.size = Pt(size)
     if bold:
@@ -167,9 +175,16 @@ def _set_cell_shading(cell, fill):
     # rejects the file (LibreOffice tolerates out-of-order children).
     cell._tc.get_or_add_tcPr().insert_element_before(
         shd,
-        "w:noWrap", "w:tcMar", "w:textDirection", "w:tcFitText",
-        "w:vAlign", "w:hideMark", "w:cellIns", "w:cellDel",
-        "w:cellMerge", "w:tcPrChange",
+        "w:noWrap",
+        "w:tcMar",
+        "w:textDirection",
+        "w:tcFitText",
+        "w:vAlign",
+        "w:hideMark",
+        "w:cellIns",
+        "w:cellDel",
+        "w:cellMerge",
+        "w:tcPrChange",
     )
 
 
@@ -199,8 +214,13 @@ def _set_table_borders(table):
     # open the file, while LibreOffice repairs it silently.
     table._tbl.tblPr.insert_element_before(
         borders,
-        "w:shd", "w:tblLayout", "w:tblCellMar", "w:tblLook",
-        "w:tblCaption", "w:tblDescription", "w:tblPrChange",
+        "w:shd",
+        "w:tblLayout",
+        "w:tblCellMar",
+        "w:tblLook",
+        "w:tblCaption",
+        "w:tblDescription",
+        "w:tblPrChange",
     )
 
 
@@ -256,8 +276,13 @@ def _fill_round_cell(cell, round_number, *, mark_start=False):
     p2 = cell.add_paragraph()
     _style_paragraph(p2)
     p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    for text, sup in [("1", False), ("st", True), ("   2", False),
-                      ("nd", True), (" ", False)]:
+    for text, sup in [
+        ("1", False),
+        ("st", True),
+        ("   2", False),
+        ("nd", True),
+        (" ", False),
+    ]:
         run = p2.add_run(text)
         _set_run_font(run, 10)
         if sup:
@@ -288,10 +313,10 @@ def _add_floating_image(paragraph, image, cx, cy, h_offset, v_offset, *, behind)
         f'<wp:positionV relativeFrom="paragraph"><wp:posOffset>{v_offset}</wp:posOffset></wp:positionV>'
         f'<wp:extent cx="{cx}" cy="{cy}"/>'
         '<wp:effectExtent l="0" t="0" r="0" b="0"/>'
-        '<wp:wrapNone/>'
+        "<wp:wrapNone/>"
         f'<wp:docPr id="{_uid[0]}" name="image{_uid[0]}"/>'
-        '<wp:cNvGraphicFramePr/>'
-        '</wp:anchor>'
+        "<wp:cNvGraphicFramePr/>"
+        "</wp:anchor>"
     )
     anchor.append(graphic)
     # The DrawingML non-visual picture id (pic:cNvPr/@id) that add_picture emits
@@ -315,6 +340,7 @@ def _make_qr_png(data):
 
 
 # --- assembly ---------------------------------------------------------------
+
 
 def _row_cells(row, table):
     """The row's cells straight off its ``<w:tc>`` children.
@@ -392,7 +418,7 @@ def _circle_xml(h_offset):
     fragment resolves standalone.
     """
     drawing = (
-        '<w:drawing>'
+        "<w:drawing>"
         '<wp:anchor distT="0" distB="0" distL="114300" distR="114300" '
         f'simplePos="0" relativeHeight="{_CIRCLE_Z_BASE}" behindDoc="0" '
         'locked="0" layoutInCell="1" allowOverlap="1" '
@@ -404,42 +430,42 @@ def _circle_xml(h_offset):
         '<wp:effectExtent l="0" t="0" r="9525" b="9525"/><wp:wrapNone/>'
         '<wp:docPr id="0" name="circle0"/><wp:cNvGraphicFramePr/>'
         '<a:graphic><a:graphicData uri="' + _WPS_NS + '">'
-        '<wps:wsp><wps:cNvSpPr/><wps:spPr>'
+        "<wps:wsp><wps:cNvSpPr/><wps:spPr>"
         f'<a:xfrm><a:off x="0" y="0"/><a:ext cx="{CIRCLE_W}" cy="{CIRCLE_H}"/></a:xfrm>'
         '<a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom><a:noFill/>'
         f'<a:ln w="19050"><a:solidFill><a:srgbClr val="{CIRCLE_COLOR}"/></a:solidFill></a:ln>'
-        '<a:effectLst/></wps:spPr>'
-        '<wps:style>'
+        "<a:effectLst/></wps:spPr>"
+        "<wps:style>"
         '<a:lnRef idx="1"><a:schemeClr val="accent1"/></a:lnRef>'
         '<a:fillRef idx="3"><a:schemeClr val="accent1"/></a:fillRef>'
         '<a:effectRef idx="2"><a:schemeClr val="accent1"/></a:effectRef>'
         '<a:fontRef idx="minor"><a:schemeClr val="lt1"/></a:fontRef>'
-        '</wps:style>'
+        "</wps:style>"
         '<wps:bodyPr rot="0" spcFirstLastPara="0" vertOverflow="overflow" '
         'horzOverflow="overflow" vert="horz" wrap="square" lIns="91440" '
         'tIns="45720" rIns="91440" bIns="45720" numCol="1" spcCol="0" '
         'rtlCol="0" fromWordArt="0" anchor="ctr" anchorCtr="0" forceAA="0" '
         'compatLnSpc="1"><a:prstTxWarp prst="textNoShape"><a:avLst/>'
-        '</a:prstTxWarp><a:noAutofit/></wps:bodyPr>'
-        '</wps:wsp></a:graphicData></a:graphic>'
+        "</a:prstTxWarp><a:noAutofit/></wps:bodyPr>"
+        "</wps:wsp></a:graphicData></a:graphic>"
         '<wp14:sizeRelH relativeFrom="margin"><wp14:pctWidth>0</wp14:pctWidth></wp14:sizeRelH>'
         '<wp14:sizeRelV relativeFrom="margin"><wp14:pctHeight>0</wp14:pctHeight></wp14:sizeRelV>'
-        '</wp:anchor></w:drawing>'
+        "</wp:anchor></w:drawing>"
     )
     # VML fallback: same ellipse in points, positioned like the wps anchor's
     # column/paragraph origins. Only clients that can't read wps use this; its
     # style string mirrors what Word emits for the fallback branch.
     fallback = (
-        '<w:pict>'
+        "<w:pict>"
         '<v:oval id="circle0" o:spid="_x0000_s1026" '
         f'style="position:absolute;margin-left:{h_offset / _EMU_PER_PT:.2f}pt;'
-        f'margin-top:{CIRCLE_V_OFFSET / _EMU_PER_PT:.2f}pt;'
-        f'width:{CIRCLE_W / _EMU_PER_PT:.2f}pt;height:{CIRCLE_H / _EMU_PER_PT:.2f}pt;'
-        f'z-index:{_CIRCLE_Z_BASE};visibility:visible;mso-wrap-style:square;'
-        'mso-wrap-distance-left:9pt;mso-wrap-distance-top:0;'
-        'mso-wrap-distance-right:9pt;mso-wrap-distance-bottom:0;'
-        'mso-position-horizontal:absolute;mso-position-horizontal-relative:text;'
-        'mso-position-vertical:absolute;mso-position-vertical-relative:text;'
+        f"margin-top:{CIRCLE_V_OFFSET / _EMU_PER_PT:.2f}pt;"
+        f"width:{CIRCLE_W / _EMU_PER_PT:.2f}pt;height:{CIRCLE_H / _EMU_PER_PT:.2f}pt;"
+        f"z-index:{_CIRCLE_Z_BASE};visibility:visible;mso-wrap-style:square;"
+        "mso-wrap-distance-left:9pt;mso-wrap-distance-top:0;"
+        "mso-wrap-distance-right:9pt;mso-wrap-distance-bottom:0;"
+        "mso-position-horizontal:absolute;mso-position-horizontal-relative:text;"
+        "mso-position-vertical:absolute;mso-position-vertical-relative:text;"
         'v-text-anchor:middle" '
         f'filled="f" strokecolor="#{CIRCLE_COLOR}" strokeweight="1.5pt">'
         '<w10:wrap type="none"/></v:oval></w:pict>'
@@ -449,10 +475,10 @@ def _circle_xml(h_offset):
         f'xmlns:a="{nsmap["a"]}" xmlns:wps="{_WPS_NS}" xmlns:mc="{_MC_NS}" '
         f'xmlns:wp14="{_WPS_DRAWING_NS}" '
         f'xmlns:v="{_V_NS}" xmlns:o="{_O_NS}" xmlns:w10="{_W10_NS}">'
-        '<mc:AlternateContent>'
+        "<mc:AlternateContent>"
         f'<mc:Choice Requires="wps">{drawing}</mc:Choice>'
-        f'<mc:Fallback>{fallback}</mc:Fallback>'
-        '</mc:AlternateContent></w:r>'
+        f"<mc:Fallback>{fallback}</mc:Fallback>"
+        "</mc:AlternateContent></w:r>"
     )
 
 
@@ -576,8 +602,9 @@ def _add_round_table(doc, round_specs, opponents, results, placeholder_rounds):
             _center_cell(bottom[c])
 
         # Round number goes in the (merged) first cell so it appears once.
-        _fill_round_cell(top[0], spec.number,
-                         mark_start=spec.number in placeholder_rounds)
+        _fill_round_cell(
+            top[0], spec.number, mark_start=spec.number in placeholder_rounds
+        )
 
         # Prefill the (merged) Opponent cell if a name was supplied.
         _prefill_cell(top[1], opponents.get(spec.number, ""))
@@ -600,9 +627,9 @@ def _chunk_rounds(spec):
     """Split rounds into per-page groups (smaller first page leaves room for the title)."""
     rounds = spec.rounds
     chunks = [rounds[: spec.first_page_rounds]]
-    rest = rounds[spec.first_page_rounds:]
+    rest = rounds[spec.first_page_rounds :]
     for i in range(0, len(rest), spec.rounds_per_page):
-        chunks.append(rest[i: i + spec.rounds_per_page])
+        chunks.append(rest[i : i + spec.rounds_per_page])
     return [c for c in chunks if c]
 
 
@@ -614,10 +641,24 @@ def build_scorecard(doc, spec, *, placeholder_rounds=frozenset()):
     """
     title = _add_paragraph(doc, spec.tournament_name, 25, bold=True)
     if spec.qr_url:
-        _add_floating_image(title, BytesIO(_make_qr_png(spec.qr_url)),
-                            QR_SIZE, QR_SIZE, QR_H_OFFSET, QR_V_OFFSET, behind=True)
-    _add_floating_image(title, LOGO_PATH, LOGO_SIZE, LOGO_SIZE,
-                        LOGO_H_OFFSET, LOGO_V_OFFSET, behind=False)
+        _add_floating_image(
+            title,
+            BytesIO(_make_qr_png(spec.qr_url)),
+            QR_SIZE,
+            QR_SIZE,
+            QR_H_OFFSET,
+            QR_V_OFFSET,
+            behind=True,
+        )
+    _add_floating_image(
+        title,
+        LOGO_PATH,
+        LOGO_SIZE,
+        LOGO_SIZE,
+        LOGO_H_OFFSET,
+        LOGO_V_OFFSET,
+        behind=False,
+    )
 
     _add_paragraph(doc, spec.tournament_date, 20)
     for _ in range(3):
@@ -628,7 +669,11 @@ def build_scorecard(doc, spec, *, placeholder_rounds=frozenset()):
     chunks = _chunk_rounds(spec)
     tables = []
     for i, chunk in enumerate(chunks):
-        tables.append(_add_round_table(doc, chunk, spec.opponents, spec.results, placeholder_rounds))
+        tables.append(
+            _add_round_table(
+                doc, chunk, spec.opponents, spec.results, placeholder_rounds
+            )
+        )
         if i < len(chunks) - 1:
             _add_page_break(doc)
 
@@ -642,7 +687,7 @@ def build_scorecard(doc, spec, *, placeholder_rounds=frozenset()):
 
 
 def _configure_page(section):
-    section.page_width = Emu(7772400)    # 8.5"
+    section.page_width = Emu(7772400)  # 8.5"
     section.page_height = Emu(10058400)  # 11"
     section.left_margin = Emu(594360)
     section.right_margin = Emu(548640)
@@ -681,7 +726,7 @@ def _patch_text(element, replacements, spec):
         if text in replacements:
             t.text = replacements[text]
         elif text.startswith(_START_PREFIX):
-            starts.append((t.getparent(), int(text[len(_START_PREFIX):])))
+            starts.append((t.getparent(), int(text[len(_START_PREFIX) :])))
     for run, round_number in starts:
         _resolve_start(run, round_number, spec)
 
@@ -731,10 +776,16 @@ def build_document(specs):
     prefill_rounds = {n for spec in specs for n in spec.opponents}
     template_opponents = {n: _opp_sentinel(n) for n in prefill_rounds}
     start_rounds = frozenset(n for spec in specs for n in spec.starts)
-    build_scorecard(doc, replace(
-        specs[0], player_name=_NAME_SENTINEL,
-        opponents=template_opponents, starts={},
-    ), placeholder_rounds=start_rounds)
+    build_scorecard(
+        doc,
+        replace(
+            specs[0],
+            player_name=_NAME_SENTINEL,
+            opponents=template_opponents,
+            starts={},
+        ),
+        placeholder_rounds=start_rounds,
+    )
     template_els = [c for c in body if c is not sectPr]
     for el in template_els:
         body.remove(el)
@@ -758,7 +809,9 @@ def build_document(specs):
         else:
             # Different layout: build it fresh, with start placeholders for its
             # own rounds, then resolve them (no name/opponent sentinels here).
-            tables = build_scorecard(doc, spec, placeholder_rounds=frozenset(spec.starts))
+            tables = build_scorecard(
+                doc, spec, placeholder_rounds=frozenset(spec.starts)
+            )
             for table in tables:
                 _patch_text(table._tbl, {}, spec)
     return doc

@@ -131,8 +131,14 @@ class ReplayTests(LoggedTournamentMixin, TestCase):
             division=div, round=1, round_pairings=rp, first=e1, second=e2, table=1
         )
         ResultSlip.objects.create(
-            division=div, round=1, pairing=pairing, winner=e1, winner_score=450,
-            loser=e2, loser_score=380, winner_started=True,
+            division=div,
+            round=1,
+            pairing=pairing,
+            winner=e1,
+            winner_score=450,
+            loser=e2,
+            loser_score=380,
+            winner_started=True,
         )
         recorded = division_digest(div)
 
@@ -264,13 +270,22 @@ class PublishedStartCorrectionTests(LoggedTournamentMixin, TestCase):
         )
         entrants = list(division.entrants.order_by("number")[:2])
         pairing = Pairing.objects.create(
-            division=division, round=2, round_pairings=rp,
-            first=entrants[0], second=entrants[1], table=1,
+            division=division,
+            round=2,
+            round_pairings=rp,
+            first=entrants[0],
+            second=entrants[1],
+            table=1,
         )
         ResultSlip.objects.create(
-            division=division, round=2, pairing=pairing,
-            winner=entrants[0], winner_score=450,
-            loser=entrants[1], loser_score=380, winner_started=False,
+            division=division,
+            round=2,
+            pairing=pairing,
+            winner=entrants[0],
+            winner_score=450,
+            loser=entrants[1],
+            loser_score=380,
+            winner_started=False,
         )
 
         self.assertEqual(start_conflicts(division), [])
@@ -509,9 +524,7 @@ class PlayerNumberChangeTests(LoggedTournamentMixin, TestCase):
     def _rename(self, tournament, old, new):
         from tournaments.commands import change_player_number
 
-        return change_player_number(
-            tournament, self.owner, {"old": old, "new": new}
-        )
+        return change_player_number(tournament, self.owner, {"old": old, "new": new})
 
     def _record(self, division, pairing):
         """Enter one result through the command, as the single-result form does.
@@ -521,21 +534,27 @@ class PlayerNumberChangeTests(LoggedTournamentMixin, TestCase):
         """
         from tournaments.commands import add_result
 
-        return add_result(division.tournament, self.owner, {
-            "division": division.name,
-            "round": pairing.round,
-            "first_player": pairing.first.key,
-            "second_player": pairing.second.key,
-            "winner_player": pairing.first.key,
-            "winner_score": 450,
-            "loser_score": 380,
-        })
+        return add_result(
+            division.tournament,
+            self.owner,
+            {
+                "division": division.name,
+                "round": pairing.round,
+                "first_player": pairing.first.key,
+                "second_player": pairing.second.key,
+                "winner_player": pairing.first.key,
+                "winner_score": 450,
+                "loser_score": 380,
+            },
+        )
 
     def test_results_either_side_of_a_rename_belong_to_one_player(self):
         from tournaments.models import Player
 
         guest = Player.objects.create(
-            name="Guest Gwen", player_number="T-7", rating=1450,
+            name="Guest Gwen",
+            player_number="T-7",
+            rating=1450,
             is_provisional=True,
         )
         tournament, division = self._build_logged_tournament(
@@ -546,8 +565,9 @@ class PlayerNumberChangeTests(LoggedTournamentMixin, TestCase):
         # only pairs once the round it pairs from is finished.
         first_round = list(division.pairings.filter(round=1).order_by("table"))
         self.assertTrue(
-            any(guest.pk in (p.first.player_id, p.second.player_id)
-                for p in first_round),
+            any(
+                guest.pk in (p.first.player_id, p.second.player_id) for p in first_round
+            ),
             "the guest should have a round-1 game",
         )
         for pairing in first_round:
@@ -562,16 +582,15 @@ class PlayerNumberChangeTests(LoggedTournamentMixin, TestCase):
         # …and a result under the new one. Published through the view, so the
         # round-2 draft is regenerated off round 1's result exactly as it would
         # be in use, and the publish is logged.
-        self.client.get(
-            reverse("division_pair_rounds", kwargs=division.slug_kwargs())
-        )
+        self.client.get(reverse("division_pair_rounds", kwargs=division.slug_kwargs()))
         self.client.post(
             reverse("publish_round", kwargs=division.slug_kwargs()), {"round": 2}
         )
         second_round = division.pairings.filter(round=2).order_by("table")
         self.assertTrue(second_round.exists(), "round 2 was not paired")
         pairing2 = next(
-            p for p in second_round
+            p
+            for p in second_round
             if guest.pk in (p.first.player_id, p.second.player_id)
         )
         self._record(division, pairing2)
@@ -616,7 +635,9 @@ class PlayerNumberChangeTests(LoggedTournamentMixin, TestCase):
         from tournaments.models import Player
 
         guest = Player.objects.create(
-            name="Guest Gwen", player_number="T-7", rating=1450,
+            name="Guest Gwen",
+            player_number="T-7",
+            rating=1450,
             is_provisional=True,
         )
         tournament, _ = self._build_logged_tournament(
@@ -645,9 +666,7 @@ class PlayerNumberChangeTests(LoggedTournamentMixin, TestCase):
         tournament, _ = self._build_logged_tournament()
         with self.assertRaisesRegex(ValueError, "already taken"):
             self._rename(tournament, "0500", "0600")
-        self.assertEqual(
-            Player.objects.get(name="A").player_number, "0500"
-        )
+        self.assertEqual(Player.objects.get(name="A").player_number, "0500")
 
     def test_renaming_an_unknown_number_is_refused(self):
         tournament, _ = self._build_logged_tournament()
@@ -679,9 +698,12 @@ class SeedingReplayTests(TestCase):
             )
         ]
         self.tournament = create_tournament(
-            None, self.owner,
+            None,
+            self.owner,
             {
-                "name": "Champs", "location": "X", "start_date": "2026-04-01",
+                "name": "Champs",
+                "location": "X",
+                "start_date": "2026-04-01",
                 "default_division": {"name": "Open"},
             },
         )
@@ -689,12 +711,11 @@ class SeedingReplayTests(TestCase):
         # Entered worst-first, so entry order and rating order disagree.
         for player in self.players:
             add_entrant(
-                self.tournament, self.owner,
+                self.tournament,
+                self.owner,
                 {"division": "Open", "player": player.player_number},
             )
-            reseed_entrants(
-                self.tournament, self.owner, {"division": "Open"}
-            )
+            reseed_entrants(self.tournament, self.owner, {"division": "Open"})
 
     def test_the_numbering_survives_a_replay(self):
         before = division_digest(self.division)
@@ -711,15 +732,18 @@ class SeedingReplayTests(TestCase):
         division = ctx.tournament.divisions.get(name="Open")
         self.assertEqual(division_digest(division), before)
         self.assertEqual(
-            {e.player.name: e.number
-             for e in division.entrants.select_related("player")},
+            {
+                e.player.name: e.number
+                for e in division.entrants.select_related("player")
+            },
             numbers,
         )
 
     def test_a_log_with_no_reseed_event_keeps_its_typed_numbers(self):
         """A tournament numbered by hand before any of this replays unchanged."""
         events = [
-            e for e in events_from_tournament(self.tournament)
+            e
+            for e in events_from_tournament(self.tournament)
             if e["event_type"] != "entrants_reseeded"
         ]
         # Numbers as add_entrant assigned them: entry order, worst first.
@@ -731,8 +755,10 @@ class SeedingReplayTests(TestCase):
 
         division = ctx.tournament.divisions.get(name="Open")
         self.assertEqual(
-            {e.player.name: e.number
-             for e in division.entrants.select_related("player")},
+            {
+                e.player.name: e.number
+                for e in division.entrants.select_related("player")
+            },
             {"Low": 1, "High": 2, "Mid": 3},
         )
 
@@ -752,9 +778,12 @@ class CopSeedReplayTests(TestCase):
 
         self.owner = User.objects.create_user(username="owner", password="pw")
         self.tournament = create_tournament(
-            None, self.owner,
+            None,
+            self.owner,
             {
-                "name": "Champs", "location": "X", "start_date": "2026-04-01",
+                "name": "Champs",
+                "location": "X",
+                "start_date": "2026-04-01",
                 "default_division": {"name": "Open"},
             },
         )
@@ -764,7 +793,8 @@ class CopSeedReplayTests(TestCase):
         from tournaments.commands import save_settings
 
         save_settings(
-            self.tournament, self.owner,
+            self.tournament,
+            self.owner,
             {"division": "Open", "blocks": self.COP_SCHEDULE},
         )
 
@@ -780,7 +810,8 @@ class CopSeedReplayTests(TestCase):
         seeded = self.division.settings.cop_config
         self.assertEqual(seeded, DEFAULT_COP_CONFIG)
         (event,) = [
-            e for e in events_from_tournament(self.tournament)
+            e
+            for e in events_from_tournament(self.tournament)
             if e["event_type"] == "division_settings_saved"
         ]
         self.assertEqual(event["payload"]["seeded_cop_config"], seeded)
@@ -841,7 +872,11 @@ class RecordedPublishTests(LoggedTournamentMixin, TestCase):
         self.assertEqual(
             sorted(tuple(sorted((r["first"], r["second"]))) for r in rows),
             sorted(
-                tuple(sorted((p.first.player.player_number, p.second.player.player_number)))
+                tuple(
+                    sorted(
+                        (p.first.player.player_number, p.second.player.player_number)
+                    )
+                )
                 for p in division.pairings.filter(round=1)
             ),
         )
@@ -884,12 +919,15 @@ class RecordedPublishTests(LoggedTournamentMixin, TestCase):
             },
             published,
         )
-        self.assertEqual([(d["division"], d["round"]) for d in ctx.drift],
-                         [(division.name, 1)])
+        self.assertEqual(
+            [(d["division"], d["round"]) for d in ctx.drift], [(division.name, 1)]
+        )
 
     def test_the_same_engine_reports_no_drift(self):
         tournament, _ = self._build_logged_tournament()
-        self.assertEqual(replay(events_from_tournament(tournament), verify=True).drift, [])
+        self.assertEqual(
+            replay(events_from_tournament(tournament), verify=True).drift, []
+        )
 
     def test_a_publish_logged_before_boards_were_recorded_still_replays(self):
         tournament, division = self._build_logged_tournament()
@@ -931,7 +969,9 @@ class PortableExportTests(LoggedTournamentMixin, TestCase):
         from tournaments.commands import add_entrant
 
         late = Player.objects.create(name="Eve", player_number="0005", rating=1200)
-        add_entrant(tournament, self.owner, {"division": division.name, "player": "0005"})
+        add_entrant(
+            tournament, self.owner, {"division": division.name, "player": "0005"}
+        )
         return late
 
     def _export(self, tournament):
@@ -956,7 +996,9 @@ class PortableExportTests(LoggedTournamentMixin, TestCase):
     def _bulk_import(self, tournament, division, csv):
         from tournaments.commands import bulk_import_entrants
 
-        bulk_import_entrants(tournament, self.owner, {"division": division.name, "csv": csv})
+        bulk_import_entrants(
+            tournament, self.owner, {"division": division.name, "csv": csv}
+        )
 
     def _replay_elsewhere(self, tournament):
         """Export, empty the player table, and replay with the header."""
@@ -984,9 +1026,14 @@ class PortableExportTests(LoggedTournamentMixin, TestCase):
         tournament, division = self._build_logged_tournament()
         self._bulk_import(tournament, division, "Zed,1000\n")
         guest = Player.objects.get(name="Zed")
-        change_player_number(tournament, self.owner, {"old": guest.player_number, "new": "0777"})
+        change_player_number(
+            tournament, self.owner, {"old": guest.player_number, "new": "0777"}
+        )
         ctx = self._replay_elsewhere(tournament)
-        names = {e.player.player_number: e.player.name for e in ctx.tournament.divisions.get().entrants.all()}
+        names = {
+            e.player.player_number: e.player.name
+            for e in ctx.tournament.divisions.get().entrants.all()
+        }
         self.assertEqual(names["0777"], "Zed")
 
     def test_a_renumber_finds_a_guest_minted_under_another_temp_number(self):
@@ -996,11 +1043,17 @@ class PortableExportTests(LoggedTournamentMixin, TestCase):
         from tournaments.models import next_temp_player_number
 
         tournament, division = self._build_logged_tournament()
-        Player.objects.create(name="Old guest", player_number=next_temp_player_number(),
-                              rating=0, is_provisional=True)
+        Player.objects.create(
+            name="Old guest",
+            player_number=next_temp_player_number(),
+            rating=0,
+            is_provisional=True,
+        )
         self._bulk_import(tournament, division, "Zed,1000\n")
         guest = Player.objects.get(name="Zed")
-        change_player_number(tournament, self.owner, {"old": guest.player_number, "new": "0777"})
+        change_player_number(
+            tournament, self.owner, {"old": guest.player_number, "new": "0777"}
+        )
         header, events = self._export(tournament)
         tournament.delete()
         Player.objects.exclude(is_bye=True).delete()
@@ -1051,7 +1104,9 @@ class PortableExportTests(LoggedTournamentMixin, TestCase):
         # the unrecorded rating are reported, not failed.
         header, events, number = self._old_style_export(moved_rating=1900)
         ctx = replay(events, verify=True, players=header["players"])
-        entrant = ctx.tournament.divisions.get().entrants.get(player__player_number="0005")
+        entrant = ctx.tournament.divisions.get().entrants.get(
+            player__player_number="0005"
+        )
         self.assertEqual(entrant.number, number)
         self.assertTrue(ctx.unverified)
 
@@ -1103,7 +1158,9 @@ class ReplayCommandTests(LoggedTournamentMixin, TestCase):
 
         tournament, _ = self._build_logged_tournament()
         out = StringIO()
-        call_command("replay_tournament", self._write(tournament), "--upto", "2", stdout=out)
+        call_command(
+            "replay_tournament", self._write(tournament), "--upto", "2", stdout=out
+        )
         self.assertIn("Replayed 2 event(s)", out.getvalue())
 
     def test_a_failed_replay_leaves_nothing_behind_and_says_where(self):
@@ -1113,13 +1170,17 @@ class ReplayCommandTests(LoggedTournamentMixin, TestCase):
 
         tournament, division = self._build_logged_tournament()
         Player.objects.create(name="Eve", player_number="0005", rating=1200)
-        add_entrant(tournament, self.owner, {"division": division.name, "player": "0005"})
+        add_entrant(
+            tournament, self.owner, {"division": division.name, "player": "0005"}
+        )
         path = self._write(tournament, drop_players=True)
         tournament.delete()
         Player.objects.exclude(is_bye=True).delete()
         before = Tournament.objects.count()
 
-        with self.assertRaisesRegex(CommandError, r"No player with number .* at seq \d+"):
+        with self.assertRaisesRegex(
+            CommandError, r"No player with number .* at seq \d+"
+        ):
             call_command("replay_tournament", path)
         self.assertEqual(Tournament.objects.count(), before)
 
@@ -1130,18 +1191,30 @@ class FixedByeReplayTests(LoggedTournamentMixin, TestCase):
         # the inline picker and then the grid, and publish.
         self.client.post(
             reverse("tournament_create"),
-            {"name": "Champs", "location": "Reno", "start_date": "2026-03-15",
-             "editor_usernames": ""},
+            {
+                "name": "Champs",
+                "location": "Reno",
+                "start_date": "2026-03-15",
+                "editor_usernames": "",
+            },
         )
         tournament = Tournament.objects.get(name="Champs")
         division = tournament.divisions.get()
-        self._post_json("division_entrants_edit", division, {"rows": [
-            {"number": i + 1, "player": p.pk, "dropped": False}
-            for i, p in enumerate(self.players[:3])
-        ]})
-        self._post_json("division_round_pairings", division, {
-            "blocks": [{"pairing": "KotH", "rounds": 2, "pair_from": 1}]
-        })
+        self._post_json(
+            "division_entrants_edit",
+            division,
+            {
+                "rows": [
+                    {"number": i + 1, "player": p.pk, "dropped": False}
+                    for i, p in enumerate(self.players[:3])
+                ]
+            },
+        )
+        self._post_json(
+            "division_round_pairings",
+            division,
+            {"blocks": [{"pairing": "KotH", "rounds": 2, "pair_from": 1}]},
+        )
         self.client.get(reverse("division_pair_rounds", kwargs=division.slug_kwargs()))
         alice = division.entrants.get(player__name="Alice")
         self.client.post(
@@ -1150,10 +1223,16 @@ class FixedByeReplayTests(LoggedTournamentMixin, TestCase):
         )
         bye = division.bye_entrant()
         bob = division.entrants.get(player__name="Bob")
-        self._post_json("division_fixed_pairings", division, {"rows": [
-            {"round_number": 1, "entrant1": alice.pk, "entrant2": bye.pk},
-            {"round_number": 2, "entrant1": bye.pk, "entrant2": bob.pk},
-        ]})
+        self._post_json(
+            "division_fixed_pairings",
+            division,
+            {
+                "rows": [
+                    {"round_number": 1, "entrant1": alice.pk, "entrant2": bye.pk},
+                    {"round_number": 2, "entrant1": bye.pk, "entrant2": bob.pk},
+                ]
+            },
+        )
         self.assertEqual(division.fixed_pairings.count(), 2)
         # The grid save dropped the draft; viewing the round re-pairs it.
         self.client.get(reverse("division_pair_rounds", kwargs=division.slug_kwargs()))

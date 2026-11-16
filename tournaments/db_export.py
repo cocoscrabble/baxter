@@ -46,8 +46,7 @@ def exported_models():
     for label in EXPORTED_APPS:
         config = apps.get_app_config(label)
         models = [
-            m for m in config.get_models()
-            if m._meta.label_lower not in EXCLUDED_MODELS
+            m for m in config.get_models() if m._meta.label_lower not in EXCLUDED_MODELS
         ]
         app_list.append((config, models))
     return serializers.sort_dependencies(app_list, allow_cycles=True)

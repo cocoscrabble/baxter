@@ -38,7 +38,7 @@ class ResultSlipDTO(DataClassJsonMixin):
                 loser_score=int(row["loser_score"]),
                 winner_started=bool(row["winner_started"]),
             )
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return None
 
     def validate(self, entrant_ids: set[int]) -> list[str]:
@@ -107,11 +107,14 @@ class EntrantDTO(DataClassJsonMixin):
                 # The current grid has only Tentative. Older clients and
                 # replay payloads still carry an explicit paid value; preserve
                 # it rather than rewriting historical registration state.
-                paid=(bool(row["paid"]) if "paid" in row
-                      else not bool(row.get("tentative", False))),
+                paid=(
+                    bool(row["paid"])
+                    if "paid" in row
+                    else not bool(row.get("tentative", False))
+                ),
                 playing_up=bool(row.get("playing_up", False)),
             )
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return None
 
     def validate(self, valid_player_ids: set[int], seen_players: set[int]) -> list[str]:
@@ -158,7 +161,7 @@ class FixedPairingDTO(DataClassJsonMixin):
                 entrant1=int(row["entrant1"]),
                 entrant2=int(row["entrant2"]),
             )
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return None
 
     def validate(
@@ -216,17 +219,21 @@ class FixedTableDTO(DataClassJsonMixin):
                 entrant=int(row["entrant"]),
                 table_label=label,
             )
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return None
 
-    def validate(self, valid_entrant_ids: set[int], seen_per_round: dict[int, set[int]]) -> list[str]:
+    def validate(
+        self, valid_entrant_ids: set[int], seen_per_round: dict[int, set[int]]
+    ) -> list[str]:
         errors = []
         if self.entrant not in valid_entrant_ids:
             errors.append("player not found in division.")
             return errors
         seen = seen_per_round.setdefault(self.round_number, set())
         if self.entrant in seen:
-            errors.append(f"player already has a fixed table assignment in round {self.round_number}.")
+            errors.append(
+                f"player already has a fixed table assignment in round {self.round_number}."
+            )
         else:
             seen.add(self.entrant)
         return errors

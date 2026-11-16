@@ -61,10 +61,10 @@ class RosterParseError(Exception):
 class PendingResolution:
     """A roster row that appears to be a local guest under their new number."""
 
-    local_number: str      # the T- number Baxter has
-    roster_number: str     # the number the registry assigned
+    local_number: str  # the T- number Baxter has
+    roster_number: str  # the number the registry assigned
     name: str
-    row: dict              # the full roster row, applied once confirmed
+    row: dict  # the full roster row, applied once confirmed
 
     @property
     def key(self):
@@ -102,7 +102,7 @@ class PendingResolution:
 
 @dataclass
 class RosterImportResult:
-    added: list = field(default_factory=list)      # player numbers
+    added: list = field(default_factory=list)  # player numbers
     updated: list = field(default_factory=list)
     unchanged: list = field(default_factory=list)
     # Rows held back for a director to confirm. Nothing was written for these.
@@ -114,8 +114,10 @@ class RosterImportResult:
     @property
     def total(self):
         return (
-            len(self.added) + len(self.updated)
-            + len(self.unchanged) + len(self.pending)
+            len(self.added)
+            + len(self.updated)
+            + len(self.unchanged)
+            + len(self.pending)
         )
 
 
@@ -161,7 +163,9 @@ def parse_roster(raw):
                 "name": name,
                 # A null rating means no rated games yet. Baxter has always
                 # spelled that 0.
-                "rating": int(entry["rating"]) if entry.get("rating") is not None else 0,
+                "rating": int(entry["rating"])
+                if entry.get("rating") is not None
+                else 0,
                 "deviation": entry.get("deviation"),
                 "career_games": int(entry.get("career_games") or 0),
                 # Played games only, which the rating formula needs. A roster
@@ -181,7 +185,7 @@ def _parse_date(value, number):
         return None
     try:
         return date.fromisoformat(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         raise RosterParseError(
             f"Player #{number}: last_played {value!r} is not a date."
         ) from None
@@ -189,7 +193,12 @@ def _parse_date(value, number):
 
 # What a pull owns. wespa_rating is pointedly not here.
 SYNCED_FIELDS = (
-    "name", "rating", "deviation", "career_games", "rated_games", "last_played",
+    "name",
+    "rating",
+    "deviation",
+    "career_games",
+    "rated_games",
+    "last_played",
 )
 
 
@@ -359,9 +368,9 @@ def resolve_number(pending, actor=None):
 
     payload = {"old": pending.local_number, "new": pending.roster_number}
     tournaments = list(
-        Tournament.objects.filter(
-            divisions__entrants__player=player
-        ).distinct().order_by("pk")
+        Tournament.objects.filter(divisions__entrants__player=player)
+        .distinct()
+        .order_by("pk")
     )
 
     if not tournaments:
@@ -372,9 +381,7 @@ def resolve_number(pending, actor=None):
         change_player_number(tournaments[0], actor, payload)
         with command_context():
             for tournament in tournaments[1:]:
-                record_event(
-                    tournament, "player_number_changed", payload, actor=actor
-                )
+                record_event(tournament, "player_number_changed", payload, actor=actor)
 
     # Now that they are on the registry's number, take the registry's data.
     player.refresh_from_db()

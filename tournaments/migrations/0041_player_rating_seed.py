@@ -4,25 +4,24 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('tournaments', '0040_backfill_entrant_ratings'),
+        ("tournaments", "0040_backfill_entrant_ratings"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='player',
-            name='career_games',
+            model_name="player",
+            name="career_games",
             field=models.IntegerField(default=0),
         ),
         migrations.AddField(
-            model_name='player',
-            name='deviation',
+            model_name="player",
+            name="deviation",
             field=models.FloatField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='player',
-            name='last_played',
+            model_name="player",
+            name="last_played",
             field=models.DateField(blank=True, null=True),
         ),
     ]

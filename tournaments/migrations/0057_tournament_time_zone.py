@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('tournaments', '0056_games_per_day'),
+        ("tournaments", "0056_games_per_day"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='tournament',
-            name='time_zone',
-            field=models.CharField(default='America/Chicago', max_length=64),
+            model_name="tournament",
+            name="time_zone",
+            field=models.CharField(default="America/Chicago", max_length=64),
         ),
     ]

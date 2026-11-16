@@ -90,7 +90,11 @@ urlpatterns = [
     # segment as a tournament slug.
     path("", TournamentListView.as_view(), name="tournament_list"),
     path("create/", TournamentCreateView.as_view(), name="tournament_create"),
-    path("fake-tournament/", FakeTournamentCreateView.as_view(), name="fake_tournament_create"),
+    path(
+        "fake-tournament/",
+        FakeTournamentCreateView.as_view(),
+        name="fake_tournament_create",
+    ),
     path("what-if/import/", WhatIfImportView.as_view(), name="whatif_import"),
     # The admin landing page. Named "manage/" to match the sibling cocodb site
     # (../ratings), whose staff area is /manage/ — and to leave "/admin/" meaning
@@ -104,75 +108,221 @@ urlpatterns = [
         name="admin_action_attachment",
     ),
     path("manage/export/", DatabaseExportView.as_view(), name="database_export"),
-    path("manage/users/<int:pk>/password/", UserSetPasswordView.as_view(), name="user_set_password"),
+    path(
+        "manage/users/<int:pk>/password/",
+        UserSetPasswordView.as_view(),
+        name="user_set_password",
+    ),
     path("players/import/", PlayerImportView.as_view(), name="player_import"),
     path("players/wespa/", WespaImportView.as_view(), name="wespa_import"),
     path("players/roster/", RosterImportView.as_view(), name="roster_import"),
     path("players/merge/", PlayerMergeView.as_view(), name="player_merge"),
-
-    path("<slug:tournament_slug>/", TournamentDetailView.as_view(), name="tournament_detail"),
-    path("<slug:tournament_slug>/edit/", TournamentUpdateView.as_view(), name="tournament_edit"),
-    path("<slug:tournament_slug>/delete/", TournamentDeleteView.as_view(), name="tournament_delete"),
-    path("<slug:tournament_slug>/activity/", TournamentActivityView.as_view(), name="tournament_activity"),
-    path("<slug:tournament_slug>/activity/export/", TournamentEventLogExportView.as_view(), name="tournament_event_log_export"),
-    path("<slug:tournament_slug>/division/create/", DivisionCreateView.as_view(), name="division_create"),
-
+    path(
+        "<slug:tournament_slug>/",
+        TournamentDetailView.as_view(),
+        name="tournament_detail",
+    ),
+    path(
+        "<slug:tournament_slug>/edit/",
+        TournamentUpdateView.as_view(),
+        name="tournament_edit",
+    ),
+    path(
+        "<slug:tournament_slug>/delete/",
+        TournamentDeleteView.as_view(),
+        name="tournament_delete",
+    ),
+    path(
+        "<slug:tournament_slug>/activity/",
+        TournamentActivityView.as_view(),
+        name="tournament_activity",
+    ),
+    path(
+        "<slug:tournament_slug>/activity/export/",
+        TournamentEventLogExportView.as_view(),
+        name="tournament_event_log_export",
+    ),
+    path(
+        "<slug:tournament_slug>/division/create/",
+        DivisionCreateView.as_view(),
+        name="division_create",
+    ),
     path(D, DivisionRootRedirectView.as_view()),
     path(D + "entrants/", DivisionEntrantsView.as_view(), name="division_entrants"),
-    path(D + "entrants/refresh-ratings/", DivisionRefreshRatingsView.as_view(), name="division_refresh_ratings"),
-    path(D + "entrants/reseed/", DivisionReseedEntrantsView.as_view(), name="division_reseed_entrants"),
-    path(D + "entrants/withdraw/", DivisionWithdrawEntrantView.as_view(), name="division_withdraw_entrant"),
-    path(D + "entrants/rejoin/", DivisionRejoinEntrantView.as_view(), name="division_rejoin_entrant"),
+    path(
+        D + "entrants/refresh-ratings/",
+        DivisionRefreshRatingsView.as_view(),
+        name="division_refresh_ratings",
+    ),
+    path(
+        D + "entrants/reseed/",
+        DivisionReseedEntrantsView.as_view(),
+        name="division_reseed_entrants",
+    ),
+    path(
+        D + "entrants/withdraw/",
+        DivisionWithdrawEntrantView.as_view(),
+        name="division_withdraw_entrant",
+    ),
+    path(
+        D + "entrants/rejoin/",
+        DivisionRejoinEntrantView.as_view(),
+        name="division_rejoin_entrant",
+    ),
     path(D + "forfeit-game/", ForfeitGameView.as_view(), name="forfeit_game"),
     path(D + "fix-start/", FixPlayoffStartView.as_view(), name="fix_playoff_start"),
     path(D + "results/", DivisionAllResultsView.as_view(), name="division_all_results"),
-    path(D + "statistics/", DivisionStatisticsView.as_view(), name="division_statistics"),
+    path(
+        D + "statistics/", DivisionStatisticsView.as_view(), name="division_statistics"
+    ),
     path(D + "add-result/", ResultSlipCreateView.as_view(), name="resultslip_create"),
-    path(D + "edit-result/<int:result_pk>/", ResultSlipCreateView.as_view(), name="resultslip_edit"),
+    path(
+        D + "edit-result/<int:result_pk>/",
+        ResultSlipCreateView.as_view(),
+        name="resultslip_edit",
+    ),
     path(D + "standings/", DivisionStandingsView.as_view(), name="division_standings"),
-    path(D + "ratings/", DivisionLiveRatingsView.as_view(), name="division_live_ratings"),
-    path(D + "standings/table/", DivisionStandingsTableView.as_view(), name="division_standings_table"),
-    path(D + "standings/embed/", DivisionStandingsEmbedView.as_view(), name="division_standings_embed"),
-    path(D + "standings/table/<int:round>/", DivisionStandingsTableView.as_view(), name="division_standings_table_round"),
-    path(D + "standings/<int:round>/", DivisionStandingsView.as_view(), name="division_standings_round"),
-    path(D + "pairings/", DivisionPublishedPairingsView.as_view(), name="division_pairings"),
-    path(D + "pair-rounds/", DivisionPairingsView.as_view(), name="division_pair_rounds"),
-    path(D + "pair-rounds/<int:round>/", RoundPairingsTabView.as_view(), name="round_pairings_tab"),
+    path(
+        D + "ratings/", DivisionLiveRatingsView.as_view(), name="division_live_ratings"
+    ),
+    path(
+        D + "standings/table/",
+        DivisionStandingsTableView.as_view(),
+        name="division_standings_table",
+    ),
+    path(
+        D + "standings/embed/",
+        DivisionStandingsEmbedView.as_view(),
+        name="division_standings_embed",
+    ),
+    path(
+        D + "standings/table/<int:round>/",
+        DivisionStandingsTableView.as_view(),
+        name="division_standings_table_round",
+    ),
+    path(
+        D + "standings/<int:round>/",
+        DivisionStandingsView.as_view(),
+        name="division_standings_round",
+    ),
+    path(
+        D + "pairings/",
+        DivisionPublishedPairingsView.as_view(),
+        name="division_pairings",
+    ),
+    path(
+        D + "pair-rounds/", DivisionPairingsView.as_view(), name="division_pair_rounds"
+    ),
+    path(
+        D + "pair-rounds/<int:round>/",
+        RoundPairingsTabView.as_view(),
+        name="round_pairings_tab",
+    ),
     path(D + "explore/", DivisionExploreView.as_view(), name="division_explore"),
     path(D + "playoff/", DivisionPlayoffView.as_view(), name="division_playoff"),
-    path(D + "playoff/setup/", PlayoffSetupView.as_view(), name="division_playoff_setup"),
-    path(D + "edit-entrants/", DivisionEntrantsEditView.as_view(), name="division_entrants_edit"),
+    path(
+        D + "playoff/setup/", PlayoffSetupView.as_view(), name="division_playoff_setup"
+    ),
+    path(
+        D + "edit-entrants/",
+        DivisionEntrantsEditView.as_view(),
+        name="division_entrants_edit",
+    ),
     path(D + "live/standings/", LiveStandingsView.as_view(), name="live_standings"),
     path(D + "live/pairings/", LivePairingsView.as_view(), name="live_pairings"),
     path(D + "live/results/", LiveResultsView.as_view(), name="live_results"),
     path(D + "live/statistics/", LiveStatisticsView.as_view(), name="live_statistics"),
     path(D + "live/playoff/", LivePlayoffView.as_view(), name="live_playoff"),
-    path(D + "entrants/embed/", DivisionEntrantsEmbedView.as_view(), name="division_entrants_embed"),
+    path(
+        D + "entrants/embed/",
+        DivisionEntrantsEmbedView.as_view(),
+        name="division_entrants_embed",
+    ),
     path(D + "register/", DivisionRegisterView.as_view(), name="division_register"),
     path(D + "settings/", DivisionSettingsEditView.as_view(), name="division_settings"),
-    path(D + "edit-results/", DivisionEditResultsView.as_view(), name="division_edit_results"),
+    path(
+        D + "edit-results/",
+        DivisionEditResultsView.as_view(),
+        name="division_edit_results",
+    ),
     path(D + "simulate-match/", SimulateMatchView.as_view(), name="simulate_match"),
     path(D + "simulate-round/", SimulateRoundView.as_view(), name="simulate_round"),
-    path(D + "publish-pairings/", PublishPairingsView.as_view(), name="publish_pairings"),
+    path(
+        D + "publish-pairings/", PublishPairingsView.as_view(), name="publish_pairings"
+    ),
     path(D + "publish-round/", PublishRoundView.as_view(), name="publish_round"),
     path(D + "unpublish-round/", UnpublishRoundView.as_view(), name="unpublish_round"),
-    path(D + "add-fixed-pairing/", AddFixedPairingView.as_view(), name="add_fixed_pairing"),
-    path(D + "remove-fixed-pairing/", RemoveFixedPairingView.as_view(), name="remove_fixed_pairing"),
-    path(D + "remove-fixed-pairings/", RemoveFixedPairingsView.as_view(), name="remove_fixed_pairings"),
-    path(D + "published-pairings/", PublishedPairingsView.as_view(), name="published_pairings"),
-    path(D + "scorecards/", DivisionScorecardsView.as_view(), name="division_scorecards"),
-    path(D + "scorecards/download/", DivisionScorecardsDownloadView.as_view(), name="division_scorecards_download"),
-    path(D + "results/export/", DivisionResultsExportView.as_view(), name="division_results_export"),
+    path(
+        D + "add-fixed-pairing/",
+        AddFixedPairingView.as_view(),
+        name="add_fixed_pairing",
+    ),
+    path(
+        D + "remove-fixed-pairing/",
+        RemoveFixedPairingView.as_view(),
+        name="remove_fixed_pairing",
+    ),
+    path(
+        D + "remove-fixed-pairings/",
+        RemoveFixedPairingsView.as_view(),
+        name="remove_fixed_pairings",
+    ),
+    path(
+        D + "published-pairings/",
+        PublishedPairingsView.as_view(),
+        name="published_pairings",
+    ),
+    path(
+        D + "scorecards/", DivisionScorecardsView.as_view(), name="division_scorecards"
+    ),
+    path(
+        D + "scorecards/download/",
+        DivisionScorecardsDownloadView.as_view(),
+        name="division_scorecards_download",
+    ),
+    path(
+        D + "results/export/",
+        DivisionResultsExportView.as_view(),
+        name="division_results_export",
+    ),
     path(D + "delete/", DivisionDeleteView.as_view(), name="division_delete"),
     path(D + "rename/", DivisionRenameView.as_view(), name="division_rename"),
     path(D + "restore/", DivisionRestoreView.as_view(), name="division_restore"),
-    path(D + "fixed-pairings/", DivisionFixedPairingsEditView.as_view(), name="division_fixed_pairings"),
-    path(D + "fixed-tables/", DivisionFixedTablesEditView.as_view(), name="division_fixed_tables"),
-    path(D + "board-tables/", DivisionBoardTableMapEditView.as_view(), name="division_board_tables"),
+    path(
+        D + "fixed-pairings/",
+        DivisionFixedPairingsEditView.as_view(),
+        name="division_fixed_pairings",
+    ),
+    path(
+        D + "fixed-tables/",
+        DivisionFixedTablesEditView.as_view(),
+        name="division_fixed_tables",
+    ),
+    path(
+        D + "board-tables/",
+        DivisionBoardTableMapEditView.as_view(),
+        name="division_board_tables",
+    ),
     path(D + "fixtures/", DivisionFixturesEditView.as_view(), name="division_fixtures"),
-    path(D + "round-pairings/", DivisionRoundPairingsEditView.as_view(), name="division_round_pairings"),
-    path(D + "round-pairings/method-preview/", DivisionPairingMethodPreviewView.as_view(), name="division_pairing_method_preview"),
-    path(D + "round-pairings/preview/", DivisionRoundPairingsPreviewView.as_view(), name="division_round_pairings_preview"),
-    path(D + "bulk-import/", BulkImportEntrantsView.as_view(), name="bulk_import_entrants"),
+    path(
+        D + "round-pairings/",
+        DivisionRoundPairingsEditView.as_view(),
+        name="division_round_pairings",
+    ),
+    path(
+        D + "round-pairings/method-preview/",
+        DivisionPairingMethodPreviewView.as_view(),
+        name="division_pairing_method_preview",
+    ),
+    path(
+        D + "round-pairings/preview/",
+        DivisionRoundPairingsPreviewView.as_view(),
+        name="division_round_pairings_preview",
+    ),
+    path(
+        D + "bulk-import/",
+        BulkImportEntrantsView.as_view(),
+        name="bulk_import_entrants",
+    ),
     path(D + "presence/<str:scope>/", EditPresenceView.as_view(), name="edit_presence"),
 ]

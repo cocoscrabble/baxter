@@ -173,7 +173,9 @@ class PairingData:
             )
         ]
         fixed: dict[int, list[tuple[str, str]]] = defaultdict(list)
-        for fp in division.fixed_pairings.select_related("entrant1__player", "entrant2__player").all():
+        for fp in division.fixed_pairings.select_related(
+            "entrant1__player", "entrant2__player"
+        ).all():
             pair = (fp.entrant1.player.player_number, fp.entrant2.player.player_number)
             # A fixed bye goes to the engine the way it makes its own:
             # (player, bye). The grid lets a director type it either way round.

@@ -4,25 +4,38 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('tournaments', '0057_tournament_time_zone'),
+        ("tournaments", "0057_tournament_time_zone"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='adminaction',
-            name='attachment',
+            model_name="adminaction",
+            name="attachment",
             field=models.TextField(blank=True),
         ),
         migrations.AddField(
-            model_name='adminaction',
-            name='attachment_name',
+            model_name="adminaction",
+            name="attachment_name",
             field=models.CharField(blank=True, max_length=255),
         ),
         migrations.AlterField(
-            model_name='adminaction',
-            name='kind',
-            field=models.CharField(choices=[('roster_pull', 'PlayerDB pull'), ('roster_resolution', 'Guest number confirmed'), ('wespa_pull', 'WESPA pull'), ('wespa_link', 'WESPA link'), ('wespa_unlink', 'WESPA unlink'), ('player_import', 'Player import'), ('player_merge', 'Guest merged'), ('password_set', 'Password set'), ('database_export', 'Database export'), ('tournament_delete', 'Tournament deleted')], max_length=32),
+            model_name="adminaction",
+            name="kind",
+            field=models.CharField(
+                choices=[
+                    ("roster_pull", "PlayerDB pull"),
+                    ("roster_resolution", "Guest number confirmed"),
+                    ("wespa_pull", "WESPA pull"),
+                    ("wespa_link", "WESPA link"),
+                    ("wespa_unlink", "WESPA unlink"),
+                    ("player_import", "Player import"),
+                    ("player_merge", "Guest merged"),
+                    ("password_set", "Password set"),
+                    ("database_export", "Database export"),
+                    ("tournament_delete", "Tournament deleted"),
+                ],
+                max_length=32,
+            ),
         ),
     ]

@@ -59,7 +59,8 @@ class AccessTests(TestCase):
         self.assertIn("ad-x", [r["fields"].get("username") for r in rows])
         action = AdminAction.objects.get()
         self.assertEqual(
-            (action.kind, action.ok, action.actor), (AdminAction.DATABASE_EXPORT, True, admin)
+            (action.kind, action.ok, action.actor),
+            (AdminAction.DATABASE_EXPORT, True, admin),
         )
 
 
@@ -77,7 +78,8 @@ class ContentTests(TestCase):
         hidden = Entrant.all_objects.filter(player__is_bye=True)
         self.assertFalse(Entrant.objects.filter(pk__in=hidden).exists())
         exported = {
-            r["pk"] for r in fixture_rows(export_database()[0])
+            r["pk"]
+            for r in fixture_rows(export_database()[0])
             if r["model"] == "tournaments.entrant"
         }
         self.assertTrue(set(hidden.values_list("pk", flat=True)) <= exported)

@@ -31,7 +31,9 @@ def setUpTournament(target):
     )
     target.tournament.editors.add(target.owner)
     target.division = Division.objects.create(name="Open", tournament=target.tournament)
-    target.player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
+    target.player1 = Player.objects.create(
+        name="Alice", player_number="001", rating=1600
+    )
     target.player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
     # enter(), not create(): entrants pin the rating they are seeded from, and
     # a fixture that skips that produces entrants rated 0.
@@ -66,7 +68,8 @@ class TournamentModelTests(TestCase):
         """The grant is silent: access without membership in ``editors``, which
         is what the tournament page, the edit form and the event log read."""
         supervisor = User.objects.create_user(
-            username="super_visor", password="testpass123",
+            username="super_visor",
+            password="testpass123",
             role=User.Role.SUPERVISOR,
         )
         self.assertTrue(self.tournament.can_edit(supervisor))
@@ -74,7 +77,9 @@ class TournamentModelTests(TestCase):
 
     def test_admin_can_edit_without_being_an_editor(self):
         admin = User.objects.create_user(
-            username="an_admin", password="testpass123", role=User.Role.ADMIN,
+            username="an_admin",
+            password="testpass123",
+            role=User.Role.ADMIN,
         )
         self.assertTrue(self.tournament.can_edit(admin))
 
@@ -92,9 +97,15 @@ class DivisionModelTests(TestCase):
         self.assertEqual(division.max_round(), 0)
 
     def test_max_round_with_results(self):
-        division = Division.objects.create(name="WithResults", tournament=self.tournament)
-        entrant1 = Entrant.objects.create(division=division, player=self.player1, number=1)
-        entrant2 = Entrant.objects.create(division=division, player=self.player2, number=2)
+        division = Division.objects.create(
+            name="WithResults", tournament=self.tournament
+        )
+        entrant1 = Entrant.objects.create(
+            division=division, player=self.player1, number=1
+        )
+        entrant2 = Entrant.objects.create(
+            division=division, player=self.player2, number=2
+        )
         for r in [1, 3, 2]:
             ResultSlip.objects.create(
                 division=division,
@@ -179,8 +190,12 @@ class NextTempPlayerNumberTests(TestCase):
         self.assertEqual(next_temp_player_number(), "T-1")
 
     def test_sequences_over_existing_temp_numbers(self):
-        Player.objects.create(name="A", player_number="T-1", rating=1500, is_provisional=True)
-        Player.objects.create(name="B", player_number="T-2", rating=1500, is_provisional=True)
+        Player.objects.create(
+            name="A", player_number="T-1", rating=1500, is_provisional=True
+        )
+        Player.objects.create(
+            name="B", player_number="T-2", rating=1500, is_provisional=True
+        )
         self.assertEqual(next_temp_player_number(), "T-3")
 
     def test_ignores_registry_players(self):
@@ -190,7 +205,9 @@ class NextTempPlayerNumberTests(TestCase):
         self.assertEqual(next_temp_player_number(), "T-1")
 
     def test_fills_gap_above_current_max(self):
-        Player.objects.create(name="A", player_number="T-5", rating=1500, is_provisional=True)
+        Player.objects.create(
+            name="A", player_number="T-5", rating=1500, is_provisional=True
+        )
         self.assertEqual(next_temp_player_number(), "T-6")
 
 
@@ -225,7 +242,9 @@ class SlugTests(TestCase):
         t1 = self._tournament("T1")
         t2 = self._tournament("T2")
         d1 = Division.objects.create(name="A", tournament=t1)
-        d1b = Division.objects.create(name="A B", tournament=t1)  # also slugifies near "a"
+        d1b = Division.objects.create(
+            name="A B", tournament=t1
+        )  # also slugifies near "a"
         d2 = Division.objects.create(name="A", tournament=t2)
         self.assertEqual(d1.slug, "a")
         self.assertEqual(d2.slug, "a")  # different tournament, no clash
@@ -268,7 +287,9 @@ class PlayerNumberIdentityTests(TestCase):
         self.assertEqual(player.player_number, "0233")
 
     def test_save_collapses_over_padding(self):
-        player = Player.objects.create(name="Padded", player_number="00233", rating=1500)
+        player = Player.objects.create(
+            name="Padded", player_number="00233", rating=1500
+        )
         player.refresh_from_db()
         self.assertEqual(player.player_number, "0233")
 
@@ -335,7 +356,7 @@ class CanonicalNumberConformanceTests(TestCase):
         ("00233", "0233"),
         (233, "0233"),
         ("  233 ", "0233"),
-        ("12345", "12345"),   # wider than four digits is never truncated
+        ("12345", "12345"),  # wider than four digits is never truncated
         ("T-7", "T-7"),
         ("T-123", "T-123"),
         ("BYE", "BYE"),
@@ -398,8 +419,7 @@ class EffectiveRatingTests(TestCase):
     """
 
     def _player(self, rating, wespa):
-        return Player(name="P", player_number="0001", rating=rating,
-                      wespa_rating=wespa)
+        return Player(name="P", player_number="0001", rating=rating, wespa_rating=wespa)
 
     def test_coco_wins_when_both_are_present(self):
         self.assertEqual(
@@ -412,20 +432,14 @@ class EffectiveRatingTests(TestCase):
         )
 
     def test_wespa_alone(self):
-        self.assertEqual(
-            self._player(0, 1400).effective_rating, (1400, Entrant.WESPA)
-        )
+        self.assertEqual(self._player(0, 1400).effective_rating, (1400, Entrant.WESPA))
 
     def test_neither(self):
-        self.assertEqual(
-            self._player(0, None).effective_rating, (0, Entrant.NONE)
-        )
+        self.assertEqual(self._player(0, None).effective_rating, (0, Entrant.NONE))
 
     def test_a_wespa_rating_of_zero_is_still_a_rating(self):
         """Distinct from having none: NULL means unknown, 0 means zero."""
-        self.assertEqual(
-            self._player(0, 0).effective_rating, (0, Entrant.WESPA)
-        )
+        self.assertEqual(self._player(0, 0).effective_rating, (0, Entrant.WESPA))
 
 
 class EntrantEnterTests(TestCase):
@@ -459,15 +473,18 @@ class EntrantEnterTests(TestCase):
 
     def test_an_explicit_rating_of_zero_is_still_manual(self):
         """0 is a rating a director may deliberately assign, not a missing one."""
-        entrant = Entrant.enter(
-            self.division, self._player(rating=1600), 1, rating=0
-        )
+        entrant = Entrant.enter(self.division, self._player(rating=1600), 1, rating=0)
         self.assertEqual((entrant.rating, entrant.rating_source), (0, "manual"))
 
     def test_registration_flags_pass_through(self):
         entrant = Entrant.enter(
-            self.division, self._player(rating=1500), 1,
-            tentative=True, paid=True, playing_up=True, payment_note="cash",
+            self.division,
+            self._player(rating=1500),
+            1,
+            tentative=True,
+            paid=True,
+            playing_up=True,
+            payment_note="cash",
         )
         self.assertTrue(entrant.tentative)
         self.assertTrue(entrant.paid)
@@ -536,12 +553,16 @@ class EffectiveRatingCascadeTests(TestCase):
         for i, ((rating, wespa), expected, why) in enumerate(self.CASES):
             with self.subTest(why):
                 player = Player.objects.create(
-                    name=f"P{i}", player_number=f"90{i}",
-                    rating=rating, wespa_rating=wespa,
+                    name=f"P{i}",
+                    player_number=f"90{i}",
+                    rating=rating,
+                    wespa_rating=wespa,
                 )
                 record = PlayerRecord(
-                    player_number=player.player_number, name=player.name,
-                    rating=rating, wespa_rating=wespa,
+                    player_number=player.player_number,
+                    name=player.name,
+                    rating=rating,
+                    wespa_rating=wespa,
                 )
                 self.assertEqual(player.effective_rating, expected)
                 self.assertEqual(record.effective_rating, expected)

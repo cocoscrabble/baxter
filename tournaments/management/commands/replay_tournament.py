@@ -1,7 +1,7 @@
 """Replay a tournament's event log into the current database.
 
-    manage.py replay_tournament path/to/export.jsonl --verify
-    manage.py replay_tournament <slug> --from-slug --upto 12
+manage.py replay_tournament path/to/export.jsonl --verify
+manage.py replay_tournament <slug> --from-slug --upto 12
 """
 
 from django.core.management.base import BaseCommand, CommandError
@@ -20,13 +20,17 @@ class Command(BaseCommand):
     help = "Replay a tournament event log (JSONL file, or a live slug) into this DB."
 
     def add_arguments(self, parser):
-        parser.add_argument("source", help="Path to a JSONL export, or a tournament slug")
+        parser.add_argument(
+            "source", help="Path to a JSONL export, or a tournament slug"
+        )
         parser.add_argument(
             "--from-slug",
             action="store_true",
             help="Treat SOURCE as a live tournament slug instead of a file",
         )
-        parser.add_argument("--upto", type=int, default=None, help="Stop after this seq")
+        parser.add_argument(
+            "--upto", type=int, default=None, help="Stop after this seq"
+        )
         parser.add_argument(
             "--verify",
             action="store_true",
@@ -51,7 +55,9 @@ class Command(BaseCommand):
         try:
             with transaction.atomic():
                 ctx = replay(
-                    events, verify=options["verify"], upto=options["upto"],
+                    events,
+                    verify=options["verify"],
+                    upto=options["upto"],
                     players=players,
                 )
         except ReplayError as exc:
@@ -65,10 +71,12 @@ class Command(BaseCommand):
         # It says today's engine would have printed something else — expected
         # after an engine fix, and worth knowing either way.
         for d in ctx.drift:
-            self.stdout.write(self.style.WARNING(
-                f"Engine drift: {d['division']} round {d['round']} was published "
-                f"as recorded; today's engine would pair it differently."
-            ))
+            self.stdout.write(
+                self.style.WARNING(
+                    f"Engine drift: {d['division']} round {d['round']} was published "
+                    f"as recorded; today's engine would pair it differently."
+                )
+            )
 
         # Not a failure either: these digests include entrant ratings the log
         # never recorded, so they cannot be checked. The seeding they would
@@ -76,10 +84,12 @@ class Command(BaseCommand):
         # v3 digest.
         if ctx.unverified:
             seqs = ctx.unverified
-            self.stdout.write(self.style.WARNING(
-                f"{len(seqs)} digest(s) not verifiable (seq {seqs[0]}–{seqs[-1]}): "
-                f"they include entrant ratings this log never recorded."
-            ))
+            self.stdout.write(
+                self.style.WARNING(
+                    f"{len(seqs)} digest(s) not verifiable (seq {seqs[0]}–{seqs[-1]}): "
+                    f"they include entrant ratings this log never recorded."
+                )
+            )
 
         target = ctx.tournament
         suffix = " (digests verified)" if options["verify"] else ""

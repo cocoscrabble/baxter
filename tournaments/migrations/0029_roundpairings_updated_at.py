@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('tournaments', '0028_division_slug_tournament_slug_and_aliases'),
+        ("tournaments", "0028_division_slug_tournament_slug_and_aliases"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='roundpairings',
-            name='updated_at',
+            model_name="roundpairings",
+            name="updated_at",
             field=models.DateTimeField(auto_now=True, null=True),
         ),
     ]

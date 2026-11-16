@@ -40,7 +40,7 @@ class AnnotatedPairing:
 
     @property
     def absence(self) -> str:
-        """"bye", "forfeit", or "" — what this row is instead of a game.
+        """ "bye", "forfeit", or "" — what this row is instead of a game.
 
         A bye and a forfeit are the same shape (one real entrant against the bye
         entrant) and only ``Pairing.forfeit`` tells them apart, so every surface
@@ -77,7 +77,7 @@ class AnnotatedPairing:
 
 
 def _playoff_label(pairing) -> str:
-    """"Semifinal 1, game 2" for a playoff game, else empty."""
+    """ "Semifinal 1, game 2" for a playoff game, else empty."""
     if pairing.series_id is None:
         return ""
     return series_label(
@@ -184,7 +184,9 @@ class PairingsPresenter:
 
     @cached_property
     def rounds_with_results(self) -> set[int]:
-        return set(self.division.result_slips.values_list("round", flat=True).distinct())
+        return set(
+            self.division.result_slips.values_list("round", flat=True).distinct()
+        )
 
     @cached_property
     def rounds_with_real_results(self) -> set[int]:
@@ -192,8 +194,7 @@ class PairingsPresenter:
         forfeit slips don't count, so a freshly published round (those aside)
         reads as unplayed and can still be unpublished."""
         return set(
-            self.division.result_slips
-            .played()
+            self.division.result_slips.played()
             .values_list("round", flat=True)
             .distinct()
         )
@@ -201,9 +202,9 @@ class PairingsPresenter:
     @cached_property
     def db_pairings(self):
         pairings = list(
-            self.division.pairings
-            .select_related("first", "first__player", "second", "second__player")
-            .order_by("round", "table")
+            self.division.pairings.select_related(
+                "first", "first__player", "second", "second__player"
+            ).order_by("round", "table")
         )
         # A board has to name two distinguishable people, so entrants who share
         # a name get their number appended here (tournaments/display.py).
@@ -243,14 +244,16 @@ class PairingsPresenter:
         if self.selected_round is None:
             return []
         return list(
-            self.division.fixed_pairings
-            .filter(round_number=self.selected_round)
-            .select_related("entrant1__player", "entrant2__player")
+            self.division.fixed_pairings.filter(
+                round_number=self.selected_round
+            ).select_related("entrant1__player", "entrant2__player")
         )
 
     @cached_property
     def has_draft_rounds(self) -> bool:
-        return self.division.round_pairings_set.filter(status=RoundPairings.DRAFT).exists()
+        return self.division.round_pairings_set.filter(
+            status=RoundPairings.DRAFT
+        ).exists()
 
     @cached_property
     def has_published_rounds(self) -> bool:
@@ -379,22 +382,29 @@ class PairingsPresenter:
             key = (round_num, frozenset({p.first_id, p.second_id}))
             slip = self.played.get(key)
             if slip:
-                scores = {slip.winner_id: slip.winner_score, slip.loser_id: slip.loser_score}
+                scores = {
+                    slip.winner_id: slip.winner_score,
+                    slip.loser_id: slip.loser_score,
+                }
                 result = f"{scores[p.first_id]} - {scores[p.second_id]}"
             else:
                 result = ""
             # Prior rounds in which this same pair already met (a repeat). Earlier
             # rounds only, so the list matches the running Repeats count shown.
-            meetings = self.pair_meeting_rounds.get(frozenset({p.first_id, p.second_id}), [])
+            meetings = self.pair_meeting_rounds.get(
+                frozenset({p.first_id, p.second_id}), []
+            )
             repeat_rounds = tuple(r for r in meetings if r < round_num)
-            rows.append(AnnotatedPairing(
-                pairing=p,
-                result=result,
-                is_fixed=key in self.fixed_lookup,
-                repeat_rounds=repeat_rounds,
-                playoff_label=_playoff_label(p),
-                start_fixed=self._start_fixed(p, round_num),
-            ))
+            rows.append(
+                AnnotatedPairing(
+                    pairing=p,
+                    result=result,
+                    is_fixed=key in self.fixed_lookup,
+                    repeat_rounds=repeat_rounds,
+                    playoff_label=_playoff_label(p),
+                    start_fixed=self._start_fixed(p, round_num),
+                )
+            )
         return rows
 
     @cached_property
@@ -406,7 +416,9 @@ class PairingsPresenter:
     def _start_fixed(self, p, round_num):
         if p.series_id is None or self._playoff is None:
             return False
-        return self._playoff.fixed_start(round_num, p.first.key, p.second.key) is not None
+        return (
+            self._playoff.fixed_start(round_num, p.first.key, p.second.key) is not None
+        )
 
     def _rows_for_selected(self):
         tab = self.selected_tab
@@ -453,8 +465,13 @@ class PairingsPresenter:
             # be this round itself; it pairs up front and waits on nothing.
             if RP.is_round_robin(rp.pairing):
                 return None
-            if rp.start_round and self.db_status_map.get(rp.start_round) != RoundPairings.FINISHED:
-                return f"Round {rp.round} is waiting for round {rp.start_round} results."
+            if (
+                rp.start_round
+                and self.db_status_map.get(rp.start_round) != RoundPairings.FINISHED
+            ):
+                return (
+                    f"Round {rp.round} is waiting for round {rp.start_round} results."
+                )
             return None
         # The main schedule is done; a playoff may still have rounds to play.
         for round_num in sorted(self.playoff_round_labels):
@@ -491,7 +508,11 @@ class PairingsPresenter:
                 sel["status"] in ("published", "in_progress")
                 and sel["round"] not in self.rounds_with_real_results
             )
-            context["can_reset_selected"] = sel["status"] in ("published", "in_progress", "finished")
+            context["can_reset_selected"] = sel["status"] in (
+                "published",
+                "in_progress",
+                "finished",
+            )
             # Resetting the earliest started round un-starts the division, so
             # the next publish re-pins ratings and renumbers entrants. Intended
             # (a reset is a clean slate), but the director should know.
@@ -528,11 +549,13 @@ class PublishedPairingsPresenter:
     def as_context(self) -> dict:
         context = {"division": self.division}
         open_statuses = [RoundPairings.PUBLISHED, RoundPairings.IN_PROGRESS]
-        statuses = open_statuses + ([RoundPairings.FINISHED] if self.include_finished else [])
+        statuses = open_statuses + (
+            [RoundPairings.FINISHED] if self.include_finished else []
+        )
         shown = list(
-            self.division.round_pairings_set
-            .filter(status__in=statuses)
-            .values_list("round", "status", "updated_at")
+            self.division.round_pairings_set.filter(status__in=statuses).values_list(
+                "round", "status", "updated_at"
+            )
         )
         if not shown:
             context["pairings_message"] = "No pairings published yet."
@@ -548,7 +571,8 @@ class PublishedPairingsPresenter:
             return context
         context["pairings"] = annotated
         context["round_tabs"] = [
-            {"round": round_num, "status": status_of[round_num]} for round_num, _ in annotated
+            {"round": round_num, "status": status_of[round_num]}
+            for round_num, _ in annotated
         ]
         # Open on the earliest round still being played, not the latest: a
         # later publish must not hide the Submit result links for games still
@@ -564,8 +588,7 @@ def annotate_published_rounds(division, rounds):
     """``[(round, [AnnotatedPairing, ...]), ...]`` for ``rounds``, in round and
     table order. A played pairing carries its score (first - second)."""
     db_pairings = list(
-        division.pairings
-        .filter(round__in=rounds)
+        division.pairings.filter(round__in=rounds)
         .select_related("first", "first__player", "second", "second__player")
         .order_by("round", "table")
     )
@@ -576,9 +599,9 @@ def annotate_published_rounds(division, rounds):
     )
     played = {
         (s["round"], frozenset({s["winner_id"], s["loser_id"]})): s
-        for s in division.result_slips
-        .filter(round__in=rounds)
-        .values("round", "winner_id", "loser_id", "winner_score", "loser_score")
+        for s in division.result_slips.filter(round__in=rounds).values(
+            "round", "winner_id", "loser_id", "winner_score", "loser_score"
+        )
     }
     annotated = []
     for round_num, round_pairings in groupby(db_pairings, key=lambda p: p.round):
@@ -586,14 +609,20 @@ def annotate_published_rounds(division, rounds):
         for p in round_pairings:
             slip = played.get((round_num, frozenset({p.first_id, p.second_id})))
             if slip:
-                scores = {slip["winner_id"]: slip["winner_score"],
-                          slip["loser_id"]: slip["loser_score"]}
+                scores = {
+                    slip["winner_id"]: slip["winner_score"],
+                    slip["loser_id"]: slip["loser_score"],
+                }
                 result = f"{scores[p.first_id]} - {scores[p.second_id]}"
             else:
                 result = ""
-            rows.append(AnnotatedPairing(
-                pairing=p, result=result, playoff_label=_playoff_label(p),
-            ))
+            rows.append(
+                AnnotatedPairing(
+                    pairing=p,
+                    result=result,
+                    playoff_label=_playoff_label(p),
+                )
+            )
         annotated.append((round_num, rows))
     return annotated
 
@@ -606,8 +635,7 @@ def latest_published_rounds(division, count):
     should keep showing the round just played rather than go blank.
     """
     return list(
-        division.round_pairings_set
-        .exclude(status=RoundPairings.DRAFT)
+        division.round_pairings_set.exclude(status=RoundPairings.DRAFT)
         .order_by("-round")
         .values_list("round", flat=True)[:count]
     )

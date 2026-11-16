@@ -6,24 +6,30 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('tournaments', '0046_pairing_forfeit'),
+        ("tournaments", "0046_pairing_forfeit"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='entrant',
-            name='forfeits',
+            model_name="entrant",
+            name="forfeits",
         ),
         migrations.AddField(
-            model_name='divisionsettings',
-            name='bye_spread',
+            model_name="divisionsettings",
+            name="bye_spread",
             field=models.IntegerField(default=50),
         ),
         migrations.AddField(
-            model_name='divisionsettings',
-            name='withdrawal',
-            field=models.CharField(choices=[('omit', 'Leave the rounds blank'), ('forfeit', 'Record forfeit losses')], default='omit', max_length=16),
+            model_name="divisionsettings",
+            name="withdrawal",
+            field=models.CharField(
+                choices=[
+                    ("omit", "Leave the rounds blank"),
+                    ("forfeit", "Record forfeit losses"),
+                ],
+                default="omit",
+                max_length=16,
+            ),
         ),
     ]

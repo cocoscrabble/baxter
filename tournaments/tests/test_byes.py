@@ -92,9 +92,7 @@ class ByePlayerModelTests(TestCase):
 
         # Reverse relation (and the default manager) exclude the bye...
         self.assertEqual(division.entrants.count(), 3)
-        self.assertNotIn(
-            bye_entrant.pk, division.entrants.values_list("pk", flat=True)
-        )
+        self.assertNotIn(bye_entrant.pk, division.entrants.values_list("pk", flat=True))
         # ...but it is reachable via all_objects.
         self.assertIn(
             bye_entrant.pk,
@@ -113,9 +111,7 @@ class ByePairingTests(TestCase):
 
         round1 = list(division.pairings.filter(round=1))
         self.assertEqual(len(round1), 3)  # 2 real games + 1 bye
-        byes = [
-            p for p in round1 if p.first.player.is_bye or p.second.player.is_bye
-        ]
+        byes = [p for p in round1 if p.first.player.is_bye or p.second.player.is_bye]
         self.assertEqual(len(byes), 1)
         self.assertEqual(byes[0].table, 0)
         # No result until the round is published.
@@ -146,13 +142,19 @@ class ByePairingTests(TestCase):
         regenerate_pairings(division)
         publish_rounds(division, [1])
         real = [
-            p for p in division.pairings.filter(round=1)
+            p
+            for p in division.pairings.filter(round=1)
             if not (p.first.player.is_bye or p.second.player.is_bye)
         ][0]
         ResultSlip.objects.create(
-            division=division, round=1, pairing=real,
-            winner=real.first, winner_score=450,
-            loser=real.second, loser_score=380, winner_started=True,
+            division=division,
+            round=1,
+            pairing=real,
+            winner=real.first,
+            winner_score=450,
+            loser=real.second,
+            loser_score=380,
+            winner_started=True,
         )
         real.round_pairings.update_status()
         rp = division.round_pairings_set.get(round=1)
@@ -183,13 +185,19 @@ class ByePairingTests(TestCase):
         publish_rounds(division, [1])
         # Enter a real game result alongside the auto bye.
         real = [
-            p for p in division.pairings.filter(round=1)
+            p
+            for p in division.pairings.filter(round=1)
             if not (p.first.player.is_bye or p.second.player.is_bye)
         ][0]
         ResultSlip.objects.create(
-            division=division, round=1, pairing=real,
-            winner=real.first, winner_score=450,
-            loser=real.second, loser_score=380, winner_started=True,
+            division=division,
+            round=1,
+            pairing=real,
+            winner=real.first,
+            winner_score=450,
+            loser=real.second,
+            loser_score=380,
+            winner_started=True,
         )
 
         self.assertEqual(unpublish_rounds(division, [1]), [])
@@ -320,7 +328,11 @@ class EditByeAndForfeitRowsTests(TestCase):
         self.assertEqual((slip.winner_score, slip.loser_score), (0, 0))
 
     def test_a_bye_row_can_be_deleted(self):
-        rows = [r for r in self.rows() if self.bye_entrant.pk not in (r["winner"], r["loser"])]
+        rows = [
+            r
+            for r in self.rows()
+            if self.bye_entrant.pk not in (r["winner"], r["loser"])
+        ]
         self.assertEqual(self.save(rows), [])
         self.assertFalse(
             self.division.result_slips.filter(loser__player__is_bye=True).exists()
@@ -378,9 +390,7 @@ class EditByeAndForfeitRowsTests(TestCase):
         pairings = Pairings()
         for slip in PairingData.for_division(self.division).result_slips:
             pairings.add_result_slip(slip)
-        bye_game = next(
-            p for p in pairings if "BYE" in (p.first.key, p.second.key)
-        )
+        bye_game = next(p for p in pairings if "BYE" in (p.first.key, p.second.key))
         # The bye leads, so the real player is charged no start.
         self.assertEqual(bye_game.first.key, "BYE")
         self.assertEqual(
@@ -442,7 +452,9 @@ class NotPlayedPredicateTests(TestCase):
         slip = self.make_forfeit()
         bundle = ExportTournament.from_db(self.division.tournament)
         results = [
-            (r.winner, r.loser) for d in bundle.divisions for r in d.results
+            (r.winner, r.loser)
+            for d in bundle.divisions
+            for r in d.results
             if BYE_PLAYER_NUMBER in (r.winner, r.loser)
         ]
         self.assertEqual(results, [(BYE_PLAYER_NUMBER, slip.loser.key)])
@@ -451,13 +463,20 @@ class NotPlayedPredicateTests(TestCase):
         # A forfeit is part of the absentee's record, so the CSV carries it,
         # with the bye's reserved name and number marking it unplayed for the
         # ratings reader (plans/PLAN_UNPLAYED_GAMES.md decision 5).
-        real = self.division.pairings.filter(round=1).exclude(
-            second__player__is_bye=True
-        ).first()
+        real = (
+            self.division.pairings.filter(round=1)
+            .exclude(second__player__is_bye=True)
+            .first()
+        )
         ResultSlip.objects.create(
-            division=self.division, round=1, pairing=real,
-            winner=real.first, winner_score=420,
-            loser=real.second, loser_score=390, winner_started=True,
+            division=self.division,
+            round=1,
+            pairing=real,
+            winner=real.first,
+            winner_score=420,
+            loser=real.second,
+            loser_score=390,
+            winner_started=True,
         )
         self.make_forfeit()
         self.division.tournament.editors.add(self.user)
@@ -469,8 +488,15 @@ class NotPlayedPredicateTests(TestCase):
         forfeit = self.bye_slip
         rows = [r for r in csv.reader(io.StringIO(body)) if r[1:2] == ["1"]]
         self.assertIn(
-            ["1", "Bye", str(forfeit.winner_score), forfeit.loser.name,
-             str(forfeit.loser_score), "BYE", forfeit.loser.key],
+            [
+                "1",
+                "Bye",
+                str(forfeit.winner_score),
+                forfeit.loser.name,
+                str(forfeit.loser_score),
+                "BYE",
+                forfeit.loser.key,
+            ],
             [r[1:] for r in rows],
         )
 
@@ -494,9 +520,14 @@ class WithdrawalDoesNotStallPairingTests(TestCase):
         publish_rounds(division, [round_num])
         for p in division.pairings.filter(round=round_num, result__isnull=True):
             ResultSlip.objects.create(
-                division=division, round=round_num, pairing=p,
-                winner=p.first, winner_score=420,
-                loser=p.second, loser_score=380, winner_started=True,
+                division=division,
+                round=round_num,
+                pairing=p,
+                winner=p.first,
+                winner_score=420,
+                loser=p.second,
+                loser_score=380,
+                winner_started=True,
             )
         division.round_pairings_set.get(round=round_num).update_status()
         return True
@@ -520,7 +551,9 @@ class ByeRotationTests(TestCase):
         user = User.objects.create_user(username="rot", password="p")
         for i in range(7):
             Player.objects.create(
-                name=f"R{i}", player_number=f"R{i}", rating=1500 + i,
+                name=f"R{i}",
+                player_number=f"R{i}",
+                rating=1500 + i,
                 is_provisional=False,
             )
         # 7 players, simulate 5 rounds (5 byes) — fewer byes than players.
@@ -541,7 +574,9 @@ class ByeExportTests(TestCase):
         user = User.objects.create_user(username="exp", password="p")
         for i in range(5):
             Player.objects.create(
-                name=f"E{i}", player_number=f"E{i}", rating=1500 + i,
+                name=f"E{i}",
+                player_number=f"E{i}",
+                rating=1500 + i,
                 is_provisional=False,
             )
         division = create_fake_tournament(user, num_players=5, num_rounds=3)
@@ -569,16 +604,15 @@ class ByeIsNotSeededTests(TestCase):
 
         owner = User.objects.create_user(username="bye-seed", password="pw")
         self.tournament = Tournament.objects.create(
-            name="Byes", location="X", start_date=date(2026, 5, 1), owner=owner,
+            name="Byes",
+            location="X",
+            start_date=date(2026, 5, 1),
+            owner=owner,
         )
-        self.division = Division.objects.create(
-            tournament=self.tournament, name="Open"
-        )
+        self.division = Division.objects.create(tournament=self.tournament, name="Open")
         # A rated player and two unrated ones — the bye's own rating is 0, so
         # unrated entrants are who it can shuffle past.
-        for i, (name, rating) in enumerate(
-            [("Rated", 1500), ("Unrated", 0)], 1
-        ):
+        for i, (name, rating) in enumerate([("Rated", 1500), ("Unrated", 0)], 1):
             Entrant.enter(
                 self.division,
                 Player.objects.create(
@@ -598,17 +632,14 @@ class ByeIsNotSeededTests(TestCase):
 
     def _numbers(self):
         return [
-            (e.number, e.player.name)
-            for e in self.division.entrants.order_by("number")
+            (e.number, e.player.name) for e in self.division.entrants.order_by("number")
         ]
 
     def test_the_bye_takes_no_seed_and_leaves_no_gap(self):
         Entrant.apply_seeding(self.division, Entrant.seeding_for(self.division))
         self.bye.refresh_from_db()
         self.assertEqual(self.bye.number, 0)
-        self.assertEqual(
-            self._numbers(), [(1, "Rated"), (2, "Unrated"), (3, "Guest")]
-        )
+        self.assertEqual(self._numbers(), [(1, "Rated"), (2, "Unrated"), (3, "Guest")])
 
     def test_a_bye_already_holding_a_seat_is_sent_home(self):
         """Divisions seeded while it was included are repaired, not broken.
@@ -624,9 +655,7 @@ class ByeIsNotSeededTests(TestCase):
         Entrant.apply_seeding(self.division, Entrant.seeding_for(self.division))
         self.bye.refresh_from_db()
         self.assertEqual(self.bye.number, 0)
-        self.assertEqual(
-            self._numbers(), [(1, "Rated"), (2, "Unrated"), (3, "Guest")]
-        )
+        self.assertEqual(self._numbers(), [(1, "Rated"), (2, "Unrated"), (3, "Guest")])
 
     def test_a_recorded_seeding_that_names_the_bye_still_replays(self):
         """Logs written while it was included must reproduce what happened."""
@@ -661,9 +690,14 @@ class FixedByeTests(TestCase):
 
         number = self._key(division, name)
         return add_fixed_pairing_cmd(
-            division.tournament, self.user,
-            {"division": division.name, "round": round_num,
-             "player1": number, "player2": BYE_PLAYER_NUMBER},
+            division.tournament,
+            self.user,
+            {
+                "division": division.name,
+                "round": round_num,
+                "player1": number,
+                "player2": BYE_PLAYER_NUMBER,
+            },
         )
 
     def test_fixed_bye_overrides_the_automatic_choice(self):
@@ -694,9 +728,14 @@ class FixedByeTests(TestCase):
         division = make_division(self.user, 5, 3)
         self._fix_bye(division, "P1")
         ok, error = remove_fixed_pairing_cmd(
-            division.tournament, self.user,
-            {"division": division.name, "round": 1,
-             "player1": self._key(division, "P1"), "player2": BYE_PLAYER_NUMBER},
+            division.tournament,
+            self.user,
+            {
+                "division": division.name,
+                "round": 1,
+                "player1": self._key(division, "P1"),
+                "player2": BYE_PLAYER_NUMBER,
+            },
         )
         self.assertTrue(ok, error)
         self.assertFalse(division.fixed_pairings.exists())

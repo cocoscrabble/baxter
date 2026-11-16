@@ -40,25 +40,31 @@ class DigestBackfillTests(TestCase):
     def _build(self):
         self.client.post(
             reverse("tournament_create"),
-            {"name": "Champs", "location": "Reno", "start_date": "2026-03-15",
-             "editor_usernames": ""},
+            {
+                "name": "Champs",
+                "location": "Reno",
+                "start_date": "2026-03-15",
+                "editor_usernames": "",
+            },
         )
         tournament = Tournament.objects.get(name="Champs")
         division = tournament.divisions.get()
         self._post_json(
-            "division_entrants_edit", division,
-            {"rows": [
-                {"number": i + 1, "player": p.pk, "dropped": False}
-                for i, p in enumerate(self.players)
-            ]},
+            "division_entrants_edit",
+            division,
+            {
+                "rows": [
+                    {"number": i + 1, "player": p.pk, "dropped": False}
+                    for i, p in enumerate(self.players)
+                ]
+            },
         )
         self._post_json(
-            "division_round_pairings", division,
+            "division_round_pairings",
+            division,
             {"blocks": [{"pairing": "KotH", "rounds": 2, "pair_from": 1}]},
         )
-        self.client.get(
-            reverse("division_pair_rounds", kwargs=division.slug_kwargs())
-        )
+        self.client.get(reverse("division_pair_rounds", kwargs=division.slug_kwargs()))
         self.client.post(
             reverse("publish_round", kwargs=division.slug_kwargs()), {"round": 1}
         )
@@ -82,9 +88,7 @@ class DigestBackfillTests(TestCase):
         stored = {e.seq: e.digest for e in self.tournament.events.all() if e.digest}
         self.assertTrue(stored)
         # Precondition: the log is in the old vocabulary and does not verify.
-        self.assertNotEqual(
-            stored[max(stored)], digests[max(digests)][1]
-        )
+        self.assertNotEqual(stored[max(stored)], digests[max(digests)][1])
 
         count, reason = backfill_tournament(self.tournament)
 
@@ -122,9 +126,7 @@ class DigestBackfillTests(TestCase):
         before = set(Tournament.objects.values_list("pk", flat=True))
         self._make_digests_v1()
         backfill_tournament(self.tournament)
-        self.assertEqual(
-            set(Tournament.objects.values_list("pk", flat=True)), before
-        )
+        self.assertEqual(set(Tournament.objects.values_list("pk", flat=True)), before)
 
     def test_backfill_all_reports_each_tournament(self):
         self._make_digests_v1()
@@ -152,9 +154,7 @@ class DigestBackfillTests(TestCase):
         from tournaments.digest_backfill import schema_mismatch
 
         with connection.cursor() as cursor:
-            cursor.execute(
-                "ALTER TABLE tournaments_entrant DROP COLUMN payment_note"
-            )
+            cursor.execute("ALTER TABLE tournaments_entrant DROP COLUMN payment_note")
         try:
             self.assertEqual(
                 schema_mismatch(), "tournaments_entrant.payment_note does not exist yet"
@@ -237,15 +237,19 @@ class ImportedDivisionBackfillTests(TestCase):
         from tournaments.commands import create_tournament, import_division
 
         tournament = create_tournament(
-            None, self.owner,
+            None,
+            self.owner,
             {
-                "name": "What-if", "location": "X",
-                "start_date": "2026-04-01", "editors": [],
+                "name": "What-if",
+                "location": "X",
+                "start_date": "2026-04-01",
+                "editors": [],
                 "default_division": {"name": "Division 1", "pairing_seed": 3},
             },
         )
         import_division(
-            tournament, self.owner,
+            tournament,
+            self.owner,
             {
                 "name": "Imported",
                 "entrants": [
@@ -256,12 +260,22 @@ class ImportedDivisionBackfillTests(TestCase):
                     {"player": "Carol Newcomer", "rating": 0, "number": 3},
                 ],
                 "results": [
-                    {"round": 1, "winner": "Alice", "loser": "Bob",
-                     "winner_score": 450, "loser_score": 380,
-                     "winner_started": True},
-                    {"round": 2, "winner": "Carol Newcomer", "loser": "Alice",
-                     "winner_score": 500, "loser_score": 400,
-                     "winner_started": True},
+                    {
+                        "round": 1,
+                        "winner": "Alice",
+                        "loser": "Bob",
+                        "winner_score": 450,
+                        "loser_score": 380,
+                        "winner_started": True,
+                    },
+                    {
+                        "round": 2,
+                        "winner": "Carol Newcomer",
+                        "loser": "Alice",
+                        "winner_score": 500,
+                        "loser_score": 400,
+                        "winner_started": True,
+                    },
                 ],
             },
         )
@@ -297,6 +311,4 @@ class ImportedDivisionBackfillTests(TestCase):
 
         # The rewritten digest describes the division that is actually here —
         # which is what makes the replay faithful rather than merely repeatable.
-        self.assertEqual(
-            tournament.events.order_by("seq").last().digest, live
-        )
+        self.assertEqual(tournament.events.order_by("seq").last().digest, live)

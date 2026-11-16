@@ -45,8 +45,8 @@ class PendingLink:
     """
 
     name: str
-    players: list      # [{"player_number", "name", "rating", "wespa_rating"}]
-    candidates: list   # [{"wespa_id", "name", "country", "rating"}]
+    players: list  # [{"player_number", "name", "rating", "wespa_rating"}]
+    candidates: list  # [{"wespa_id", "name", "country", "rating"}]
 
     @property
     def key(self):
@@ -72,11 +72,11 @@ class PendingLink:
 @dataclass
 class WespaImportResult:
     # The mirror.
-    added: list = field(default_factory=list)      # wespa ids
+    added: list = field(default_factory=list)  # wespa ids
     updated: list = field(default_factory=list)
     unchanged: list = field(default_factory=list)
     # The roster.
-    rated: list = field(default_factory=list)      # player names
+    rated: list = field(default_factory=list)  # player names
     linked: list = field(default_factory=list)
     # Names held back for a director. Nothing was written for these.
     pending: list = field(default_factory=list)
@@ -111,7 +111,9 @@ def _upsert_mirror(rows, result):
     for row in rows:
         current = existing.get(row["wespa_id"])
         if current is None:
-            current = WespaPlayer(wespa_id=row["wespa_id"], **{f: row[f] for f in MIRROR_FIELDS})
+            current = WespaPlayer(
+                wespa_id=row["wespa_id"], **{f: row[f] for f in MIRROR_FIELDS}
+            )
             to_create.append(current)
             result.added.append(row["wespa_id"])
         else:

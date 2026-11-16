@@ -60,7 +60,9 @@ class EditPresence(models.Model):
 
     key = models.CharField(max_length=200)
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="edit_presences"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="edit_presences",
     )
     last_seen = models.DateTimeField(auto_now=True)
 

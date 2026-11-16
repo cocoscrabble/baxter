@@ -57,14 +57,28 @@ import io
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-HEADERS = ["Submitted On", "Round", "Winner", "Winners Score",
-           "Opponent", "Opponents Score", "Winner Number", "Opponent Number"]
+HEADERS = [
+    "Submitted On",
+    "Round",
+    "Winner",
+    "Winners Score",
+    "Opponent",
+    "Opponents Score",
+    "Winner Number",
+    "Opponent Number",
+]
 
 # The pre-identity six-column form, still produced by the Google Form export and
 # still valid input everywhere that reads this format. Readers dispatch on the
 # header width; nothing writes it any more.
-LEGACY_HEADERS = ["Submitted On", "Round", "Winner", "Winners Score",
-                  "Opponent", "Opponents Score"]
+LEGACY_HEADERS = [
+    "Submitted On",
+    "Round",
+    "Winner",
+    "Winners Score",
+    "Opponent",
+    "Opponents Score",
+]
 
 # Excel's serial-date epoch: it counts from 1899-12-30 (a quirk of treating
 # 1900 as a leap year), so this date is serial 0.
@@ -103,14 +117,16 @@ def render_results_csv(rows):
     writer = csv.writer(buf)
     writer.writerow(HEADERS)
     for row in rows:
-        writer.writerow([
-            _excel_serial(row.submitted_on),
-            row.round,
-            row.winner,
-            row.winner_score,
-            row.opponent,
-            row.opponent_score,
-            row.winner_number,
-            row.opponent_number,
-        ])
+        writer.writerow(
+            [
+                _excel_serial(row.submitted_on),
+                row.round,
+                row.winner,
+                row.winner_score,
+                row.opponent,
+                row.opponent_score,
+                row.winner_number,
+                row.opponent_number,
+            ]
+        )
     return buf.getvalue()

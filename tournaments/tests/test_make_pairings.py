@@ -146,29 +146,35 @@ class NormalizeRoundRobinStartRoundsTests(TestCase):
     def test_per_round_start_rounds_collapse_to_block_first(self):
         # The settings editor stores start_round=round-1; round robin needs them
         # all pointing at the block's first round.
-        rps = self._rps([
-            {"round": 1, "start_round": 0, "pairing": "RoundRobin"},
-            {"round": 2, "start_round": 1, "pairing": "RoundRobin"},
-            {"round": 3, "start_round": 2, "pairing": "RoundRobin"},
-        ])
+        rps = self._rps(
+            [
+                {"round": 1, "start_round": 0, "pairing": "RoundRobin"},
+                {"round": 2, "start_round": 1, "pairing": "RoundRobin"},
+                {"round": 3, "start_round": 2, "pairing": "RoundRobin"},
+            ]
+        )
         normalize_round_robin_start_rounds(rps)
         self.assertEqual([r.start_round for r in rps], [1, 1, 1])
 
     def test_non_round_robin_rounds_are_untouched(self):
-        rps = self._rps([
-            {"round": 1, "start_round": 0, "pairing": "Swiss"},
-            {"round": 2, "start_round": 1, "pairing": "Swiss"},
-        ])
+        rps = self._rps(
+            [
+                {"round": 1, "start_round": 0, "pairing": "Swiss"},
+                {"round": 2, "start_round": 1, "pairing": "Swiss"},
+            ]
+        )
         normalize_round_robin_start_rounds(rps)
         self.assertEqual([r.start_round for r in rps], [0, 1])
 
     def test_separate_blocks_keep_their_own_first_round(self):
-        rps = self._rps([
-            {"round": 1, "start_round": 0, "pairing": "RoundRobin"},
-            {"round": 2, "start_round": 1, "pairing": "RoundRobin"},
-            {"round": 3, "start_round": 2, "pairing": "Swiss"},
-            {"round": 4, "start_round": 3, "pairing": "RoundRobin"},
-        ])
+        rps = self._rps(
+            [
+                {"round": 1, "start_round": 0, "pairing": "RoundRobin"},
+                {"round": 2, "start_round": 1, "pairing": "RoundRobin"},
+                {"round": 3, "start_round": 2, "pairing": "Swiss"},
+                {"round": 4, "start_round": 3, "pairing": "RoundRobin"},
+            ]
+        )
         normalize_round_robin_start_rounds(rps)
         self.assertEqual([r.start_round for r in rps], [1, 1, 2, 4])
 
@@ -190,10 +196,12 @@ class BlocksToRoundPairingsTests(TestCase):
 
     def test_quads_fixed_snapshot(self):
         # Quads (block starting at round 4) pair off one snapshot: blockStart - 1.
-        rows = self.expand([
-            {"pairing": "Swiss", "rounds": 3, "pair_from": 1},
-            {"pairing": "Quads_Clustered", "rounds": 3, "pair_from": 1},
-        ])
+        rows = self.expand(
+            [
+                {"pairing": "Swiss", "rounds": 3, "pair_from": 1},
+                {"pairing": "Quads_Clustered", "rounds": 3, "pair_from": 1},
+            ]
+        )
         quads = [r for r in rows if r["pairing"] == "Quads_Clustered"]
         self.assertEqual([r["round"] for r in quads], [4, 5, 6])
         self.assertEqual([r["start_round"] for r in quads], [3, 3, 3])
@@ -218,48 +226,66 @@ class DefaultBlockRoundsTests(TestCase):
 
 class RoundPairingsToBlocksTests(TestCase):
     def test_groups_consecutive_runs_and_infers_pair_from(self):
-        blocks = round_pairings_to_blocks([
-            {"round": 1, "start_round": -1, "pairing": "Swiss"},
-            {"round": 2, "start_round": 0, "pairing": "Swiss"},
-            {"round": 3, "start_round": 3, "pairing": "RoundRobin"},
-        ])
-        self.assertEqual(blocks, [
-            {"pairing": "Swiss", "rounds": 2, "pair_from": 2},  # 1 - (-1)
-            {"pairing": "RoundRobin", "rounds": 1, "pair_from": 1},  # RR ignores it
-        ])
+        blocks = round_pairings_to_blocks(
+            [
+                {"round": 1, "start_round": -1, "pairing": "Swiss"},
+                {"round": 2, "start_round": 0, "pairing": "Swiss"},
+                {"round": 3, "start_round": 3, "pairing": "RoundRobin"},
+            ]
+        )
+        self.assertEqual(
+            blocks,
+            [
+                {"pairing": "Swiss", "rounds": 2, "pair_from": 2},  # 1 - (-1)
+                {"pairing": "RoundRobin", "rounds": 1, "pair_from": 1},  # RR ignores it
+            ],
+        )
 
     def test_same_strategy_different_pair_from_splits(self):
         # Swiss 1-before then Swiss 2-before must be two blocks, not one.
-        blocks = round_pairings_to_blocks([
-            {"round": 1, "start_round": 0, "pairing": "Swiss"},
-            {"round": 2, "start_round": 1, "pairing": "Swiss"},
-            {"round": 3, "start_round": 1, "pairing": "Swiss"},
-            {"round": 4, "start_round": 2, "pairing": "Swiss"},
-        ])
-        self.assertEqual(blocks, [
-            {"pairing": "Swiss", "rounds": 2, "pair_from": 1},
-            {"pairing": "Swiss", "rounds": 2, "pair_from": 2},
-        ])
+        blocks = round_pairings_to_blocks(
+            [
+                {"round": 1, "start_round": 0, "pairing": "Swiss"},
+                {"round": 2, "start_round": 1, "pairing": "Swiss"},
+                {"round": 3, "start_round": 1, "pairing": "Swiss"},
+                {"round": 4, "start_round": 2, "pairing": "Swiss"},
+            ]
+        )
+        self.assertEqual(
+            blocks,
+            [
+                {"pairing": "Swiss", "rounds": 2, "pair_from": 1},
+                {"pairing": "Swiss", "rounds": 2, "pair_from": 2},
+            ],
+        )
 
     def test_consecutive_round_robin_rounds_collapse_to_one_block(self):
         # Legacy schedules stored per-round start_rounds for RR; they should
         # still seed a single round-robin block.
-        blocks = round_pairings_to_blocks([
-            {"round": 1, "start_round": 0, "pairing": "RoundRobin"},
-            {"round": 2, "start_round": 1, "pairing": "RoundRobin"},
-            {"round": 3, "start_round": 2, "pairing": "RoundRobin"},
-        ])
-        self.assertEqual(blocks, [{"pairing": "RoundRobin", "rounds": 3, "pair_from": 1}])
+        blocks = round_pairings_to_blocks(
+            [
+                {"round": 1, "start_round": 0, "pairing": "RoundRobin"},
+                {"round": 2, "start_round": 1, "pairing": "RoundRobin"},
+                {"round": 3, "start_round": 2, "pairing": "RoundRobin"},
+            ]
+        )
+        self.assertEqual(
+            blocks, [{"pairing": "RoundRobin", "rounds": 3, "pair_from": 1}]
+        )
 
     def test_quads_stay_one_block_despite_varying_offset(self):
         # Quads share a fixed start_round; round-start_round varies (1,2,3) but
         # they must remain a single block.
-        blocks = round_pairings_to_blocks([
-            {"round": 1, "start_round": 0, "pairing": "Quads_Clustered"},
-            {"round": 2, "start_round": 0, "pairing": "Quads_Clustered"},
-            {"round": 3, "start_round": 0, "pairing": "Quads_Clustered"},
-        ])
-        self.assertEqual(blocks, [{"pairing": "Quads_Clustered", "rounds": 3, "pair_from": 1}])
+        blocks = round_pairings_to_blocks(
+            [
+                {"round": 1, "start_round": 0, "pairing": "Quads_Clustered"},
+                {"round": 2, "start_round": 0, "pairing": "Quads_Clustered"},
+                {"round": 3, "start_round": 0, "pairing": "Quads_Clustered"},
+            ]
+        )
+        self.assertEqual(
+            blocks, [{"pairing": "Quads_Clustered", "rounds": 3, "pair_from": 1}]
+        )
 
 
 class AdjacentRoundRobinBlocksTests(TestCase):
@@ -273,10 +299,18 @@ class AdjacentRoundRobinBlocksTests(TestCase):
                 rps = blocks_to_round_pairings(blocks)
                 normalize_round_robin_start_rounds(rps)
                 self.assertEqual([r.start_round for r in rps], [1, 1, 1, 4, 4, 4])
-                self.assertEqual(round_pairings_to_blocks([r.to_dict() for r in rps]), blocks)
+                self.assertEqual(
+                    round_pairings_to_blocks([r.to_dict() for r in rps]), blocks
+                )
 
     def test_editor_round_trip_keeps_legacy_sliding_sources_as_one_block(self):
-        rows = [{"round": r, "start_round": r - 1, "pairing": "RoundRobin"} for r in range(1, 4)]
-        self.assertEqual(round_pairings_to_blocks(rows), [
-            {"pairing": "RoundRobin", "rounds": 3, "pair_from": 1},
-        ])
+        rows = [
+            {"round": r, "start_round": r - 1, "pairing": "RoundRobin"}
+            for r in range(1, 4)
+        ]
+        self.assertEqual(
+            round_pairings_to_blocks(rows),
+            [
+                {"pairing": "RoundRobin", "rounds": 3, "pair_from": 1},
+            ],
+        )

@@ -6,14 +6,13 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('tournaments', '0047_withdrawal_settings'),
+        ("tournaments", "0047_withdrawal_settings"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='resultslip',
-            name='forfeit',
+            model_name="resultslip",
+            name="forfeit",
         ),
     ]

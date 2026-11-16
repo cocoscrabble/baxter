@@ -1,4 +1,5 @@
 """Publishing ahead must not hide or close unfinished earlier games."""
+
 from django.test import TestCase
 from django.urls import reverse
 from tournaments.generate_pairings import regenerate_pairings, publish_rounds
@@ -18,15 +19,22 @@ class EarlierRoundResultsTests(TestCase):
         url = reverse("resultslip_create", kwargs=division.slug_kwargs())
         for route in ("division_pairings", "published_pairings"):
             response = self.client.get(reverse(route, kwargs=division.slug_kwargs()))
-            self.assertContains(response, f'{url}?pairing={first.pk}')
+            self.assertContains(response, f"{url}?pairing={first.pk}")
             self.assertEqual(response.context["current_round"], 1)
             self.assertEqual([r for r, _ in response.context["pairings"]], [1, 2])
         form = self.client.get(url, {"pairing": first.pk})
         self.assertEqual(int(form.context["form"].initial["round"]), 1)
-        response = self.client.post(url, {
-            "round": 1, "pairing": first.pk, "winner": first.first_id,
-            "winner_score": 400, "loser_score": 350, "verified_by_opponent": "on",
-        })
+        response = self.client.post(
+            url,
+            {
+                "round": 1,
+                "pairing": first.pk,
+                "winner": first.first_id,
+                "winner_score": 400,
+                "loser_score": 350,
+                "verified_by_opponent": "on",
+            },
+        )
         self.assertIn(response.status_code, (200, 302))
         result = ResultSlip.objects.get(pairing=first)
         self.assertEqual(result.round, 1)

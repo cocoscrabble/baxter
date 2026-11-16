@@ -14,15 +14,28 @@ class StatisticsTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         setUpTournament(cls)
-        cls.player3 = Player.objects.create(name="Cara", player_number="003", rating=1400)
-        cls.player4 = Player.objects.create(name="Dan", player_number="004", rating=1300)
-        cls.entrant3 = Entrant.objects.create(division=cls.division, player=cls.player3, number=3)
-        cls.entrant4 = Entrant.objects.create(division=cls.division, player=cls.player4, number=4)
+        cls.player3 = Player.objects.create(
+            name="Cara", player_number="003", rating=1400
+        )
+        cls.player4 = Player.objects.create(
+            name="Dan", player_number="004", rating=1300
+        )
+        cls.entrant3 = Entrant.objects.create(
+            division=cls.division, player=cls.player3, number=3
+        )
+        cls.entrant4 = Entrant.objects.create(
+            division=cls.division, player=cls.player4, number=4
+        )
 
     def _game(self, round, winner, loser, winner_score, loser_score):
         return ResultSlip.objects.create(
-            division=self.division, round=round, winner=winner, loser=loser,
-            winner_score=winner_score, loser_score=loser_score, winner_started=True,
+            division=self.division,
+            round=round,
+            winner=winner,
+            loser=loser,
+            winner_score=winner_score,
+            loser_score=loser_score,
+            winner_started=True,
         )
 
     def _stats(self, **kwargs):
@@ -46,9 +59,7 @@ class StatisticsTests(TestCase):
         self.assertEqual(self._games(stats["Highest losses"])[0], ("Dan", 400, 410))
         self.assertEqual(self._games(stats["Lowest losses"])[0], ("Dan", 280, 350))
         self.assertEqual(self._games(stats["Lowest wins"])[0], ("Bob", 350, 280))
-        self.assertEqual(
-            [r.value for r in stats["Highest games"]], [810, 800, 630]
-        )
+        self.assertEqual([r.value for r in stats["Highest games"]], [810, 800, 630])
         self.assertEqual([r.value for r in stats["Biggest blowouts"]], [200, 70, 10])
         self.assertEqual([r.value for r in stats["Nailbiters"]], [10, 70, 200])
         self.assertEqual(stats["Nailbiters"][0].value_label, "Spread")
@@ -88,8 +99,16 @@ class StatisticsTests(TestCase):
         )
         self.assertEqual(
             [c.title for c in response.context["categories"]],
-            ["Highest wins", "Highest losses", "Lowest wins", "Lowest losses",
-             "Highest games", "Biggest blowouts", "Nailbiters", "Ties"],
+            [
+                "Highest wins",
+                "Highest losses",
+                "Lowest wins",
+                "Lowest losses",
+                "Highest games",
+                "Biggest blowouts",
+                "Nailbiters",
+                "Ties",
+            ],
         )
         # Ties has no game yet: its tab stays, and says so.
         self.assertContains(response, "No games yet.")

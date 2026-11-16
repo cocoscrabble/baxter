@@ -5,50 +5,113 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('tournaments', '0034_divisionsettings_swiss_config'),
+        ("tournaments", "0034_divisionsettings_swiss_config"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='pairing',
-            name='game_number',
+            model_name="pairing",
+            name="game_number",
             field=models.IntegerField(blank=True, null=True),
         ),
         migrations.CreateModel(
-            name='Playoff',
+            name="Playoff",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('qualification_round', models.IntegerField()),
-                ('qualifier_count', models.IntegerField()),
-                ('timing', models.CharField(choices=[('postscript', 'Postscript'), ('concurrent', 'Concurrent')], default='postscript', max_length=20)),
-                ('stage_games', models.JSONField(default=dict)),
-                ('seeds', models.JSONField(default=list)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('division', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='playoff', to='tournaments.division')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("qualification_round", models.IntegerField()),
+                ("qualifier_count", models.IntegerField()),
+                (
+                    "timing",
+                    models.CharField(
+                        choices=[
+                            ("postscript", "Postscript"),
+                            ("concurrent", "Concurrent"),
+                        ],
+                        default="postscript",
+                        max_length=20,
+                    ),
+                ),
+                ("stage_games", models.JSONField(default=dict)),
+                ("seeds", models.JSONField(default=list)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "division",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="playoff",
+                        to="tournaments.division",
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='PlayoffSeries',
+            name="PlayoffSeries",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('key', models.CharField(max_length=32)),
-                ('position', models.IntegerField(default=0)),
-                ('max_games', models.IntegerField(default=1)),
-                ('start_round', models.IntegerField()),
-                ('high', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='playoff_series_as_high', to='tournaments.entrant')),
-                ('low', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='playoff_series_as_low', to='tournaments.entrant')),
-                ('playoff', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='series', to='tournaments.playoff')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("key", models.CharField(max_length=32)),
+                ("position", models.IntegerField(default=0)),
+                ("max_games", models.IntegerField(default=1)),
+                ("start_round", models.IntegerField()),
+                (
+                    "high",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="playoff_series_as_high",
+                        to="tournaments.entrant",
+                    ),
+                ),
+                (
+                    "low",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="playoff_series_as_low",
+                        to="tournaments.entrant",
+                    ),
+                ),
+                (
+                    "playoff",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="series",
+                        to="tournaments.playoff",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['start_round', 'key', 'position'],
-                'unique_together': {('playoff', 'key', 'position')},
+                "ordering": ["start_round", "key", "position"],
+                "unique_together": {("playoff", "key", "position")},
             },
         ),
         migrations.AddField(
-            model_name='pairing',
-            name='series',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='pairings', to='tournaments.playoffseries'),
+            model_name="pairing",
+            name="series",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="pairings",
+                to="tournaments.playoffseries",
+            ),
         ),
     ]

@@ -12,25 +12,47 @@ from users.models import User
 
 
 def _bundle():
-    return json.dumps({
-        "name": "Nationals 2019", "location": "Reno", "start_date": "2019-07-04",
-        "players": [
-            {"player_number": "P1", "name": "Alice", "rating": 1600, "provisional": False},
-            {"player_number": "P2", "name": "Bob", "rating": 1500, "provisional": False},
-        ],
-        "divisions": [{
-            "name": "Open",
-            "entrants": [
-                {"number": 1, "player_number": "P1"},
-                {"number": 2, "player_number": "P2"},
+    return json.dumps(
+        {
+            "name": "Nationals 2019",
+            "location": "Reno",
+            "start_date": "2019-07-04",
+            "players": [
+                {
+                    "player_number": "P1",
+                    "name": "Alice",
+                    "rating": 1600,
+                    "provisional": False,
+                },
+                {
+                    "player_number": "P2",
+                    "name": "Bob",
+                    "rating": 1500,
+                    "provisional": False,
+                },
             ],
-            "results": [{
-                "round": 1, "winner": "P1", "winner_score": 420,
-                "loser": "P2", "loser_score": 388, "winner_started": True,
-            }],
-        }],
-        "event_log": [],
-    })
+            "divisions": [
+                {
+                    "name": "Open",
+                    "entrants": [
+                        {"number": 1, "player_number": "P1"},
+                        {"number": 2, "player_number": "P2"},
+                    ],
+                    "results": [
+                        {
+                            "round": 1,
+                            "winner": "P1",
+                            "winner_score": 420,
+                            "loser": "P2",
+                            "loser_score": 388,
+                            "winner_started": True,
+                        }
+                    ],
+                }
+            ],
+            "event_log": [],
+        }
+    )
 
 
 class WhatIfImportViewTests(TestCase):
@@ -62,14 +84,18 @@ class WhatIfImportViewTests(TestCase):
         self.assertEqual(division.entrants.count(), 2)
         self.assertEqual(division.result_slips.count(), 1)
         # It logged the import as a command.
-        self.assertTrue(tournament.events.filter(event_type="division_imported").exists())
+        self.assertTrue(
+            tournament.events.filter(event_type="division_imported").exists()
+        )
 
     def test_import_csv_creates_sandbox(self):
         Player.objects.create(name="Alice", player_number="1", rating=1600)
         Player.objects.create(name="Bob", player_number="2", rating=1500)
         self.client.force_login(self.user)
-        csv = ("Submitted On,Round,Winner,Winners Score,Opponent,Opponents Score\n"
-               ",1,Alice,420,Bob,388\n")
+        csv = (
+            "Submitted On,Round,Winner,Winners Score,Opponent,Opponents Score\n"
+            ",1,Alice,420,Bob,388\n"
+        )
         response = self.client.post(self.url, {"name": "CSV run", "pasted": csv})
         self.assertEqual(response.status_code, 200)
 
@@ -82,9 +108,13 @@ class WhatIfImportViewTests(TestCase):
 
         Player.objects.create(name="Alice", player_number="1", rating=1600)
         self.client.force_login(self.user)
-        csv = ("Submitted On,Round,Winner,Winners Score,Opponent,Opponents Score\n"
-               ",1,Alice,420,Bob,388\n")
-        upload = SimpleUploadedFile("nationals-2019.csv", csv.encode(), content_type="text/csv")
+        csv = (
+            "Submitted On,Round,Winner,Winners Score,Opponent,Opponents Score\n"
+            ",1,Alice,420,Bob,388\n"
+        )
+        upload = SimpleUploadedFile(
+            "nationals-2019.csv", csv.encode(), content_type="text/csv"
+        )
         response = self.client.post(self.url, {"name": "", "upload": upload})
         self.assertEqual(response.status_code, 200)
         # Named from the filename stem, not the literal "import".
@@ -119,24 +149,30 @@ class TournamentListSplitsWhatIfTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="lister", password="p")
         self.real = Tournament.objects.create(
-            name="Real Open", location="Toronto",
-            start_date=date(2026, 5, 1), owner=self.user,
+            name="Real Open",
+            location="Toronto",
+            start_date=date(2026, 5, 1),
+            owner=self.user,
         )
         Division.objects.create(tournament=self.real, name="Division 1")
 
         self.fake = Tournament.objects.create(
-            name="Fake Cup", location="nowhere",
-            start_date=date(2026, 5, 2), owner=self.user, is_fake=True,
+            name="Fake Cup",
+            location="nowhere",
+            start_date=date(2026, 5, 2),
+            owner=self.user,
+            is_fake=True,
         )
         Division.objects.create(tournament=self.fake, name="Division 1")
 
         self.whatif = Tournament.objects.create(
-            name="Sandbox Cup", location="What-if sandbox",
-            start_date=date(2026, 5, 3), owner=self.user, is_fake=True,
+            name="Sandbox Cup",
+            location="What-if sandbox",
+            start_date=date(2026, 5, 3),
+            owner=self.user,
+            is_fake=True,
         )
-        Division.objects.create(
-            tournament=self.whatif, name="Division 1", is_test=True
-        )
+        Division.objects.create(tournament=self.whatif, name="Division 1", is_test=True)
 
     def context(self):
         self.client.force_login(self.user)
@@ -160,7 +196,9 @@ class TournamentListSplitsWhatIfTests(TestCase):
         self.assertLess(html.index("Real Open"), html.index("Test tournaments"))
         self.assertLess(html.index("Test tournaments"), html.index("Fake Cup"))
         self.assertLess(html.index("Fake Cup"), html.index("<h2>Sandbox Testing</h2>"))
-        self.assertLess(html.index("<h2>Sandbox Testing</h2>"), html.index("Sandbox Cup"))
+        self.assertLess(
+            html.index("<h2>Sandbox Testing</h2>"), html.index("Sandbox Cup")
+        )
 
     def test_a_visitor_who_cannot_open_them_is_not_shown_them(self):
         # Their divisions are is_test, which 404s for anyone who cannot edit the
@@ -204,14 +242,18 @@ class TournamentListSplitsWhatIfTests(TestCase):
         few = load()
         for i in range(20):
             t = Tournament.objects.create(
-                name=f"Extra {i}", location="x",
-                start_date=date(2026, 4, 1), owner=self.user,
+                name=f"Extra {i}",
+                location="x",
+                start_date=date(2026, 4, 1),
+                owner=self.user,
             )
             Division.objects.create(tournament=t, name="Division 1")
         many = load()
         # The only mention of the division table is the EXISTS inside the list
         # query itself, so 20 more tournaments cost no extra queries at all.
-        standalone = [q for q in many if q.lstrip().startswith('SELECT "tournaments_division"')]
+        standalone = [
+            q for q in many if q.lstrip().startswith('SELECT "tournaments_division"')
+        ]
         self.assertEqual(standalone, [])
         self.assertEqual(len(many), len(few), f"{len(few)} -> {len(many)}")
 

@@ -92,8 +92,11 @@ def _parse_json_bundle(text: str) -> tuple[str, list[dict]]:
     divisions = []
     for d in bundle.divisions:
         entrants = [
-            {"player": name_of(e.player_number), "rating": by_number[e.player_number].rating,
-             "number": e.number}
+            {
+                "player": name_of(e.player_number),
+                "rating": by_number[e.player_number].rating,
+                "number": e.number,
+            }
             for e in d.entrants
         ]
         results = [
@@ -107,10 +110,14 @@ def _parse_json_bundle(text: str) -> tuple[str, list[dict]]:
             }
             for r in d.results
         ]
-        divisions.append({
-            "name": d.name, "entrants": entrants, "results": results,
-            "bye_rows": True,
-        })
+        divisions.append(
+            {
+                "name": d.name,
+                "entrants": entrants,
+                "results": results,
+                "bye_rows": True,
+            }
+        )
     return bundle.name, divisions
 
 
@@ -159,25 +166,29 @@ def _parse_csv(text: str) -> dict:
             raise ImportParseError(
                 f"Row {i}: round and scores must be whole numbers."
             ) from None
-        for name, number, bye in ((winner, wnumber, winner_bye),
-                                  (opponent, onumber, opponent_bye)):
+        for name, number, bye in (
+            (winner, wnumber, winner_bye),
+            (opponent, onumber, opponent_bye),
+        ):
             if bye:
                 continue  # the bye is not an entrant
             names.setdefault(name.lower(), name)
             if number:
                 numbers.setdefault(name.lower(), number)
-        results.append({
-            "round": round_num,
-            # Canonicalize to the first-seen casing so result names match entrant
-            # names exactly (the command keys entrants by name).
-            "winner": BYE_PLAYER_NAME if winner_bye else names[winner.lower()],
-            "loser": BYE_PLAYER_NAME if opponent_bye else names[opponent.lower()],
-            "winner_score": wscore,
-            "loser_score": oscore,
-            # The CSV never recorded who went first; default and note the limit
-            # (matchings are unaffected — only display orientation is approximate).
-            "winner_started": True,
-        })
+        results.append(
+            {
+                "round": round_num,
+                # Canonicalize to the first-seen casing so result names match entrant
+                # names exactly (the command keys entrants by name).
+                "winner": BYE_PLAYER_NAME if winner_bye else names[winner.lower()],
+                "loser": BYE_PLAYER_NAME if opponent_bye else names[opponent.lower()],
+                "winner_score": wscore,
+                "loser_score": oscore,
+                # The CSV never recorded who went first; default and note the limit
+                # (matchings are unaffected — only display orientation is approximate).
+                "winner_started": True,
+            }
+        )
     if not results:
         raise ImportParseError("The CSV has a header but no result rows.")
 
@@ -198,8 +209,7 @@ def _parse_csv(text: str) -> dict:
         return Player.objects.filter(name__iexact=name).first()
 
     ratings = {
-        name: (p.rating if (p := roster_player(name)) else 0)
-        for name in display_names
+        name: (p.rating if (p := roster_player(name)) else 0) for name in display_names
     }
     ordered = sorted(display_names, key=lambda n: (-ratings[n], n.lower()))
     entrants = [
@@ -207,6 +217,8 @@ def _parse_csv(text: str) -> dict:
         for i, name in enumerate(ordered, start=1)
     ]
     return {
-        "name": "Division 1", "entrants": entrants, "results": results,
+        "name": "Division 1",
+        "entrants": entrants,
+        "results": results,
         "bye_rows": True,
     }

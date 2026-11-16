@@ -49,9 +49,11 @@ class PrintedRoundBase(TestCase):
         )
 
     def bye_shaped(self, round_num, entrant):
-        return self.rows(round_num).filter(
-            first=entrant, second__player__is_bye=True
-        ).first()
+        return (
+            self.rows(round_num)
+            .filter(first=entrant, second__player__is_bye=True)
+            .first()
+        )
 
 
 class WithdrawFromAPrintedRoundTests(PrintedRoundBase):
@@ -61,7 +63,8 @@ class WithdrawFromAPrintedRoundTests(PrintedRoundBase):
         absentee, opponent = pairing.first, pairing.second
 
         withdraw_entrant(
-            self.tournament, self.user,
+            self.tournament,
+            self.user,
             {"division": self.division.name, "player": absentee.key},
         )
 
@@ -87,7 +90,8 @@ class WithdrawFromAPrintedRoundTests(PrintedRoundBase):
         pairing = self.rows(1).exclude(second__player__is_bye=True).first()
         opponent = pairing.second
         withdraw_entrant(
-            self.tournament, self.user,
+            self.tournament,
+            self.user,
             {"division": self.division.name, "player": pairing.first.key},
         )
         from tournaments.pairing.base import PairingData
@@ -103,7 +107,8 @@ class WithdrawFromAPrintedRoundTests(PrintedRoundBase):
         s.save(update_fields=["withdrawal"])
         victim = before.entrants.order_by("number").first()
         withdraw_entrant(
-            before.tournament, self.user,
+            before.tournament,
+            self.user,
             {"division": before.name, "player": victim.key},
         )
         regenerate_pairings(before)
@@ -112,7 +117,8 @@ class WithdrawFromAPrintedRoundTests(PrintedRoundBase):
         self.publish(1)
         after = self.rows(1).exclude(second__player__is_bye=True).first().first
         withdraw_entrant(
-            self.tournament, self.user,
+            self.tournament,
+            self.user,
             {"division": self.division.name, "player": after.key},
         )
 
@@ -122,9 +128,12 @@ class WithdrawFromAPrintedRoundTests(PrintedRoundBase):
             ).get()
             slip = p.result
             return (
-                p.forfeit, p.table,
-                slip.winner.player.is_bye, slip.winner_score,
-                slip.loser_score, slip.winner_started,
+                p.forfeit,
+                p.table,
+                slip.winner.player.is_bye,
+                slip.winner_score,
+                slip.loser_score,
+                slip.winner_started,
             )
 
         self.assertEqual(shape(before, victim), shape(self.division, after))
@@ -133,14 +142,20 @@ class WithdrawFromAPrintedRoundTests(PrintedRoundBase):
         self.publish(1)
         pairing = self.rows(1).exclude(second__player__is_bye=True).first()
         withdraw_entrant(
-            self.tournament, self.user,
+            self.tournament,
+            self.user,
             {"division": self.division.name, "player": pairing.first.key},
         )
         for p in self.rows(1).filter(result__isnull=True):
             ResultSlip.objects.create(
-                division=self.division, round=1, pairing=p,
-                winner=p.first, winner_score=420,
-                loser=p.second, loser_score=380, winner_started=True,
+                division=self.division,
+                round=1,
+                pairing=p,
+                winner=p.first,
+                winner_score=420,
+                loser=p.second,
+                loser_score=380,
+                winner_started=True,
             )
         self.division.round_pairings_set.get(round=1).update_status()
         self.assertEqual(
@@ -152,13 +167,19 @@ class WithdrawFromAPrintedRoundTests(PrintedRoundBase):
         self.publish(1)
         pairing = self.rows(1).exclude(second__player__is_bye=True).first()
         ResultSlip.objects.create(
-            division=self.division, round=1, pairing=pairing,
-            winner=pairing.first, winner_score=420,
-            loser=pairing.second, loser_score=380, winner_started=True,
+            division=self.division,
+            round=1,
+            pairing=pairing,
+            winner=pairing.first,
+            winner_score=420,
+            loser=pairing.second,
+            loser_score=380,
+            winner_started=True,
         )
         with self.assertRaises(ForfeitError):
             withdraw_entrant(
-                self.tournament, self.user,
+                self.tournament,
+                self.user,
                 {"division": self.division.name, "player": pairing.first.key},
             )
 
@@ -167,19 +188,26 @@ class WithdrawFromAPrintedRoundTests(PrintedRoundBase):
         pairing = self.rows(1).exclude(second__player__is_bye=True).first()
         absentee = pairing.first
         withdraw_entrant(
-            self.tournament, self.user,
+            self.tournament,
+            self.user,
             {"division": self.division.name, "player": absentee.key},
         )
+
         def printed_round():
             return sorted(
-                (p.first.key, p.second.key, p.forfeit,
-                 getattr(getattr(p, "result", None), "winner_score", None))
+                (
+                    p.first.key,
+                    p.second.key,
+                    p.forfeit,
+                    getattr(getattr(p, "result", None), "winner_score", None),
+                )
                 for p in self.rows(1)
             )
 
         before = printed_round()
         rejoin_entrant(
-            self.tournament, self.user,
+            self.tournament,
+            self.user,
             {"division": self.division.name, "player": absentee.key},
         )
         self.assertFalse(self.division.entrants.get(pk=absentee.pk).dropped)
@@ -198,14 +226,13 @@ class OmitPolicyTests(PrintedRoundBase):
         pairing = self.rows(1).exclude(second__player__is_bye=True).first()
         absentee, opponent = pairing.first, pairing.second
         withdraw_entrant(
-            self.tournament, self.user,
+            self.tournament,
+            self.user,
             {"division": self.division.name, "player": absentee.key},
         )
         self.assertIsNone(self.bye_shaped(1, absentee))
         self.assertIsNotNone(self.bye_shaped(1, opponent))
-        self.assertFalse(
-            self.division.result_slips.filter(loser=absentee).exists()
-        )
+        self.assertFalse(self.division.result_slips.filter(loser=absentee).exists())
 
 
 class ForfeitOneGameTests(PrintedRoundBase):
@@ -216,7 +243,8 @@ class ForfeitOneGameTests(PrintedRoundBase):
         pairing = self.rows(1).exclude(second__player__is_bye=True).first()
         absentee, opponent = pairing.first, pairing.second
         forfeit_game(
-            self.tournament, self.user,
+            self.tournament,
+            self.user,
             {"division": self.division.name, "round": 1, "player": absentee.key},
         )
         self.assertTrue(self.bye_shaped(1, absentee).forfeit)
@@ -227,9 +255,11 @@ class ForfeitOneGameTests(PrintedRoundBase):
     def test_forfeiting_an_unpublished_round_is_refused(self):
         with self.assertRaises(ForfeitError):
             forfeit_game(
-                self.tournament, self.user,
+                self.tournament,
+                self.user,
                 {
-                    "division": self.division.name, "round": 1,
+                    "division": self.division.name,
+                    "round": 1,
                     "player": self.division.entrants.first().key,
                 },
             )
@@ -238,15 +268,19 @@ class ForfeitOneGameTests(PrintedRoundBase):
         self.publish(1)
         pairing = self.rows(1).exclude(second__player__is_bye=True).first()
         forfeit_game(
-            self.tournament, self.user,
-            {"division": self.division.name, "round": 1,
-             "player": pairing.first.key},
+            self.tournament,
+            self.user,
+            {"division": self.division.name, "round": 1, "player": pairing.first.key},
         )
         with self.assertRaises(ForfeitError):
             forfeit_game(
-                self.tournament, self.user,
-                {"division": self.division.name, "round": 1,
-                 "player": pairing.first.key},
+                self.tournament,
+                self.user,
+                {
+                    "division": self.division.name,
+                    "round": 1,
+                    "player": pairing.first.key,
+                },
             )
 
 
@@ -260,7 +294,10 @@ class ForfeitReplayTests(TestCase):
 
     def test_a_withdrawal_replays_to_the_same_digest(self):
         from tournaments.commands import (
-            add_entrant, create_division, create_tournament, publish_round,
+            add_entrant,
+            create_division,
+            create_tournament,
+            publish_round,
             save_settings,
         )
         from tournaments.events import division_digest, export_jsonl
@@ -268,31 +305,54 @@ class ForfeitReplayTests(TestCase):
         from tournaments.replay import replay, parse_jsonl
 
         user = User.objects.create_user(username="r", password="p")
-        tournament = create_tournament(None, user, {
-            "name": "Replay Cup", "location": "x", "start_date": "2026-03-15",
-        })
+        tournament = create_tournament(
+            None,
+            user,
+            {
+                "name": "Replay Cup",
+                "location": "x",
+                "start_date": "2026-03-15",
+            },
+        )
         create_division(tournament, user, {"name": "D"})
         for i in range(1, 7):
-            Player.objects.create(name=f"R{i}", player_number=f"9{i:02d}",
-                                  rating=1600 - i)
-            add_entrant(tournament, user, {
-                "division": "D", "player": f"9{i:02d}",
-            })
-        save_settings(tournament, user, {
-            "division": "D",
-            "blocks": [{"pairing": "KotH", "rounds": 4, "pair_from": 1}],
-        })
-        save_absence_settings(tournament, user, {
-            "division": "D",
-            "withdrawal": DivisionSettings.FORFEIT,
-            "bye_spread": 100,
-        })
+            Player.objects.create(
+                name=f"R{i}", player_number=f"9{i:02d}", rating=1600 - i
+            )
+            add_entrant(
+                tournament,
+                user,
+                {
+                    "division": "D",
+                    "player": f"9{i:02d}",
+                },
+            )
+        save_settings(
+            tournament,
+            user,
+            {
+                "division": "D",
+                "blocks": [{"pairing": "KotH", "rounds": 4, "pair_from": 1}],
+            },
+        )
+        save_absence_settings(
+            tournament,
+            user,
+            {
+                "division": "D",
+                "withdrawal": DivisionSettings.FORFEIT,
+                "bye_spread": 100,
+            },
+        )
         division = tournament.divisions.get(name="D")
         regenerate_pairings(division)
         publish_round(tournament, user, {"division": "D", "round": 1})
-        victim = division.pairings.filter(
-            round=1
-        ).exclude(second__player__is_bye=True).first().first
+        victim = (
+            division.pairings.filter(round=1)
+            .exclude(second__player__is_bye=True)
+            .first()
+            .first
+        )
         withdraw_entrant(tournament, user, {"division": "D", "player": victim.key})
 
         expected = division_digest(division)
@@ -322,9 +382,9 @@ class AbsentForOneRoundOnlyTests(PrintedRoundBase):
 
     def forfeit(self, entrant, round_num=1):
         forfeit_game(
-            self.tournament, self.user,
-            {"division": self.division.name, "round": round_num,
-             "player": entrant.key},
+            self.tournament,
+            self.user,
+            {"division": self.division.name, "round": round_num, "player": entrant.key},
         )
 
     def test_both_players_forfeit_without_withdrawing(self):
@@ -376,8 +436,10 @@ class AbsentForOneRoundOnlyTests(PrintedRoundBase):
         self.forfeit(pairing.first)
         self.client.force_login(self.user)
         body = self.client.get(
-            reverse("round_pairings_tab",
-                    args=(self.division.tournament.slug, self.division.slug, 1))
+            reverse(
+                "round_pairings_tab",
+                args=(self.division.tournament.slug, self.division.slug, 1),
+            )
         ).content.decode()
         # The opponent's bye row offers the way to make it a forfeit too...
         self.assertIn(f"{pairing.second.name} forfeits", body)
@@ -413,9 +475,9 @@ class FlippingAnAbsenceRowInTheGridTests(PrintedRoundBase):
         self.publish(1)
         pairing = self.rows(1).exclude(second__player__is_bye=True).first()
         forfeit_game(
-            self.tournament, self.user,
-            {"division": self.division.name, "round": 1,
-             "player": pairing.first.key},
+            self.tournament,
+            self.user,
+            {"division": self.division.name, "round": 1, "player": pairing.first.key},
         )
         self.assertTrue(self.bye_shaped(1, pairing.first).forfeit)
 
@@ -457,18 +519,14 @@ class ForfeitSurfaceTests(PrintedRoundBase):
     def test_the_public_embed_offers_no_withdraw_control(self):
         # The partial is shared, so this is the check that keeps a director's
         # action off a page anyone can iframe.
-        response = self.client.get(
-            reverse("division_entrants_embed", args=self.slugs)
-        )
+        response = self.client.get(reverse("division_entrants_embed", args=self.slugs))
         self.assertNotContains(
             response, reverse("division_withdraw_entrant", args=self.slugs)
         )
 
     def test_a_forfeit_button_appears_on_a_published_game(self):
         self.publish(1)
-        response = self.client.get(
-            reverse("round_pairings_tab", args=(*self.slugs, 1))
-        )
+        response = self.client.get(reverse("round_pairings_tab", args=(*self.slugs, 1)))
         self.assertContains(response, "forfeits")
         self.assertContains(response, reverse("forfeit_game", args=self.slugs))
 
@@ -516,8 +574,12 @@ class ForfeitSurfaceTests(PrintedRoundBase):
         self.assertContains(self.client.get(url), "bye_spread")
         response = self.client.post(
             url,
-            {"absence": "1", "withdrawal": DivisionSettings.OMIT,
-             "bye_spread": 100, "forfeit_spread": 150},
+            {
+                "absence": "1",
+                "withdrawal": DivisionSettings.OMIT,
+                "bye_spread": 100,
+                "forfeit_spread": 150,
+            },
         )
         self.assertEqual(response.status_code, 302)
         settings = self.division.settings
@@ -530,9 +592,13 @@ class ForfeitSurfaceTests(PrintedRoundBase):
         # Logged before the two were separate, when a forfeit cost the bye
         # spread: it must replay that way.
         save_absence_settings(
-            self.tournament, self.user,
-            {"division": self.division.name,
-             "withdrawal": DivisionSettings.FORFEIT, "bye_spread": 75},
+            self.tournament,
+            self.user,
+            {
+                "division": self.division.name,
+                "withdrawal": DivisionSettings.FORFEIT,
+                "bye_spread": 75,
+            },
         )
         settings = self.division.settings
         settings.refresh_from_db()
@@ -544,8 +610,12 @@ class ForfeitSurfaceTests(PrintedRoundBase):
         before = self.division.settings.pairing_blocks
         self.client.post(
             reverse("division_settings", args=self.slugs),
-            {"absence": "1", "withdrawal": DivisionSettings.FORFEIT,
-             "bye_spread": 75, "forfeit_spread": 75},
+            {
+                "absence": "1",
+                "withdrawal": DivisionSettings.FORFEIT,
+                "bye_spread": 75,
+                "forfeit_spread": 75,
+            },
         )
         settings = self.division.settings
         settings.refresh_from_db()
@@ -572,7 +642,8 @@ class WithdrawingSomebodyWhoAlreadySitsOutTests(PrintedRoundBase):
         byed = division.pairings.get(round=1, second__player__is_bye=True).first
 
         withdraw_entrant(
-            division.tournament, self.user,
+            division.tournament,
+            self.user,
             {"division": division.name, "player": byed.key},
         )
         self.assertTrue(division.entrants.get(pk=byed.pk).dropped)
@@ -589,7 +660,8 @@ class WithdrawingSomebodyWhoAlreadySitsOutTests(PrintedRoundBase):
         first, second = pairing.first, pairing.second
         for entrant in (first, second):
             withdraw_entrant(
-                self.tournament, self.user,
+                self.tournament,
+                self.user,
                 {"division": self.division.name, "player": entrant.key},
             )
         self.assertTrue(self.division.entrants.get(pk=first.pk).dropped)
@@ -635,7 +707,8 @@ class ConvertingAByeToAForfeitTests(PrintedRoundBase):
         first, second = pairing.first, pairing.second
         for entrant in (first, second):
             withdraw_entrant(
-                self.tournament, self.user,
+                self.tournament,
+                self.user,
                 {"division": self.division.name, "player": entrant.key},
             )
         self.flip_bye_rows(self.division)
@@ -654,7 +727,8 @@ class ConvertingAByeToAForfeitTests(PrintedRoundBase):
         first, second = pairing.first, pairing.second
         for entrant in (first, second):
             withdraw_entrant(
-                self.tournament, self.user,
+                self.tournament,
+                self.user,
                 {"division": self.division.name, "player": entrant.key},
             )
         self.flip_bye_rows(self.division)
@@ -662,10 +736,7 @@ class ConvertingAByeToAForfeitTests(PrintedRoundBase):
         from tournaments.pairing.base import PairingData, standings_after_round
 
         pd = PairingData.for_division(self.division)
-        by_key = {
-            p.key: p
-            for p in standings_after_round(pd, 1, include_dropped=True)
-        }
+        by_key = {p.key: p for p in standings_after_round(pd, 1, include_dropped=True)}
         for entrant in (first, second):
             self.assertEqual(by_key[entrant.key].losses, 1)
             self.assertEqual(by_key[entrant.key].spread, -100)
@@ -675,7 +746,8 @@ class ConvertingAByeToAForfeitTests(PrintedRoundBase):
         self.publish(1)
         pairing = self.rows(1).exclude(second__player__is_bye=True).first()
         withdraw_entrant(
-            self.tournament, self.user,
+            self.tournament,
+            self.user,
             {"division": self.division.name, "player": pairing.first.key},
         )
         self.assertTrue(self.bye_shaped(1, pairing.first).forfeit)

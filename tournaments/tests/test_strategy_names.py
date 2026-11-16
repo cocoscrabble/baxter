@@ -67,9 +67,7 @@ class EngineAcceptanceTests(TestCase):
     pairing strategy" is the failure being guarded against.
     """
 
-    PLAYERS = [
-        {"name": chr(ord("A") + i), "rating": 1600 - i * 25} for i in range(12)
-    ]
+    PLAYERS = [{"name": chr(ord("A") + i), "rating": 1600 - i * 25} for i in range(12)]
 
     def _error_for(self, strategy):
         out = json.loads(
@@ -91,7 +89,8 @@ class EngineAcceptanceTests(TestCase):
             with self.subTest(strategy=strategy.name):
                 error = self._error_for(strategy)
                 self.assertNotIn(
-                    "unknown pairing strategy", (error or "").lower(),
+                    "unknown pairing strategy",
+                    (error or "").lower(),
                     f"the engine does not know {str(strategy)!r} — the value is "
                     f"the wire identifier, not the label",
                 )

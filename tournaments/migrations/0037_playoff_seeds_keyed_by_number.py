@@ -41,7 +41,6 @@ def drop_keys(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("tournaments", "0036_player_number_identity"),
     ]

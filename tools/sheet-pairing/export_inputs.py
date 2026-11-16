@@ -98,13 +98,15 @@ def restore_withdrawals(data: dict[str, list[list]]) -> list[str]:
     for row in data["results"]:
         try:
             rnd = int(row[0])
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             continue
         for name in (row[1], row[3]):
             if name and name != "Bye":
                 played[name] = max(played.get(name, 0), rnd)
     missing = sorted(n for n in played if n not in listed)
-    seed = max((int(r[4]) for r in data["entrants"] if str(r[4]).strip().isdigit()), default=0)
+    seed = max(
+        (int(r[4]) for r in data["entrants"] if str(r[4]).strip().isdigit()), default=0
+    )
     for name in missing:
         seed += 1
         data["entrants"].append([name, 0, "", "", seed])
@@ -122,7 +124,9 @@ def export(path: Path) -> dict[str, list[list]]:
         if missing:
             raise SystemExit(f"{path.name} is missing tab(s): {sorted(missing)}")
         return {
-            name: read_range(workbook, schedule if sheet in SCHEDULE_TABS else sheet, lo, hi)
+            name: read_range(
+                workbook, schedule if sheet in SCHEDULE_TABS else sheet, lo, hi
+            )
             for name, sheet, lo, hi in RANGES
         }
     finally:
@@ -155,15 +159,19 @@ def render(data: dict[str, list[list]], source: str) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("path", type=Path, help="path to the .xlsx workbook")
-    parser.add_argument("-o", "--out", type=Path, help="output .js file (default stdout)")
+    parser.add_argument(
+        "-o", "--out", type=Path, help="output .js file (default stdout)"
+    )
     args = parser.parse_args()
 
     path = args.path.expanduser()
     data = export(path)
     restored = restore_withdrawals(data)
     if restored:
-        print(f"restored {len(restored)} withdrawn entrant(s): {', '.join(restored)}",
-              file=sys.stderr)
+        print(
+            f"restored {len(restored)} withdrawn entrant(s): {', '.join(restored)}",
+            file=sys.stderr,
+        )
     text = render(data, path.name)
     if args.out:
         args.out.write_text(text)

@@ -341,7 +341,9 @@ class NoDuplicatePairingsInRoundTests(TestCase):
                 seen = set()
                 for p in round.pairings:
                     self.assertNotIn(p.first.name, seen, f"{p.first.name} paired twice")
-                    self.assertNotIn(p.second.name, seen, f"{p.second.name} paired twice")
+                    self.assertNotIn(
+                        p.second.name, seen, f"{p.second.name} paired twice"
+                    )
                     seen.add(p.first.name)
                     seen.add(p.second.name)
 

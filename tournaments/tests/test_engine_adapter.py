@@ -119,7 +119,8 @@ class EnginePathTests(TestCase):
         self.assertEqual(pairing_data_to_input(pd)["players"][0]["seed"], 1)
         pairs = {
             frozenset((p.first.name, p.second.name))
-            for _, ps in pair_with_engine(pd) for p in ps
+            for _, ps in pair_with_engine(pd)
+            for p in ps
         }
         self.assertEqual(pairs, {frozenset("AB"), frozenset("CD")})
 
@@ -168,7 +169,9 @@ def _cop_pd(cop_config):
             ResultSlipData(1, "C", "D", 450, 400, True),
             ResultSlipData(1, "E", "F", 450, 400, True),
         ],
-        entrants=[EntrantData(PlayerData(n, n, 1600 - 10 * i)) for i, n in enumerate(names)],
+        entrants=[
+            EntrantData(PlayerData(n, n, 1600 - 10 * i)) for i, n in enumerate(names)
+        ],
         repeats=Repeats(),
         round_pairings=[RoundPairing(1, 0, RP.Swiss), RoundPairing(2, 1, RP.COP)],
         seed=7,
@@ -211,7 +214,9 @@ class CopConfigTests(TestCase):
     def test_a_blank_activation_round_leaves_it_to_the_engine(self):
         # None is the engine's default (control loss in the last few rounds),
         # not round 0, which would switch it on from the start.
-        d = pairing_data_to_input(_cop_pd({**_COP_CONFIG, "control_loss_activation_round": None}))
+        d = pairing_data_to_input(
+            _cop_pd({**_COP_CONFIG, "control_loss_activation_round": None})
+        )
         self.assertIsNone(d["cop_config"]["control_loss_activation_round"])
 
     def test_partial_config_uses_application_gibson_default(self):
@@ -224,7 +229,9 @@ class CopConfigTests(TestCase):
         # has to forward them.
         pd = _cop_pd({**_COP_CONFIG, "top_down_byes": True, "max_simulations": 50000})
         config = pairing_data_to_input(pd)["cop_config"]
-        self.assertEqual((config["top_down_byes"], config["max_simulations"]), (True, 50000))
+        self.assertEqual(
+            (config["top_down_byes"], config["max_simulations"]), (True, 50000)
+        )
 
     def test_empty_config_serializes_to_none(self):
         # No usable config → None, so a COP round fails loudly rather than pairing

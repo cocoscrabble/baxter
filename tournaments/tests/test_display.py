@@ -25,15 +25,11 @@ from users.models import User
 
 class DisplayNamesTests(TestCase):
     def _players(self, *pairs):
-        return [
-            Player(name=name, player_number=number) for name, number in pairs
-        ]
+        return [Player(name=name, player_number=number) for name, number in pairs]
 
     def test_a_unique_name_renders_bare(self):
         players = self._players(("Ann", "0001"), ("Bea", "0002"))
-        self.assertEqual(
-            display_names(players), {"0001": "Ann", "0002": "Bea"}
-        )
+        self.assertEqual(display_names(players), {"0001": "Ann", "0002": "Bea"})
 
     def test_a_shared_name_carries_the_number_on_both(self):
         players = self._players(
@@ -65,12 +61,12 @@ class DivisionScopeTests(TestCase):
     def setUp(self):
         self.owner = User.objects.create_user(username="td", password="pw")
         self.tournament = Tournament.objects.create(
-            name="Champs", location="Reno",
-            start_date=date(2026, 3, 15), owner=self.owner,
+            name="Champs",
+            location="Reno",
+            start_date=date(2026, 3, 15),
+            owner=self.owner,
         )
-        self.division = Division.objects.create(
-            tournament=self.tournament, name="Open"
-        )
+        self.division = Division.objects.create(tournament=self.tournament, name="Open")
         DivisionSettings.objects.create(division=self.division)
         self.ann = Player.objects.create(
             name="Ann Lee", player_number="0001", rating=1600
@@ -90,16 +86,12 @@ class DivisionScopeTests(TestCase):
         return reverse(name, kwargs=self.division.slug_kwargs())
 
     def _add_twin(self, number="0003"):
-        twin = Player.objects.create(
-            name="Ann Lee", player_number=number, rating=1400
-        )
+        twin = Player.objects.create(name="Ann Lee", player_number=number, rating=1400)
         return twin
 
     def test_no_clash_renders_bare_names(self):
         labels = division_labels(self.division)
-        self.assertEqual(
-            set(labels.values()), {"Ann Lee", "Bea Fox"}
-        )
+        self.assertEqual(set(labels.values()), {"Ann Lee", "Bea Fox"})
 
     def test_a_clash_outside_the_division_changes_nothing(self):
         # A second Ann Lee exists, but not in this division — the reader of this
@@ -131,12 +123,15 @@ class DivisionScopeTests(TestCase):
 
     def test_results_disambiguate(self):
         twin = self._add_twin()
-        e_twin = Entrant.objects.create(
-            division=self.division, player=twin, number=3
-        )
+        e_twin = Entrant.objects.create(division=self.division, player=twin, number=3)
         ResultSlip.objects.create(
-            division=self.division, round=1, winner=self.e_ann,
-            winner_score=450, loser=e_twin, loser_score=380, winner_started=True,
+            division=self.division,
+            round=1,
+            winner=self.e_ann,
+            winner_score=450,
+            loser=e_twin,
+            loser_score=380,
+            winner_started=True,
         )
         response = self.client.get(self._url("division_all_results"))
         self.assertContains(response, "Ann Lee (0001)")
@@ -144,12 +139,15 @@ class DivisionScopeTests(TestCase):
 
     def test_standings_disambiguate(self):
         twin = self._add_twin()
-        e_twin = Entrant.objects.create(
-            division=self.division, player=twin, number=3
-        )
+        e_twin = Entrant.objects.create(division=self.division, player=twin, number=3)
         ResultSlip.objects.create(
-            division=self.division, round=1, winner=self.e_ann,
-            winner_score=450, loser=e_twin, loser_score=380, winner_started=True,
+            division=self.division,
+            round=1,
+            winner=self.e_ann,
+            winner_score=450,
+            loser=e_twin,
+            loser_score=380,
+            winner_started=True,
         )
         response = self.client.get(self._url("division_standings"))
         self.assertContains(response, "Ann Lee (0001)")
@@ -162,12 +160,12 @@ class RosterScopeTests(TestCase):
     def setUp(self):
         self.owner = User.objects.create_user(username="td", password="pw")
         self.tournament = Tournament.objects.create(
-            name="Champs", location="Reno",
-            start_date=date(2026, 3, 15), owner=self.owner,
+            name="Champs",
+            location="Reno",
+            start_date=date(2026, 3, 15),
+            owner=self.owner,
         )
-        self.division = Division.objects.create(
-            tournament=self.tournament, name="Open"
-        )
+        self.division = Division.objects.create(tournament=self.tournament, name="Open")
         self.client.force_login(self.owner)
 
     def test_the_player_picker_judges_ambiguity_against_every_player(self):
@@ -179,9 +177,7 @@ class RosterScopeTests(TestCase):
         Player.objects.create(name="Ann Lee", player_number="0002", rating=1500)
         Player.objects.create(name="Bea Fox", player_number="0003", rating=1400)
 
-        labels = {
-            p["label"] for p in EntrantsGrid().lookups(self.division)["players"]
-        }
+        labels = {p["label"] for p in EntrantsGrid().lookups(self.division)["players"]}
         self.assertIn("Ann Lee (0001)", labels)
         self.assertIn("Ann Lee (0002)", labels)
         self.assertIn("Bea Fox", labels)

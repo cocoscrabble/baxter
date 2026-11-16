@@ -104,8 +104,9 @@ def committed_field_rounds(division, pd):
     rounds sharing a pairing *and* a start_round.
     """
     started = set(
-        division.round_pairings_set.exclude(status=RoundPairings.DRAFT)
-        .values_list("round", flat=True)
+        division.round_pairings_set.exclude(status=RoundPairings.DRAFT).values_list(
+            "round", flat=True
+        )
     )
     if not started:
         return set()
@@ -297,16 +298,18 @@ def published_rows(division, round_numbers):
         for p in division.pairings.filter(round=round_num).select_related(
             "first__player", "second__player", "series"
         ):
-            rows.append({
-                "first": p.first.player.player_number,
-                "second": p.second.player.player_number,
-                "table": p.table,
-                "table_label": p.table_label,
-                "repeats": p.repeats,
-                "forfeit": p.forfeit,
-                "series": [p.series.key, p.series.position] if p.series else None,
-                "game": p.game_number,
-            })
+            rows.append(
+                {
+                    "first": p.first.player.player_number,
+                    "second": p.second.player.player_number,
+                    "table": p.table,
+                    "table_label": p.table_label,
+                    "repeats": p.repeats,
+                    "forfeit": p.forfeit,
+                    "series": [p.series.key, p.series.position] if p.series else None,
+                    "game": p.game_number,
+                }
+            )
         rows.sort(key=lambda r: (r["table"], r["first"], r["second"]))
         out[str(round_num)] = rows
     return out
@@ -335,9 +338,7 @@ def install_published(division, recorded):
         for e in Entrant.all_objects.filter(division=division).select_related("player")
     }
     playoff = playoff_for(division)
-    series = (
-        {(s.key, s.position): s for s in playoff.series.all()} if playoff else {}
-    )
+    series = {(s.key, s.position): s for s in playoff.series.all()} if playoff else {}
 
     drifted = []
     for round_key, rows in recorded.items():
@@ -354,12 +355,14 @@ def install_published(division, recorded):
             drifted.append(round_num)
             sink = ENGINE_DRIFT.get()
             if sink is not None:
-                sink.append({
-                    "division": division.name,
-                    "round": round_num,
-                    "recorded": _board(rows),
-                    "regenerated": _board(current),
-                })
+                sink.append(
+                    {
+                        "division": division.name,
+                        "round": round_num,
+                        "recorded": _board(rows),
+                        "regenerated": _board(current),
+                    }
+                )
         division.pairings.filter(round=round_num).delete()
         for row in rows:
             try:
@@ -427,7 +430,8 @@ def unpublish_rounds(division, round_numbers=None):
         # real games. Ordinary bye-only drafts retain their existing boards.
         reset_rounds = list(
             division.pairings.filter(round__in=to_unpublish, forfeit=True)
-            .values_list("round", flat=True).distinct()
+            .values_list("round", flat=True)
+            .distinct()
         )
         # A board paired under a schedule entry that has since changed (the
         # director switched the round's strategy while it was published) is
@@ -454,9 +458,15 @@ def reset_round_pairings(division, round_number):
         current = rounds.filter(round=round_number).first()
         if current is None or current.status == RoundPairings.DRAFT:
             return []
-        if (rounds.filter(round__gt=round_number).exclude(status=RoundPairings.DRAFT).exists()
-                or division.result_slips.filter(round__gt=round_number).exists()):
-            raise ValueError("Unpublish or reset later rounds first, starting with the last round.")
+        if (
+            rounds.filter(round__gt=round_number)
+            .exclude(status=RoundPairings.DRAFT)
+            .exists()
+            or division.result_slips.filter(round__gt=round_number).exists()
+        ):
+            raise ValueError(
+                "Unpublish or reset later rounds first, starting with the last round."
+            )
         division.result_slips.filter(round=round_number).delete()
         division.pairings.filter(round__gte=round_number).delete()
         rounds.filter(round__gte=round_number).update(status=RoundPairings.DRAFT)
@@ -486,7 +496,7 @@ def resolve_fixed_table(first_ft, second_ft, first_rank, second_rank):
     if first_ft[1] and not second_ft[1]:
         return second_ft[0]  # second is round-specific
     if second_ft[1] and not first_ft[1]:
-        return first_ft[0]   # first is round-specific
+        return first_ft[0]  # first is round-specific
     return first_ft[0] if first_rank < second_rank else second_ft[0]
 
 
@@ -538,7 +548,9 @@ def _orient_playoff_game(starts, playoff, high, low, round_num):
     recorded, so the series' later games follow on from it."""
     fixed = playoff.fixed_start(round_num, high, low) if playoff else None
     if fixed is None:
-        return starts.add(EnginePairing(EnginePlayer(high), EnginePlayer(low)), round_num)
+        return starts.add(
+            EnginePairing(EnginePlayer(high), EnginePlayer(low)), round_num
+        )
     other = low if fixed == high else high
     oriented = EnginePairing(EnginePlayer(fixed), EnginePlayer(other))
     starts.register(oriented, round_num)
@@ -559,9 +571,7 @@ def _add_missing_playoff_games(
         for p in rp_obj.pairings.all()
         if p.series_id is not None
     }
-    next_table = max(
-        (p.table for p in rp_obj.pairings.all()), default=0
-    )
+    next_table = max((p.table for p in rp_obj.pairings.all()), default=0)
     for series, game in games:
         series_row = series_rows.get((series.key, series.position))
         if series_row is None or (series_row.pk, game.number) in existing:
@@ -633,8 +643,7 @@ def regenerate_pairings(division):
         for round_num in bracket.rounds:
             engine_rounds.pop(round_num, None)
     entrant_by_key = {
-        e.player.player_number: e
-        for e in division.entrants.select_related("player")
+        e.player.player_number: e for e in division.entrants.select_related("player")
     }
     # Withdrawn entrants whose absence this division records rather than omits.
     # The policy is the division's, not the entrant's (``DivisionSettings.
@@ -656,6 +665,7 @@ def regenerate_pairings(division):
                 bye_entrant = division.bye_entrant()
             return bye_entrant
         return entrant_by_key.get(key)
+
     start_round_by_round = {rp.round: rp.start_round for rp in pd.round_pairings}
     schedule_by_round = {rp.round: rp for rp in pd.round_pairings}
     fixed_table_lookup = {
@@ -670,8 +680,9 @@ def regenerate_pairings(division):
     # Only delete draft rounds (cascades to their Pairing objects).
     # Also clean up any legacy pairings not linked to a RoundPairings.
     draft_rounds = list(
-        division.round_pairings_set.filter(status=RoundPairings.DRAFT)
-        .values_list("round", flat=True)
+        division.round_pairings_set.filter(status=RoundPairings.DRAFT).values_list(
+            "round", flat=True
+        )
     )
     # Auto-created bye and forfeit results live in draft rounds until published;
     # drop them so the round can be re-paired cleanly (a draft round with a
@@ -726,8 +737,13 @@ def regenerate_pairings(division):
                 RoundPairings.IN_PROGRESS,
             ):
                 _add_missing_playoff_games(
-                    division, rp_obj, playoff_games[round_num],
-                    entrant_by_key, series_rows, starts, repeats,
+                    division,
+                    rp_obj,
+                    playoff_games[round_num],
+                    entrant_by_key,
+                    series_rows,
+                    starts,
+                    repeats,
                 )
             continue
 
@@ -788,8 +804,15 @@ def regenerate_pairings(division):
                 first_entrant, second_entrant, round_num, ranks
             )
             resolved.append(
-                (p.repeats, first_entrant, second_entrant, effective,
-                 (1, min(ranks)), None, None)
+                (
+                    p.repeats,
+                    first_entrant,
+                    second_entrant,
+                    effective,
+                    (1, min(ranks)),
+                    None,
+                    None,
+                )
             )
 
         for series, game in playoff_games.get(round_num, []):
@@ -823,9 +846,15 @@ def regenerate_pairings(division):
                 first_entrant, second_entrant, round_num, ranks
             )
             resolved.append(
-                (reps, first_entrant, second_entrant, effective,
-                 (0, min(seeds, default=0)),
-                 series_rows.get((series.key, series.position)), game.number)
+                (
+                    reps,
+                    first_entrant,
+                    second_entrant,
+                    effective,
+                    (0, min(seeds, default=0)),
+                    series_rows.get((series.key, series.position)),
+                    game.number,
+                )
             )
 
         # Order pairings so the top game claims the first board. Fixed-table

@@ -20,8 +20,8 @@ def _next_temp_minter(Player):
         player_number__startswith=TEMP_PREFIX
     ).values_list("player_number", flat=True):
         try:
-            highest = max(highest, int(number[len(TEMP_PREFIX):]))
-        except (ValueError, TypeError):
+            highest = max(highest, int(number[len(TEMP_PREFIX) :]))
+        except ValueError, TypeError:
             continue
 
     def mint():
@@ -130,7 +130,6 @@ def noop_reverse(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("tournaments", "0035_playoff"),
     ]

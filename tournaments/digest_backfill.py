@@ -118,8 +118,7 @@ def backfill_tournament(tournament):
     # already-backfilled tournament as divergent — technically true and
     # thoroughly misleading.
     if all(
-        seq in digests and digests[seq][1] == digest
-        for seq, digest in stored.items()
+        seq in digests and digests[seq][1] == digest for seq, digest in stored.items()
     ):
         return 0, None
 

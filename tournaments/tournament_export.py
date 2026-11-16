@@ -128,9 +128,12 @@ class ExportTournament:
         divisions = list(tournament.divisions.filter(is_test=False))
         # One ExportPlayer per distinct player across all exported divisions, so
         # a player entered in two divisions is described only once.
-        players = Player.objects.filter(
-            entries__division__in=divisions
-        ).exclude(is_bye=True).distinct().order_by("player_number")
+        players = (
+            Player.objects.filter(entries__division__in=divisions)
+            .exclude(is_bye=True)
+            .distinct()
+            .order_by("player_number")
+        )
         return cls(
             name=tournament.name,
             location=tournament.location,

@@ -183,10 +183,12 @@ def round_pairings_to_blocks(round_pairings) -> list[dict]:
     """
     blocks = []
     last_sig = None
-    normalized = normalize_round_robin_start_rounds([
-        RoundPairing.from_dict(rp)
-        for rp in sorted(round_pairings, key=lambda x: x["round"])
-    ])
+    normalized = normalize_round_robin_start_rounds(
+        [
+            RoundPairing.from_dict(rp)
+            for rp in sorted(round_pairings, key=lambda x: x["round"])
+        ]
+    )
     for entry in normalized:
         rp = entry.to_dict()
         pairing = rp["pairing"]

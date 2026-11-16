@@ -98,7 +98,13 @@ from .forfeits import (
     save_absence_settings,
     withdraw_entrant,
 )
-from .grids import BoardTableMapGrid, EntrantsGrid, FixedPairingsGrid, FixedTablesGrid, ResultsGrid
+from .grids import (
+    BoardTableMapGrid,
+    EntrantsGrid,
+    FixedPairingsGrid,
+    FixedTablesGrid,
+    ResultsGrid,
+)
 from coco_ratings.identity import canonical_player_number
 from .admin_log import logged
 from .models import (
@@ -226,9 +232,7 @@ def _tournament_payload(form):
         "location": form.cleaned_data["location"],
         "start_date": form.cleaned_data["start_date"].isoformat(),
         "time_zone": form.cleaned_data["time_zone"],
-        "editors": [
-            u.username for u in form.cleaned_data.get("editor_usernames", [])
-        ],
+        "editors": [u.username for u in form.cleaned_data.get("editor_usernames", [])],
     }
 
 
@@ -253,9 +257,7 @@ class FakeTournamentCreateView(LoginRequiredMixin, View):
     template_name = "tournaments/fake_tournament_form.html"
 
     def get(self, request):
-        form = FakeTournamentForm(
-            initial={"name": default_fake_tournament_name()}
-        )
+        form = FakeTournamentForm(initial={"name": default_fake_tournament_name()})
         return render(request, self.template_name, {"form": form})
 
     def post(self, request):
@@ -326,27 +328,37 @@ class WhatIfImportView(LoginRequiredMixin, View):
             form.add_error(None, str(e))
             return render(request, self.template_name, {"form": form})
 
-        name = form.cleaned_data.get("name") or _default_whatif_name(source_name, filename)
+        name = form.cleaned_data.get("name") or _default_whatif_name(
+            source_name, filename
+        )
         # All-or-nothing: a failure importing any division rolls back the whole
         # sandbox (each command is atomic; the outer atomic ties them together).
         with transaction.atomic():
-            tournament = create_tournament(None, request.user, {
-                "name": name,
-                "location": "What-if sandbox",
-                "start_date": timezone.now().date().isoformat(),
-                "is_fake": True,
-                "default_division": {"name": divisions[0]["name"]},
-            })
+            tournament = create_tournament(
+                None,
+                request.user,
+                {
+                    "name": name,
+                    "location": "What-if sandbox",
+                    "start_date": timezone.now().date().isoformat(),
+                    "is_fake": True,
+                    "default_division": {"name": divisions[0]["name"]},
+                },
+            )
             summaries = [
                 import_division(tournament, request.user, d) for d in divisions
             ]
 
         first_division = tournament.divisions.get(name=divisions[0]["name"])
-        return render(request, "tournaments/whatif_import_summary.html", {
-            "tournament": tournament,
-            "division": first_division,
-            "summaries": summaries,
-        })
+        return render(
+            request,
+            "tournaments/whatif_import_summary.html",
+            {
+                "tournament": tournament,
+                "division": first_division,
+                "summaries": summaries,
+            },
+        )
 
 
 def _resolve_tournament(slug):
@@ -356,7 +368,9 @@ def _resolve_tournament(slug):
     if tournament is not None:
         return tournament, True
     alias = (
-        TournamentSlugAlias.objects.select_related("tournament").filter(slug=slug).first()
+        TournamentSlugAlias.objects.select_related("tournament")
+        .filter(slug=slug)
+        .first()
     )
     if alias is not None:
         return alias.tournament, False
@@ -547,7 +561,9 @@ class TournamentDetailView(TournamentURLMixin, DetailView):
         return context
 
 
-class TournamentUpdateView(TournamentURLMixin, LoginRequiredMixin, CanEditTournamentMixin, UpdateView):
+class TournamentUpdateView(
+    TournamentURLMixin, LoginRequiredMixin, CanEditTournamentMixin, UpdateView
+):
     model = Tournament
     form_class = TournamentForm
     template_name = "tournaments/tournament_form.html"
@@ -585,7 +601,9 @@ class CanReadTournamentLogMixin(UserPassesTestMixin):
         )
 
 
-class TournamentActivityView(TournamentURLMixin, LoginRequiredMixin, CanReadTournamentLogMixin, DetailView):
+class TournamentActivityView(
+    TournamentURLMixin, LoginRequiredMixin, CanReadTournamentLogMixin, DetailView
+):
     """The tournament's event log, newest first, with what each event changed."""
 
     model = Tournament
@@ -599,9 +617,7 @@ class TournamentActivityView(TournamentURLMixin, LoginRequiredMixin, CanReadTour
         from tournaments.events import describe_events
 
         context = super().get_context_data(**kwargs)
-        events = self.object.events.order_by("-seq").select_related(
-            "actor", "division"
-        )
+        events = self.object.events.order_by("-seq").select_related("actor", "division")
         # The filters come from the log itself rather than from the catalog: a
         # list of every event type Baxter can record would offer dozens that
         # this tournament has never produced.
@@ -651,7 +667,9 @@ class TournamentActivityView(TournamentURLMixin, LoginRequiredMixin, CanReadTour
         return context
 
 
-class TournamentEventLogExportView(TournamentURLMixin, LoginRequiredMixin, CanReadTournamentLogMixin, View):
+class TournamentEventLogExportView(
+    TournamentURLMixin, LoginRequiredMixin, CanReadTournamentLogMixin, View
+):
     """Download the tournament's event log as JSONL (same readers as the page)."""
 
     def get_object(self, queryset=None):
@@ -676,7 +694,9 @@ class CanDeleteTournamentMixin(UserPassesTestMixin):
         return tournament.can_delete(self.request.user)
 
 
-class TournamentDeleteView(TournamentURLMixin, LoginRequiredMixin, CanDeleteTournamentMixin, DeleteView):
+class TournamentDeleteView(
+    TournamentURLMixin, LoginRequiredMixin, CanDeleteTournamentMixin, DeleteView
+):
     model = Tournament
     template_name = "tournaments/tournament_confirm_delete.html"
     context_object_name = "tournament"
@@ -696,11 +716,13 @@ class TournamentDeleteView(TournamentURLMixin, LoginRequiredMixin, CanDeleteTour
             division__tournament=tournament
         ).count()
         guests = Player.objects.filter(
-            is_provisional=True, is_bye=False,
+            is_provisional=True,
+            is_bye=False,
             entries__division__tournament=tournament,
         ).distinct()
         context["orphan_guests"] = sorted(
-            g.name for g in guests
+            g.name
+            for g in guests
             if not g.entries.exclude(division__tournament=tournament).exists()
         )
         return context
@@ -792,17 +814,24 @@ class DivisionRenameView(LoginRequiredMixin, CanEditDivisionMixin, View):
             error = f"A division named “{name}” already exists."
         else:
             rename_division(
-                tournament, request.user,
+                tournament,
+                request.user,
                 {"old_name": division.name, "new_name": name},
             )
 
         if is_datastar(request):
-            context = {"tournament": tournament, "can_edit": True, "rename_error": error}
+            context = {
+                "tournament": tournament,
+                "can_edit": True,
+                "rename_error": error,
+            }
             context.update(tournament.division_buckets())
             # Reset the inline-edit signals so the swapped-in table shows the
             # display state regardless of how the morph re-applies data-signals.
             return fragment_response(
-                "tournaments/_division_management.html", context, request=request,
+                "tournaments/_division_management.html",
+                context,
+                request=request,
                 signals={"renamingPk": 0, "renameName": ""},
             )
         if error:
@@ -886,9 +915,7 @@ def entrants_for_display(division):
     The legend only lists markers that are actually on the page: a table with no
     tentative entrants should not explain what an asterisk would have meant.
     """
-    entrants = list(
-        division.entrants.select_related("player").order_by("number")
-    )
+    entrants = list(division.entrants.select_related("player").order_by("number"))
     label_entrants(division_labels(division), entrants)
     flags = {
         "has_tentative": any(e.tentative for e in entrants),
@@ -945,9 +972,7 @@ class DivisionRefreshRatingsView(LoginRequiredMixin, CanEditDivisionMixin, View)
 
     def post(self, request, *args, **kwargs):
         division = self.get_division()
-        back = redirect(
-            "division_entrants", division.tournament.slug, division.slug
-        )
+        back = redirect("division_entrants", division.tournament.slug, division.slug)
         picked = set(request.POST.getlist("entrants"))
         if not picked:
             messages.error(request, "No entrants selected.")
@@ -969,9 +994,7 @@ class DivisionRefreshRatingsView(LoginRequiredMixin, CanEditDivisionMixin, View)
         # command records nothing, which is the whole point: this page already
         # warns that a round has left draft, and it should not renumber the
         # field it warned about.
-        reseed_entrants(
-            division.tournament, request.user, {"division": division.name}
-        )
+        reseed_entrants(division.tournament, request.user, {"division": division.name})
         messages.success(
             request,
             f"Refreshed {len(drifted)} entrant(s) from the player table; "
@@ -1004,7 +1027,10 @@ class DivisionReseedEntrantsView(LoginRequiredMixin, CanEditDivisionMixin, View)
             division.tournament, request.user, {"division": division.name}
         )
         if changed:
-            messages.success(request, f"Reseeded by rating; {len(changed)} entrant number(s) changed.")
+            messages.success(
+                request,
+                f"Reseeded by rating; {len(changed)} entrant number(s) changed.",
+            )
         else:
             messages.info(request, "Entrants are already numbered in rating order.")
         return back
@@ -1015,13 +1041,13 @@ class _EntrantAbsenceView(LoginRequiredMixin, CanEditDivisionMixin, View):
 
     def post(self, request, *args, **kwargs):
         division = self.get_division()
-        back = redirect(
-            "division_entrants", division.tournament.slug, division.slug
-        )
+        back = redirect("division_entrants", division.tournament.slug, division.slug)
         key = request.POST.get("player", "")
-        entrant = division.entrants.filter(
-            player__player_number=key
-        ).select_related("player").first()
+        entrant = (
+            division.entrants.filter(player__player_number=key)
+            .select_related("player")
+            .first()
+        )
         if entrant is None:
             messages.error(request, "No such entrant in this division.")
             return back
@@ -1038,7 +1064,8 @@ class DivisionWithdrawEntrantView(_EntrantAbsenceView):
 
     def apply(self, division, request, entrant):
         withdraw_entrant(
-            division.tournament, request.user,
+            division.tournament,
+            request.user,
             {"division": division.name, "player": entrant.key},
         )
         if withdrawal_policy(division) == DivisionSettings.FORFEIT:
@@ -1061,7 +1088,8 @@ class DivisionRejoinEntrantView(_EntrantAbsenceView):
 
     def apply(self, division, request, entrant):
         rejoin_entrant(
-            division.tournament, request.user,
+            division.tournament,
+            request.user,
             {"division": division.name, "player": entrant.key},
         )
         messages.success(
@@ -1081,15 +1109,21 @@ class FixPlayoffStartView(LoginRequiredMixin, CanEditDivisionMixin, View):
         if bad_round:
             return bad_round
         command = (
-            unfix_playoff_start if data.get("clear") in (True, "1", "true")
+            unfix_playoff_start
+            if data.get("clear") in (True, "1", "true")
             else fix_playoff_start
         )
         error = None
         try:
             command(
-                division.tournament, request.user,
-                {"division": division.name, "round": round_num,
-                 "first": data.get("first", ""), "second": data.get("second", "")},
+                division.tournament,
+                request.user,
+                {
+                    "division": division.name,
+                    "round": round_num,
+                    "first": data.get("first", ""),
+                    "second": data.get("second", ""),
+                },
             )
         except (StartFixError, Entrant.DoesNotExist) as exc:
             error = str(exc) or "That entrant is not in this division."
@@ -1113,9 +1147,13 @@ class ForfeitGameView(LoginRequiredMixin, CanEditDivisionMixin, View):
         error = None
         try:
             forfeit_game(
-                division.tournament, request.user,
-                {"division": division.name, "round": round_num,
-                 "player": data.get("player", "")},
+                division.tournament,
+                request.user,
+                {
+                    "division": division.name,
+                    "round": round_num,
+                    "player": data.get("player", ""),
+                },
             )
         except (ForfeitError, Entrant.DoesNotExist) as exc:
             # Surfaced as a banner on the pairings body, like a PairingError:
@@ -1202,9 +1240,7 @@ class DivisionStandingsEmbedView(PubliclyVisibleDivisionMixin, DetailView):
         context = super().get_context_data(**kwargs)
         division = self.object
         standings = division_standings(division, division.current_round())
-        entrants = {
-            e.key: e for e in division.entrants.select_related("player")
-        }
+        entrants = {e.key: e for e in division.entrants.select_related("player")}
         projections = project_ratings(division)
         rows = []
         for p in standings:
@@ -1214,15 +1250,17 @@ class DivisionStandingsEmbedView(PubliclyVisibleDivisionMixin, DetailView):
                 old, new = projection.old_rating, projection.new_rating
             else:
                 old = new = entrant.rating if entrant else ""
-            rows.append({
-                "rank": p.rank,
-                "name": p.name,
-                "url": playerdb_url(entrant.player) if entrant else "",
-                "record": p.record,
-                "spread": p.spread,
-                "old_rating": old,
-                "new_rating": new,
-            })
+            rows.append(
+                {
+                    "rank": p.rank,
+                    "name": p.name,
+                    "url": playerdb_url(entrant.player) if entrant else "",
+                    "record": p.record,
+                    "spread": p.spread,
+                    "old_rating": old,
+                    "new_rating": new,
+                }
+            )
         context["rows"] = rows
         return context
 
@@ -1273,9 +1311,7 @@ class DivisionLiveRatingsView(DivisionNavMixin, VisibleDivisionMixin, DetailView
         context = super().get_context_data(**kwargs)
         division = self.object
         projections = project_ratings(division)
-        labels = {
-            e.key: e for e in division.entrants.select_related("player")
-        }
+        labels = {e.key: e for e in division.entrants.select_related("player")}
         label_entrants(division_labels(division), labels.values())
         rows = sorted(
             (
@@ -1285,9 +1321,7 @@ class DivisionLiveRatingsView(DivisionNavMixin, VisibleDivisionMixin, DetailView
             key=lambda r: -r["projection"].new_rating,
         )
         context["rows"] = rows
-        context["has_unrated"] = any(
-            r["projection"].was_unrated for r in rows
-        )
+        context["has_unrated"] = any(r["projection"].was_unrated for r in rows)
         return context
 
 
@@ -1339,8 +1373,6 @@ class DivisionStandingsTableView(VisibleDivisionMixin, DetailView):
             request=request,
         )
         return HttpResponse(html)
-
-
 
 
 def _pairings_body_response(
@@ -1425,7 +1457,9 @@ def _unseen_drafts(request, division, round_numbers=None, select_round=None):
     if not paired:
         return None
     return _pairings_body_response(
-        request, division, select_round=select_round,
+        request,
+        division,
+        select_round=select_round,
         notice="This round had to be re-paired since it was last shown. Check it and publish again.",
     )
 
@@ -1441,7 +1475,9 @@ class PublishPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
         unseen = _unseen_drafts(request, division)
         if unseen is not None:
             return unseen
-        publish_all_rounds(division.tournament, request.user, {"division": division.name})
+        publish_all_rounds(
+            division.tournament, request.user, {"division": division.name}
+        )
         return _pairings_body_response(request, division)
 
 
@@ -1454,10 +1490,8 @@ def _read_int(data, key):
     """
     try:
         return int(data[key]), None
-    except (KeyError, TypeError, ValueError):
-        return None, JsonResponse(
-            {"error": f"missing or invalid '{key}'"}, status=400
-        )
+    except KeyError, TypeError, ValueError:
+        return None, JsonResponse({"error": f"missing or invalid '{key}'"}, status=400)
 
 
 class PublishRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
@@ -1476,7 +1510,8 @@ class PublishRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
         if unseen is not None:
             return unseen
         publish_round(
-            division.tournament, request.user,
+            division.tournament,
+            request.user,
             {"division": division.name, "round": round_number},
         )
         # A playoff round with no games left finishes as it is published; show
@@ -1509,13 +1544,23 @@ class UnpublishRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
                     # in the seeding and the new drafts are drawn off it.
                     refresh_before_start(division, request.user)
                 notice = _autogenerate_pairable_rounds(division) if reset else None
-                error = None if reset else (
-                    f"Round {round_number} has not been published, so there is nothing to reset."
+                error = (
+                    None
+                    if reset
+                    else (
+                        f"Round {round_number} has not been published, so there is nothing to reset."
+                    )
                 )
             else:
-                unpublished = unpublish_round(division.tournament, request.user, payload)
-                error = None if unpublished else (
-                    f"Round {round_number} can't be unpublished. Use Reset round to discard its results."
+                unpublished = unpublish_round(
+                    division.tournament, request.user, payload
+                )
+                error = (
+                    None
+                    if unpublished
+                    else (
+                        f"Round {round_number} can't be unpublished. Use Reset round to discard its results."
+                    )
                 )
                 if unpublished and data.get("repair") in (True, "1", "true"):
                     # From the fixed-pairings grid: the board predates its
@@ -1528,7 +1573,10 @@ class UnpublishRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
                         )
                     except PairingError as exc:
                         error = str(exc)
-                elif unpublished and not division.pairings.filter(round=round_number).exists():
+                elif (
+                    unpublished
+                    and not division.pairings.filter(round=round_number).exists()
+                ):
                     # Unpublishing dropped the board: the round's schedule entry
                     # changed while it was published. Draw it now, so the
                     # director sees the new board rather than an empty round.
@@ -1564,18 +1612,27 @@ class AddFixedPairingView(LoginRequiredMixin, CanEditDivisionMixin, View):
             entrant2_id, error = _read_int(data, "entrant2")
             if error:
                 return error
-            e2 = division.entrants.filter(pk=entrant2_id).select_related("player").first()
+            e2 = (
+                division.entrants.filter(pk=entrant2_id)
+                .select_related("player")
+                .first()
+            )
             key2 = e2.key if e2 is not None and e2 != e1 else None
         error = None
         if e1 is not None and key2 is not None:
             _, error = add_fixed_pairing_cmd(
-                division.tournament, request.user,
+                division.tournament,
+                request.user,
                 {
-                    "division": division.name, "round": round_number,
-                    "player1": e1.key, "player2": key2,
+                    "division": division.name,
+                    "round": round_number,
+                    "player1": e1.key,
+                    "player2": key2,
                 },
             )
-        return _pairings_body_response(request, division, select_round=round_number, error=error)
+        return _pairings_body_response(
+            request, division, select_round=round_number, error=error
+        )
 
 
 class RemoveFixedPairingView(LoginRequiredMixin, CanEditDivisionMixin, View):
@@ -1591,21 +1648,27 @@ class RemoveFixedPairingView(LoginRequiredMixin, CanEditDivisionMixin, View):
         if error:
             return error
         fp = (
-            division.fixed_pairings
-            .select_related("entrant1__player", "entrant2__player")
-            .filter(pk=fp_id).first()
+            division.fixed_pairings.select_related(
+                "entrant1__player", "entrant2__player"
+            )
+            .filter(pk=fp_id)
+            .first()
         )
         error = None
         if fp is not None:
             _, error = remove_fixed_pairing_cmd(
-                division.tournament, request.user,
+                division.tournament,
+                request.user,
                 {
-                    "division": division.name, "round": fp.round_number,
+                    "division": division.name,
+                    "round": fp.round_number,
                     "player1": fp.entrant1.key,
                     "player2": fp.entrant2.key,
                 },
             )
-        return _pairings_body_response(request, division, select_round=round_number, error=error)
+        return _pairings_body_response(
+            request, division, select_round=round_number, error=error
+        )
 
 
 class RemoveFixedPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
@@ -1620,7 +1683,8 @@ class RemoveFixedPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
                 k1, k2 = sorted([fp.entrant1.key, fp.entrant2.key])
                 kept.append([fp.round_number, k1, k2])
         error = remove_fixed_pairings_cmd(
-            division.tournament, request.user,
+            division.tournament,
+            request.user,
             {"division": division.name, "kept": kept},
         )
         if error:
@@ -1629,9 +1693,7 @@ class RemoveFixedPairingsView(LoginRequiredMixin, CanEditDivisionMixin, View):
 
 
 def _entrants_for_editing(division):
-    entrants = list(
-        division.entrants.select_related("player").order_by("player__name")
-    )
+    entrants = list(division.entrants.select_related("player").order_by("player__name"))
     # The fixed-pairing pickers list these by name, so same-named entrants must
     # be told apart before the director picks one of them.
     label_entrants(division_labels(division), entrants)
@@ -1676,10 +1738,13 @@ def _autogenerate_pairable_rounds(division):
     return None
 
 
-class DivisionPairingsView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixin, DetailView):
+class DivisionPairingsView(
+    LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixin, DetailView
+):
     """The "Pair rounds" tab — generating/publishing pairings is an organiser
     tool, so it is editor-only. Players see published pairings on the public
     "Pairings" tab (:class:`DivisionPublishedPairingsView`)."""
+
     model = Division
     template_name = "tournaments/division_pairings.html"
     context_object_name = "division"
@@ -1699,8 +1764,11 @@ class DivisionPairingsView(LoginRequiredMixin, DivisionNavMixin, CanEditDivision
         return context
 
 
-class RoundPairingsTabView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixin, DetailView):
+class RoundPairingsTabView(
+    LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixin, DetailView
+):
     """Datastar fragment endpoint for switching between round tabs (editor-only)."""
+
     model = Division
     template_name = "tournaments/division_pairings.html"
     context_object_name = "division"
@@ -1728,12 +1796,14 @@ class RoundPairingsTabView(LoginRequiredMixin, DivisionNavMixin, CanEditDivision
 def _int_or(value, default):
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return default
 
 
-class DivisionExploreView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixin, DetailView):
-    """"Explore" tab: hypothetically re-pair one round with a chosen strategy off
+class DivisionExploreView(
+    LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixin, DetailView
+):
+    """ "Explore" tab: hypothetically re-pair one round with a chosen strategy off
     a chosen based-on round. Pure read — nothing is persisted. Editor-only, like
     Pair rounds. Query params (round, strategy, based_on, seed) make results
     shareable; a datastar request swaps just the result panel."""
@@ -1785,34 +1855,45 @@ class DivisionExploreView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionM
             # (each would otherwise rebuild it — a costly per-call query set).
             pd = PairingData.for_division(division)
             try:
-                pairings = explore_pairing(division, target, strategy, based_on, seed, pd=pd)
+                pairings = explore_pairing(
+                    division, target, strategy, based_on, seed, pd=pd
+                )
                 rows = decorate(division, target, based_on, pairings, pd=pd)
                 # Compare against reality only when the target round was played.
-                actual = actual_rows(division, target, pd=pd) if target <= max_round else None
+                actual = (
+                    actual_rows(division, target, pd=pd)
+                    if target <= max_round
+                    else None
+                )
                 rows, actual = mark_common(rows, actual)
-                configured = configured_pairing(division, target, pd=pd) if actual else None
+                configured = (
+                    configured_pairing(division, target, pd=pd) if actual else None
+                )
                 if configured is not None:
                     actual_strategy = configured.pairing
                     actual_based_on = configured.start_round
             except PairingError as e:
                 error = str(e)
 
-        context.update({
-            "target_round": target,
-            "based_on": based_on,
-            "strategy": strategy,
-            "seed": seed,
-            "explored": explored,
-            "explore_rows": rows,
-            "actual_rows": actual,
-            "actual_strategy": actual_strategy,
-            "actual_based_on": actual_based_on,
-            "explore_error": error,
-            "strategies": strategies,
-            "round_choices": range(1, max_round + 2),
-            "based_on_choices": range(0, max_round + 1),
-            "is_random_strategy": strategy in ("Random", "RandomNoRepeats", "SwissPlusRandom"),
-        })
+        context.update(
+            {
+                "target_round": target,
+                "based_on": based_on,
+                "strategy": strategy,
+                "seed": seed,
+                "explored": explored,
+                "explore_rows": rows,
+                "actual_rows": actual,
+                "actual_strategy": actual_strategy,
+                "actual_based_on": actual_based_on,
+                "explore_error": error,
+                "strategies": strategies,
+                "round_choices": range(1, max_round + 2),
+                "based_on_choices": range(0, max_round + 1),
+                "is_random_strategy": strategy
+                in ("Random", "RandomNoRepeats", "SwissPlusRandom"),
+            }
+        )
         return context
 
     def get(self, request, *args, **kwargs):
@@ -1835,6 +1916,7 @@ def _division_seed(division):
 class _PublishedPairingsMixin(VisibleDivisionMixin):
     """Shared published-pairings context (the rounds + their pairings) for both the
     in-nav tab and the standalone page. The two differ only in base template."""
+
     model = Division
     context_object_name = "division"
 
@@ -1843,21 +1925,28 @@ class _PublishedPairingsMixin(VisibleDivisionMixin):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context.update(PublishedPairingsPresenter(
-            self.object, include_finished=self.include_finished(),
-        ).as_context())
+        context.update(
+            PublishedPairingsPresenter(
+                self.object,
+                include_finished=self.include_finished(),
+            ).as_context()
+        )
         return context
 
 
 class PublishedPairingsView(_PublishedPairingsMixin, DetailView):
     """Standalone (embeddable) published-pairings page — no division nav. Linked
     from the editor tab and the scorecard QR code."""
+
     template_name = "tournaments/published_pairings.html"
 
 
-class DivisionPublishedPairingsView(DivisionNavMixin, _PublishedPairingsMixin, DetailView):
+class DivisionPublishedPairingsView(
+    DivisionNavMixin, _PublishedPairingsMixin, DetailView
+):
     """Public "Pairings" tab: the same published pairings shown inside the
     division nav, visible to everyone (no editing controls)."""
+
     template_name = "tournaments/division_published_pairings.html"
     active_tab = "pairings"
 
@@ -1906,7 +1995,9 @@ def live_shape(section_sizes, cols, tiles=False):
     categories), so a column is as tall as the tallest tile in each band.
     """
     if tiles:
-        bands = [section_sizes[i:i + cols] for i in range(0, len(section_sizes), cols)]
+        bands = [
+            section_sizes[i : i + cols] for i in range(0, len(section_sizes), cols)
+        ]
         return sum(max(band) for band in bands), live_overhead(len(bands))
     return (
         sum(ceil_div(n, cols) for n in section_sizes),
@@ -1940,7 +2031,7 @@ def live_columns(section_sizes, col_ems, tiles=False):
 def split_columns(rows, cols):
     """``rows`` in ``cols`` consecutive runs, reading down then across."""
     per_column = ceil_div(len(rows), cols) or 1
-    return [rows[i:i + per_column] for i in range(0, len(rows), per_column)]
+    return [rows[i : i + per_column] for i in range(0, len(rows), per_column)]
 
 
 class _LiveDisplayMixin(VisibleDivisionMixin):
@@ -1995,7 +2086,11 @@ class _LiveDisplayMixin(VisibleDivisionMixin):
         col_rows, col_overhead = live_shape(sizes, cols, self.live_tiles)
         return {
             "live_sections": [
-                {"subtitle": subtitle, "rows": rows, "columns": split_columns(rows, cols)}
+                {
+                    "subtitle": subtitle,
+                    "rows": rows,
+                    "columns": split_columns(rows, cols),
+                }
                 for subtitle, rows in sections
             ],
             "live_tiles": self.live_tiles,
@@ -2027,7 +2122,9 @@ class _LiveDisplayMixin(VisibleDivisionMixin):
         self.object = self.get_object()
         context = self.get_context_data(object=self.object)
         if is_datastar(request):
-            return fragment_response(self.live_fragment_template, context, request=request)
+            return fragment_response(
+                self.live_fragment_template, context, request=request
+            )
         return self.render_to_response(context)
 
 
@@ -2059,8 +2156,11 @@ class LivePairingsView(_LiveDisplayMixin, DetailView):
     live_col_ems = 38
 
     def published_rounds(self, division):
-        return list(division.round_pairings_set.exclude(status=RoundPairings.DRAFT)
-                    .order_by("round").values_list("round", flat=True))
+        return list(
+            division.round_pairings_set.exclude(status=RoundPairings.DRAFT)
+            .order_by("round")
+            .values_list("round", flat=True)
+        )
 
     def selected_rounds(self, division):
         published = self.published_rounds(division)
@@ -2084,7 +2184,9 @@ class LivePairingsView(_LiveDisplayMixin, DetailView):
             for r in self.published_rounds(self.object)
         ]
         if self.request.GET.getlist("rounds"):
-            context["live_poll_url"] += "?" + urlencode([("rounds", r) for r in selected])
+            context["live_poll_url"] += "?" + urlencode(
+                [("rounds", r) for r in selected]
+            )
         return context
 
 
@@ -2135,13 +2237,15 @@ def _live_series_card(bracket, series, row, names):
         (row["high_won"], row["low_won"]),
     ):
         seed = bracket.config.seed_of(key) if key else None
-        sides.append({
-            "name": names.get(key, key) if key else None,
-            "source": source,
-            "seed": seed,
-            "score": score if key and series.games else None,
-            "won": won,
-        })
+        sides.append(
+            {
+                "name": names.get(key, key) if key else None,
+                "source": source,
+                "seed": seed,
+                "score": score if key and series.games else None,
+                "won": won,
+            }
+        )
     if series.games:
         games = row["games"]
     else:
@@ -2159,7 +2263,9 @@ class LivePlayoffView(_LiveDisplayMixin, DetailView):
 
     live_title = "Playoff"
     live_fragment_template = "tournaments/_live_playoff.html"
-    live_empty_message = "This division has no playoff, or the playoff has not yet begun."
+    live_empty_message = (
+        "This division has no playoff, or the playoff has not yet begun."
+    )
 
     def get_live_content(self, division):
         playoff = playoff_for(division)
@@ -2174,23 +2280,30 @@ class LivePlayoffView(_LiveDisplayMixin, DetailView):
         for window in ctx["windows"]:
             cards = [
                 _live_series_card(bracket, series, row, names)
-                for series, row in zip(series_by_window.get(window["index"], []), window["series"])
+                for series, row in zip(
+                    series_by_window.get(window["index"], []), window["series"]
+                )
             ]
-            columns.append({
-                "title": f"Rounds {window['rounds'][0]}–{window['rounds'][-1]}",
-                "cards": cards,
-                "height": LIVE_COLUMN_HEADING_EMS
-                + sum(live_card_ems(c["max_games"]) for c in cards),
-            })
+            columns.append(
+                {
+                    "title": f"Rounds {window['rounds'][0]}–{window['rounds'][-1]}",
+                    "cards": cards,
+                    "height": LIVE_COLUMN_HEADING_EMS
+                    + sum(live_card_ems(c["max_games"]) for c in cards),
+                }
+            )
         # Only once the bracket has placed someone: a column of "not yet
         # decided" would be most of the screen saying nothing.
         places = ctx["bracket_placements"]
         if any(p.source == "series" for p in places):
-            columns.append({
-                "title": "Final placements",
-                "places": places,
-                "height": LIVE_COLUMN_HEADING_EMS + len(places) * LIVE_PLACE_ROW_EMS,
-            })
+            columns.append(
+                {
+                    "title": "Final placements",
+                    "places": places,
+                    "height": LIVE_COLUMN_HEADING_EMS
+                    + len(places) * LIVE_PLACE_ROW_EMS,
+                }
+            )
         return {
             "live_columns": columns,
             "live_layout": live_bracket_layout([c["height"] for c in columns]),
@@ -2206,9 +2319,14 @@ class LiveResultsView(_LiveDisplayMixin, DetailView):
     live_col_ems = 32
 
     def get_live_sections(self, division):
-        return [("", results_newest_first(
-            division, division.result_slips.played(), limit=LIVE_RECENT_RESULTS
-        ))]
+        return [
+            (
+                "",
+                results_newest_first(
+                    division, division.result_slips.played(), limit=LIVE_RECENT_RESULTS
+                ),
+            )
+        ]
 
 
 class LiveStatisticsView(_LiveDisplayMixin, DetailView):
@@ -2253,7 +2371,9 @@ class LiveStatisticsView(_LiveDisplayMixin, DetailView):
         return context
 
 
-class DivisionScorecardsView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixin, DetailView):
+class DivisionScorecardsView(
+    LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixin, DetailView
+):
     """Scorecards landing page with a generate-and-download action (editor-only)."""
 
     model = Division
@@ -2262,7 +2382,9 @@ class DivisionScorecardsView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisi
     active_tab = "scorecards"
 
 
-class DivisionScorecardsDownloadView(LoginRequiredMixin, CanEditDivisionMixin, DetailView):
+class DivisionScorecardsDownloadView(
+    LoginRequiredMixin, CanEditDivisionMixin, DetailView
+):
     """Download a .docx with a printable scorecard for every entrant (editor-only)."""
 
     model = Division
@@ -2388,6 +2510,7 @@ class DivisionResultsExportView(LoginRequiredMixin, CanEditDivisionMixin, Detail
         slips = division.result_slips.select_related(
             "winner__player", "loser__player"
         ).order_by("round", "created_at")
+
         def side(entrant):
             # The plain name, not the disambiguated label: this column is a
             # join key for coco-ratings, and the number columns beside it are
@@ -2406,16 +2529,18 @@ class DivisionResultsExportView(LoginRequiredMixin, CanEditDivisionMixin, Detail
         for slip in slips:
             winner, winner_number = side(slip.winner)
             opponent, opponent_number = side(slip.loser)
-            rows.append(ResultRow(
-                round=slip.round,
-                winner=winner,
-                winner_number=winner_number,
-                winner_score=slip.winner_score,
-                opponent=opponent,
-                opponent_number=opponent_number,
-                opponent_score=slip.loser_score,
-                submitted_on=slip.created_at,
-            ))
+            rows.append(
+                ResultRow(
+                    round=slip.round,
+                    winner=winner,
+                    winner_number=winner_number,
+                    winner_score=slip.winner_score,
+                    opponent=opponent,
+                    opponent_number=opponent_number,
+                    opponent_score=slip.loser_score,
+                    submitted_on=slip.created_at,
+                )
+            )
 
         response = HttpResponse(render_results_csv(rows), content_type="text/csv")
         filename = slugify(f"{tournament.name}-{division.name}-results") + ".csv"
@@ -2443,34 +2568,45 @@ class DivisionSettingsEditView(LoginRequiredMixin, CanEditDivisionMixin, View):
             schedule = GamesPerDayForm.for_division(division, request.POST)
             if schedule.is_valid():
                 save_games_per_day(
-                    division.tournament, request.user,
+                    division.tournament,
+                    request.user,
                     {"division": division.name, **schedule.cleaned_data},
                 )
                 messages.success(request, "Schedule saved.")
                 return redirect("division_settings", **division.slug_kwargs())
             return render(
-                request, self.template_name,
-                self._context(division, CopConfigForm(initial=self._cop_config(division)),
-                              schedule=schedule),
+                request,
+                self.template_name,
+                self._context(
+                    division,
+                    CopConfigForm(initial=self._cop_config(division)),
+                    schedule=schedule,
+                ),
             )
         if "absence" in request.POST:
             absence = AbsenceSettingsForm.for_division(division, request.POST)
             if absence.is_valid():
                 save_absence_settings(
-                    division.tournament, request.user,
+                    division.tournament,
+                    request.user,
                     {"division": division.name, **absence.cleaned_data},
                 )
                 messages.success(request, "Absence settings saved.")
                 return redirect("division_settings", **division.slug_kwargs())
             return render(
-                request, self.template_name,
-                self._context(division, CopConfigForm(initial=self._cop_config(division)),
-                              absence=absence),
+                request,
+                self.template_name,
+                self._context(
+                    division,
+                    CopConfigForm(initial=self._cop_config(division)),
+                    absence=absence,
+                ),
             )
         form = CopConfigForm(request.POST)
         if form.is_valid():
             save_cop_config(
-                division.tournament, request.user,
+                division.tournament,
+                request.user,
                 {"division": division.name, "cop_config": form.to_config()},
             )
             messages.success(request, "COP settings saved.")
@@ -2514,7 +2650,7 @@ def _validate_blocks(raw):
         try:
             rounds = int(b.get("rounds"))
             pair_from = int(b.get("pair_from") or 1)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             errors.append(f"Row {i + 1}: rounds and pair-from must be whole numbers.")
             continue
         if rounds < 1:
@@ -2540,30 +2676,36 @@ class DivisionRoundPairingsEditView(LoginRequiredMixin, CanEditDivisionMixin, Vi
         preview = [rp.to_dict() for rp in blocks_to_round_pairings(blocks)]
         method_total_rounds = len(preview) or 24
         key = edit_key(division, "round_pairings")
-        return render(request, self.template_name, {
-            "division": division,
-            "blocks_json": json.dumps(blocks),
-            "preview_json": json.dumps(preview),
-            "default_rounds_json": json.dumps(default_block_rounds(division.entrants.count())),
-            "strategy_types_json": json.dumps(
-                [{"value": str(s), "label": s.label} for s in STRATEGY_TYPES]
-            ),
-            "pairing_methods": [(str(m), m.label) for m in PairingMethod],
-            "method_total_rounds": method_total_rounds,
-            "edit_version": EditVersion.version_for(key),
-            "presence_url": reverse(
-                "edit_presence",
-                kwargs={**division.slug_kwargs(), "scope": "round_pairings"},
-            ),
-            "preview_url": reverse(
-                "division_round_pairings_preview", kwargs=division.slug_kwargs()
-            ),
-            "method_preview_url": reverse(
-                "division_pairing_method_preview", kwargs=division.slug_kwargs()
-            ),
-            "active_tab": "round_pairings",
-            "can_edit": True,
-        })
+        return render(
+            request,
+            self.template_name,
+            {
+                "division": division,
+                "blocks_json": json.dumps(blocks),
+                "preview_json": json.dumps(preview),
+                "default_rounds_json": json.dumps(
+                    default_block_rounds(division.entrants.count())
+                ),
+                "strategy_types_json": json.dumps(
+                    [{"value": str(s), "label": s.label} for s in STRATEGY_TYPES]
+                ),
+                "pairing_methods": [(str(m), m.label) for m in PairingMethod],
+                "method_total_rounds": method_total_rounds,
+                "edit_version": EditVersion.version_for(key),
+                "presence_url": reverse(
+                    "edit_presence",
+                    kwargs={**division.slug_kwargs(), "scope": "round_pairings"},
+                ),
+                "preview_url": reverse(
+                    "division_round_pairings_preview", kwargs=division.slug_kwargs()
+                ),
+                "method_preview_url": reverse(
+                    "division_pairing_method_preview", kwargs=division.slug_kwargs()
+                ),
+                "active_tab": "round_pairings",
+                "can_edit": True,
+            },
+        )
 
     def post(self, request, *args, **kwargs):
         division = self.get_division()
@@ -2574,11 +2716,14 @@ class DivisionRoundPairingsEditView(LoginRequiredMixin, CanEditDivisionMixin, Vi
         blocks, errors = _validate_blocks(data.get("blocks", []))
         if errors:
             return JsonResponse({"errors": errors}, status=400)
-        with check_conflict(edit_key(division, "round_pairings"), data.get("_version")) as guard:
+        with check_conflict(
+            edit_key(division, "round_pairings"), data.get("_version")
+        ) as guard:
             if guard.conflict:
                 return guard.conflict
             save_settings(
-                division.tournament, request.user,
+                division.tournament,
+                request.user,
                 {"division": division.name, "blocks": blocks},
             )
         return guard.response
@@ -2619,12 +2764,14 @@ class DivisionPairingMethodPreviewView(LoginRequiredMixin, CanEditDivisionMixin,
             return JsonResponse({"errors": [str(error)]}, status=400)
 
         rows = [rp.to_dict() for rp in blocks_to_round_pairings(schedule.blocks)]
-        return JsonResponse({
-            "ok": True,
-            "method": str(schedule.method),
-            "blocks": schedule.blocks,
-            "rows": rows,
-        })
+        return JsonResponse(
+            {
+                "ok": True,
+                "method": str(schedule.method),
+                "blocks": schedule.blocks,
+                "rows": rows,
+            }
+        )
 
 
 class DivisionEditGridView(LoginRequiredMixin, CanEditDivisionMixin, BaseEditGridView):
@@ -2733,9 +2880,11 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
         division = self.get_division()
         overrides = {}
         if request.GET.get("entrant"):
-            entrant = division.entrants.filter(
-                pk=request.GET["entrant"]
-            ).select_related("player").first()
+            entrant = (
+                division.entrants.filter(pk=request.GET["entrant"])
+                .select_related("player")
+                .first()
+            )
             if entrant is None:
                 messages.error(request, "That entrant is not in this division.")
                 return self._redirect(division)
@@ -2784,9 +2933,7 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
     # -- context -----------------------------------------------------------
 
     def _context(self, division, **overrides):
-        entrants = list(
-            division.entrants.select_related("player").order_by("number")
-        )
+        entrants = list(division.entrants.select_related("player").order_by("number"))
         label_entrants(division_labels(division), entrants)
         context = {
             "division": division,
@@ -2853,15 +3000,11 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
         and records nothing when no number actually moves, so these calls can be
         unconditional.
         """
-        reseed_entrants(
-            division.tournament, request.user, {"division": division.name}
-        )
+        reseed_entrants(division.tournament, request.user, {"division": division.name})
 
     def _render(self, request, division, **overrides):
         """The page again, with whatever the handler wants shown on it."""
-        return render(
-            request, self.template_name, self._context(division, **overrides)
-        )
+        return render(request, self.template_name, self._context(division, **overrides))
 
     def _mint_guest(self, request, division, name, *, wespa=None):
         """Create a provisional player for somebody Baxter has never seen.
@@ -2892,7 +3035,8 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
         """
         try:
             add_entrant(
-                division.tournament, request.user,
+                division.tournament,
+                request.user,
                 {
                     "division": division.name,
                     "player": player_number,
@@ -2901,9 +3045,7 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
             )
         except ValueError as exc:
             messages.error(request, str(exc))
-            return self._render(
-                request, division, registration_form=form, **overrides
-            )
+            return self._render(request, division, registration_form=form, **overrides)
         self._reseed(request, division)
         messages.success(request, f"Entered {label}.")
         return self._redirect(division)
@@ -2917,9 +3059,7 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
             return self._render(request, division)
         if not form.is_valid():
             return self._render(request, division, registration_form=form)
-        return self._enter(
-            request, division, record.player_number, form, record.name
-        )
+        return self._enter(request, division, record.player_number, form, record.name)
 
     def _wespa_guest(self, request, division):
         """Enter someone who exists only in the WESPA list.
@@ -2946,7 +3086,10 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
         if player is None:
             player = self._mint_guest(request, division, row.name, wespa=row)
         return self._enter(
-            request, division, player.player_number, form,
+            request,
+            division,
+            player.player_number,
+            form,
             f"{row.name} from the WESPA list",
         )
 
@@ -2981,7 +3124,8 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
         existing = Player.same_named(name)
         if request.POST.get("guest") != "confirm" and existing.exists():
             return self._render(
-                request, division,
+                request,
+                division,
                 registration_form=form,
                 guest_form=guest,
                 duplicate_name=name,
@@ -2994,9 +3138,11 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
         )
 
     def _update(self, request, division):
-        entrant = division.entrants.filter(
-            pk=request.POST.get("entrant")
-        ).select_related("player").first()
+        entrant = (
+            division.entrants.filter(pk=request.POST.get("entrant"))
+            .select_related("player")
+            .first()
+        )
         if entrant is None:
             messages.error(request, "That entrant is no longer in this division.")
             return self._redirect(division)
@@ -3013,7 +3159,8 @@ class DivisionRegisterView(LoginRequiredMixin, CanEditDivisionMixin, View):
             registration.pop("rating", None)
         try:
             update_entrant(
-                division.tournament, request.user,
+                division.tournament,
+                request.user,
                 {
                     "division": division.name,
                     "player": entrant.key,
@@ -3085,7 +3232,9 @@ class DatabaseExportView(LoginRequiredMixin, IsAdminMixin, View):
 
         with logged(AdminAction.DATABASE_EXPORT, request.user) as entry:
             data, count = export_database()
-            entry.summary = f"Exported the database ({count} row{'' if count == 1 else 's'})"
+            entry.summary = (
+                f"Exported the database ({count} row{'' if count == 1 else 's'})"
+            )
         stamp = timezone.now().strftime("%Y%m%d-%H%M")
         rev = code_revision()[:12] or "unknown"
         response = HttpResponse(data, content_type="application/gzip")
@@ -3104,9 +3253,7 @@ class AdminActionAttachmentView(LoginRequiredMixin, IsAdminMixin, View):
         action = get_object_or_404(AdminAction, pk=pk)
         if not action.attachment:
             raise Http404("Nothing kept with this action.")
-        response = HttpResponse(
-            action.attachment, content_type="application/x-ndjson"
-        )
+        response = HttpResponse(action.attachment, content_type="application/x-ndjson")
         name = action.attachment_name or f"admin-action-{action.pk}.jsonl"
         response["Content-Disposition"] = f'attachment; filename="{name}"'
         return response
@@ -3141,8 +3288,14 @@ class AdminLogView(LoginRequiredMixin, IsAdminMixin, TemplateView):
         context["selected_kind"] = selected_kind
         context["failed_only"] = failed_only
         context["filter_query"] = urlencode(
-            {k: v for k, v in (("kind", selected_kind),
-                               ("failed", "1" if failed_only else "")) if v}
+            {
+                k: v
+                for k, v in (
+                    ("kind", selected_kind),
+                    ("failed", "1" if failed_only else ""),
+                )
+                if v
+            }
         )
         return context
 
@@ -3214,10 +3367,14 @@ class UserSetPasswordView(LoginRequiredMixin, IsAdminMixin, View):
         return redirect("user_list")
 
     def _render(self, form):
-        return render(self.request, self.template_name, {
-            "form": form,
-            "target": self.target,
-        })
+        return render(
+            self.request,
+            self.template_name,
+            {
+                "form": form,
+                "target": self.target,
+            },
+        )
 
 
 class PlayerImportView(LoginRequiredMixin, IsAdminMixin, View):
@@ -3231,9 +3388,13 @@ class PlayerImportView(LoginRequiredMixin, IsAdminMixin, View):
     template_name = "tournaments/player_import.html"
 
     def get(self, request):
-        return render(request, self.template_name, {
-            "player_count": Player.objects.count(),
-        })
+        return render(
+            request,
+            self.template_name,
+            {
+                "player_count": Player.objects.count(),
+            },
+        )
 
     def post(self, request):
         uploaded = request.FILES.get("players_file")
@@ -3377,9 +3538,13 @@ class PlayerMergeView(LoginRequiredMixin, IsAdminMixin, View):
     template_name = "tournaments/player_merge.html"
 
     def get(self, request):
-        return render(request, self.template_name, {
-            "candidates": merge_candidates(),
-        })
+        return render(
+            request,
+            self.template_name,
+            {
+                "candidates": merge_candidates(),
+            },
+        )
 
     def post(self, request):
         guest = Player.objects.filter(
@@ -3389,15 +3554,18 @@ class PlayerMergeView(LoginRequiredMixin, IsAdminMixin, View):
             player_number=request.POST.get("into", ""), is_bye=False
         ).first()
         if guest is None or into is None:
-            messages.error(request, "That player is no longer there; nothing was merged.")
+            messages.error(
+                request, "That player is no longer there; nothing was merged."
+            )
             return redirect("player_merge")
         if guest.name.casefold() != into.name.casefold():
-            messages.error(request, "Only players with the same name can be merged here.")
+            messages.error(
+                request, "Only players with the same name can be merged here."
+            )
             return redirect("player_merge")
         with logged(AdminAction.PLAYER_MERGE, request.user) as entry:
             entry.summary = (
-                f"Guest {guest.player_number} into {into.name} "
-                f"(#{into.player_number})"
+                f"Guest {guest.player_number} into {into.name} (#{into.player_number})"
             )
             try:
                 merge_guest(guest, into, actor=request.user)
@@ -3496,9 +3664,7 @@ class WespaImportView(LoginRequiredMixin, IsAdminMixin, View):
             )
         }
         return {
-            "guests": [
-                {"player": g, "wespa": rows.get(g.wespa_id)} for g in guests
-            ],
+            "guests": [{"player": g, "wespa": rows.get(g.wespa_id)} for g in guests],
             "guest_total": total,
             "guests_truncated": total > len(guests),
         }
@@ -3524,8 +3690,9 @@ class WespaImportView(LoginRequiredMixin, IsAdminMixin, View):
         results = []
         if query:
             results = list(
-                WespaPlayer.objects.filter(name__icontains=query)
-                .order_by("name")[: self.SEARCH_LIMIT]
+                WespaPlayer.objects.filter(name__icontains=query).order_by("name")[
+                    : self.SEARCH_LIMIT
+                ]
             )
         return {
             "linking": player,
@@ -3640,10 +3807,13 @@ class BulkImportEntrantsView(LoginRequiredMixin, CanEditDivisionMixin, View):
         try:
             text = uploaded.read().decode("utf-8-sig")
         except UnicodeDecodeError:
-            return JsonResponse({"errors": ["File must be UTF-8 encoded text."]}, status=400)
+            return JsonResponse(
+                {"errors": ["File must be UTF-8 encoded text."]}, status=400
+            )
 
         result, errors = bulk_import_entrants(
-            division.tournament, request.user,
+            division.tournament,
+            request.user,
             {"division": division.name, "csv": text},
         )
         if errors:
@@ -3653,17 +3823,17 @@ class BulkImportEntrantsView(LoginRequiredMixin, CanEditDivisionMixin, View):
         # the import is followed by the same renumber every other entry path
         # gets. Recorded separately from the import, which stays the verbatim
         # document the director pasted.
-        reseed_entrants(
-            division.tournament, request.user, {"division": division.name}
-        )
+        reseed_entrants(division.tournament, request.user, {"division": division.name})
 
-        return JsonResponse({
-            "ok": True,
-            "created": result.created,
-            "matched": result.matched,
-            "skipped": result.skipped,
-            "added": result.added,
-        })
+        return JsonResponse(
+            {
+                "ok": True,
+                "created": result.created,
+                "matched": result.matched,
+                "skipped": result.skipped,
+                "added": result.added,
+            }
+        )
 
 
 class DivisionFixedPairingsEditView(DivisionEditGridView):
@@ -3676,24 +3846,34 @@ class DivisionFixedPairingsEditView(DivisionEditGridView):
 
         after = self.grid.to_portable(self.grid.rows_for(division), division)
         notices = []
-        for round_number, has_results in boards_missing_fixtures(division, before, after):
+        for round_number, has_results in boards_missing_fixtures(
+            division, before, after
+        ):
             if has_results:
-                notices.append({"text": (
-                    f"Round {round_number} has results, so its board is unchanged. "
-                    "To re-pair it, reset the round on Pair Rounds (this discards its results)."
-                )})
+                notices.append(
+                    {
+                        "text": (
+                            f"Round {round_number} has results, so its board is unchanged. "
+                            "To re-pair it, reset the round on Pair Rounds (this discards its results)."
+                        )
+                    }
+                )
                 continue
-            notices.append({
-                "text": (
-                    f"Round {round_number} is already published, so its board does not "
-                    "have these fixed pairings yet."
-                ),
-                "action": {
-                    "label": f"Unpublish and re-pair round {round_number}",
-                    "url": reverse("unpublish_round", kwargs=division.slug_kwargs()),
-                    "fields": {"round": round_number, "repair": "1"},
-                },
-            })
+            notices.append(
+                {
+                    "text": (
+                        f"Round {round_number} is already published, so its board does not "
+                        "have these fixed pairings yet."
+                    ),
+                    "action": {
+                        "label": f"Unpublish and re-pair round {round_number}",
+                        "url": reverse(
+                            "unpublish_round", kwargs=division.slug_kwargs()
+                        ),
+                        "fields": {"round": round_number, "repair": "1"},
+                    },
+                }
+            )
         return notices
 
 
@@ -3767,8 +3947,9 @@ def _pairings_by_round(division, include_pairing=None):
     it already has one — used when editing that pairing's existing result.
     """
     rp_objs = (
-        division.round_pairings_set
-        .filter(status__in=[RoundPairings.PUBLISHED, RoundPairings.IN_PROGRESS])
+        division.round_pairings_set.filter(
+            status__in=[RoundPairings.PUBLISHED, RoundPairings.IN_PROGRESS]
+        )
         .prefetch_related(
             models.Prefetch(
                 "pairings",
@@ -3796,8 +3977,11 @@ def _pairings_by_round(division, include_pairing=None):
 
 
 _BLANK_RESULT_SIGNALS = {
-    "round": "", "pairing": "", "winner": "",
-    "winner_score": "", "loser_score": "",
+    "round": "",
+    "pairing": "",
+    "winner": "",
+    "winner_score": "",
+    "loser_score": "",
     "verified_by_opponent": False,
 }
 
@@ -3892,8 +4076,13 @@ class ResultSlipCreateView(DivisionURLMixin, View):
         pairings_json = {}
         for r, pairing_list in pbr.items():
             pairings_json[str(r)] = [
-                {"pk": p_pk, "first_pk": f_pk, "first_name": f_name,
-                 "second_pk": s_pk, "second_name": s_name}
+                {
+                    "pk": p_pk,
+                    "first_pk": f_pk,
+                    "first_name": f_name,
+                    "second_pk": s_pk,
+                    "second_name": s_name,
+                }
                 for p_pk, f_pk, f_name, s_pk, s_name in pairing_list
             ]
         slug_kwargs = division.slug_kwargs()
@@ -3924,8 +4113,10 @@ class ResultSlipCreateView(DivisionURLMixin, View):
     def _render(self, request, context, signals=None):
         if is_datastar(request):
             return fragment_response(
-                "tournaments/_resultslip_form.html", context,
-                request=request, signals=signals,
+                "tournaments/_resultslip_form.html",
+                context,
+                request=request,
+                signals=signals,
             )
         return render(request, self.template_name, context)
 
@@ -3951,8 +4142,9 @@ class ResultSlipCreateView(DivisionURLMixin, View):
         if not pairing_pk:
             return None
         return (
-            Pairing.objects
-            .select_related("first__player", "second__player", "round_pairings")
+            Pairing.objects.select_related(
+                "first__player", "second__player", "round_pairings"
+            )
             .filter(division=division, pk=pairing_pk)
             .first()
         )
@@ -3964,15 +4156,21 @@ class ResultSlipCreateView(DivisionURLMixin, View):
         if result is not None:
             pbr = _pairings_by_round(division, include_pairing=result.pairing)
             form = ResultSlipForm(
-                division=division, pairings_by_round=pbr,
-                instance=result, initial=_result_initial(result),
+                division=division,
+                pairings_by_round=pbr,
+                instance=result,
+                initial=_result_initial(result),
             )
             context = self._form_context(division, form, editing=True, result=result)
             return self._render(request, context, signals=_result_signals(result))
         prefill = self._prefill_pairing(division, request.GET.get("pairing"))
         # A stale pairings page can point "Submit results" at a game that has
         # since been played; show its result instead of a blank submission form.
-        existing = prefill.result if prefill is not None and hasattr(prefill, "result") else None
+        existing = (
+            prefill.result
+            if prefill is not None and hasattr(prefill, "result")
+            else None
+        )
         if existing is not None:
             return self._render_played(request, division, existing)
         pbr = _pairings_by_round(division, include_pairing=prefill)
@@ -3983,7 +4181,11 @@ class ResultSlipCreateView(DivisionURLMixin, View):
         initial = None
         if prefill is not None:
             initial = {"round": prefill.round, "pairing": prefill.pk}
-            signals = {**signals, "round": str(prefill.round), "pairing": str(prefill.pk)}
+            signals = {
+                **signals,
+                "round": str(prefill.round),
+                "pairing": str(prefill.pk),
+            }
         form = ResultSlipForm(division=division, pairings_by_round=pbr, initial=initial)
         context = self._form_context(division, form)
         return self._render(request, context, signals=signals)
@@ -4000,7 +4202,10 @@ class ResultSlipCreateView(DivisionURLMixin, View):
         else:
             data = request.POST
         form = ResultSlipForm(
-            data, division=division, pairings_by_round=pbr, instance=result,
+            data,
+            division=division,
+            pairings_by_round=pbr,
+            instance=result,
         )
         if form.is_valid():
             pairing = form.cleaned_data["pairing"]
@@ -4034,7 +4239,10 @@ class ResultSlipCreateView(DivisionURLMixin, View):
             context = self._form_context(division, fresh_form, saved=rs)
             return self._render(request, context, signals=_BLANK_RESULT_SIGNALS)
         context = self._form_context(
-            division, form, editing=result is not None, result=result,
+            division,
+            form,
+            editing=result is not None,
+            result=result,
         )
         return self._render(request, context)
 
@@ -4123,19 +4331,21 @@ class SimulateMatchView(LoginRequiredMixin, CanEditDivisionMixin, View):
         if error:
             return error
 
-        entrants = {
-            e.key: e
-            for e in division.entrants.select_related("player")
-        }
+        entrants = {e.key: e for e in division.entrants.select_related("player")}
         first_entrant = entrants.get(first_key)
         second_entrant = entrants.get(second_key)
         if not first_entrant or not second_entrant:
             return JsonResponse({"error": "Entrant not found."}, status=400)
 
         simulate_match_cmd(
-            division.tournament, request.user,
-            {"division": division.name, "round": round_num,
-             "first_player": first_key, "second_player": second_key},
+            division.tournament,
+            request.user,
+            {
+                "division": division.name,
+                "round": round_num,
+                "first_player": first_key,
+                "second_player": second_key,
+            },
         )
         return _simulation_response(request, division)
 
@@ -4164,7 +4374,8 @@ class SimulateRoundView(LoginRequiredMixin, CanEditDivisionMixin, View):
             return error
 
         simulate_round_cmd(
-            division.tournament, request.user,
+            division.tournament,
+            request.user,
             {"division": division.name, "round": round_num},
         )
         return _simulation_response(request, division)
@@ -4220,9 +4431,7 @@ def _playoff_context(division, playoff):
     """Bracket, placements and headline state for a division's playoff pages."""
     pd = PairingData.for_division(division)
     bracket = build_bracket(playoff.config(), pd.result_slips)
-    standings = standings_after_round(
-        pd, division.max_round(), include_dropped=True
-    )
+    standings = standings_after_round(pd, division.max_round(), include_dropped=True)
     numbers = {
         e.player.player_number: e.number
         for e in division.entrants.select_related("player")
@@ -4285,7 +4494,9 @@ class DivisionPlayoffView(DivisionNavMixin, VisibleDivisionMixin, DetailView):
         return context
 
 
-class PlayoffSetupView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixin, View):
+class PlayoffSetupView(
+    LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixin, View
+):
     """Configure a playoff: pick the qualification round, size, timing and series
     lengths, preview the qualifiers the standings give, then confirm.
 
@@ -4484,10 +4695,14 @@ class PlayoffSetupView(LoginRequiredMixin, DivisionNavMixin, CanEditDivisionMixi
             "candidates": candidates,
             "qualifier_counts": QUALIFIER_COUNTS,
             "timings": [
-                (str(Timing.POSTSCRIPT), "Postscript — the main tournament ends "
-                 "at the qualification round"),
-                (str(Timing.CONCURRENT), "Concurrent — everyone else keeps "
-                 "playing the configured schedule"),
+                (
+                    str(Timing.POSTSCRIPT),
+                    "Postscript — the main tournament ends at the qualification round",
+                ),
+                (
+                    str(Timing.CONCURRENT),
+                    "Concurrent — everyone else keeps playing the configured schedule",
+                ),
             ],
             "series_rows": [
                 {

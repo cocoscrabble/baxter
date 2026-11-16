@@ -10,7 +10,14 @@ from tournaments.forms import (
     TournamentForm,
     clean_multiline_text,
 )
-from tournaments.models import Division, Entrant, Pairing, Player, RoundPairings, Tournament
+from tournaments.models import (
+    Division,
+    Entrant,
+    Pairing,
+    Player,
+    RoundPairings,
+    Tournament,
+)
 from users.models import User
 
 
@@ -55,7 +62,9 @@ def setUpTournament(target):
     )
     target.tournament.editors.add(target.owner)
     target.division = Division.objects.create(name="Open", tournament=target.tournament)
-    target.player1 = Player.objects.create(name="Alice", player_number="001", rating=1600)
+    target.player1 = Player.objects.create(
+        name="Alice", player_number="001", rating=1600
+    )
     target.player2 = Player.objects.create(name="Bob", player_number="002", rating=1500)
     target.entrant1 = Entrant.objects.create(
         division=target.division, player=target.player1, number=1
@@ -163,11 +172,16 @@ class ResultSlipFormTests(TestCase):
         setUpTournament(cls)
         # Create a RoundPairings + Pairing so the form has data to work with.
         cls.rp = RoundPairings.objects.create(
-            division=cls.division, round=1, status=RoundPairings.PUBLISHED,
+            division=cls.division,
+            round=1,
+            status=RoundPairings.PUBLISHED,
         )
         cls.pairing = Pairing.objects.create(
-            division=cls.division, round=1, round_pairings=cls.rp,
-            first=cls.entrant1, second=cls.entrant2,
+            division=cls.division,
+            round=1,
+            round_pairings=cls.rp,
+            first=cls.entrant1,
+            second=cls.entrant2,
             table=1,
         )
 
@@ -254,8 +268,12 @@ class ResultSlipFormTests(TestCase):
         self.assertEqual(rs.loser_score, -20)
 
     def test_winner_must_be_in_pairing(self):
-        other_player = Player.objects.create(name="Charlie", player_number="003", rating=1400)
-        other_entrant = Entrant.objects.create(division=self.division, player=other_player, number=3)
+        other_player = Player.objects.create(
+            name="Charlie", player_number="003", rating=1400
+        )
+        other_entrant = Entrant.objects.create(
+            division=self.division, player=other_player, number=3
+        )
         form = ResultSlipForm(
             data={
                 "round": 1,
@@ -269,7 +287,9 @@ class ResultSlipFormTests(TestCase):
             pairings_by_round=self._pbr(),
         )
         self.assertFalse(form.is_valid())
-        self.assertIn("Winner must be one of the players in the pairing", str(form.errors))
+        self.assertIn(
+            "Winner must be one of the players in the pairing", str(form.errors)
+        )
 
     def test_winner_score_below_opponent_rejected(self):
         form = ResultSlipForm(
@@ -371,28 +391,34 @@ class ResultSlipFormTests(TestCase):
 
 class RoundPairingFormTests(TestCase):
     def test_valid(self):
-        form = RoundPairingForm(data={
-            "round": 3,
-            "pairing_type": "Swiss",
-            "start_round": 2,
-        })
+        form = RoundPairingForm(
+            data={
+                "round": 3,
+                "pairing_type": "Swiss",
+                "start_round": 2,
+            }
+        )
         self.assertTrue(form.is_valid())
 
     def test_start_round_must_be_less_than_round(self):
-        form = RoundPairingForm(data={
-            "round": 3,
-            "pairing_type": "Swiss",
-            "start_round": 3,
-        })
+        form = RoundPairingForm(
+            data={
+                "round": 3,
+                "pairing_type": "Swiss",
+                "start_round": 3,
+            }
+        )
         self.assertFalse(form.is_valid())
         self.assertIn("Based on round must be less than 3", str(form.errors))
 
     def test_start_round_cannot_exceed_round(self):
-        form = RoundPairingForm(data={
-            "round": 2,
-            "pairing_type": "Swiss",
-            "start_round": 5,
-        })
+        form = RoundPairingForm(
+            data={
+                "round": 2,
+                "pairing_type": "Swiss",
+                "start_round": 5,
+            }
+        )
         self.assertFalse(form.is_valid())
 
     def test_pairing_type_choices_include_all_strategies(self):
@@ -413,14 +439,16 @@ class RoundPairingFormSetTests(TestCase):
 
     def test_invalid_form_in_formset(self):
         data = self._management_data(2)
-        data.update({
-            "form-0-round": "1",
-            "form-0-pairing_type": "Swiss",
-            "form-0-start_round": "0",
-            "form-1-round": "2",
-            "form-1-pairing_type": "KotH",
-            "form-1-start_round": "2",
-        })
+        data.update(
+            {
+                "form-0-round": "1",
+                "form-0-pairing_type": "Swiss",
+                "form-0-start_round": "0",
+                "form-1-round": "2",
+                "form-1-pairing_type": "KotH",
+                "form-1-start_round": "2",
+            }
+        )
         formset = RoundPairingFormSet(data)
         self.assertFalse(formset.is_valid())
 

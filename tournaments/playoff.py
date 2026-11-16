@@ -590,8 +590,15 @@ def series_sides(bracket: "Bracket", series: "Series") -> list[tuple[str | None,
         if (s.key, s.position) == (series.key, series.position)
     )
     done = {(s.key, s.position): s for s in bracket.series}
-    sides = [(_resolve(src, bracket.config, done), source_label(src)) for src in (spec.a, spec.b)]
-    if series.high is not None and series.low is not None and sides[0][0] != series.high:
+    sides = [
+        (_resolve(src, bracket.config, done), source_label(src))
+        for src in (spec.a, spec.b)
+    ]
+    if (
+        series.high is not None
+        and series.low is not None
+        and sides[0][0] != series.high
+    ):
         sides.reverse()
     return sides
 
@@ -866,8 +873,7 @@ def final_placements(bracket: Bracket, standings, numbers) -> list[Placement]:
         for key in config.seeds
         if key not in placed
         and not any(
-            key in s.participants and s.places and not s.decided
-            for s in bracket.series
+            key in s.participants and s.places and not s.decided for s in bracket.series
         )
     ]
     leftover.sort(key=lambda k: (-last_window.get(k, -1), config.seed_of(k)))
@@ -989,7 +995,9 @@ def printed_participant_games(division, rounds, participants) -> dict:
         round__in=rounds,
         series__isnull=True,  # a playoff game of this bracket is not a clash
         round_pairings__status__in=(
-            RoundPairings.PUBLISHED, RoundPairings.IN_PROGRESS, RoundPairings.FINISHED
+            RoundPairings.PUBLISHED,
+            RoundPairings.IN_PROGRESS,
+            RoundPairings.FINISHED,
         ),
     ).select_related("first__player", "second__player")
     for pairing in pairings:
@@ -1259,10 +1267,7 @@ def conflicts_for_single_result(
     slips = [
         ResultSlipData.from_db(r)
         for r in division.result_slips.select_related("winner__player", "loser__player")
-        if not (
-            r.round == pairing.round
-            and {r.winner_key, r.loser_key} == keys
-        )
+        if not (r.round == pairing.round and {r.winner_key, r.loser_key} == keys)
     ]
     loser_key = next(iter(keys - {winner_key}), winner_key)
     slips.append(

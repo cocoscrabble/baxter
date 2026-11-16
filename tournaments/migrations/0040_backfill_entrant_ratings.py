@@ -37,7 +37,6 @@ def unbackfill(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("tournaments", "0039_entrant_registration_fields"),
     ]

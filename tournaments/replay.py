@@ -223,7 +223,9 @@ class ReplayContext:
 
         if not name or Player.objects.filter(name__iexact=name).exists():
             return
-        specs = [p for p in self._players.values() if p["name"].casefold() == name.casefold()]
+        specs = [
+            p for p in self._players.values() if p["name"].casefold() == name.casefold()
+        ]
         # A number the log itself assigns later belonged to a guest at this
         # point: the importer mints that guest, and the renumber event renames
         # it, as they did the first time.
@@ -270,7 +272,9 @@ class ReplayContext:
         spec = self._players.get(canonical_player_number(str(payload.get("new", ""))))
         if spec is None or Player.objects.filter(player_number=old).exists():
             return payload
-        guests = list(Player.objects.filter(name__iexact=spec["name"], is_provisional=True))
+        guests = list(
+            Player.objects.filter(name__iexact=spec["name"], is_provisional=True)
+        )
         if len(guests) != 1:
             return payload
         return {**payload, "old": guests[0].player_number}
@@ -302,7 +306,10 @@ def parse_jsonl(text):
 def _upgrade(event):
     upgrader = SCHEMA_UPGRADES.get(event["event_type"])
     if upgrader is not None:
-        event = {**event, "payload": upgrader(event["payload"], event.get("schema_version", 1))}
+        event = {
+            **event,
+            "payload": upgrader(event["payload"], event.get("schema_version", 1)),
+        }
     return event
 
 
@@ -401,7 +408,9 @@ def _replay_snapshot(ctx, payload):
                     e.get("wespa_rating"),
                 )
                 ent_by_key[e["player"]] = Entrant.enter(
-                    division, player, e["number"],
+                    division,
+                    player,
+                    e["number"],
                     # The pinned snapshot, not the player's live rating —
                     # restored verbatim, source included, because replay is
                     # reproducing a recorded state rather than deciding one. A
@@ -420,7 +429,9 @@ def _replay_snapshot(ctx, payload):
                 if key.casefold() == BYE_PLAYER_NUMBER.casefold():
                     return division.bye_entrant()
                 return ent_by_key.get(key) or Entrant.enter(
-                    division, resolve_player(key), 1000 + len(ent_by_key),
+                    division,
+                    resolve_player(key),
+                    1000 + len(ent_by_key),
                 )
 
             pairing_by_key = {}
@@ -431,9 +442,13 @@ def _replay_snapshot(ctx, payload):
                 for p in rd["pairings"]:
                     first, second = resolve(p["first"]), resolve(p["second"])
                     pairing = Pairing.objects.create(
-                        division=division, round=rd["round"], round_pairings=rp,
-                        first=first, second=second,
-                        table=p.get("table", 0), table_label=p.get("table_label", ""),
+                        division=division,
+                        round=rd["round"],
+                        round_pairings=rp,
+                        first=first,
+                        second=second,
+                        table=p.get("table", 0),
+                        table_label=p.get("table_label", ""),
                     )
                     key = (rd["round"], frozenset({p["first"], p["second"]}))
                     pairing_by_key[key] = pairing
@@ -441,10 +456,13 @@ def _replay_snapshot(ctx, payload):
             for r in d["results"]:
                 key = (r["round"], frozenset({r["winner"], r["loser"]}))
                 ResultSlip.objects.create(
-                    division=division, round=r["round"],
+                    division=division,
+                    round=r["round"],
                     pairing=pairing_by_key.get(key),
-                    winner=resolve(r["winner"]), winner_score=r["winner_score"],
-                    loser=resolve(r["loser"]), loser_score=r["loser_score"],
+                    winner=resolve(r["winner"]),
+                    winner_score=r["winner_score"],
+                    loser=resolve(r["loser"]),
+                    loser_score=r["loser_score"],
                     winner_started=r["winner_started"],
                 )
 
@@ -494,14 +512,18 @@ def apply_event(ctx, event):
 
     if event_type in GRID_BY_EVENT:
         if division is None:
-            raise ReplayError(f"{event_type}: division {payload.get('division')!r} not found")
+            raise ReplayError(
+                f"{event_type}: division {payload.get('division')!r} not found"
+            )
         _replay_grid(division, event_type, payload)
         return
 
     command = COMMAND_REGISTRY.get(event_type)
     if command is None:
         raise ReplayError(f"no replay handler for event type {event_type!r}")
-    command(ctx.tournament, actor, payload, actor_session=event.get("actor_session", ""))
+    command(
+        ctx.tournament, actor, payload, actor_session=event.get("actor_session", "")
+    )
 
 
 def replay(events, *, verify=False, upto=None, players=None):
@@ -566,7 +588,9 @@ def events_from_tournament(tournament):
                 "seq": e.seq,
                 "actor": e.actor.username if e.actor else None,
                 "actor_session": e.actor_session,
-                "division": e.division.name if e.division else e.payload.get("division"),
+                "division": e.division.name
+                if e.division
+                else e.payload.get("division"),
                 "event_type": e.event_type,
                 "schema_version": e.schema_version,
                 "payload": e.payload,

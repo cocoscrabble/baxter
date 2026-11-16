@@ -91,9 +91,9 @@ class OpponentPrefillTests(SimpleTestCase):
         )
         table = doc.tables[0]
         # Opponent column is index 1; round N's row pair starts at 1 + 2*(N-1).
-        self.assertEqual(table.cell(1, 1).text, "Bob")     # round 1
-        self.assertEqual(table.cell(5, 1).text, "Carol")   # round 3
-        self.assertEqual(table.cell(3, 1).text, "")        # round 2 left blank
+        self.assertEqual(table.cell(1, 1).text, "Bob")  # round 1
+        self.assertEqual(table.cell(5, 1).text, "Carol")  # round 3
+        self.assertEqual(table.cell(3, 1).text, "")  # round 2 left blank
 
     def test_no_opponents_leaves_column_blank(self):
         doc = build_document([_spec("Alice", n_rounds=6)])
@@ -137,11 +137,13 @@ def _circle_offsets(el):
 
 def _first_pt():
     from tournaments.scorecards import CIRCLE_FIRST_H_OFFSET, _EMU_PER_PT
+
     return round(CIRCLE_FIRST_H_OFFSET / _EMU_PER_PT, 2)
 
 
 def _second_pt():
     from tournaments.scorecards import CIRCLE_SECOND_H_OFFSET, _EMU_PER_PT
+
     return round(CIRCLE_SECOND_H_OFFSET / _EMU_PER_PT, 2)
 
 
@@ -152,17 +154,15 @@ class StartPrefillTests(SimpleTestCase):
         return table.cell(1 + 2 * (round_number - 1), 0)
 
     def test_supplied_starts_circle_the_right_ordinal(self):
-        doc = build_document(
-            [_spec("Alice", n_rounds=6, starts={1: "1st", 3: "2nd"})]
-        )
+        doc = build_document([_spec("Alice", n_rounds=6, starts={1: "1st", 3: "2nd"})])
         table = doc.tables[0]
         # The prompt text is untouched; the start is shown by a circle over it.
         self.assertIn("1st", self._round_cell(table, 1).text)
         self.assertIn("2nd", self._round_cell(table, 1).text)
-        self.assertEqual(_circle_offsets(self._round_cell(table, 1)._tc),
-                         [_first_pt()])
-        self.assertEqual(_circle_offsets(self._round_cell(table, 3)._tc),
-                         [_second_pt()])
+        self.assertEqual(_circle_offsets(self._round_cell(table, 1)._tc), [_first_pt()])
+        self.assertEqual(
+            _circle_offsets(self._round_cell(table, 3)._tc), [_second_pt()]
+        )
 
     def test_unmarked_rounds_get_no_circle(self):
         doc = build_document([_spec("Alice", n_rounds=6, starts={1: "1st"})])
@@ -177,16 +177,21 @@ class StartPrefillTests(SimpleTestCase):
             _spec("Bob", starts={1: "2nd"}),
         ]
         doc = build_document(specs)
-        self.assertEqual(_circle_offsets(self._round_cell(doc.tables[0], 1)._tc),
-                         [_first_pt()])
-        self.assertEqual(_circle_offsets(self._round_cell(doc.tables[1], 1)._tc),
-                         [_second_pt()])
+        self.assertEqual(
+            _circle_offsets(self._round_cell(doc.tables[0], 1)._tc), [_first_pt()]
+        )
+        self.assertEqual(
+            _circle_offsets(self._round_cell(doc.tables[1], 1)._tc), [_second_pt()]
+        )
 
     def test_marked_division_still_shares_images(self):
         # Starts differ per player but the clone path must still hold.
         specs = [
-            _spec(f"P{i}", starts={1: "1st" if i % 2 else "2nd"},
-                  qr_url="https://x.test/live")
+            _spec(
+                f"P{i}",
+                starts={1: "1st" if i % 2 else "2nd"},
+                qr_url="https://x.test/live",
+            )
             for i in range(4)
         ]
         doc = Document(BytesIO(render_scorecards(specs)))
@@ -204,7 +209,8 @@ class StartPrefillTests(SimpleTestCase):
         body = doc.element.body
 
         ellipse_choices = [
-            c for c in body.iter(f"{{{mc}}}Choice")
+            c
+            for c in body.iter(f"{{{mc}}}Choice")
             if any(g.get("prst") == "ellipse" for g in c.iter(qn("a:prstGeom")))
         ]
         wps_ns = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
@@ -230,35 +236,71 @@ class StartPrefillTests(SimpleTestCase):
 class ResultPrefillTests(SimpleTestCase):
     def test_record_and_scores_and_both_spread_subcells(self):
         # Round 2 is divided, so its Spread column has two subcells.
-        doc = build_document([_spec("Alice", n_rounds=6, results={
-            2: ScorecardResult(player_score=450, opponent_score=380,
-                               cumulative_wins=2, cumulative_losses=1,
-                               cumulative_spread=120),
-        })])
+        doc = build_document(
+            [
+                _spec(
+                    "Alice",
+                    n_rounds=6,
+                    results={
+                        2: ScorecardResult(
+                            player_score=450,
+                            opponent_score=380,
+                            cumulative_wins=2,
+                            cumulative_losses=1,
+                            cumulative_spread=120,
+                        ),
+                    },
+                )
+            ]
+        )
         table = doc.tables[0]
         top, bottom = 3, 4  # round 2 grid rows (1 + 2*1, and the one below)
-        self.assertEqual(table.cell(top, 2).text, "2")    # Won (running wins)
-        self.assertEqual(table.cell(top, 3).text, "1")    # Lost (running losses)
+        self.assertEqual(table.cell(top, 2).text, "2")  # Won (running wins)
+        self.assertEqual(table.cell(top, 3).text, "1")  # Lost (running losses)
         self.assertEqual(table.cell(top, 4).text, "450")  # Player Score
         self.assertEqual(table.cell(top, 5).text, "380")  # Opponent Score
-        self.assertEqual(table.cell(top, 6).text, "70")   # game spread
+        self.assertEqual(table.cell(top, 6).text, "70")  # game spread
         self.assertEqual(table.cell(bottom, 6).text, "120")  # cumulative spread
 
     def test_half_records_from_a_tie_show_a_fraction(self):
-        doc = build_document([_spec("Alice", n_rounds=6, results={
-            2: ScorecardResult(player_score=400, opponent_score=400,
-                               cumulative_wins=2.5, cumulative_losses=1.5,
-                               cumulative_spread=0),
-        })])
+        doc = build_document(
+            [
+                _spec(
+                    "Alice",
+                    n_rounds=6,
+                    results={
+                        2: ScorecardResult(
+                            player_score=400,
+                            opponent_score=400,
+                            cumulative_wins=2.5,
+                            cumulative_losses=1.5,
+                            cumulative_spread=0,
+                        ),
+                    },
+                )
+            ]
+        )
         table = doc.tables[0]
         self.assertEqual(table.cell(3, 2).text, "2.5")  # Won
         self.assertEqual(table.cell(3, 3).text, "1.5")  # Lost
 
     def test_rounds_without_a_result_stay_blank(self):
-        doc = build_document([_spec("Alice", n_rounds=6, results={
-            2: ScorecardResult(player_score=450, opponent_score=380,
-                               cumulative_wins=1, cumulative_spread=70),
-        })])
+        doc = build_document(
+            [
+                _spec(
+                    "Alice",
+                    n_rounds=6,
+                    results={
+                        2: ScorecardResult(
+                            player_score=450,
+                            opponent_score=380,
+                            cumulative_wins=1,
+                            cumulative_spread=70,
+                        ),
+                    },
+                )
+            ]
+        )
         table = doc.tables[0]
         # Round 3 (rows 5/6) has no result: score columns are empty.
         for col in (2, 3, 4, 5, 6):
@@ -313,13 +355,16 @@ class ClonedScorecardTests(SimpleTestCase):
         # emits every pic:cNvPr id as 0, so the clones must renumber them).
         for element in ("wp:docPr", "pic:cNvPr"):
             ids = [e.get("id") for e in doc.element.iter(qn(element))]
-            self.assertEqual(len(ids), len(set(ids)), f"{element} ids not unique: {ids}")
+            self.assertEqual(
+                len(ids), len(set(ids)), f"{element} ids not unique: {ids}"
+            )
 
     def test_differing_layouts_fall_back_and_still_render(self):
         specs = [
             _spec("Alice", n_rounds=6),
-            ScorecardSpec("Other Cup", "May 28, 2026", "Bob",
-                          rounds=make_rounds(range(1, 9))),
+            ScorecardSpec(
+                "Other Cup", "May 28, 2026", "Bob", rounds=make_rounds(range(1, 9))
+            ),
         ]
         doc = Document(BytesIO(render_scorecards(specs)))
         text = "\n".join(p.text for p in doc.paragraphs)
@@ -352,8 +397,9 @@ class DivisionScorecardsViewTests(TestCase):
         response = self.client.get(
             reverse("division_scorecards_download", kwargs=self.division.slug_kwargs())
         )
-        self.assertIn("test-tournament-open-scorecards.docx",
-                      response["Content-Disposition"])
+        self.assertIn(
+            "test-tournament-open-scorecards.docx", response["Content-Disposition"]
+        )
 
     def test_forbidden_for_non_editor(self):
         # The whole scorecards feature is editor-only.
@@ -371,8 +417,10 @@ class DivisionScorecardsViewTests(TestCase):
             round_pairings=[{"round": 1}, {"round": 2}, {"round": 3}],
         )
         Pairing.objects.create(
-            division=self.division, round=1,
-            first=self.entrant1, second=self.entrant2,
+            division=self.division,
+            round=1,
+            first=self.entrant1,
+            second=self.entrant2,
         )
         response = self.client.get(
             reverse("division_scorecards_download", kwargs=self.division.slug_kwargs())
@@ -389,9 +437,12 @@ class DivisionScorecardsViewTests(TestCase):
             round_pairings=[{"round": 1}, {"round": 2}, {"round": 3}],
         )
         ResultSlip.objects.create(
-            division=self.division, round=1,
-            winner=self.entrant1, winner_score=450,
-            loser=self.entrant2, loser_score=380,
+            division=self.division,
+            round=1,
+            winner=self.entrant1,
+            winner_score=450,
+            loser=self.entrant2,
+            loser_score=380,
             winner_started=True,
         )
 
@@ -405,12 +456,12 @@ class DivisionScorecardsViewTests(TestCase):
         # Round 1 (undivided) is a single merged block; its cells are row 1.
         winner_card, loser_card = doc.tables[0], doc.tables[1]
         # After round 1 the winner's running record is 1-0, the loser's 0-1.
-        self.assertEqual(winner_card.cell(1, 2).text, "1")    # Won
-        self.assertEqual(winner_card.cell(1, 3).text, "0")    # Lost
+        self.assertEqual(winner_card.cell(1, 2).text, "1")  # Won
+        self.assertEqual(winner_card.cell(1, 3).text, "0")  # Lost
         self.assertEqual(winner_card.cell(1, 4).text, "450")  # Player Score
         self.assertEqual(winner_card.cell(1, 5).text, "380")  # Opponent Score
-        self.assertEqual(loser_card.cell(1, 2).text, "0")     # Won
-        self.assertEqual(loser_card.cell(1, 3).text, "1")     # Lost
+        self.assertEqual(loser_card.cell(1, 2).text, "0")  # Won
+        self.assertEqual(loser_card.cell(1, 3).text, "1")  # Lost
         self.assertEqual(loser_card.cell(1, 4).text, "380")
 
     def test_results_omitted_without_the_flag(self):
@@ -429,18 +480,18 @@ class DivisionScorecardsViewTests(TestCase):
             round_pairings=[{"round": 1}, {"round": 2}, {"round": 3}],
         )
         Pairing.objects.create(
-            division=self.division, round=1,
-            first=self.entrant1, second=self.entrant2,
+            division=self.division,
+            round=1,
+            first=self.entrant1,
+            second=self.entrant2,
         )
         response = self.client.get(
             reverse("division_scorecards_download", kwargs=self.division.slug_kwargs())
         )
         doc = Document(BytesIO(response.content))
         # entrant1 went first, entrant2 second; round 1's Round cell is (1, 0).
-        self.assertEqual(_circle_offsets(doc.tables[0].cell(1, 0)._tc),
-                         [_first_pt()])
-        self.assertEqual(_circle_offsets(doc.tables[1].cell(1, 0)._tc),
-                         [_second_pt()])
+        self.assertEqual(_circle_offsets(doc.tables[0].cell(1, 0)._tc), [_first_pt()])
+        self.assertEqual(_circle_offsets(doc.tables[1].cell(1, 0)._tc), [_second_pt()])
 
 
 # Canonical child orders for the OOXML complex types we emit by hand. Word
@@ -448,21 +499,61 @@ class DivisionScorecardsViewTests(TestCase):
 # child appears out of order; LibreOffice silently repairs it, so only a schema
 # check (not "does it open here") catches the regression. Local names only.
 _CT_TBL_PR_ORDER = [
-    "tblStyle", "tblpPr", "tblOverlap", "bidiVisual", "tblStyleRowBandSize",
-    "tblStyleColBandSize", "tblW", "jc", "tblCellSpacing", "tblInd",
-    "tblBorders", "shd", "tblLayout", "tblCellMar", "tblLook", "tblCaption",
-    "tblDescription", "tblPrChange",
+    "tblStyle",
+    "tblpPr",
+    "tblOverlap",
+    "bidiVisual",
+    "tblStyleRowBandSize",
+    "tblStyleColBandSize",
+    "tblW",
+    "jc",
+    "tblCellSpacing",
+    "tblInd",
+    "tblBorders",
+    "shd",
+    "tblLayout",
+    "tblCellMar",
+    "tblLook",
+    "tblCaption",
+    "tblDescription",
+    "tblPrChange",
 ]
 _CT_TC_PR_ORDER = [
-    "cnfStyle", "tcW", "gridSpan", "hMerge", "vMerge", "tcBorders", "shd",
-    "noWrap", "tcMar", "textDirection", "tcFitText", "vAlign", "hideMark",
-    "cellIns", "cellDel", "cellMerge", "tcPrChange",
+    "cnfStyle",
+    "tcW",
+    "gridSpan",
+    "hMerge",
+    "vMerge",
+    "tcBorders",
+    "shd",
+    "noWrap",
+    "tcMar",
+    "textDirection",
+    "tcFitText",
+    "vAlign",
+    "hideMark",
+    "cellIns",
+    "cellDel",
+    "cellMerge",
+    "tcPrChange",
 ]
 _CT_ANCHOR_ORDER = [
-    "simplePos", "positionH", "positionV", "extent", "effectExtent",
+    "simplePos",
+    "positionH",
+    "positionV",
+    "extent",
+    "effectExtent",
     # any one wrap* variant occupies this slot
-    "wrapNone", "wrapSquare", "wrapTight", "wrapThrough", "wrapTopAndBottom",
-    "docPr", "cNvGraphicFramePr", "graphic", "sizeRelH", "sizeRelV",
+    "wrapNone",
+    "wrapSquare",
+    "wrapTight",
+    "wrapThrough",
+    "wrapTopAndBottom",
+    "docPr",
+    "cNvGraphicFramePr",
+    "graphic",
+    "sizeRelH",
+    "sizeRelV",
 ]
 # the wrap variants are mutually exclusive alternatives sharing one rank
 _WRAP_RANK = {w: 5 for w in _CT_ANCHOR_ORDER[5:10]}
@@ -484,10 +575,17 @@ class SchemaOrderTests(SimpleTestCase):
     def _rich_doc():
         # Exercise every raw-XML path: borders + fixed layout (tblPr), shading +
         # width + merges + vAlign (tcPr), and floating QR/logo/ellipse (anchor).
-        return build_document([
-            _spec("Alice", n_rounds=6, opponents={1: "Bob"},
-                  starts={1: "1st", 3: "2nd"}, qr_url="https://x.test/live"),
-        ])
+        return build_document(
+            [
+                _spec(
+                    "Alice",
+                    n_rounds=6,
+                    opponents={1: "Bob"},
+                    starts={1: "1st", 3: "2nd"},
+                    qr_url="https://x.test/live",
+                ),
+            ]
+        )
 
     def _assert_ordered(self, el, order, *, strict):
         rank = {name: i for i, name in enumerate(order)}
@@ -503,13 +601,15 @@ class SchemaOrderTests(SimpleTestCase):
                     )
                 continue
             self.assertGreaterEqual(
-                rank[name], last,
+                rank[name],
+                last,
                 f"<{name}> is out of OOXML sequence order (Word will reject it)",
             )
             last = rank[name]
 
     def test_tblPr_children_in_order(self):
         from docx.oxml.ns import qn
+
         body = self._rich_doc().element.body
         tblPrs = list(body.iter(qn("w:tblPr")))
         self.assertTrue(tblPrs)
@@ -518,6 +618,7 @@ class SchemaOrderTests(SimpleTestCase):
 
     def test_tcPr_children_in_order(self):
         from docx.oxml.ns import qn
+
         body = self._rich_doc().element.body
         tcPrs = list(body.iter(qn("w:tcPr")))
         self.assertTrue(tcPrs)
@@ -526,6 +627,7 @@ class SchemaOrderTests(SimpleTestCase):
 
     def test_anchor_children_in_order(self):
         from docx.oxml.ns import qn
+
         body = self._rich_doc().element.body
         anchors = list(body.iter(qn("wp:anchor")))
         self.assertTrue(anchors)

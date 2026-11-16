@@ -48,13 +48,16 @@ class Entry:
         self.error = str(error)
 
 
-def record(kind, actor=None, *, ok, summary="", error="", attachment="",
-           attachment_name=""):
+def record(
+    kind, actor=None, *, ok, summary="", error="", attachment="", attachment_name=""
+):
     """Write one row. ``actor`` None means nobody — a scheduled run."""
     return AdminAction.objects.create(
         kind=kind,
         actor=actor if getattr(actor, "is_authenticated", False) else None,
-        actor_name=actor.get_username() if getattr(actor, "is_authenticated", False) else "",
+        actor_name=actor.get_username()
+        if getattr(actor, "is_authenticated", False)
+        else "",
         ok=ok,
         summary=summary,
         error=error,
@@ -70,12 +73,21 @@ def logged(kind, actor=None):
         yield entry
     except Exception as exc:
         record(
-            kind, actor, ok=False, summary=entry.summary,
+            kind,
+            actor,
+            ok=False,
+            summary=entry.summary,
             error=f"Unexpected error: {type(exc).__name__}: {exc}",
-            attachment=entry.attachment, attachment_name=entry.attachment_name,
+            attachment=entry.attachment,
+            attachment_name=entry.attachment_name,
         )
         raise
     record(
-        kind, actor, ok=entry.ok, summary=entry.summary, error=entry.error,
-        attachment=entry.attachment, attachment_name=entry.attachment_name,
+        kind,
+        actor,
+        ok=entry.ok,
+        summary=entry.summary,
+        error=entry.error,
+        attachment=entry.attachment,
+        attachment_name=entry.attachment_name,
     )

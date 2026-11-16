@@ -157,7 +157,7 @@ class EditPresenceBaseView(View):
         payload = {"editors": EditPresence.others(key, request.user)}
         try:
             known_version = int(request.GET["known_version"])
-        except (KeyError, ValueError):
+        except KeyError, ValueError:
             known_version = None
         if known_version is not None:
             current_version = EditVersion.version_for(key)

@@ -20,25 +20,41 @@ def _bundle(divisions, name="Nationals 2019"):
         {"player_number": "P2", "name": "Bob", "rating": 1500, "provisional": False},
         {"player_number": "P3", "name": "Cara", "rating": 1400, "provisional": False},
     ]
-    return json.dumps({
-        "name": name, "location": "Reno", "start_date": "2019-07-04",
-        "players": players, "divisions": divisions, "event_log": [],
-    })
+    return json.dumps(
+        {
+            "name": name,
+            "location": "Reno",
+            "start_date": "2019-07-04",
+            "players": players,
+            "divisions": divisions,
+            "event_log": [],
+        }
+    )
 
 
 class ParseJsonBundleTests(TestCase):
     def test_parses_entrants_and_results(self):
-        bundle = _bundle([{
-            "name": "Open",
-            "entrants": [
-                {"number": 1, "player_number": "P1"},
-                {"number": 2, "player_number": "P2"},
-            ],
-            "results": [{
-                "round": 1, "winner": "P1", "winner_score": 420,
-                "loser": "P2", "loser_score": 388, "winner_started": True,
-            }],
-        }])
+        bundle = _bundle(
+            [
+                {
+                    "name": "Open",
+                    "entrants": [
+                        {"number": 1, "player_number": "P1"},
+                        {"number": 2, "player_number": "P2"},
+                    ],
+                    "results": [
+                        {
+                            "round": 1,
+                            "winner": "P1",
+                            "winner_score": 420,
+                            "loser": "P2",
+                            "loser_score": 388,
+                            "winner_started": True,
+                        }
+                    ],
+                }
+            ]
+        )
         name, divisions = parse_import(bundle)
         self.assertEqual(name, "Nationals 2019")
         self.assertEqual(len(divisions), 1)
@@ -46,18 +62,24 @@ class ParseJsonBundleTests(TestCase):
         self.assertEqual(div["name"], "Open")
         self.assertEqual(
             div["entrants"],
-            [{"player": "Alice", "rating": 1600, "number": 1},
-             {"player": "Bob", "rating": 1500, "number": 2}],
+            [
+                {"player": "Alice", "rating": 1600, "number": 1},
+                {"player": "Bob", "rating": 1500, "number": 2},
+            ],
         )
         self.assertEqual(div["results"][0]["winner"], "Alice")
         self.assertEqual(div["results"][0]["loser"], "Bob")
 
     def test_unknown_player_reference_errors(self):
-        bundle = _bundle([{
-            "name": "Open",
-            "entrants": [{"number": 1, "player_number": "P9"}],
-            "results": [],
-        }])
+        bundle = _bundle(
+            [
+                {
+                    "name": "Open",
+                    "entrants": [{"number": 1, "player_number": "P9"}],
+                    "results": [],
+                }
+            ]
+        )
         with self.assertRaises(ImportParseError):
             parse_import(bundle)
 
@@ -95,8 +117,10 @@ class ParseCsvTests(TestCase):
             parse_import("Name,Score\nAlice,400\n")
 
     def test_non_integer_score_errors(self):
-        bad = ("Submitted On,Round,Winner,Winners Score,Opponent,Opponents Score\n"
-               ",1,Alice,foo,Bob,388\n")
+        bad = (
+            "Submitted On,Round,Winner,Winners Score,Opponent,Opponents Score\n"
+            ",1,Alice,foo,Bob,388\n"
+        )
         with self.assertRaises(ImportParseError):
             parse_import(bad)
 
@@ -116,12 +140,8 @@ class NumberedCsvTests(TestCase):
     )
 
     def setUp(self):
-        self.alice = Player.objects.create(
-            name="Alice", player_number="1", rating=1600
-        )
-        self.bob = Player.objects.create(
-            name="Bob", player_number="2", rating=1500
-        )
+        self.alice = Player.objects.create(name="Alice", player_number="1", rating=1600)
+        self.bob = Player.objects.create(name="Bob", player_number="2", rating=1500)
 
     def test_the_numbered_form_parses(self):
         _, divisions = parse_import(self.NUMBERED)
@@ -175,8 +195,11 @@ class ImportDivisionCommandTests(TestCase):
     def setUp(self):
         self.owner = User.objects.create_user(username="owner", password="pw")
         self.tournament = Tournament.objects.create(
-            name="What-if", location="sandbox",
-            start_date="2026-07-16", owner=self.owner, is_fake=True,
+            name="What-if",
+            location="sandbox",
+            start_date="2026-07-16",
+            owner=self.owner,
+            is_fake=True,
         )
 
     def _portable(self):
@@ -188,10 +211,16 @@ class ImportDivisionCommandTests(TestCase):
                 {"player": "Bob", "rating": 1500, "number": 2},
                 {"player": "Cara", "rating": 1400, "number": 3},
             ],
-            "results": [{
-                "round": 1, "winner": "Alice", "winner_score": 420,
-                "loser": "Bob", "loser_score": 388, "winner_started": True,
-            }],
+            "results": [
+                {
+                    "round": 1,
+                    "winner": "Alice",
+                    "winner_score": 420,
+                    "loser": "Bob",
+                    "loser_score": 388,
+                    "winner_started": True,
+                }
+            ],
         }
 
     def test_builds_finished_division_with_inferred_bye(self):
@@ -216,9 +245,9 @@ class ImportDivisionCommandTests(TestCase):
         payload["results"][0]["winner_started"] = False  # Bob (loser) started
         import_division(self.tournament, self.owner, payload)
         division = self.tournament.divisions.get(name="Open")
-        real = division.pairings.filter(round=1).exclude(
-            second__player__is_bye=True
-        ).get()
+        real = (
+            division.pairings.filter(round=1).exclude(second__player__is_bye=True).get()
+        )
         # Loser started -> loser is listed first.
         self.assertEqual(real.first.player.name, "Bob")
         self.assertEqual(real.second.player.name, "Alice")
@@ -232,27 +261,51 @@ class ImportDivisionCommandTests(TestCase):
 class ImportReplayRoundTripTests(TestCase):
     def test_imported_tournament_replays_to_same_digest(self):
         owner = User.objects.create_user(username="owner", password="pw")
-        _, divisions = parse_import(_bundle([{
-            "name": "Open",
-            "entrants": [
-                {"number": 1, "player_number": "P1"},
-                {"number": 2, "player_number": "P2"},
-                {"number": 3, "player_number": "P3"},
-            ],
-            "results": [
-                {"round": 1, "winner": "P1", "winner_score": 420,
-                 "loser": "P2", "loser_score": 388, "winner_started": True},
-                {"round": 2, "winner": "P1", "winner_score": 500,
-                 "loser": "P3", "loser_score": 300, "winner_started": False},
-            ],
-        }]))
+        _, divisions = parse_import(
+            _bundle(
+                [
+                    {
+                        "name": "Open",
+                        "entrants": [
+                            {"number": 1, "player_number": "P1"},
+                            {"number": 2, "player_number": "P2"},
+                            {"number": 3, "player_number": "P3"},
+                        ],
+                        "results": [
+                            {
+                                "round": 1,
+                                "winner": "P1",
+                                "winner_score": 420,
+                                "loser": "P2",
+                                "loser_score": 388,
+                                "winner_started": True,
+                            },
+                            {
+                                "round": 2,
+                                "winner": "P1",
+                                "winner_score": 500,
+                                "loser": "P3",
+                                "loser_score": 300,
+                                "winner_started": False,
+                            },
+                        ],
+                    }
+                ]
+            )
+        )
         div_payload = divisions[0]
 
-        tournament = create_tournament(None, owner, {
-            "name": "What-if: Nationals", "location": "sandbox",
-            "start_date": "2026-07-16", "is_fake": True,
-            "default_division": {"name": div_payload["name"]},
-        })
+        tournament = create_tournament(
+            None,
+            owner,
+            {
+                "name": "What-if: Nationals",
+                "location": "sandbox",
+                "start_date": "2026-07-16",
+                "is_fake": True,
+                "default_division": {"name": div_payload["name"]},
+            },
+        )
         import_division(tournament, owner, div_payload)
 
         division = tournament.divisions.get(name="Open")
@@ -280,8 +333,11 @@ class ByeRowTests(TestCase):
     def setUp(self):
         self.owner = User.objects.create_user(username="owner", password="pw")
         self.tournament = Tournament.objects.create(
-            name="What-if", location="sandbox",
-            start_date="2026-07-16", owner=self.owner, is_fake=True,
+            name="What-if",
+            location="sandbox",
+            start_date="2026-07-16",
+            owner=self.owner,
+            is_fake=True,
         )
 
     def test_the_csv_parser_keeps_the_bye_out_of_the_entrants(self):
@@ -290,7 +346,9 @@ class ByeRowTests(TestCase):
             sorted(e["player"] for e in division["entrants"]), ["Alice", "Bob", "Cara"]
         )
         self.assertTrue(division["bye_rows"])
-        self.assertIn(("Cara", "Bye"), [(r["winner"], r["loser"]) for r in division["results"]])
+        self.assertIn(
+            ("Cara", "Bye"), [(r["winner"], r["loser"]) for r in division["results"]]
+        )
 
     def test_the_legacy_corpus_spelling_is_a_bye_too(self):
         text = (
@@ -301,14 +359,24 @@ class ByeRowTests(TestCase):
         self.assertNotIn("Bye", [e["player"] for e in division["entrants"]])
 
     def test_a_bundle_result_against_BYE_parses(self):
-        bundle = _bundle([{
-            "name": "Open",
-            "entrants": [{"number": 1, "player_number": "P1"}],
-            "results": [{
-                "round": 1, "winner": "P1", "winner_score": 50,
-                "loser": "BYE", "loser_score": 0, "winner_started": False,
-            }],
-        }])
+        bundle = _bundle(
+            [
+                {
+                    "name": "Open",
+                    "entrants": [{"number": 1, "player_number": "P1"}],
+                    "results": [
+                        {
+                            "round": 1,
+                            "winner": "P1",
+                            "winner_score": 50,
+                            "loser": "BYE",
+                            "loser_score": 0,
+                            "winner_started": False,
+                        }
+                    ],
+                }
+            ]
+        )
         _, (division,) = parse_import(bundle)
         self.assertEqual(division["results"][0]["loser"], "Bye")
 
@@ -330,11 +398,17 @@ class ByeRowTests(TestCase):
 
     def test_it_replays_to_the_same_digest(self):
         _, (payload,) = parse_import(self.CSV)
-        tournament = create_tournament(None, self.owner, {
-            "name": "What-if: byes", "location": "sandbox",
-            "start_date": "2026-07-16", "is_fake": True,
-            "default_division": {"name": payload["name"]},
-        })
+        tournament = create_tournament(
+            None,
+            self.owner,
+            {
+                "name": "What-if: byes",
+                "location": "sandbox",
+                "start_date": "2026-07-16",
+                "is_fake": True,
+                "default_division": {"name": payload["name"]},
+            },
+        )
         import_division(tournament, self.owner, payload)
         recorded = division_digest(tournament.divisions.get())
         ctx = replay(events_from_tournament(tournament), verify=True)

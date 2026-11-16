@@ -59,19 +59,23 @@ class Command(BaseCommand):
                 missing_players.add(loser_name)
 
             if winner and loser:
-                results_to_create.append({
-                    "division": division,
-                    "round": round_num,
-                    "winner": winner,
-                    "winner_score": winner_score,
-                    "loser": loser,
-                    "loser_score": loser_score,
-                    "winner_started": False,  # Not in CSV, default to False
-                })
+                results_to_create.append(
+                    {
+                        "division": division,
+                        "round": round_num,
+                        "winner": winner,
+                        "winner_score": winner_score,
+                        "loser": loser,
+                        "loser_score": loser_score,
+                        "winner_started": False,  # Not in CSV, default to False
+                    }
+                )
 
         # If any players are missing, print error and exit
         if missing_players:
-            self.stderr.write(self.style.ERROR("The following players were not found as entrants:"))
+            self.stderr.write(
+                self.style.ERROR("The following players were not found as entrants:")
+            )
             for name in sorted(missing_players):
                 self.stderr.write(self.style.ERROR(f"  - {name}"))
             sys.exit(1)

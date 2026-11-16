@@ -4,20 +4,19 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('tournaments', '0044_wespa_mirror'),
+        ("tournaments", "0044_wespa_mirror"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='entrant',
-            name='forfeits',
+            model_name="entrant",
+            name="forfeits",
             field=models.BooleanField(default=False),
         ),
         migrations.AddField(
-            model_name='resultslip',
-            name='forfeit',
+            model_name="resultslip",
+            name="forfeit",
             field=models.BooleanField(default=False),
         ),
     ]

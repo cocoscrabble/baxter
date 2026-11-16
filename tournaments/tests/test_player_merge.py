@@ -16,10 +16,14 @@ from users.models import User
 
 def tournament(owner, name):
     return create_tournament(
-        None, owner,
+        None,
+        owner,
         {
-            "name": name, "location": "X", "start_date": "2026-05-01",
-            "editors": [], "default_division": {"name": "Open", "pairing_seed": 1},
+            "name": name,
+            "location": "X",
+            "start_date": "2026-05-01",
+            "editors": [],
+            "default_division": {"name": "Open", "pairing_seed": 1},
         },
     )
 
@@ -33,8 +37,12 @@ class MergeTests(TestCase):
             name="Joe Thorngren", player_number="T-4", rating=0, is_provisional=True
         )
         self.guest2 = Player.objects.create(
-            name="joe thorngren", player_number="T-9", rating=0, is_provisional=True,
-            wespa_id=1234, wespa_rating=1500,
+            name="joe thorngren",
+            player_number="T-9",
+            rating=0,
+            is_provisional=True,
+            wespa_id=1234,
+            wespa_rating=1500,
         )
         self.coco = Player.objects.create(
             name="Joe Thorngren", player_number="0301", rating=1400
@@ -43,8 +51,9 @@ class MergeTests(TestCase):
         self.entrant2 = Entrant.enter(self.second.divisions.get(), self.guest2, 1)
 
     def test_every_guest_sharing_the_name_is_offered(self):
-        Player.objects.create(name="Nobody Else", player_number="T-5", rating=0,
-                              is_provisional=True)
+        Player.objects.create(
+            name="Nobody Else", player_number="T-5", rating=0, is_provisional=True
+        )
         offered = {c.guest.player_number: c for c in merge_candidates()}
         self.assertEqual(set(offered), {"T-4", "T-9"})
         self.assertEqual(offered["T-4"].targets, [self.coco])
@@ -101,7 +110,9 @@ class MergeTests(TestCase):
         self.assertEqual(self.entrant1.player_id, self.guest1.pk)
 
     def test_only_a_guest_can_be_merged(self):
-        other = Player.objects.create(name="Joe Thorngren", player_number="0302", rating=0)
+        other = Player.objects.create(
+            name="Joe Thorngren", player_number="0302", rating=0
+        )
         with self.assertRaisesRegex(ValueError, "not a guest"):
             merge_guest(other, self.coco, actor=self.owner)
 
@@ -135,7 +146,9 @@ class MergeViewTests(TestCase):
         self.assertFalse(Player.objects.filter(pk=self.guest.pk).exists())
 
     def test_different_names_are_refused(self):
-        other = Player.objects.create(name="Someone Else", player_number="0400", rating=0)
+        other = Player.objects.create(
+            name="Someone Else", player_number="0400", rating=0
+        )
         self.login("admin")
         self.client.post(self.url, {"guest": "T-4", "into": other.player_number})
         self.assertTrue(Player.objects.filter(pk=self.guest.pk).exists())
@@ -143,7 +156,8 @@ class MergeViewTests(TestCase):
     def test_the_admin_index_flags_waiting_merges(self):
         self.login("admin")
         self.assertContains(
-            self.client.get(reverse("admin_index")), "a name with a CoCo player</strong>"
+            self.client.get(reverse("admin_index")),
+            "a name with a CoCo player</strong>",
         )
 
 
@@ -160,7 +174,9 @@ class MergeReplayTests(test_replay.LoggedTournamentMixin, TestCase):
             name="Guest Gwen", player_number="T-7", rating=1450, is_provisional=True
         )
         t, division = self._build_logged_tournament(players=[*self.players[:3], guest])
-        coco = Player.objects.create(name="Guest Gwen", player_number="0412", rating=1450)
+        coco = Player.objects.create(
+            name="Guest Gwen", player_number="0412", rating=1450
+        )
 
         merge_guest(guest, coco, actor=self.owner)
         recorded = division_digest(division)

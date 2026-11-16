@@ -1,6 +1,14 @@
 from django.contrib import admin
 
-from .models import Division, Entrant, Pairing, Player, ResultSlip, RoundPairings, Tournament
+from .models import (
+    Division,
+    Entrant,
+    Pairing,
+    Player,
+    ResultSlip,
+    RoundPairings,
+    Tournament,
+)
 from .player_ratings import RATING_FIELDS, players_rerated
 
 
@@ -50,6 +58,13 @@ class PairingAdmin(admin.ModelAdmin):
 
 @admin.register(ResultSlip)
 class ResultSlipAdmin(admin.ModelAdmin):
-    list_display = ("round", "winner", "winner_score", "loser", "loser_score", "division")
+    list_display = (
+        "round",
+        "winner",
+        "winner_score",
+        "loser",
+        "loser_score",
+        "division",
+    )
     list_filter = ("division", "round")
     search_fields = ("winner__player__name", "loser__player__name")

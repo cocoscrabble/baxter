@@ -36,13 +36,17 @@ class CommittedBlockBase(TestCase):
         division = Division.objects.create(tournament=tournament, name="D")
         for i in range(1, n + 1):
             Entrant.objects.create(
-                division=division, number=i, rating=1600 - i,
+                division=division,
+                number=i,
+                rating=1600 - i,
                 player=Player.objects.create(
                     name=f"P{i}", player_number=f"{tag}{i:02d}", rating=1600 - i
                 ),
             )
         DivisionSettings.objects.create(
-            division=division, pairing_blocks=blocks, withdrawal=policy,
+            division=division,
+            pairing_blocks=blocks,
+            withdrawal=policy,
             round_pairings=[rp.to_dict() for rp in blocks_to_round_pairings(blocks)],
         )
         return division, user
@@ -52,17 +56,25 @@ class CommittedBlockBase(TestCase):
         publish_rounds(division, [round_num])
         for p in division.pairings.filter(round=round_num, result__isnull=True):
             ResultSlip.objects.create(
-                division=division, round=round_num, pairing=p,
-                winner=p.first, winner_score=420,
-                loser=p.second, loser_score=380, winner_started=True,
+                division=division,
+                round=round_num,
+                pairing=p,
+                winner=p.first,
+                winner_score=420,
+                loser=p.second,
+                loser_score=380,
+                winner_started=True,
             )
         division.round_pairings_set.get(round=round_num).update_status()
 
     def withdraw(self, division, user, name):
         withdraw_entrant(
-            division.tournament, user,
-            {"division": division.name,
-             "player": division.entrants.get(player__name=name).key},
+            division.tournament,
+            user,
+            {
+                "division": division.name,
+                "player": division.entrants.get(player__name=name).key,
+            },
         )
 
     def rows(self, division, round_num):
@@ -88,7 +100,8 @@ class RoundRobinWithdrawalTests(CommittedBlockBase):
         # would have rewritten everyone's remaining fixtures.
         division, user = self.build(
             [{"pairing": "RoundRobin", "rounds": 5, "pair_from": 1}],
-            DivisionSettings.FORFEIT, "a",
+            DivisionSettings.FORFEIT,
+            "a",
         )
         for r in (1, 2):
             self.play(division, r)
@@ -99,15 +112,14 @@ class RoundRobinWithdrawalTests(CommittedBlockBase):
         met = self.real_meetings(division)
         survivors = [f"P{i}" for i in range(2, 7)]
         for i, a in enumerate(survivors):
-            for b in survivors[i + 1:]:
-                self.assertEqual(
-                    met.get(frozenset({a, b})), 1, f"{a} vs {b}"
-                )
+            for b in survivors[i + 1 :]:
+                self.assertEqual(met.get(frozenset({a, b})), 1, f"{a} vs {b}")
 
     def test_the_withdrawn_players_fixtures_become_forfeits(self):
         division, user = self.build(
             [{"pairing": "RoundRobin", "rounds": 5, "pair_from": 1}],
-            DivisionSettings.FORFEIT, "b",
+            DivisionSettings.FORFEIT,
+            "b",
         )
         for r in (1, 2):
             self.play(division, r)
@@ -135,7 +147,9 @@ class RoundRobinWithdrawalTests(CommittedBlockBase):
         than a bye anybody else gains."""
         division, user = self.build(
             [{"pairing": "RoundRobin", "rounds": 5, "pair_from": 1}],
-            DivisionSettings.FORFEIT, "c", n=5,
+            DivisionSettings.FORFEIT,
+            "c",
+            n=5,
         )
         self.play(division, 1)
         self.withdraw(division, user, "P3")
@@ -147,15 +161,12 @@ class RoundRobinWithdrawalTests(CommittedBlockBase):
             appearances = []
             for p in division.pairings.filter(round=r):
                 appearances += [
-                    e.player.name
-                    for e in (p.first, p.second)
-                    if not e.player.is_bye
+                    e.player.name for e in (p.first, p.second) if not e.player.is_bye
                 ]
+            self.assertEqual(sorted(appearances), sorted(everyone), f"round {r}")
             self.assertEqual(
-                sorted(appearances), sorted(everyone), f"round {r}"
-            )
-            self.assertEqual(
-                division.pairings.filter(round=r, forfeit=True).count(), 1,
+                division.pairings.filter(round=r, forfeit=True).count(),
+                1,
                 f"round {r}",
             )
 
@@ -163,9 +174,12 @@ class RoundRobinWithdrawalTests(CommittedBlockBase):
         # Nothing is committed yet, so the better tournament is a complete round
         # robin over the remaining field rather than one with a phantom in it.
         division, user = self.build(
-            [{"pairing": "KotH", "rounds": 2, "pair_from": 1},
-             {"pairing": "RoundRobin", "rounds": 4, "pair_from": 1}],
-            DivisionSettings.FORFEIT, "d",
+            [
+                {"pairing": "KotH", "rounds": 2, "pair_from": 1},
+                {"pairing": "RoundRobin", "rounds": 4, "pair_from": 1},
+            ],
+            DivisionSettings.FORFEIT,
+            "d",
         )
         for r in (1, 2):
             self.play(division, r)
@@ -175,13 +189,14 @@ class RoundRobinWithdrawalTests(CommittedBlockBase):
         met = self.real_meetings(division)
         survivors = [f"P{i}" for i in range(2, 7)]
         for i, a in enumerate(survivors):
-            for b in survivors[i + 1:]:
+            for b in survivors[i + 1 :]:
                 self.assertGreaterEqual(met.get(frozenset({a, b}), 0), 1)
 
     def test_omit_leaves_the_absentee_out_and_still_finishes(self):
         division, user = self.build(
             [{"pairing": "RoundRobin", "rounds": 5, "pair_from": 1}],
-            DivisionSettings.OMIT, "e",
+            DivisionSettings.OMIT,
+            "e",
         )
         for r in (1, 2):
             self.play(division, r)
@@ -189,9 +204,7 @@ class RoundRobinWithdrawalTests(CommittedBlockBase):
         for r in (3, 4, 5):
             self.play(division, r)
         for r in (3, 4, 5):
-            self.assertFalse(
-                division.pairings.filter(round=r, forfeit=True).exists()
-            )
+            self.assertFalse(division.pairings.filter(round=r, forfeit=True).exists())
             self.assertEqual(
                 division.round_pairings_set.get(round=r).status,
                 RoundPairings.FINISHED,
@@ -203,7 +216,9 @@ class QuadBlockWithdrawalTests(CommittedBlockBase):
     def test_the_quads_keep_their_grouping(self):
         division, user = self.build(
             [{"pairing": "Quads_Clustered", "rounds": 3, "pair_from": 1}],
-            DivisionSettings.FORFEIT, "q", n=8,
+            DivisionSettings.FORFEIT,
+            "q",
+            n=8,
         )
         self.play(division, 1)
         self.withdraw(division, user, "P1")

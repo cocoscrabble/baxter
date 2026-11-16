@@ -73,8 +73,8 @@ COMMAND_BACKED = {
 EXEMPT = {
     "DivisionPairingMethodPreviewView",  # method compilation only, no write
     "DivisionRoundPairingsPreviewView",  # preview only, no write
-    "EditPresenceView",                  # editing-presence heartbeat
-    "PlayerImportView",                  # global registry import (out of scope)
+    "EditPresenceView",  # editing-presence heartbeat
+    "PlayerImportView",  # global registry import (out of scope)
     # Global rating refresh. Unlogged on purpose: entrants pin their rating when
     # they enter, so this mutates no replayable tournament state.
     "WespaImportView",
@@ -107,4 +107,6 @@ class EventLogCompletenessTests(SimpleTestCase):
         # Keep the lists honest: every named view must still exist and accept POST.
         discovered = _post_view_classes()
         stale = (COMMAND_BACKED | EXEMPT) - discovered
-        self.assertEqual(stale, set(), f"stale entries in the guard lists: {sorted(stale)}")
+        self.assertEqual(
+            stale, set(), f"stale entries in the guard lists: {sorted(stale)}"
+        )

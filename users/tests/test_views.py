@@ -34,7 +34,9 @@ class RegisterViewTests(TestCase):
             },
         )
         self.assertEqual(response.status_code, 200)
-        self.assertFormError(response.context["form"], "email", "This field is required.")
+        self.assertFormError(
+            response.context["form"], "email", "This field is required."
+        )
 
 
 class LoginViewTests(TestCase):

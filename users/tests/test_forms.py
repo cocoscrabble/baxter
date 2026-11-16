@@ -6,41 +6,49 @@ from users.models import User
 
 class CustomUserCreationFormTests(TestCase):
     def test_valid_form(self):
-        form = CustomUserCreationForm(data={
-            "username": "newuser",
-            "email": "newuser@example.com",
-            "password1": "testpass123!",
-            "password2": "testpass123!",
-        })
+        form = CustomUserCreationForm(
+            data={
+                "username": "newuser",
+                "email": "newuser@example.com",
+                "password1": "testpass123!",
+                "password2": "testpass123!",
+            }
+        )
         self.assertTrue(form.is_valid())
 
     def test_email_required(self):
-        form = CustomUserCreationForm(data={
-            "username": "newuser",
-            "email": "",
-            "password1": "testpass123!",
-            "password2": "testpass123!",
-        })
+        form = CustomUserCreationForm(
+            data={
+                "username": "newuser",
+                "email": "",
+                "password1": "testpass123!",
+                "password2": "testpass123!",
+            }
+        )
         self.assertFalse(form.is_valid())
         self.assertIn("email", form.errors)
 
     def test_password_mismatch(self):
-        form = CustomUserCreationForm(data={
-            "username": "newuser",
-            "email": "newuser@example.com",
-            "password1": "testpass123!",
-            "password2": "differentpass!",
-        })
+        form = CustomUserCreationForm(
+            data={
+                "username": "newuser",
+                "email": "newuser@example.com",
+                "password1": "testpass123!",
+                "password2": "differentpass!",
+            }
+        )
         self.assertFalse(form.is_valid())
         self.assertIn("password2", form.errors)
 
     def test_creates_user_with_default_role(self):
-        form = CustomUserCreationForm(data={
-            "username": "newuser",
-            "email": "newuser@example.com",
-            "password1": "testpass123!",
-            "password2": "testpass123!",
-        })
+        form = CustomUserCreationForm(
+            data={
+                "username": "newuser",
+                "email": "newuser@example.com",
+                "password1": "testpass123!",
+                "password2": "testpass123!",
+            }
+        )
         self.assertTrue(form.is_valid())
         user = form.save()
         self.assertEqual(user.role, User.Role.DIRECTOR)
@@ -55,21 +63,27 @@ class ProfileFormTests(TestCase):
         )
 
     def test_valid_form(self):
-        form = ProfileForm(data={
-            "username": "updateduser",
-            "email": "updated@example.com",
-            "first_name": "Test",
-            "last_name": "User",
-        }, instance=self.user)
+        form = ProfileForm(
+            data={
+                "username": "updateduser",
+                "email": "updated@example.com",
+                "first_name": "Test",
+                "last_name": "User",
+            },
+            instance=self.user,
+        )
         self.assertTrue(form.is_valid())
 
     def test_updates_user(self):
-        form = ProfileForm(data={
-            "username": "updateduser",
-            "email": "updated@example.com",
-            "first_name": "Test",
-            "last_name": "User",
-        }, instance=self.user)
+        form = ProfileForm(
+            data={
+                "username": "updateduser",
+                "email": "updated@example.com",
+                "first_name": "Test",
+                "last_name": "User",
+            },
+            instance=self.user,
+        )
         self.assertTrue(form.is_valid())
         user = form.save()
         self.assertEqual(user.username, "updateduser")

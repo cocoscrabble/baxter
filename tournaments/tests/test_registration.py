@@ -21,13 +21,13 @@ class RegistrationTestCase(TestCase):
         self.owner = User.objects.create_user(username="td", password="pw")
         self.other = User.objects.create_user(username="other", password="pw")
         self.tournament = Tournament.objects.create(
-            name="Champs", location="Reno",
-            start_date=date(2026, 4, 1), owner=self.owner,
+            name="Champs",
+            location="Reno",
+            start_date=date(2026, 4, 1),
+            owner=self.owner,
         )
         self.tournament.editors.add(self.owner)
-        self.division = Division.objects.create(
-            tournament=self.tournament, name="Open"
-        )
+        self.division = Division.objects.create(tournament=self.tournament, name="Open")
         DivisionSettings.objects.create(division=self.division)
         self.ann = Player.objects.create(
             name="Ann Lee", player_number="0001", rating=1600
@@ -58,7 +58,10 @@ class RegistrationTestCase(TestCase):
 class AddExistingTests(RegistrationTestCase):
     def test_adds_a_player_and_snapshots_their_coco_rating(self):
         response = self._post(
-            action="add", player="0001", number=1, payment_note="",
+            action="add",
+            player="0001",
+            number=1,
+            payment_note="",
         )
         self.assertEqual(response.status_code, 200)
         entrant = self.division.entrants.get()
@@ -77,15 +80,23 @@ class AddExistingTests(RegistrationTestCase):
 
     def test_an_explicit_rating_overrides_the_cascade_and_is_manual(self):
         self._post(
-            action="add", player="0001", number=1, rating=1234, payment_note="",
+            action="add",
+            player="0001",
+            number=1,
+            rating=1234,
+            payment_note="",
         )
         entrant = self.division.entrants.get()
         self.assertEqual((entrant.rating, entrant.rating_source), (1234, "manual"))
 
     def test_registration_flags_are_recorded(self):
         self._post(
-            action="add", player="0001", number=1, tentative="on",
-            playing_up="on", payment_note="cheque in the post",
+            action="add",
+            player="0001",
+            number=1,
+            tentative="on",
+            playing_up="on",
+            payment_note="cheque in the post",
         )
         entrant = self.division.entrants.get()
         self.assertTrue(entrant.tentative)
@@ -114,7 +125,11 @@ class TentativeStatusTests(RegistrationTestCase):
 
     def test_stale_paid_input_cannot_override_tentative(self):
         self._post(
-            action="add", player="0001", number=1, paid="on", tentative="on",
+            action="add",
+            player="0001",
+            number=1,
+            paid="on",
+            tentative="on",
             payment_note="",
         )
         entrant = self.division.entrants.get()
@@ -171,8 +186,12 @@ class UpdateEntrantTests(RegistrationTestCase):
         self.entrant.tentative = True
         self.entrant.save(update_fields=["tentative"])
         self._post(
-            action="update", entrant=self.entrant.pk, number=1, paid="on",
-            rating=self.entrant.rating, payment_note="cash",
+            action="update",
+            entrant=self.entrant.pk,
+            number=1,
+            paid="on",
+            rating=self.entrant.rating,
+            payment_note="cash",
         )
         self.entrant.refresh_from_db()
         self.assertTrue(self.entrant.paid)
@@ -183,8 +202,12 @@ class UpdateEntrantTests(RegistrationTestCase):
         """The form prefills the rating, so a plain re-save must not silently
         convert a cascaded snapshot into a hand-set one."""
         self._post(
-            action="update", entrant=self.entrant.pk, number=1,
-            rating=self.entrant.rating, paid="on", payment_note="",
+            action="update",
+            entrant=self.entrant.pk,
+            number=1,
+            rating=self.entrant.rating,
+            paid="on",
+            payment_note="",
         )
         self.entrant.refresh_from_db()
         self.assertEqual(
@@ -194,7 +217,10 @@ class UpdateEntrantTests(RegistrationTestCase):
 
     def test_fixing_a_rating_makes_it_manual(self):
         self._post(
-            action="update", entrant=self.entrant.pk, number=1, rating=1750,
+            action="update",
+            entrant=self.entrant.pk,
+            number=1,
+            rating=1750,
             payment_note="",
         )
         self.entrant.refresh_from_db()
@@ -237,9 +263,7 @@ class PermissionTests(RegistrationTestCase):
 
     def test_a_non_editor_cannot_register_anyone(self):
         self.client.force_login(self.other)
-        self.client.post(
-            self.url(), {"action": "add", "player": "0001", "number": 1}
-        )
+        self.client.post(self.url(), {"action": "add", "player": "0001", "number": 1})
         self.assertEqual(self.division.entrants.count(), 0)
 
 
@@ -255,10 +279,13 @@ class RegistrationEventTests(RegistrationTestCase):
         from tournaments.commands import create_tournament
 
         self.tournament = create_tournament(
-            None, self.owner,
+            None,
+            self.owner,
             {
-                "name": "Logged", "location": "Reno",
-                "start_date": "2026-04-01", "editors": [],
+                "name": "Logged",
+                "location": "Reno",
+                "start_date": "2026-04-01",
+                "editors": [],
                 "default_division": {"name": "Open", "pairing_seed": 7},
             },
         )
@@ -284,8 +311,12 @@ class RegistrationEventTests(RegistrationTestCase):
     def test_updating_logs_entrant_updated(self):
         entrant = Entrant.enter(self.division, self.ann, 1)
         self._post(
-            action="update", entrant=entrant.pk, number=1, paid="on",
-            rating=1600, payment_note="",
+            action="update",
+            entrant=entrant.pk,
+            number=1,
+            paid="on",
+            rating=1600,
+            payment_note="",
         )
         event = self.tournament.events.get(event_type="entrant_updated")
         self.assertEqual(event.payload["player"], "0001")
@@ -297,19 +328,23 @@ class RegistrationEventTests(RegistrationTestCase):
 
         self._post(action="add", player="0001", payment_note="")
         self._guest_post(
-            name="Gwen", rating=1450, tentative="on", payment_note="pending",
+            name="Gwen",
+            rating=1450,
+            tentative="on",
+            payment_note="pending",
         )
         entrant = self.division.entrants.get(player=self.ann)
         self._post(
-            action="update", entrant=entrant.pk, rating=1720,
-            paid="on", payment_note="cash",
+            action="update",
+            entrant=entrant.pk,
+            rating=1720,
+            paid="on",
+            payment_note="cash",
         )
         recorded = division_digest(self.division)
 
         ctx = replay(events_from_tournament(self.tournament), verify=True)
-        self.assertEqual(
-            division_digest(ctx.tournament.divisions.get()), recorded
-        )
+        self.assertEqual(division_digest(ctx.tournament.divisions.get()), recorded)
 
 
 class EntrantDisplayTests(RegistrationTestCase):
@@ -382,9 +417,7 @@ class EntrantsEmbedTests(RegistrationTestCase):
     """The chrome-free fragment the CoCo site iframes (phase 4b)."""
 
     def _url(self):
-        return reverse(
-            "division_entrants_embed", kwargs=self.division.slug_kwargs()
-        )
+        return reverse("division_entrants_embed", kwargs=self.division.slug_kwargs())
 
     def test_it_renders_the_same_conventions_without_chrome(self):
         Entrant.enter(self.division, self.bea, 1, tentative=True)
@@ -436,15 +469,17 @@ class EntrantsEmbedTests(RegistrationTestCase):
         self.assertEqual(self.client.get(self._url()).status_code, 404)
         # …and the ordinary page still works for them, so this is the embed's
         # rule rather than a change to what an editor may see.
-        ordinary = reverse(
-            "division_entrants", kwargs=self.division.slug_kwargs()
-        )
+        ordinary = reverse("division_entrants", kwargs=self.division.slug_kwargs())
         self.assertEqual(self.client.get(ordinary).status_code, 200)
 
     def test_the_bytes_do_not_depend_on_who_is_asking(self):
         """The whole rule, in one assertion."""
         Entrant.enter(
-            self.division, self.ann, 1, paid=True, payment_note="cash",
+            self.division,
+            self.ann,
+            1,
+            paid=True,
+            payment_note="cash",
             tentative=True,
         )
         Entrant.enter(self.division, self.bea, 2, playing_up=True)
@@ -493,9 +528,9 @@ class PlayerSourceSeamTests(RegistrationTestCase):
 
         from tournaments.player_source import PlayerRecord
 
-        fake = self._fake_source([
-            PlayerRecord(player_number="9900", name="Remote Rita", rating=1710)
-        ])
+        fake = self._fake_source(
+            [PlayerRecord(player_number="9900", name="Remote Rita", rating=1710)]
+        )
         with patch("tournaments.views.get_player_source", return_value=fake):
             response = self.client.get(self.url(), {"q": "rita"})
 
@@ -511,9 +546,9 @@ class PlayerSourceSeamTests(RegistrationTestCase):
 
         # The player has to exist locally to be entered; the source decides
         # *which* one, the database still holds them.
-        fake = self._fake_source([
-            PlayerRecord(player_number="0001", name="Ann Lee", rating=1600)
-        ])
+        fake = self._fake_source(
+            [PlayerRecord(player_number="0001", name="Ann Lee", rating=1600)]
+        )
         with patch("tournaments.views.get_player_source", return_value=fake):
             self._post(action="add", player="0001", number=1, payment_note="")
 
@@ -528,7 +563,8 @@ class PlayerSourceSeamTests(RegistrationTestCase):
 
         player = Player.objects.get(name="Sourced Sam")
         self.assertEqual(
-            player.player_number, "X-1",
+            player.player_number,
+            "X-1",
             "the source mints the number, not next_temp_player_number",
         )
 
@@ -551,9 +587,7 @@ class WespaGuestTests(RegistrationTestCase):
 
     def test_the_search_offers_wespa_players_baxter_does_not_have(self):
         response = self.client.get(self.url(), {"q": "Nadia"})
-        self.assertEqual(
-            [r.wespa_id for r in response.context["wespa_results"]], [7]
-        )
+        self.assertEqual([r.wespa_id for r in response.context["wespa_results"]], [7])
         self.assertContains(response, "Enter as guest")
 
     def test_a_row_already_linked_is_not_offered_twice(self):
@@ -637,12 +671,10 @@ class SeedingTests(RegistrationTestCase):
     def test_entering_orders_the_division_by_rating(self):
         # Entered lowest-rated first, on purpose: the numbers must not follow
         # entry order.
-        self._post(action="add", player=self.unrated.player_number)   # 0
-        self._post(action="add", player=self.bea.player_number)       # 1400 WESPA
-        self._post(action="add", player=self.ann.player_number)       # 1600 CoCo
-        self.assertEqual(
-            self._numbers(), {"Ann Lee": 1, "Bea Fox": 2, "Cy Ray": 3}
-        )
+        self._post(action="add", player=self.unrated.player_number)  # 0
+        self._post(action="add", player=self.bea.player_number)  # 1400 WESPA
+        self._post(action="add", player=self.ann.player_number)  # 1600 CoCo
+        self.assertEqual(self._numbers(), {"Ann Lee": 1, "Bea Fox": 2, "Cy Ray": 3})
 
     def test_a_rating_correction_reorders_the_field(self):
         self._post(action="add", player=self.ann.player_number)
@@ -654,9 +686,7 @@ class SeedingTests(RegistrationTestCase):
     def test_a_tie_breaks_on_the_player_number(self):
         """A tie has to break on something replayable — not on row order."""
         self._post(action="add", player=self.unrated.player_number)  # 0003
-        other = Player.objects.create(
-            name="Dee Vee", player_number="0004", rating=0
-        )
+        other = Player.objects.create(name="Dee Vee", player_number="0004", rating=0)
         self._post(action="add", player=other.player_number)
         self.assertEqual(self._numbers(), {"Cy Ray": 1, "Dee Vee": 2})
 
@@ -739,9 +769,7 @@ class UnifiedAddTests(RegistrationTestCase):
         self.assertEqual(
             [r.player_number for r in response.context["search_results"]], ["0001"]
         )
-        self.assertEqual(
-            [r.wespa_id for r in response.context["wespa_results"]], [7]
-        )
+        self.assertEqual([r.wespa_id for r in response.context["wespa_results"]], [7])
         # Both halves reach the page, each row carrying the identity its button
         # posts: a player number on one side, a WESPA id on the other.
         self.assertContains(response, "Nadia Lee")
@@ -752,9 +780,7 @@ class UnifiedAddTests(RegistrationTestCase):
     def test_the_guest_name_is_prefilled_from_the_search(self):
         """Re-typing it at a busy desk is how a visitor ends up as "Nadia"."""
         response = self.client.get(self.url(), {"q": "  Nadia Sharma  "})
-        self.assertEqual(
-            response.context["guest_form"].initial["name"], "Nadia Sharma"
-        )
+        self.assertEqual(response.context["guest_form"].initial["name"], "Nadia Sharma")
 
     def test_the_guest_branch_only_appears_once_a_search_has_run(self):
         self.assertNotContains(self.client.get(self.url()), "Add as guest")
@@ -779,9 +805,7 @@ class UnifiedAddTests(RegistrationTestCase):
         self._post(action="add", wespa="7")
         player = Player.objects.get(name="Nadia Sharma")
         self.assertEqual((player.wespa_id, player.wespa_rating), (7, 1750))
-        self.assertEqual(
-            self.division.entrants.get().rating_source, "wespa"
-        )
+        self.assertEqual(self.division.entrants.get().rating_source, "wespa")
 
     def test_a_stranger_is_a_guest_with_a_manual_rating(self):
         self._guest_post(name="Walk In", rating=1234)
@@ -859,7 +883,7 @@ class DuplicateGuestNameTests(RegistrationTestCase):
         self.assertEqual(self.division.entrants.count(), 1)
 
     def test_the_typed_rating_survives_the_question(self):
-        """"Add as a different person" resubmits this form, so a fieldset that
+        """ "Add as a different person" resubmits this form, so a fieldset that
         is not rendered would silently drop what the director typed."""
         response = self._guest_post(name="Ann Lee", rating=1400, tentative="on")
         page = response.content.decode()
@@ -884,7 +908,7 @@ class EntrantDisplayOrderTests(RegistrationTestCase):
 
     def test_in_draft_seed_order_is_rating_order(self):
         self._post(action="add", player=self.unrated.player_number)  # 0
-        self._post(action="add", player=self.ann.player_number)      # 1600
+        self._post(action="add", player=self.ann.player_number)  # 1600
         self.assertEqual(self._rows(), [(1, "Ann Lee"), (2, "Cy Ray")])
 
     def test_a_frozen_seeding_is_shown_in_its_own_order(self):
@@ -894,7 +918,7 @@ class EntrantDisplayOrderTests(RegistrationTestCase):
         RoundPairings.objects.create(
             division=self.division, round=1, status=RoundPairings.PUBLISHED
         )
-        self._post(action="add", player=self.ann.player_number)      # appended 2
+        self._post(action="add", player=self.ann.player_number)  # appended 2
 
         # Rating order would put Ann first; she is seeded second, and the
         # numbers in the table have to count up.
@@ -935,14 +959,18 @@ class RatingOverrideRuleTests(RegistrationTestCase):
         url = reverse("division_entrants_edit", kwargs=self.division.slug_kwargs())
         self.client.post(
             url,
-            json.dumps({
-                "rows": [{
-                    "number": entrant.number,
-                    "player": self.ann.pk,
-                    "rating": entrant.rating,
-                }],
-                "_version": 0,
-            }),
+            json.dumps(
+                {
+                    "rows": [
+                        {
+                            "number": entrant.number,
+                            "player": self.ann.pk,
+                            "rating": entrant.rating,
+                        }
+                    ],
+                    "_version": 0,
+                }
+            ),
             content_type="application/json",
         )
         entrant.refresh_from_db()
@@ -960,11 +988,17 @@ class RatingOverrideRuleTests(RegistrationTestCase):
         url = reverse("division_entrants_edit", kwargs=self.division.slug_kwargs())
         self.client.post(
             url,
-            json.dumps({
-                "rows": [{
-                    "number": entrant.number, "player": self.ann.pk, "rating": 1800,
-                }],
-            }),
+            json.dumps(
+                {
+                    "rows": [
+                        {
+                            "number": entrant.number,
+                            "player": self.ann.pk,
+                            "rating": 1800,
+                        }
+                    ],
+                }
+            ),
             content_type="application/json",
         )
         entrant.refresh_from_db()
@@ -1036,9 +1070,11 @@ class SeedingIsAppliedByEveryWritePathTests(RegistrationTestCase):
         self._post(action="add", player=self.unrated.player_number)
         self.client.post(
             reverse("bulk_import_entrants", kwargs=self.division.slug_kwargs()),
-            {"csv_file": SimpleUploadedFile(
-                "e.csv", b"Imported One,1750\nImported Two,900\n", "text/csv"
-            )},
+            {
+                "csv_file": SimpleUploadedFile(
+                    "e.csv", b"Imported One,1750\nImported Two,900\n", "text/csv"
+                )
+            },
         )
         self.assertSeeded()
 

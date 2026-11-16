@@ -4,7 +4,6 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("tournaments", "0017_resultslip_pairing_roundpairings_and_more"),
     ]

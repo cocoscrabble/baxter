@@ -4,20 +4,19 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('tournaments', '0049_admin_action'),
+        ("tournaments", "0049_admin_action"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='rostersync',
-            name='repinned',
+            model_name="rostersync",
+            name="repinned",
             field=models.JSONField(blank=True, default=list),
         ),
         migrations.AddField(
-            model_name='wespasync',
-            name='repinned',
+            model_name="wespasync",
+            name="repinned",
             field=models.JSONField(blank=True, default=list),
         ),
     ]

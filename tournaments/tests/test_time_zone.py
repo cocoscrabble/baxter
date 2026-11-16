@@ -16,10 +16,16 @@ class TournamentTimeZoneTests(TestCase):
         self.client.force_login(self.user)
 
     def _create(self, **extra):
-        self.client.post(reverse("tournament_create"), {
-            "name": "Zoned", "location": "Toronto", "start_date": "2026-01-10",
-            "editor_usernames": "", **extra,
-        })
+        self.client.post(
+            reverse("tournament_create"),
+            {
+                "name": "Zoned",
+                "location": "Toronto",
+                "start_date": "2026-01-10",
+                "editor_usernames": "",
+                **extra,
+            },
+        )
         return Tournament.objects.get(name="Zoned")
 
     def test_defaults_to_central_time(self):
@@ -28,10 +34,16 @@ class TournamentTimeZoneTests(TestCase):
     def test_editing_sets_the_zone_and_replays(self):
         t = self._create(time_zone="America/Toronto")
         self.assertEqual(t.time_zone, "America/Toronto")
-        self.client.post(reverse("tournament_edit", kwargs=t.slug_kwargs()), {
-            "name": "Zoned", "location": "Toronto", "start_date": "2026-01-10",
-            "time_zone": "Europe/London", "editor_usernames": "",
-        })
+        self.client.post(
+            reverse("tournament_edit", kwargs=t.slug_kwargs()),
+            {
+                "name": "Zoned",
+                "location": "Toronto",
+                "start_date": "2026-01-10",
+                "time_zone": "Europe/London",
+                "editor_usernames": "",
+            },
+        )
         t.refresh_from_db()
         self.assertEqual(t.time_zone, "Europe/London")
         replayed = replay(events_from_tournament(t)).tournament
@@ -41,9 +53,15 @@ class TournamentTimeZoneTests(TestCase):
         from tournaments.commands import update_tournament
 
         t = self._create(time_zone="America/Toronto")
-        update_tournament(t, self.user, {
-            "name": "Zoned", "location": "Toronto", "start_date": "2026-01-10",
-        })
+        update_tournament(
+            t,
+            self.user,
+            {
+                "name": "Zoned",
+                "location": "Toronto",
+                "start_date": "2026-01-10",
+            },
+        )
         t.refresh_from_db()
         self.assertEqual(t.time_zone, "America/Toronto")
 

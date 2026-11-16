@@ -10,7 +10,6 @@ def keep_existing_scoring(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("tournaments", "0054_rated_games"),
     ]

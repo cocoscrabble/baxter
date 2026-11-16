@@ -46,17 +46,24 @@ class UnpublishAfterScheduleChangeTests(TestCase):
 
     def test_a_round_whose_strategy_changed_is_drawn_again(self):
         # Changed while published: the save leaves the printed board alone.
-        save_settings(self.tournament, self.user, {
-            "division": "D",
-            "blocks": [{"pairing": "SplitSwiss", "rounds": 3, "pair_from": 1}],
-        })
+        save_settings(
+            self.tournament,
+            self.user,
+            {
+                "division": "D",
+                "blocks": [{"pairing": "SplitSwiss", "rounds": 3, "pair_from": 1}],
+            },
+        )
         self.assertEqual(board(self.division, 1), self.printed)
         self.unpublish()
         rp = self.division.round_pairings_set.get(round=1)
         self.assertEqual(rp.status, RoundPairings.DRAFT)
         self.assertEqual(rp.paired_with, "SplitSwiss")
         # Split Swiss from seedings: top half against bottom half.
-        self.assertEqual(board(self.division, 1), [["0001", "0005"], ["0002", "0006"], ["0003", "0007"], ["0004", "0008"]])
+        self.assertEqual(
+            board(self.division, 1),
+            [["0001", "0005"], ["0002", "0006"], ["0003", "0007"], ["0004", "0008"]],
+        )
 
 
 class CopConfigDropsDraftsTests(TestCase):
@@ -64,8 +71,17 @@ class CopConfigDropsDraftsTests(TestCase):
         user = User.objects.create_user(username="d", password="p")
         division = make_division(user, 8, 3, pairing="KotH")
         regenerate_pairings(division)
-        self.assertTrue(division.round_pairings_set.filter(status=RoundPairings.DRAFT).exists())
-        save_cop_config(division.tournament, user, {
-            "division": "D", "cop_config": {"place_prizes": 2},
-        })
-        self.assertFalse(division.round_pairings_set.filter(status=RoundPairings.DRAFT).exists())
+        self.assertTrue(
+            division.round_pairings_set.filter(status=RoundPairings.DRAFT).exists()
+        )
+        save_cop_config(
+            division.tournament,
+            user,
+            {
+                "division": "D",
+                "cop_config": {"place_prizes": 2},
+            },
+        )
+        self.assertFalse(
+            division.round_pairings_set.filter(status=RoundPairings.DRAFT).exists()
+        )

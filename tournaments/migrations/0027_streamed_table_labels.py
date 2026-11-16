@@ -13,13 +13,12 @@ def copy_table_label_to_number(apps, schema_editor):
     for ft in FixedTable.objects.all():
         try:
             ft.table_number = int(ft.table_label)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             ft.table_number = 0
         ft.save(update_fields=["table_number"])
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("tournaments", "0026_alter_entrant_options_alter_entrant_managers_and_more"),
     ]
@@ -36,9 +35,7 @@ class Migration(migrations.Migration):
             field=models.CharField(default="", max_length=8),
             preserve_default=False,
         ),
-        migrations.RunPython(
-            copy_table_number_to_label, copy_table_label_to_number
-        ),
+        migrations.RunPython(copy_table_number_to_label, copy_table_label_to_number),
         migrations.RemoveField(
             model_name="fixedtable",
             name="table_number",

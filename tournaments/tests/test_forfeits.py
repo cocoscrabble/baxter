@@ -45,9 +45,14 @@ class DerivedForfeitTests(TestCase):
         publish_rounds(self.division, [round_num])
         for p in self.division.pairings.filter(round=round_num, result__isnull=True):
             ResultSlip.objects.create(
-                division=self.division, round=round_num, pairing=p,
-                winner=p.first, winner_score=420,
-                loser=p.second, loser_score=380, winner_started=True,
+                division=self.division,
+                round=round_num,
+                pairing=p,
+                winner=p.first,
+                winner_score=420,
+                loser=p.second,
+                loser_score=380,
+                winner_started=True,
             )
         self.division.round_pairings_set.get(round=round_num).update_status()
 
@@ -64,9 +69,7 @@ class DerivedForfeitTests(TestCase):
         self.set_settings(withdrawal=policy)
 
     def withdraw(self, *, forfeits=True):
-        self.set_policy(
-            DivisionSettings.FORFEIT if forfeits else DivisionSettings.OMIT
-        )
+        self.set_policy(DivisionSettings.FORFEIT if forfeits else DivisionSettings.OMIT)
         self.division.entrants.filter(pk=self.entrant.pk).update(dropped=True)
         self.division.round_pairings_set.filter(status=RoundPairings.DRAFT).delete()
 
@@ -98,7 +101,9 @@ class DerivedForfeitTests(TestCase):
         for r in (3, 4):
             slip = self.forfeits_in(r).get()
             self.assertEqual(slip.loser_id, self.entrant.pk)
-            self.assertEqual((slip.winner_score, slip.loser_score), (FORFEIT_WINNER_SCORE, 0))
+            self.assertEqual(
+                (slip.winner_score, slip.loser_score), (FORFEIT_WINNER_SCORE, 0)
+            )
             # The bye leads, so the absent player is charged no start.
             self.assertTrue(slip.winner_started)
 
@@ -110,11 +115,12 @@ class DerivedForfeitTests(TestCase):
 
         pd = PairingData.for_division(self.division)
         standing = next(
-            p for p in standings_after_round(pd, 3, include_dropped=True)
+            p
+            for p in standings_after_round(pd, 3, include_dropped=True)
             if p.key == self.entrant.key
         )
-        self.assertEqual(standing.wins, 1)      # the round they played and won
-        self.assertEqual(standing.losses, 2)    # the two forfeits
+        self.assertEqual(standing.wins, 1)  # the round they played and won
+        self.assertEqual(standing.losses, 2)  # the two forfeits
         self.assertEqual(standing.spread, 40 - 2 * FORFEIT_WINNER_SCORE)
 
     def test_the_forfeits_are_not_rated_but_are_exported(self):
@@ -128,14 +134,13 @@ class DerivedForfeitTests(TestCase):
         self.assertEqual(projection.games, 1)
 
         results = [
-            r for d in ExportTournament.from_db(self.division.tournament).divisions
+            r
+            for d in ExportTournament.from_db(self.division.tournament).divisions
             for r in d.results
         ]
         # Exported, though: a forfeit is a loss in the record, and the bye's
         # reserved number is what keeps it out of the rating formula.
-        self.assertIn(
-            self.entrant.key, [r.loser for r in results if r.winner == "BYE"]
-        )
+        self.assertIn(self.entrant.key, [r.loser for r in results if r.winner == "BYE"])
 
     def test_rejoining_keeps_the_forfeits_and_pairs_the_later_rounds(self):
         self.play(1)
@@ -206,7 +211,8 @@ class DerivedForfeitTests(TestCase):
         rows = self.division.pairings.filter(round=1)
         self.assertEqual(rows.filter(forfeit=True).count(), 1)
         byes = [
-            p for p in rows
+            p
+            for p in rows
             if not p.forfeit and (p.first.player.is_bye or p.second.player.is_bye)
         ]
         self.assertEqual(len(byes), 1)
@@ -295,9 +301,14 @@ class HandEnteredAbsenceTests(TestCase):
         self.assertEqual(self.save(self.rows() + [self.absence_row(forfeit=True)]), [])
         for p in self.division.pairings.filter(round=1, result__isnull=True):
             ResultSlip.objects.create(
-                division=self.division, round=1, pairing=p,
-                winner=p.first, winner_score=420,
-                loser=p.second, loser_score=380, winner_started=True,
+                division=self.division,
+                round=1,
+                pairing=p,
+                winner=p.first,
+                winner_score=420,
+                loser=p.second,
+                loser_score=380,
+                winner_started=True,
             )
         self.division.round_pairings_set.get(round=1).update_status()
         self.assertEqual(
@@ -325,9 +336,12 @@ class HandEnteredAbsenceTests(TestCase):
         )
 
     def test_a_player_who_already_has_a_game_is_refused(self):
-        playing = self.division.pairings.filter(round=1).exclude(
-            second__player__is_bye=True
-        ).first().first
+        playing = (
+            self.division.pairings.filter(round=1)
+            .exclude(second__player__is_bye=True)
+            .first()
+            .first
+        )
         errors = self.save(
             self.rows()
             + [self.absence_row(forfeit=True, loser=playing.pk, winner=self.bye.pk)]
@@ -336,9 +350,7 @@ class HandEnteredAbsenceTests(TestCase):
         self.assertIn("already has a game", errors[0])
 
     def test_an_unpaired_round_is_refused_clearly(self):
-        errors = self.save(
-            self.rows() + [self.absence_row(forfeit=True, round=4)]
-        )
+        errors = self.save(self.rows() + [self.absence_row(forfeit=True, round=4)])
         self.assertTrue(errors)
         self.assertIn("no pairings yet", errors[0])
 
@@ -381,7 +393,9 @@ class HandEnteredGameTests(TestCase):
         # Two players withdrawn before round 1 is published, so publishing
         # records a forfeit for each.
         self.a, self.b = list(self.division.entrants.order_by("number")[:2])
-        self.division.entrants.filter(pk__in=[self.a.pk, self.b.pk]).update(dropped=True)
+        self.division.entrants.filter(pk__in=[self.a.pk, self.b.pk]).update(
+            dropped=True
+        )
         regenerate_pairings(self.division)
         publish_rounds(self.division, [1])
 
@@ -425,8 +439,9 @@ class HandEnteredGameTests(TestCase):
         self.assertEqual((slip.winner_score, slip.loser_score), (500, 442))
         self.assertEqual(slip.loser_id, self.b.pk)
         self.assertFalse(
-            self.division.result_slips.filter(round=1, winner__player__is_bye=True)
-            .exists()
+            self.division.result_slips.filter(
+                round=1, winner__player__is_bye=True
+            ).exists()
         )
 
     def test_the_row_brings_its_own_pairing(self):
@@ -434,7 +449,9 @@ class HandEnteredGameTests(TestCase):
         pairing = self.division.result_slips.get(winner=self.a).pairing
         self.assertIsNotNone(pairing)
         self.assertEqual(pairing.round, 1)
-        self.assertEqual(pairing.round_pairings, self.division.round_pairings_set.get(round=1))
+        self.assertEqual(
+            pairing.round_pairings, self.division.round_pairings_set.get(round=1)
+        )
         # The board says what the row said about who went first, or
         # correct_result_starts would rewrite the result to match it.
         self.assertEqual(pairing.first_id, self.a.pk)
@@ -461,18 +478,26 @@ class HandEnteredGameTests(TestCase):
 
     def real_board(self):
         """A round-1 board between two players, i.e. not a forfeit."""
-        return self.division.pairings.filter(round=1).exclude(
-            models.Q(first__player__is_bye=True)
-            | models.Q(second__player__is_bye=True)
-        ).first()
+        return (
+            self.division.pairings.filter(round=1)
+            .exclude(
+                models.Q(first__player__is_bye=True)
+                | models.Q(second__player__is_bye=True)
+            )
+            .first()
+        )
 
     def test_a_player_in_two_games_in_a_round_is_refused(self):
         # The result of the game a third player was paired for, plus a
         # hand-entered row putting them in a second game the same round.
         board = self.real_board()
         played = {
-            "round": 1, "winner": board.first_id, "winner_score": 420,
-            "loser": board.second_id, "loser_score": 380, "winner_started": True,
+            "round": 1,
+            "winner": board.first_id,
+            "winner_score": 420,
+            "loser": board.second_id,
+            "loser_score": 380,
+            "winner_started": True,
         }
         errors = self.save(
             self.without_forfeits() + [played, self.game_row(loser=board.first_id)]
@@ -541,7 +566,10 @@ class HandEnteredAbsenceReplayTests(TestCase):
         from django.urls import reverse
 
         from tournaments.commands import (
-            add_entrant, create_division, create_tournament, publish_round,
+            add_entrant,
+            create_division,
+            create_tournament,
+            publish_round,
             save_settings,
         )
         from tournaments.forfeits import withdraw_entrant
@@ -551,18 +579,29 @@ class HandEnteredAbsenceReplayTests(TestCase):
         from tournaments.replay import parse_jsonl, replay
 
         user = User.objects.create_user(username="hr", password="p")
-        tournament = create_tournament(None, user, {
-            "name": "Grid Replay", "location": "x", "start_date": "2026-03-15",
-        })
+        tournament = create_tournament(
+            None,
+            user,
+            {
+                "name": "Grid Replay",
+                "location": "x",
+                "start_date": "2026-03-15",
+            },
+        )
         create_division(tournament, user, {"name": "D"})
         for i in range(1, 7):
-            Player.objects.create(name=f"G{i}", player_number=f"8{i:02d}",
-                                  rating=1600 - i)
+            Player.objects.create(
+                name=f"G{i}", player_number=f"8{i:02d}", rating=1600 - i
+            )
             add_entrant(tournament, user, {"division": "D", "player": f"8{i:02d}"})
-        save_settings(tournament, user, {
-            "division": "D",
-            "blocks": [{"pairing": "KotH", "rounds": 3, "pair_from": 1}],
-        })
+        save_settings(
+            tournament,
+            user,
+            {
+                "division": "D",
+                "blocks": [{"pairing": "KotH", "rounds": 3, "pair_from": 1}],
+            },
+        )
         division = tournament.divisions.get(name="D")
         regenerate_pairings(division)
         publish_round(tournament, user, {"division": "D", "round": 1})
@@ -574,22 +613,28 @@ class HandEnteredAbsenceReplayTests(TestCase):
         absentee = division.entrants.order_by("number").first()
         withdraw_entrant(tournament, user, {"division": "D", "player": absentee.key})
         self.assertFalse(
-            division.pairings.filter(round=1).filter(
-                models.Q(first=absentee) | models.Q(second=absentee)
-            ).exists()
+            division.pairings.filter(round=1)
+            .filter(models.Q(first=absentee) | models.Q(second=absentee))
+            .exists()
         )
 
         grid = ResultsGrid()
         rows = [grid.serialize_row(s) for s in grid.queryset(division)]
-        rows.append({
-            "round": 1, "winner": division.bye_entrant().pk,
-            "winner_score": None, "loser": absentee.pk, "loser_score": None,
-            "winner_started": None,
-        })
+        rows.append(
+            {
+                "round": 1,
+                "winner": division.bye_entrant().pk,
+                "winner_score": None,
+                "loser": absentee.pk,
+                "loser_score": None,
+                "winner_started": None,
+            }
+        )
         self.client.force_login(user)
         response = self.client.post(
             reverse("division_edit_results", kwargs=division.slug_kwargs()),
-            json.dumps({"rows": rows}), content_type="application/json",
+            json.dumps({"rows": rows}),
+            content_type="application/json",
         )
         self.assertTrue(response.json().get("ok"), response.json())
         self.assertEqual(division.pairings.filter(round=1, forfeit=True).count(), 1)
@@ -617,7 +662,10 @@ class HandEnteredGameReplayTests(TestCase):
         from django.urls import reverse
 
         from tournaments.commands import (
-            add_entrant, create_division, create_tournament, publish_round,
+            add_entrant,
+            create_division,
+            create_tournament,
+            publish_round,
             save_settings,
         )
         from tournaments.forfeits import withdraw_entrant
@@ -627,18 +675,29 @@ class HandEnteredGameReplayTests(TestCase):
         from tournaments.replay import parse_jsonl, replay
 
         user = User.objects.create_user(username="hg", password="p")
-        tournament = create_tournament(None, user, {
-            "name": "Game Replay", "location": "x", "start_date": "2026-03-15",
-        })
+        tournament = create_tournament(
+            None,
+            user,
+            {
+                "name": "Game Replay",
+                "location": "x",
+                "start_date": "2026-03-15",
+            },
+        )
         create_division(tournament, user, {"name": "D"})
         for i in range(1, 7):
-            Player.objects.create(name=f"H{i}", player_number=f"9{i:02d}",
-                                  rating=1600 - i)
+            Player.objects.create(
+                name=f"H{i}", player_number=f"9{i:02d}", rating=1600 - i
+            )
             add_entrant(tournament, user, {"division": "D", "player": f"9{i:02d}"})
-        save_settings(tournament, user, {
-            "division": "D",
-            "blocks": [{"pairing": "KotH", "rounds": 3, "pair_from": 1}],
-        })
+        save_settings(
+            tournament,
+            user,
+            {
+                "division": "D",
+                "blocks": [{"pairing": "KotH", "rounds": 3, "pair_from": 1}],
+            },
+        )
         division = tournament.divisions.get(name="D")
         regenerate_pairings(division)
         publish_round(tournament, user, {"division": "D", "round": 1})
@@ -648,20 +707,25 @@ class HandEnteredGameReplayTests(TestCase):
         # other, which is a match no pairing exists for.
         first, second = list(division.entrants.order_by("number")[:2])
         for entrant in (first, second):
-            withdraw_entrant(
-                tournament, user, {"division": "D", "player": entrant.key}
-            )
+            withdraw_entrant(tournament, user, {"division": "D", "player": entrant.key})
 
         grid = ResultsGrid()
         rows = [grid.serialize_row(s) for s in grid.queryset(division)]
-        rows.append({
-            "round": 1, "winner": first.pk, "winner_score": 500,
-            "loser": second.pk, "loser_score": 442, "winner_started": True,
-        })
+        rows.append(
+            {
+                "round": 1,
+                "winner": first.pk,
+                "winner_score": 500,
+                "loser": second.pk,
+                "loser_score": 442,
+                "winner_started": True,
+            }
+        )
         self.client.force_login(user)
         response = self.client.post(
             reverse("division_edit_results", kwargs=division.slug_kwargs()),
-            json.dumps({"rows": rows}), content_type="application/json",
+            json.dumps({"rows": rows}),
+            content_type="application/json",
         )
         self.assertTrue(response.json().get("ok"), response.json())
         pairing = division.result_slips.get(winner=first).pairing
@@ -715,14 +779,13 @@ class OverridingOneAbsenceSpreadTests(TestCase):
         self.grid.after_save(self.division)
 
     def byed_entrant(self):
-        return self.division.pairings.get(
-            round=1, second__player__is_bye=True
-        ).first
+        return self.division.pairings.get(round=1, second__player__is_bye=True).first
 
     def set_spread(self, points):
         def mutate(row):
             if self.bye_pk in (row["winner"], row["loser"]):
                 row["winner_score"] = points
+
         self.save(mutate)
 
     def test_one_rows_spread_can_differ_from_the_divisions(self):
@@ -750,7 +813,8 @@ class OverridingOneAbsenceSpreadTests(TestCase):
         byed = self.byed_entrant()
         self.set_spread(75)
         withdraw_entrant(
-            self.division.tournament, self.user,
+            self.division.tournament,
+            self.user,
             {"division": self.division.name, "player": byed.key},
         )
         slip = self.division.result_slips.get(loser=byed)
@@ -767,6 +831,7 @@ class OverridingOneAbsenceSpreadTests(TestCase):
         def flip(row):
             if row["loser"] == self.bye_pk:
                 row["winner"], row["loser"] = row["loser"], row["winner"]
+
         self.save(flip)
         pairing = self.division.pairings.get(round=1, first=byed)
         self.assertTrue(pairing.forfeit)

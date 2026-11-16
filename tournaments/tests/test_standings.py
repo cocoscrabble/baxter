@@ -38,9 +38,7 @@ class DroppedAndLateEntrantStandingsTests(TestCase):
         pd = self._pd(entrants, slips)
         pairing = [p.name for p in standings_after_round(pd, 1)]
         self.assertNotIn("C", pairing)  # unpairable once withdrawn
-        display = [
-            p.name for p in standings_after_round(pd, 1, include_dropped=True)
-        ]
+        display = [p.name for p in standings_after_round(pd, 1, include_dropped=True)]
         self.assertIn("C", display)  # still shown in standings
 
     def test_dropped_result_still_counts_for_opponent(self):

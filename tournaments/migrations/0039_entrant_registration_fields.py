@@ -4,60 +4,68 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('tournaments', '0037_playoff_seeds_keyed_by_number'),
+        ("tournaments", "0037_playoff_seeds_keyed_by_number"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='entrant',
-            name='career_games',
+            model_name="entrant",
+            name="career_games",
             field=models.IntegerField(default=0),
         ),
         migrations.AddField(
-            model_name='entrant',
-            name='deviation',
+            model_name="entrant",
+            name="deviation",
             field=models.FloatField(default=0.0),
         ),
         migrations.AddField(
-            model_name='entrant',
-            name='last_played',
+            model_name="entrant",
+            name="last_played",
             field=models.DateField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='entrant',
-            name='paid',
+            model_name="entrant",
+            name="paid",
             field=models.BooleanField(default=False),
         ),
         migrations.AddField(
-            model_name='entrant',
-            name='payment_note',
-            field=models.TextField(blank=True, default=''),
+            model_name="entrant",
+            name="payment_note",
+            field=models.TextField(blank=True, default=""),
         ),
         migrations.AddField(
-            model_name='entrant',
-            name='playing_up',
+            model_name="entrant",
+            name="playing_up",
             field=models.BooleanField(default=False),
         ),
         migrations.AddField(
-            model_name='entrant',
-            name='rating',
+            model_name="entrant",
+            name="rating",
             field=models.IntegerField(default=0),
         ),
         migrations.AddField(
-            model_name='entrant',
-            name='rating_source',
-            field=models.CharField(choices=[('coco', 'CoCo'), ('wespa', 'WESPA'), ('manual', 'Manual'), ('none', 'None')], default='none', max_length=8),
+            model_name="entrant",
+            name="rating_source",
+            field=models.CharField(
+                choices=[
+                    ("coco", "CoCo"),
+                    ("wespa", "WESPA"),
+                    ("manual", "Manual"),
+                    ("none", "None"),
+                ],
+                default="none",
+                max_length=8,
+            ),
         ),
         migrations.AddField(
-            model_name='entrant',
-            name='tentative',
+            model_name="entrant",
+            name="tentative",
             field=models.BooleanField(default=False),
         ),
         migrations.AddField(
-            model_name='player',
-            name='wespa_rating',
+            model_name="player",
+            name="wespa_rating",
             field=models.IntegerField(blank=True, null=True),
         ),
     ]

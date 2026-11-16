@@ -10,7 +10,8 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            "-o", "--output",
+            "-o",
+            "--output",
             help="Write the JSON to this file instead of stdout.",
         )
 
@@ -21,8 +22,8 @@ class Command(BaseCommand):
         if output:
             with open(output, "w", encoding="utf-8") as f:
                 f.write(text)
-            self.stdout.write(self.style.SUCCESS(
-                f"Exported {len(data)} player(s) to {output}"
-            ))
+            self.stdout.write(
+                self.style.SUCCESS(f"Exported {len(data)} player(s) to {output}")
+            )
         else:
             self.stdout.write(text)

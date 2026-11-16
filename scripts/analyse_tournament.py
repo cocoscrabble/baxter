@@ -176,7 +176,7 @@ def _int(value) -> int | None:
         return None
     try:
         return int(float(value))
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
@@ -268,7 +268,10 @@ def load_generated_pairings(sheet) -> dict[int, list[tuple[str, str]]]:
         if not name1 or not name2:
             continue
         rounds[current].append(
-            (_NAME_ANNOTATION.sub("", name1).strip(), _NAME_ANNOTATION.sub("", name2).strip())
+            (
+                _NAME_ANNOTATION.sub("", name1).strip(),
+                _NAME_ANNOTATION.sub("", name2).strip(),
+            )
         )
     return {r: p for r, p in rounds.items() if p}
 

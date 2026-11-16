@@ -11,7 +11,7 @@ def _gen(base, taken, max_length, fallback):
     n = 2
     while candidate in RESERVED_SLUGS or candidate in taken:
         suffix = f"-{n}"
-        candidate = f"{root[:max_length - len(suffix)]}{suffix}"
+        candidate = f"{root[: max_length - len(suffix)]}{suffix}"
         n += 1
     taken.add(candidate)
     return candidate
@@ -38,7 +38,6 @@ def noop(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("tournaments", "0027_streamed_table_labels"),
     ]
@@ -47,18 +46,55 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="TournamentSlugAlias",
             fields=[
-                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
                 ("slug", models.SlugField(max_length=220, unique=True)),
-                ("tournament", models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name="slug_aliases", to="tournaments.tournament")),
+                (
+                    "tournament",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="slug_aliases",
+                        to="tournaments.tournament",
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
             name="DivisionSlugAlias",
             fields=[
-                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
                 ("slug", models.SlugField(max_length=120)),
-                ("division", models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name="slug_aliases", to="tournaments.division")),
-                ("tournament", models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name="division_slug_aliases", to="tournaments.tournament")),
+                (
+                    "division",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="slug_aliases",
+                        to="tournaments.division",
+                    ),
+                ),
+                (
+                    "tournament",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="division_slug_aliases",
+                        to="tournaments.tournament",
+                    ),
+                ),
             ],
             options={"unique_together": {("tournament", "slug")}},
         ),
@@ -72,7 +108,9 @@ class Migration(migrations.Migration):
             # Postgres with "relation ... already exists" (SQLite has no _like
             # index, so it silently worked there). Adding the column unindexed
             # lets the unique index be created exactly once.
-            field=models.SlugField(db_index=False, default="", editable=False, max_length=220),
+            field=models.SlugField(
+                db_index=False, default="", editable=False, max_length=220
+            ),
             preserve_default=False,
         ),
         migrations.AddField(

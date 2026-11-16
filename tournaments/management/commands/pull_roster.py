@@ -12,7 +12,9 @@ from tournaments.roster_sync import run_sync
 
 
 class Command(BaseCommand):
-    help = "Pull the central player roster and apply it (see plans/PLAN_COCO_PROGRAM.md)."
+    help = (
+        "Pull the central player roster and apply it (see plans/PLAN_COCO_PROGRAM.md)."
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(

@@ -5,26 +5,25 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('tournaments', '0025_tournament_is_fake'),
+        ("tournaments", "0025_tournament_is_fake"),
     ]
 
     operations = [
         migrations.AlterModelOptions(
-            name='entrant',
-            options={'base_manager_name': 'all_objects', 'ordering': ['number']},
+            name="entrant",
+            options={"base_manager_name": "all_objects", "ordering": ["number"]},
         ),
         migrations.AlterModelManagers(
-            name='entrant',
+            name="entrant",
             managers=[
-                ('objects', django.db.models.manager.Manager()),
-                ('all_objects', django.db.models.manager.Manager()),
+                ("objects", django.db.models.manager.Manager()),
+                ("all_objects", django.db.models.manager.Manager()),
             ],
         ),
         migrations.AddField(
-            model_name='player',
-            name='is_bye',
+            model_name="player",
+            name="is_bye",
             field=models.BooleanField(default=False),
         ),
     ]

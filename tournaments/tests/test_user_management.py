@@ -28,29 +28,44 @@ class UserListTests(TestCase):
         self.client.force_login(self.admin)
         response = self.client.get(self.url)
         self.assertContains(response, "td@example.com")
-        self.assertContains(response, reverse("user_set_password", args=[self.director.pk]))
+        self.assertContains(
+            response, reverse("user_set_password", args=[self.director.pk])
+        )
 
     def test_offers_no_reset_on_accounts_it_would_refuse(self):
-        other_admin = User.objects.create_user(username="adm2", password="pw", role="admin")
+        other_admin = User.objects.create_user(
+            username="adm2", password="pw", role="admin"
+        )
         self.client.force_login(self.admin)
         response = self.client.get(self.url)
-        self.assertNotContains(response, reverse("user_set_password", args=[other_admin.pk]))
-        self.assertNotContains(response, reverse("user_set_password", args=[self.admin.pk]))
+        self.assertNotContains(
+            response, reverse("user_set_password", args=[other_admin.pk])
+        )
+        self.assertNotContains(
+            response, reverse("user_set_password", args=[self.admin.pk])
+        )
 
 
 class SetPasswordTests(TestCase):
     def setUp(self):
-        self.admin = User.objects.create_user(username="adm", password="pw", role="admin")
-        self.director = User.objects.create_user(username="td", password="old-pw", role="director")
+        self.admin = User.objects.create_user(
+            username="adm", password="pw", role="admin"
+        )
+        self.director = User.objects.create_user(
+            username="td", password="old-pw", role="director"
+        )
 
     def url(self, user):
         return reverse("user_set_password", args=[user.pk])
 
     def post(self, user, password="a-Sturdy-new-pw-42", confirm=None):
-        return self.client.post(self.url(user), {
-            "new_password1": password,
-            "new_password2": confirm if confirm is not None else password,
-        })
+        return self.client.post(
+            self.url(user),
+            {
+                "new_password1": password,
+                "new_password2": confirm if confirm is not None else password,
+            },
+        )
 
     def test_an_admin_sets_a_directors_password(self):
         self.client.force_login(self.admin)
@@ -76,7 +91,9 @@ class SetPasswordTests(TestCase):
         )
 
     def test_a_supervisor_below_an_admin_can_be_reset(self):
-        supervisor = User.objects.create_user(username="sup", password="pw", role="supervisor")
+        supervisor = User.objects.create_user(
+            username="sup", password="pw", role="supervisor"
+        )
         self.client.force_login(self.admin)
         self.assertEqual(self.client.get(self.url(supervisor)).status_code, 200)
 

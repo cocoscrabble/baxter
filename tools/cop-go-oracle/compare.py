@@ -61,7 +61,10 @@ def build_oracle():
 def run_oracle(request_text, workers):
     done = subprocess.run(
         [str(ORACLE), f"-workers={workers}"],
-        input=request_text, capture_output=True, text=True, check=True,
+        input=request_text,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     return json.loads(done.stdout)
 
@@ -111,7 +114,9 @@ def parse_weights(log):
         if a is None or b is None:
             continue
         raw = cols[total_col].strip()
-        weights[frozenset((a, b))] = int(raw) if raw else (cols[code_col].strip() or "?")
+        weights[frozenset((a, b))] = (
+            int(raw) if raw else (cols[code_col].strip() or "?")
+        )
     return weights, int(total.group(1))
 
 
@@ -196,18 +201,24 @@ def compare(path, workers):
         # Both refusing is agreement (e.g. every round already paired).
         case["status"] = "both refuse" if go_error and rust_error else "error"
         case["oracleError"] = (
-            f"{response['errorCode']}: {response.get('errorMessage', '')}" if go_error else None
+            f"{response['errorCode']}: {response.get('errorMessage', '')}"
+            if go_error
+            else None
         )
         case["engineError"] = (
-            (engine_round or {}).get("error") or "no pairing for that round"
-        ) if rust_error else None
+            ((engine_round or {}).get("error") or "no pairing for that round")
+            if rust_error
+            else None
+        )
         return case
 
     removed = set(request.get("removedPlayers") or [])
     go = games_from_oracle(response["pairings"], conversion.names, removed)
     rust = games_from_engine(engine_round)
 
-    case["standingsMismatch"] = standings_mismatches(case["log"], conversion.engine_input)
+    case["standingsMismatch"] = standings_mismatches(
+        case["log"], conversion.engine_input
+    )
     pins = {
         frozenset(pair)
         for pairs in conversion.engine_input["fixed_pairings"].values()
@@ -263,7 +274,9 @@ def verdict(case):
 def notes(case):
     bits = []
     if case.get("standingsMismatch"):
-        bits.append(f"converter disagrees with upstream on {len(case['standingsMismatch'])} record(s)")
+        bits.append(
+            f"converter disagrees with upstream on {len(case['standingsMismatch'])} record(s)"
+        )
     if case.get("brokenPins"):
         pins = ", ".join(" v ".join(g) for g in case["brokenPins"])
         bits.append(f"Baxter broke {len(case['brokenPins'])} pinned game(s): {pins}")
@@ -290,9 +303,15 @@ def write_case(out_dir, case):
     d.mkdir(parents=True, exist_ok=True)
     (d / "cop.log").write_text(case["log"])
     (d / "engine_input.json").write_text(json.dumps(case["engineInput"], indent=2))
-    (d / "pairings.json").write_text(json.dumps({
-        k: case.get(k) for k in ("oracleGames", "engineGames", "warnings", "timeLimited")
-    }, indent=2))
+    (d / "pairings.json").write_text(
+        json.dumps(
+            {
+                k: case.get(k)
+                for k in ("oracleGames", "engineGames", "warnings", "timeLimited")
+            },
+            indent=2,
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -311,7 +330,8 @@ TRACE = CRATE / "target" / "release" / "examples" / "cop_trace"
 def build_trace():
     subprocess.run(
         ["cargo", "build", "--release", "--quiet", "--example", "cop_trace"],
-        cwd=CRATE, check=True,
+        cwd=CRATE,
+        check=True,
     )
 
 
@@ -328,7 +348,7 @@ def _table_after(log, title_pattern, table_title="Totals"):
     m = re.search(title_pattern, log)
     if not m:
         return None, None
-    rest = log[m.end():]
+    rest = log[m.end() :]
     t = re.search(rf"\*\* {table_title} \*\*\n\*+\n\n(.*?)\n-+\n(.*?)\n\n", rest, re.S)
     if not t:
         return m, None
@@ -341,7 +361,7 @@ def logged_sims(log, title):
     m, rows = _table_after(log, rf"\*\* {title} \(factor ceiling of (\d+)\) \*\*")
     if rows is None:
         return None
-    total = re.search(r"^Total Sims: (\d+)$", log[m.end():], re.M)
+    total = re.search(r"^Total Sims: (\d+)$", log[m.end() :], re.M)
     return {
         "factor": int(m.group(1)),
         "players": [int(r[1]) - 1 for r in rows],
@@ -380,10 +400,14 @@ def logged_precomp(log, names):
     }
     if "vs1st" in col:
         out["vs_first"] = {
-            str(rank): int(r[col["vs1st"]]) for rank, r in enumerate(rows) if r[col["vs1st"]]
+            str(rank): int(r[col["vs1st"]])
+            for rank, r in enumerate(rows)
+            if r[col["vs1st"]]
         }
         out["vs_factor"] = {
-            str(rank): int(r[col["vsFactor"]]) for rank, r in enumerate(rows) if r[col["vsFactor"]]
+            str(rank): int(r[col["vsFactor"]])
+            for rank, r in enumerate(rows)
+            if r[col["vsFactor"]]
         }
     child = re.search(r"^Destinys Child: (.*)$", log, re.M)
     out["destinys_child"] = (
@@ -419,7 +443,7 @@ def logged_weights(log, bye_node):
     header, rows = table
     col = {name: i for i, name in enumerate(header)}
     total_col = header.index("Total")
-    policies = header[total_col + 1:]
+    policies = header[total_col + 1 :]
 
     def rank(cell):
         if cell == "BYE":
@@ -437,7 +461,9 @@ def logged_weights(log, bye_node):
             "code": code,
             "selected": r[header.index("S", 6)] == "*",
             "total": None if code else int(r[total_col]),
-            "weights": None if code else [int(r[total_col + 1 + k]) for k in range(len(policies))],
+            "weights": None
+            if code
+            else [int(r[total_col + 1 + k]) for k in range(len(policies))],
         }
     return out
 
@@ -470,7 +496,11 @@ def _diff_sims(name, ours, theirs):
         if ours[key] != theirs[key]:
             out.append(f"{name} {key}: Rust {ours[key]} vs Go {theirs[key]}")
     if ours["final_ranks"] != theirs["final_ranks"]:
-        bad = [i for i, (a, b) in enumerate(zip(ours["final_ranks"], theirs["final_ranks"])) if a != b]
+        bad = [
+            i
+            for i, (a, b) in enumerate(zip(ours["final_ranks"], theirs["final_ranks"]))
+            if a != b
+        ]
         out.append(f"{name} final_ranks differ at starting rank(s) {bad[:5]}")
     return out
 
@@ -481,7 +511,9 @@ def compare_stages(path, workers):
     log = oracle["response"].get("log", "")
     # Raise the port's sim cap so only upstream's clock can make the two differ;
     # the production cap is sized separately (PLAN_COP_GO_PORT.md, stage 5).
-    trace = run_trace(json.dumps({**json.loads(request_text), "maxSims": STAGES_MAX_SIMS}))
+    trace = run_trace(
+        json.dumps({**json.loads(request_text), "maxSims": STAGES_MAX_SIMS})
+    )
     code = oracle["response"]["errorCode"]
     if code != "SUCCESS" or trace.get("error"):
         ours = (trace.get("error") or {}).get("code", "SUCCESS")
@@ -489,8 +521,14 @@ def compare_stages(path, workers):
         return {"case": path.stem, "timeLimited": False, "stages": {"verify": verdict}}
     names = json.loads(request_text).get("playerNames") or []
     stages = {
-        "sims": _diff_sims("initial", trace["initial"], logged_sims(log, "Initial Sim Results"))
-        + _diff_sims("improved", trace["improved"], logged_sims(log, "Improved Factor Sim Results")),
+        "sims": _diff_sims(
+            "initial", trace["initial"], logged_sims(log, "Initial Sim Results")
+        )
+        + _diff_sims(
+            "improved",
+            trace["improved"],
+            logged_sims(log, "Improved Factor Sim Results"),
+        ),
         "precomp": _diff_precomp(trace["precomp"], logged_precomp(log, names)),
         "weights": _diff_weights(
             trace["matching"], logged_weights(log, len(trace["matching"]["nodes"]) - 1)
@@ -530,15 +568,25 @@ def stages_main(args):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("requests", nargs="*", type=Path,
-                    help="PairRequest JSON files (default: every fixture)")
+    ap.add_argument(
+        "requests",
+        nargs="*",
+        type=Path,
+        help="PairRequest JSON files (default: every fixture)",
+    )
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--out", type=Path, help="write per-case detail here")
     ap.add_argument("--json", action="store_true", help="one JSON object per case")
-    ap.add_argument("--strict", action="store_true",
-                    help="exit 1 if any comparable case is worse than upstream")
-    ap.add_argument("--stages", action="store_true",
-                    help="compare the Go re-port's intermediates with the oracle's log")
+    ap.add_argument(
+        "--strict",
+        action="store_true",
+        help="exit 1 if any comparable case is worse than upstream",
+    )
+    ap.add_argument(
+        "--stages",
+        action="store_true",
+        help="compare the Go re-port's intermediates with the oracle's log",
+    )
     args = ap.parse_args()
     if args.stages:
         return stages_main(args)
@@ -556,9 +604,15 @@ def main():
             slim = {k: v for k, v in case.items() if k not in ("log", "engineInput")}
             print(json.dumps(slim), flush=True)
         else:
-            games = (f"{case['differing']:>2}/{case['games']:<2}"
-                     if "games" in case else "  -  ")
-            print(f"{verdict(case):11} {games} {case['case']:<62} {notes(case)}", flush=True)
+            games = (
+                f"{case['differing']:>2}/{case['games']:<2}"
+                if "games" in case
+                else "  -  "
+            )
+            print(
+                f"{verdict(case):11} {games} {case['case']:<62} {notes(case)}",
+                flush=True,
+            )
 
     counts = {}
     for case in cases:
@@ -566,11 +620,13 @@ def main():
     if not args.json:
         print()
         print("  ".join(f"{k}: {v}" for k, v in sorted(counts.items())))
-        print("tie: different but equally optimal on upstream's weights; WORSE: "
-              "heavier on them; BARRED: uses a pair upstream excludes; PIN: Baxter "
-              "broke a pinned game; CONVERT: the converter's standings disagree with "
-              "upstream's. Lower case and * = not comparable (clock-bound, or asks "
-              "for something the engine cannot express). Games: differing/total.")
+        print(
+            "tie: different but equally optimal on upstream's weights; WORSE: "
+            "heavier on them; BARRED: uses a pair upstream excludes; PIN: Baxter "
+            "broke a pinned game; CONVERT: the converter's standings disagree with "
+            "upstream's. Lower case and * = not comparable (clock-bound, or asks "
+            "for something the engine cannot express). Games: differing/total."
+        )
     failing = ("WORSE", "BARRED", "DIFFER", "PIN", "CONVERT", "error")
     if args.strict and any(counts.get(k) for k in failing):
         sys.exit(1)

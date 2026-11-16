@@ -46,9 +46,7 @@ class Fuzzer:
         # is now meant to catch (plans/PLAN_PLAYER_IDENTITY.md).
         self.players = [
             Player.objects.create(
-                name=(
-                    f"Twin_{self.seed}" if i % 3 == 0 else f"P{i:02d}_{self.seed}"
-                ),
+                name=(f"Twin_{self.seed}" if i % 3 == 0 else f"P{i:02d}_{self.seed}"),
                 # A namespace that cannot collide with anything real. Registry
                 # numbers are canonicalized to four digits, so the old
                 # f"{seed}{i:03d}" scheme started colliding with live players
@@ -63,13 +61,19 @@ class Fuzzer:
 
         self.client.post(
             reverse("tournament_create"),
-            {"name": f"Fuzz {self.seed}", "location": "X", "start_date": "2026-03-15",
-             "editor_usernames": ""},
+            {
+                "name": f"Fuzz {self.seed}",
+                "location": "X",
+                "start_date": "2026-03-15",
+                "editor_usernames": "",
+            },
         )
         self.tournament = Tournament.objects.get(name=f"Fuzz {self.seed}")
         # A test division so simulate ops are available.
         self.client.post(
-            reverse("division_create", kwargs={"tournament_slug": self.tournament.slug}),
+            reverse(
+                "division_create", kwargs={"tournament_slug": self.tournament.slug}
+            ),
             {"name": "Div", "is_test": "1"},
         )
         self.division = self.tournament.divisions.get(name="Div")

@@ -86,8 +86,7 @@ def forget_link(record, key):
     Matched through ``PendingLink.key`` rather than by reassembling the key here,
     so there is one definition of what identifies a pending link.
     """
-    remaining = [e for e in record.pending
-                 if PendingLink.from_json(e).key != key]
+    remaining = [e for e in record.pending if PendingLink.from_json(e).key != key]
     if len(remaining) != len(record.pending):
         record.pending = remaining
         record.save(update_fields=["pending"])

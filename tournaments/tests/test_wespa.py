@@ -108,9 +108,7 @@ class MatchingTests(TestCase):
         cls.ann = Player.objects.create(
             name="Ann Lee", player_number="0001", rating=1600
         )
-        cls.bea = Player.objects.create(
-            name="Bea Fox", player_number="0002", rating=0
-        )
+        cls.bea = Player.objects.create(name="Bea Fox", player_number="0002", rating=0)
         cls.twin_a = Player.objects.create(
             name="John Smith", player_number="0010", rating=1500
         )
@@ -192,8 +190,10 @@ class MatchingTests(TestCase):
     def test_a_pull_names_the_upcoming_divisions_it_moved(self):
         owner = User.objects.create_user(username="td-wespa", password="pw")
         tournament = Tournament.objects.create(
-            name="Next Month", location="X",
-            start_date=date(2026, 10, 1), owner=owner,
+            name="Next Month",
+            location="X",
+            start_date=date(2026, 10, 1),
+            owner=owner,
         )
         division = Division.objects.create(tournament=tournament, name="Open")
         Entrant.enter(division, self.bea, 1)
@@ -204,8 +204,10 @@ class MatchingTests(TestCase):
         """Why a pull is safe mid-event: a started division keeps its seeds."""
         owner = User.objects.create_user(username="td-wespa", password="pw")
         tournament = Tournament.objects.create(
-            name="In Progress", location="X",
-            start_date=date(2026, 5, 1), owner=owner,
+            name="In Progress",
+            location="X",
+            start_date=date(2026, 5, 1),
+            owner=owner,
         )
         division = Division.objects.create(tournament=tournament, name="Open")
         entrant = Entrant.enter(division, self.bea, 1)
@@ -224,9 +226,7 @@ class MatchingTests(TestCase):
 class LinkTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.bea = Player.objects.create(
-            name="Bea Fox", player_number="0002", rating=0
-        )
+        cls.bea = Player.objects.create(name="Bea Fox", player_number="0002", rating=0)
         cls.row = WespaPlayer.objects.create(
             wespa_id=7, name="Beatrice Fox", country="NZL", rating=1450
         )
@@ -330,9 +330,7 @@ class WespaPageTests(TestCase):
 
     def test_a_hand_search_finds_the_differently_spelled_row(self):
         response = self.client.get(self.url, {"link": "T-1", "q": "Beatrice"})
-        self.assertEqual(
-            [r.wespa_id for r in response.context["search_results"]], [7]
-        )
+        self.assertEqual([r.wespa_id for r in response.context["search_results"]], [7])
 
     def test_linking_by_hand_writes_the_link_and_the_rating(self):
         self.client.post(
@@ -346,9 +344,7 @@ class WespaPageTests(TestCase):
         link_player(self.guest, self.row)
         response = self.client.get(self.url)
         self.assertContains(response, "Unlink")
-        self.client.post(
-            self.url, {"action": "unlink", "player_number": "T-1"}
-        )
+        self.client.post(self.url, {"action": "unlink", "player_number": "T-1"})
         self.guest.refresh_from_db()
         self.assertIsNone(self.guest.wespa_id)
 

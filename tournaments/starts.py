@@ -46,8 +46,10 @@ def start_conflicts(division):
     slips = division.result_slips.filter(
         pairing__isnull=False, pairing__round_pairings__status__in=_PUBLISHED
     ).select_related(
-        "pairing__first__player", "pairing__second__player",
-        "winner__player", "loser__player",
+        "pairing__first__player",
+        "pairing__second__player",
+        "winner__player",
+        "loser__player",
     )
     conflicts = []
     for slip in slips:

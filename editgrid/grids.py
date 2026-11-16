@@ -120,16 +120,16 @@ class EditGrid:
     """
 
     model: type
-    parent_field: str = ""     # FK kwarg on ``model`` pointing at the parent
-    related_name: str = ""     # reverse accessor for the collection on the parent
-    scope: str = ""            # editgrid key scope
+    parent_field: str = ""  # FK kwarg on ``model`` pointing at the parent
+    related_name: str = ""  # reverse accessor for the collection on the parent
+    scope: str = ""  # editgrid key scope
     dto_class: type
-    data_key: str = "rows"     # JSON key the client wraps its rows in
+    data_key: str = "rows"  # JSON key the client wraps its rows in
     dom_id: str = ""
     js_module: str = GENERIC_JS  # generic bootstrap; override for custom controls
     template_name: str = ""
-    columns: list = []         # list[Column] driving the client's table
-    focus_field: str = ""      # field to focus when a new row is added
+    columns: list = []  # list[Column] driving the client's table
+    focus_field: str = ""  # field to focus when a new row is added
     # Host grids that should log a save event set this to the event type; the
     # host view's on_saved hook records it. Empty = don't log.
     event_type: str = ""
@@ -233,7 +233,9 @@ class EditGrid:
             if key not in keyed:
                 raise ValueError(f"row {key!r} is not there to change")
             if self._checked(keyed[key]) != self._checked(change["from"]):
-                raise ValueError(f"row {key!r} is not what the change was recorded over")
+                raise ValueError(
+                    f"row {key!r} is not what the change was recorded over"
+                )
             keyed[key] = change["to"]
         for row in delta.get("added", []):
             key = self.portable_key(row)
@@ -303,8 +305,8 @@ class EditGrid:
 
     # Reconciling-save configuration. Empty ``key_fields`` keeps the legacy
     # wipe-and-recreate behaviour, so grids that don't opt in are unaffected.
-    key_fields: tuple[str, ...] = ()        # model attrs forming row identity
-    update_fields: tuple[str, ...] = ()     # model attrs the grid may change
+    key_fields: tuple[str, ...] = ()  # model attrs forming row identity
+    update_fields: tuple[str, ...] = ()  # model attrs the grid may change
     unique_within_parent: tuple[str, ...] = ()  # unique attrs needing a swap dance
 
     def queryset(self, parent):

@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('tournaments', '0032_tournamentevent'),
+        ("tournaments", "0032_tournamentevent"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='divisionsettings',
-            name='cop_config',
+            model_name="divisionsettings",
+            name="cop_config",
             field=models.JSONField(default=dict),
         ),
     ]

@@ -24,9 +24,7 @@ def _entrant_values(division):
     A picker that offers the same label twice is unusable, so a shared name
     carries its player number here (tournaments/display.py).
     """
-    entrants = list(
-        division.entrants.select_related("player").order_by("player__name")
-    )
+    entrants = list(division.entrants.select_related("player").order_by("player__name"))
     label_entrants(division_labels(division), entrants)
     return [{"id": e.pk, "label": e.display_name} for e in entrants]
 
@@ -39,16 +37,14 @@ def _entrant_key_map(division):
     a name-keyed row would resolve to whichever of them was found first.
     """
     return {
-        e.pk: e.player.player_number
-        for e in division.entrants.select_related("player")
+        e.pk: e.player.player_number for e in division.entrants.select_related("player")
     }
 
 
 def _entrant_pk_by_key(division):
     """{player number -> entrant pk} — the inverse, for replay (from_portable)."""
     return {
-        e.player.player_number: e.pk
-        for e in division.entrants.select_related("player")
+        e.player.player_number: e.pk for e in division.entrants.select_related("player")
     }
 
 
@@ -193,8 +189,13 @@ class EntrantsGrid(EditGrid):
     # number changes, adds, and guarded removals.
     key_fields = ("player_id",)
     update_fields = (
-        "number", "dropped", "rating", "rating_source",
-        "tentative", "paid", "playing_up",
+        "number",
+        "dropped",
+        "rating",
+        "rating_source",
+        "tentative",
+        "paid",
+        "playing_up",
     )
     unique_within_parent = ("number",)  # (division, number) is unique
     columns = [
@@ -210,18 +211,32 @@ class EntrantsGrid(EditGrid):
         Column("source", "Source", kind="display", width=90),
         # Widths leave room for the header plus Tabulator's sort arrow, which
         # eats about 20px — too tight and the title truncates to "O…".
-        Column("tentative", "Tent.", kind="flag", value_type="bool",
-               new_row=False, width=90),
-        Column("playing_up", "Up", kind="flag", value_type="bool",
-               new_row=False, width=75),
+        Column(
+            "tentative",
+            "Tent.",
+            kind="flag",
+            value_type="bool",
+            new_row=False,
+            width=90,
+        ),
+        Column(
+            "playing_up", "Up", kind="flag", value_type="bool", new_row=False, width=75
+        ),
         # Shown, not set. Withdrawing is more than a flag: it also has to
         # resolve the round already on the boards — dissolve the printed game,
         # give the opponent their bye, record the absence per the division's
         # rule — which is what ``forfeits.withdraw_entrant`` does and this grid
         # does not. Ticking it here used to set the flag alone and leave a
         # printed game nobody could play. Use Withdraw on the entrants page.
-        Column("dropped", "Out", kind="flag", value_type="bool",
-               new_row=False, width=85, editable=False),
+        Column(
+            "dropped",
+            "Out",
+            kind="flag",
+            value_type="bool",
+            new_row=False,
+            width=85,
+            editable=False,
+        ),
     ]
 
     def queryset(self, division):
@@ -246,14 +261,10 @@ class EntrantsGrid(EditGrid):
             # the roster is the central database's, thousands of rows deep.
             for p in Player.objects.filter(pk__in={r["player"] for r in rows})
         }
-        persisted = {
-            e.player_id: e for e in division.entrants.select_related("player")
-        }
+        persisted = {e.player_id: e for e in division.entrants.select_related("player")}
         portable = []
         for r in rows:
-            key, name, rating, wespa = players.get(
-                r["player"], (None, None, 0, None)
-            )
+            key, name, rating, wespa = players.get(r["player"], (None, None, 0, None))
             entrant = persisted.get(r["player"])
             portable.append(
                 {
@@ -276,7 +287,6 @@ class EntrantsGrid(EditGrid):
             )
         return portable
 
-
     def portable_key(self, row):
         """The player. An entrant is one person's registration in a division, so
         the row is theirs however its number or flags change."""
@@ -287,7 +297,12 @@ class EntrantsGrid(EditGrid):
     # written before entrant_added recorded its rating replays with whatever
     # rating the export header has now, so these would refuse a change over a
     # rating that has merely moved since.
-    delta_unchecked_fields = ("rating", "entrant_rating", "wespa_rating", "rating_source")
+    delta_unchecked_fields = (
+        "rating",
+        "entrant_rating",
+        "wespa_rating",
+        "rating_source",
+    )
     # "name" rides along for a replay into a fresh database; in the log it is
     # the label, not a column of its own.
     portable_identity_fields = ("player", "name")
@@ -307,7 +322,7 @@ class EntrantsGrid(EditGrid):
     }
 
     def portable_summary(self, row, names):
-        """"Femi Awowade  #3 · 1804 coco · paid" — the registration at a glance,
+        """ "Femi Awowade  #3 · 1804 coco · paid" — the registration at a glance,
         with only the flags that are actually set."""
         bits = []
         if row.get("number"):
@@ -324,7 +339,7 @@ class EntrantsGrid(EditGrid):
         return f"{label}  {' · '.join(bits)}".strip() if bits else label
 
     def portable_change(self, before, after, names):
-        """"Femi Awowade  paid · rating 1128 → 1804" — a flag that went on is
+        """ "Femi Awowade  paid · rating 1128 → 1804" — a flag that went on is
         just its word, and one that went off is negated."""
         moves = []
         for key, word in self._WORDS.items():
@@ -387,22 +402,27 @@ class EntrantsGrid(EditGrid):
         # — including two people who have never yet met in one division.
         players = list(Player.objects.filter(is_bye=False))
         labels = display_names(players)
-        return {"players": [
-            {
-                "id": p.pk,
-                "label": labels[p.player_number],
-                # Both ratings and the cascade's answer, so a row added in the
-                # grid can prefill its snapshot client-side. prepare() re-derives
-                # it server-side regardless — the client is never trusted for it.
-                "rating": p.rating,
-                "wespa_rating": p.wespa_rating,
-                "effective_rating": p.effective_rating[0],
-            }
-            for p in players
-        ]}
+        return {
+            "players": [
+                {
+                    "id": p.pk,
+                    "label": labels[p.player_number],
+                    # Both ratings and the cascade's answer, so a row added in the
+                    # grid can prefill its snapshot client-side. prepare() re-derives
+                    # it server-side regardless — the client is never trusted for it.
+                    "rating": p.rating,
+                    "wespa_rating": p.wespa_rating,
+                    "effective_rating": p.effective_rating[0],
+                }
+                for p in players
+            ]
+        }
 
     def validate_args(self, division):
-        return (set(Player.objects.filter(is_bye=False).values_list("pk", flat=True)), set())
+        return (
+            set(Player.objects.filter(is_bye=False).values_list("pk", flat=True)),
+            set(),
+        )
 
     def can_delete(self, entrant):
         # An entrant with pairings or results can't just be removed — deleting
@@ -414,10 +434,7 @@ class EntrantsGrid(EditGrid):
             or entrant.wins.exists()
             or entrant.losses.exists()
         ):
-            return (
-                f"{entrant.player.name} has pairings or results — cannot be "
-                "removed."
-            )
+            return f"{entrant.player.name} has pairings or results — cannot be removed."
         return None
 
     # Two entrants in one division may share a name. The guard that used to
@@ -454,11 +471,11 @@ class EntrantsGrid(EditGrid):
         derivation itself.
         """
         pinned = {
-            e.player_id: (e.rating, e.rating_source)
-            for e in division.entrants.all()
+            e.player_id: (e.rating, e.rating_source) for e in division.entrants.all()
         }
         new_ids = [
-            row.player_id for row in prepared
+            row.player_id
+            for row in prepared
             if not row.rating_source and row.player_id not in pinned
         ]
         players = Player.objects.in_bulk(new_ids) if new_ids else {}
@@ -503,9 +520,7 @@ class EntrantsGrid(EditGrid):
             # the next Pair Rounds render. Published/finished rounds are left
             # alone (unpublish handles those). Regenerating here is deliberately
             # avoided: a PairingError would poison the whole grid save.
-            division.round_pairings_set.filter(
-                status=RoundPairings.DRAFT
-            ).delete()
+            division.round_pairings_set.filter(status=RoundPairings.DRAFT).delete()
 
 
 class FixedPairingsGrid(EditGrid):
@@ -520,8 +535,20 @@ class FixedPairingsGrid(EditGrid):
     focus_field = "round_number"
     columns = [
         Column("round_number", "Round", kind="number", min=1, width=100),
-        Column("entrant1", "Player 1", kind="choice", lookup="entrantValues", autocomplete=True),
-        Column("entrant2", "Player 2", kind="choice", lookup="entrantValues", autocomplete=True),
+        Column(
+            "entrant1",
+            "Player 1",
+            kind="choice",
+            lookup="entrantValues",
+            autocomplete=True,
+        ),
+        Column(
+            "entrant2",
+            "Player 2",
+            kind="choice",
+            lookup="entrantValues",
+            autocomplete=True,
+        ),
     ]
 
     def to_portable(self, rows, division):
@@ -547,7 +574,9 @@ class FixedPairingsGrid(EditGrid):
 
     def _fixture_signature(self, division):
         return frozenset(
-            division.fixed_pairings.values_list("round_number", "entrant1_id", "entrant2_id")
+            division.fixed_pairings.values_list(
+                "round_number", "entrant1_id", "entrant2_id"
+            )
         )
 
     def persist(self, division, prepared):
@@ -558,9 +587,7 @@ class FixedPairingsGrid(EditGrid):
             # would print a board that ignores them. Drop them for the lazy
             # re-pair on the next Pair Rounds render, as the entrants grid does
             # (and for the same reason: not regenerating inside the save).
-            division.round_pairings_set.filter(
-                status=RoundPairings.DRAFT
-            ).delete()
+            division.round_pairings_set.filter(status=RoundPairings.DRAFT).delete()
 
     def portable_label(self, row, names):
         first = names.get(row.get("entrant1"), row.get("entrant1"))
@@ -623,8 +650,22 @@ class FixedTablesGrid(EditGrid):
     template_name = "tournaments/division_fixed_tables_edit.html"
     focus_field = "round_number"
     columns = [
-        Column("round_number", "Round", kind="choice", lookup="roundValues", width=100, new_row=-1),
-        Column("entrant", "Player", kind="choice", lookup="entrantValues", autocomplete=True, min_width=200),
+        Column(
+            "round_number",
+            "Round",
+            kind="choice",
+            lookup="roundValues",
+            width=100,
+            new_row=-1,
+        ),
+        Column(
+            "entrant",
+            "Player",
+            kind="choice",
+            lookup="entrantValues",
+            autocomplete=True,
+            min_width=200,
+        ),
         Column("table_label", "Table", kind="text", value_type="str", width=100),
     ]
 
@@ -730,13 +771,21 @@ class ResultsGrid(EditGrid):
         Column("winner_score", "W Score", kind="number", min=0, width=120),
         Column("loser", "Opponent", kind="choice", lookup="entrants"),
         Column("loser_score", "Opp Score", kind="number", min=0, width=130),
-        Column("winner_started", "Started", kind="choice",
-               values={True: "Winner", False: "Opponent"}, width=120,
-               value_type="bool", new_row=True),
+        Column(
+            "winner_started",
+            "Started",
+            kind="choice",
+            values={True: "Winner", False: "Opponent"},
+            width=120,
+            value_type="bool",
+            new_row=True,
+        ),
     ]
 
     def queryset(self, division):
-        return division.result_slips.select_related("winner", "loser").order_by("round", "pk")
+        return division.result_slips.select_related("winner", "loser").order_by(
+            "round", "pk"
+        )
 
     def to_portable(self, rows, division):
         # Bye-inclusive, unlike the other grids: a bye row's opponent *is* the
@@ -823,9 +872,7 @@ class ResultsGrid(EditGrid):
                 names.get(key, key), score, was=previous, won=key == winner
             )
 
-        return (
-            f"R{round_num}  {side(first, was[0])} – {side(second, was[1])}"
-        )
+        return f"R{round_num}  {side(first, was[0])} – {side(second, was[1])}"
 
     def portable_summary(self, row, names):
         """A result as the board had it: "R3  Dean Saldanha (442) – Femi Awowade
@@ -851,7 +898,11 @@ class ResultsGrid(EditGrid):
             # Same result, opposite ends: the start moved.
             return f"{line} · {names.get(first[0], first[0])} started"
         return self._line(
-            after.get("round"), first, second, winner, names,
+            after.get("round"),
+            first,
+            second,
+            winner,
+            names,
             was=(was_first[1], was_second[1]),
         )
 
@@ -913,9 +964,7 @@ class ResultsGrid(EditGrid):
         errors = _double_booking_errors(validated, names, bye_pk)
         if errors:
             return [], errors
-        round_containers = {
-            rp.round: rp for rp in division.round_pairings_set.all()
-        }
+        round_containers = {rp.round: rp for rp in division.round_pairings_set.all()}
         # (round, entrant pk) for everyone who already has a game that round.
         # A player has at most one, which is what stops a hand-entered bye from
         # quietly becoming a *second* game for somebody.
@@ -1150,7 +1199,9 @@ class BoardTableMapGrid(JsonBlobGrid):
     blob_field = "board_table_map"
     scope = "board_table_map"
     dom_id = "board-table-map-table"
-    event_type = "board_tables_saved"  # rows are label/board/table — no pks; default to_portable
+    event_type = (
+        "board_tables_saved"  # rows are label/board/table — no pks; default to_portable
+    )
     js_module = "tournaments/js/edit_board_table_map.js"  # custom: generate button
     template_name = "tournaments/division_board_table_map_edit.html"
     focus_field = "label"
@@ -1170,7 +1221,7 @@ class BoardTableMapGrid(JsonBlobGrid):
             try:
                 board = int(row["board"])
                 table = int(row["table"])
-            except (KeyError, TypeError, ValueError):
+            except KeyError, TypeError, ValueError:
                 errors.append(f"Row {i + 1}: board and order must be integers.")
                 continue
             if board < 1 or table < 1:

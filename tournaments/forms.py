@@ -40,7 +40,8 @@ def time_zone_choices():
     from zoneinfo import available_timezones
 
     zones = sorted(
-        z for z in available_timezones()
+        z
+        for z in available_timezones()
         if "/" in z and not z.startswith(("Etc/", "SystemV/", "US/"))
     )
     return [("UTC", "UTC")] + [(z, z.replace("_", " ")) for z in zones]
@@ -126,10 +127,14 @@ class ResultSlipForm(forms.Form):
     verified_by_opponent = forms.BooleanField(
         required=True,
         label="Verified by opponent",
-        error_messages={"required": "The result must be verified by the opponent before saving."},
+        error_messages={
+            "required": "The result must be verified by the opponent before saving."
+        },
     )
 
-    def __init__(self, *args, division=None, pairings_by_round=None, instance=None, **kwargs):
+    def __init__(
+        self, *args, division=None, pairings_by_round=None, instance=None, **kwargs
+    ):
         super().__init__(*args, **kwargs)
         self._division = division
         # When set, the form edits this existing ResultSlip in place instead of
@@ -165,7 +170,10 @@ class ResultSlipForm(forms.Form):
                     second_name,
                     r,
                 )
-                for ent_pk, ent_name in ((first_pk, first_name), (second_pk, second_name)):
+                for ent_pk, ent_name in (
+                    (first_pk, first_name),
+                    (second_pk, second_name),
+                ):
                     entry = winner_options.setdefault(ent_pk, (ent_name, []))
                     entry[1].append(p_pk)
 
@@ -173,7 +181,8 @@ class ResultSlipForm(forms.Form):
         self.fields["pairing"].widget = forms.Select(choices=pairing_choices)
         # (pk, name, [pairing pks]) per entrant, for rendering the winner options.
         self.winner_options = [
-            (ent_pk, name, pairings) for ent_pk, (name, pairings) in winner_options.items()
+            (ent_pk, name, pairings)
+            for ent_pk, (name, pairings) in winner_options.items()
         ]
         # The winner field accepts any entrant pk; the Select widget is only for
         # non-JS fallback (the template renders its own filtered options).
@@ -192,7 +201,9 @@ class ResultSlipForm(forms.Form):
         # dropdown is filtered to the selected round, so a pairing picked for a
         # different round must not linger. JS-only refinement — without it the
         # server-rendered options still all submit correctly.
-        self.fields["round"].widget.attrs["data-on:change"] = "$pairing = ''; $winner = ''"
+        self.fields["round"].widget.attrs["data-on:change"] = (
+            "$pairing = ''; $winner = ''"
+        )
 
     def clean_pairing(self):
         pairing_pk = self.cleaned_data.get("pairing")
@@ -247,7 +258,11 @@ class ResultSlipForm(forms.Form):
             from tournaments.playoff import conflicts_for_single_result
 
             conflicts = conflicts_for_single_result(
-                self._division, pairing, winner.key, winner_score, loser_score,
+                self._division,
+                pairing,
+                winner.key,
+                winner_score,
+                loser_score,
             )
             if conflicts:
                 raise forms.ValidationError(conflicts)
@@ -287,7 +302,8 @@ class FakeTournamentForm(forms.Form):
     # A playoff-only division has no regular rounds, so the round count is
     # hidden (and ignored) when this is ticked.
     playoff_only = forms.BooleanField(
-        required=False, label="Playoffs only",
+        required=False,
+        label="Playoffs only",
         widget=forms.CheckboxInput(attrs={"data-bind": "playoffOnly"}),
     )
     num_rounds = forms.IntegerField(
@@ -320,11 +336,14 @@ class WhatIfImportForm(forms.Form):
     to build a what-if sandbox. The file wins if both are given."""
 
     name = forms.CharField(
-        max_length=200, required=False, label="Tournament name",
+        max_length=200,
+        required=False,
+        label="Tournament name",
         help_text="Leave blank to name it from the import.",
     )
     pasted = forms.CharField(
-        widget=forms.Textarea(attrs={"rows": 10}), required=False,
+        widget=forms.Textarea(attrs={"rows": 10}),
+        required=False,
         label="Paste JSON or CSV",
     )
     upload = forms.FileField(required=False, label="…or upload a file")
@@ -351,11 +370,13 @@ class AbsenceSettingsForm(forms.Form):
         "affected.",
     )
     bye_spread = forms.IntegerField(
-        min_value=0, label="Bye spread",
+        min_value=0,
+        label="Bye spread",
         help_text="Points awarded for a bye, as your tournament's rules set it.",
     )
     forfeit_spread = forms.IntegerField(
-        min_value=0, label="Forfeit spread",
+        min_value=0,
+        label="Forfeit spread",
         help_text="Points charged for a forfeit, as your tournament's rules set it.",
     )
 
@@ -371,9 +392,7 @@ class AbsenceSettingsForm(forms.Form):
         except DivisionSettings.DoesNotExist:
             initial = {
                 "withdrawal": DivisionSettings.OMIT,
-                "bye_spread": DivisionSettings._meta.get_field(
-                    "bye_spread"
-                ).default,
+                "bye_spread": DivisionSettings._meta.get_field("bye_spread").default,
                 "forfeit_spread": DivisionSettings._meta.get_field(
                     "forfeit_spread"
                 ).default,
@@ -383,7 +402,8 @@ class AbsenceSettingsForm(forms.Form):
 
 class GamesPerDayForm(forms.Form):
     games_per_day = forms.IntegerField(
-        min_value=1, label="Games per day",
+        min_value=1,
+        label="Games per day",
         help_text="Groups the round tabs by day on the pairing and standings pages.",
     )
 
@@ -401,46 +421,58 @@ class CopConfigForm(forms.Form):
     # Field defaults come from DEFAULT_COP_CONFIG (applied in __init__), so the
     # form and the lazily-seeded config never drift.
     place_prizes = forms.IntegerField(
-        min_value=1, label="Number of place prizes",
+        min_value=1,
+        label="Number of place prizes",
         help_text="How many top finishers win a place (cash) prize.",
     )
     gibson_spread = forms.IntegerField(
-        min_value=0, label="Gibson spread",
+        min_value=0,
+        label="Gibson spread",
         help_text="Per-round spread cushion used to decide a player is "
         "mathematically locked into a placing.",
     )
     hopefulness = forms.FloatField(
-        min_value=0.0, max_value=1.0, label="Hopefulness",
+        min_value=0.0,
+        max_value=1.0,
+        label="Hopefulness",
         help_text="A player is a contender for a prize when they reach it in more "
         "than this fraction of simulations (0–1).",
     )
     control_loss_threshold = forms.FloatField(
-        min_value=0.0, max_value=1.0, label="Control-loss threshold",
+        min_value=0.0,
+        max_value=1.0,
+        label="Control-loss threshold",
         help_text="How much control the leader may lose before COP forces a "
         "specific top pairing (0–1).",
     )
     control_loss_activation_round = forms.IntegerField(
-        min_value=0, required=False, label="Control-loss activation round",
+        min_value=0,
+        required=False,
+        label="Control-loss activation round",
         help_text="Completed rounds after which control loss is enforced (0 = "
         "from the start). Leave blank for the last 4 rounds.",
     )
     simulations = forms.IntegerField(
-        min_value=1, label="Simulations",
+        min_value=1,
+        label="Simulations",
         help_text="Initial Monte Carlo runs used to identify contenders. COP then "
         "re-simulates in batches until the contenders are clear, within a fixed "
         "budget, so this mostly sets the minimum.",
     )
     always_wins_simulations = forms.IntegerField(
-        min_value=1, label="Control-loss simulations",
+        min_value=1,
+        label="Control-loss simulations",
         help_text="Runs used to decide whether the leader controls their own "
         "destiny. By far the slowest part of COP: raise it with care, since a "
         "large division pairs in the page request.",
     )
     disallow_repeat_byes = forms.BooleanField(
-        required=False, label="Disallow repeat byes",
+        required=False,
+        label="Disallow repeat byes",
     )
     top_down_byes = forms.BooleanField(
-        required=False, label="Top-down byes",
+        required=False,
+        label="Top-down byes",
         help_text="Give the bye to the highest-ranked player who has had the "
         "fewest byes, instead of letting COP choose.",
     )
@@ -454,8 +486,12 @@ class CopConfigForm(forms.Form):
     # rest inside the "Advanced settings" box.
     _BASIC = ["place_prizes", "disallow_repeat_byes", "top_down_byes"]
     _ADVANCED = [
-        "gibson_spread", "hopefulness", "control_loss_threshold",
-        "control_loss_activation_round", "simulations", "always_wins_simulations",
+        "gibson_spread",
+        "hopefulness",
+        "control_loss_threshold",
+        "control_loss_activation_round",
+        "simulations",
+        "always_wins_simulations",
     ]
 
     def basic_fields(self):
@@ -520,13 +556,16 @@ class RegistrationForm(forms.Form):
     # their number for this tournament, not a seat or a board — so it is derived
     # from the pinned rating rather than typed (``commands.reseed_entrants``).
     rating = forms.IntegerField(
-        required=False, min_value=0, label="Rating",
+        required=False,
+        min_value=0,
+        label="Rating",
         help_text="Leave blank to use the player's own rating.",
     )
     tentative = forms.BooleanField(required=False, label="Tentative")
     playing_up = forms.BooleanField(required=False, label="Playing up")
     payment_note = forms.CharField(
-        required=False, label="Payment note",
+        required=False,
+        label="Payment note",
         widget=forms.Textarea(attrs={"rows": 2}),
     )
 

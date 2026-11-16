@@ -4,20 +4,19 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('tournaments', '0058_admin_action_attachment'),
+        ("tournaments", "0058_admin_action_attachment"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='roundpairings',
-            name='paired_from',
+            model_name="roundpairings",
+            name="paired_from",
             field=models.IntegerField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='roundpairings',
-            name='paired_with',
-            field=models.CharField(blank=True, default='', max_length=40),
+            model_name="roundpairings",
+            name="paired_with",
+            field=models.CharField(blank=True, default="", max_length=40),
         ),
     ]

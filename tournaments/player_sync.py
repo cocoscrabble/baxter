@@ -51,7 +51,7 @@ def import_players(raw, *, actor=None):
     if isinstance(raw, (str, bytes)):
         try:
             raw = json.loads(raw)
-        except (json.JSONDecodeError, UnicodeDecodeError):
+        except json.JSONDecodeError, UnicodeDecodeError:
             return None, ["File is not valid JSON."]
 
     if not isinstance(raw, list):
@@ -78,7 +78,7 @@ def import_players(raw, *, actor=None):
             continue
         try:
             rating = int(row.get("rating", 0) or 0)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             errors.append(f"Row {i + 1}: rating must be a number.")
             continue
         cleaned[number] = {"name": name, "rating": rating}
@@ -100,11 +100,13 @@ def import_players(raw, *, actor=None):
             if player is None:
                 # bulk_create bypasses Player.save(), so the canonical form has
                 # to be applied here -- `number` already is one (see above).
-                to_create.append(Player(
-                    player_number=number,
-                    name=fields["name"],
-                    rating=fields["rating"],
-                ))
+                to_create.append(
+                    Player(
+                        player_number=number,
+                        name=fields["name"],
+                        rating=fields["rating"],
+                    )
+                )
             elif player.name != fields["name"] or player.rating != fields["rating"]:
                 player.name = fields["name"]
                 player.rating = fields["rating"]

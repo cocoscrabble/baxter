@@ -10,8 +10,12 @@ class Command(BaseCommand):
     help = "Import entrants from a CSV file into a division"
 
     def add_arguments(self, parser):
-        parser.add_argument("csv_file", help="Path to CSV file with Name,Rating columns")
-        parser.add_argument("division_id", type=int, help="Division ID to add entrants to")
+        parser.add_argument(
+            "csv_file", help="Path to CSV file with Name,Rating columns"
+        )
+        parser.add_argument(
+            "division_id", type=int, help="Division ID to add entrants to"
+        )
 
     def handle(self, *args, **options):
         csv_file = options["csv_file"]
@@ -59,7 +63,9 @@ class Command(BaseCommand):
         existing_count = division.entrants.count()
         if existing_count > 0:
             self.stdout.write(
-                self.style.WARNING(f"Removing {existing_count} existing entrants from division")
+                self.style.WARNING(
+                    f"Removing {existing_count} existing entrants from division"
+                )
             )
             division.entrants.all().delete()
 

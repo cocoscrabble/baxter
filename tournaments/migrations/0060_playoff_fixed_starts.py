@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('tournaments', '0059_round_pairings_paired_with'),
+        ("tournaments", "0059_round_pairings_paired_with"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='playoff',
-            name='fixed_starts',
+            model_name="playoff",
+            name="fixed_starts",
             field=models.JSONField(blank=True, default=list),
         ),
     ]

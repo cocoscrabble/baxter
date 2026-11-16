@@ -19,8 +19,7 @@ def rounds_with_results(division, round_numbers) -> set[int]:
     if not round_numbers:
         return set()
     return set(
-        division.result_slips
-        .filter(round__in=round_numbers)
+        division.result_slips.filter(round__in=round_numbers)
         .values_list("round", flat=True)
         .distinct()
     )
@@ -83,12 +82,15 @@ def bye_is_offered(division) -> bool:
 
 def bye_entrant_ids(division) -> set[int]:
     return set(
-        Entrant.all_objects.filter(division=division, player__is_bye=True)
-        .values_list("pk", flat=True)
+        Entrant.all_objects.filter(division=division, player__is_bye=True).values_list(
+            "pk", flat=True
+        )
     )
 
 
-def add_fixed_pairing(division, round_number, entrant1_id, entrant2_id) -> tuple[bool, str | None]:
+def add_fixed_pairing(
+    division, round_number, entrant1_id, entrant2_id
+) -> tuple[bool, str | None]:
     """Add a fixed pairing and regenerate. Returns (ok, error_message).
 
     One side may be the bye entrant: that fixes who gets the bye that round

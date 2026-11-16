@@ -5,15 +5,16 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('tournaments', '0055_forfeit_spread'),
+        ("tournaments", "0055_forfeit_spread"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='divisionsettings',
-            name='games_per_day',
-            field=models.PositiveSmallIntegerField(default=7, validators=[django.core.validators.MinValueValidator(1)]),
+            model_name="divisionsettings",
+            name="games_per_day",
+            field=models.PositiveSmallIntegerField(
+                default=7, validators=[django.core.validators.MinValueValidator(1)]
+            ),
         ),
     ]

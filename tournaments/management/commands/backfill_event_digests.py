@@ -27,7 +27,5 @@ class Command(BaseCommand):
             )
         done, skipped = backfill_all(log=self.stdout.write)
         self.stdout.write(
-            self.style.SUCCESS(
-                f"{done} tournament(s) rewritten, {skipped} skipped"
-            )
+            self.style.SUCCESS(f"{done} tournament(s) rewritten, {skipped} skipped")
         )

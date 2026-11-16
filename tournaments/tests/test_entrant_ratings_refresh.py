@@ -32,16 +32,24 @@ class RefreshTestCase(TestCase):
     def setUp(self):
         self.owner = User.objects.create_user(username="td-refresh", password="pw")
         self.tournament = create_tournament(
-            None, self.owner,
+            None,
+            self.owner,
             {
-                "name": "Champs", "location": "X", "start_date": "2026-05-01",
-                "editors": [], "default_division": {"name": "Open", "pairing_seed": 1},
+                "name": "Champs",
+                "location": "X",
+                "start_date": "2026-05-01",
+                "editors": [],
+                "default_division": {"name": "Open", "pairing_seed": 1},
             },
         )
         self.division = self.tournament.divisions.get()
         self.player = Player.objects.create(
-            name="Alec", player_number="0233", rating=1500, deviation=80.0,
-            career_games=100, last_played=date(2026, 1, 1),
+            name="Alec",
+            player_number="0233",
+            rating=1500,
+            deviation=80.0,
+            career_games=100,
+            last_played=date(2026, 1, 1),
         )
         # Entered through the command, not Entrant.enter, so the log is
         # complete and the replay test has a tournament to rebuild.
@@ -53,10 +61,14 @@ class RefreshTestCase(TestCase):
         # rating_source keeps it CoCo-sourced rather than manual, which is what
         # a director confirming the offered rating produces.
         self.entrant = add_entrant(
-            self.tournament, self.owner,
+            self.tournament,
+            self.owner,
             {
-                "division": "Open", "player": "0233", "number": 1,
-                "rating": 1500, "rating_source": Entrant.COCO,
+                "division": "Open",
+                "player": "0233",
+                "number": 1,
+                "rating": 1500,
+                "rating_source": Entrant.COCO,
             },
         )
 
@@ -119,7 +131,9 @@ class RefreshTests(RefreshTestCase):
 
     def test_it_repins_the_whole_seed(self):
         self.move_player(
-            rating=1700, deviation=42.0, career_games=140,
+            rating=1700,
+            deviation=42.0,
+            career_games=140,
             last_played=date(2026, 6, 1),
         )
         self.client.post(self.url(), {"entrants": ["0233"]}, follow=True)
@@ -132,14 +146,16 @@ class RefreshTests(RefreshTestCase):
         self.assertEqual(self.entrant.rating_source, Entrant.COCO)
 
     def test_only_the_ticked_entrants_move(self):
-        other = Player.objects.create(
-            name="Becky", player_number="0244", rating=1400
-        )
+        other = Player.objects.create(name="Becky", player_number="0244", rating=1400)
         other_entrant = add_entrant(
-            self.tournament, self.owner,
+            self.tournament,
+            self.owner,
             {
-                "division": "Open", "player": "0244", "number": 2,
-                "rating": 1400, "rating_source": Entrant.COCO,
+                "division": "Open",
+                "player": "0244",
+                "number": 2,
+                "rating": 1400,
+                "rating_source": Entrant.COCO,
             },
         )
         self.move_player(rating=1700)
@@ -210,7 +226,8 @@ class EventTests(RefreshTestCase):
         refresh_entrant_ratings(self.tournament, self.owner, event.payload)
         self.entrant.refresh_from_db()
         self.assertEqual(
-            self.entrant.rating, 1700,
+            self.entrant.rating,
+            1700,
             "the recorded value, not what the player table says now",
         )
 
@@ -277,14 +294,16 @@ class AddEntrantSourceTests(RefreshTestCase):
     """
 
     def test_an_explicit_source_is_accepted(self):
-        player = Player.objects.create(
-            name="Cass", player_number="0255", rating=1600
-        )
+        player = Player.objects.create(name="Cass", player_number="0255", rating=1600)
         entrant = add_entrant(
-            self.tournament, self.owner,
+            self.tournament,
+            self.owner,
             {
-                "division": "Open", "player": player.player_number, "number": 3,
-                "rating": 1600, "rating_source": Entrant.COCO,
+                "division": "Open",
+                "player": player.player_number,
+                "number": 3,
+                "rating": 1600,
+                "rating_source": Entrant.COCO,
             },
         )
         self.assertEqual(entrant.rating_source, Entrant.COCO)
@@ -292,14 +311,16 @@ class AddEntrantSourceTests(RefreshTestCase):
     def test_a_recorded_none_stays_none(self):
         # The case Entrant.enter's rating_source argument exists for: (0, none)
         # must come back as none, not as the manual that a bare rating implies.
-        player = Player.objects.create(
-            name="Dev", player_number="0256", rating=0
-        )
+        player = Player.objects.create(name="Dev", player_number="0256", rating=0)
         entrant = add_entrant(
-            self.tournament, self.owner,
+            self.tournament,
+            self.owner,
             {
-                "division": "Open", "player": player.player_number, "number": 4,
-                "rating": 0, "rating_source": Entrant.NONE,
+                "division": "Open",
+                "player": player.player_number,
+                "number": 4,
+                "rating": 0,
+                "rating_source": Entrant.NONE,
             },
         )
         self.assertEqual(entrant.rating_source, Entrant.NONE)
@@ -370,17 +391,23 @@ class LiveBeforeStartTests(RefreshTestCase):
             name="Bea", player_number="0234", rating=1600
         )
         add_entrant(
-            self.tournament, self.owner,
+            self.tournament,
+            self.owner,
             {
-                "division": "Open", "player": "0234",
-                "rating": 1600, "rating_source": Entrant.COCO,
+                "division": "Open",
+                "player": "0234",
+                "rating": 1600,
+                "rating_source": Entrant.COCO,
             },
         )
         reseed_entrants(self.tournament, self.owner, {"division": "Open"})
         save_settings(
-            self.tournament, self.owner,
-            {"division": "Open",
-             "blocks": [{"pairing": "KotH", "rounds": 1, "pair_from": 0}]},
+            self.tournament,
+            self.owner,
+            {
+                "division": "Open",
+                "blocks": [{"pairing": "KotH", "rounds": 1, "pair_from": 0}],
+            },
         )
 
     def numbers(self):
@@ -535,7 +562,9 @@ class ReseedButtonTests(LiveBeforeStartTests):
 
     def test_refused_once_under_way(self):
         self.assertContains(self.client.get(self.entrants_url()), "Reseed by rating")
-        self.client.get(reverse("division_pair_rounds", kwargs=self.division.slug_kwargs()))
+        self.client.get(
+            reverse("division_pair_rounds", kwargs=self.division.slug_kwargs())
+        )
         self.client.post(self.publish_url(), {"round": 1})
         self.assertNotContains(self.client.get(self.entrants_url()), "Reseed by rating")
 

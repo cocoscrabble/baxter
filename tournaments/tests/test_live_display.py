@@ -32,9 +32,7 @@ class LiveLayoutTests(SimpleTestCase):
     def test_tiles_band_whole_sections(self):
         # Eight ten-row tiles in four columns: two bands, each as tall as its
         # tallest tile, each costing a subtitle and header row.
-        self.assertEqual(
-            live_shape([10] * 8, 4, tiles=True), (20, live_overhead(2))
-        )
+        self.assertEqual(live_shape([10] * 8, 4, tiles=True), (20, live_overhead(2)))
         self.assertEqual(live_shape([10, 3, 5], 2, tiles=True), (15, live_overhead(2)))
         # Never more columns than tiles.
         self.assertEqual(live_columns([4, 4], 10, tiles=True), 2)
@@ -48,33 +46,57 @@ class LiveDisplayTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         setUpTournament(cls)
-        cls.player3 = Player.objects.create(name="Cara", player_number="003", rating=1400)
-        cls.player4 = Player.objects.create(name="Dan", player_number="004", rating=1300)
-        cls.entrant3 = Entrant.objects.create(division=cls.division, player=cls.player3, number=3)
-        cls.entrant4 = Entrant.objects.create(division=cls.division, player=cls.player4, number=4)
+        cls.player3 = Player.objects.create(
+            name="Cara", player_number="003", rating=1400
+        )
+        cls.player4 = Player.objects.create(
+            name="Dan", player_number="004", rating=1300
+        )
+        cls.entrant3 = Entrant.objects.create(
+            division=cls.division, player=cls.player3, number=3
+        )
+        cls.entrant4 = Entrant.objects.create(
+            division=cls.division, player=cls.player4, number=4
+        )
 
     def _url(self, name):
         return reverse(name, kwargs=self.division.slug_kwargs())
 
     def _create_round(self, round_num, status, pairs):
-        rp = RoundPairings.objects.create(division=self.division, round=round_num, status=status)
+        rp = RoundPairings.objects.create(
+            division=self.division, round=round_num, status=status
+        )
         for table, (first, second) in enumerate(pairs, start=1):
             Pairing.objects.create(
-                division=self.division, round=round_num, round_pairings=rp,
-                first=first, second=second, table=table,
+                division=self.division,
+                round=round_num,
+                round_pairings=rp,
+                first=first,
+                second=second,
+                table=table,
             )
 
     def _slip(self, round_num, winner, loser, created_at):
         slip = ResultSlip.objects.create(
-            division=self.division, round=round_num, winner=winner, loser=loser,
-            winner_score=400, loser_score=300, winner_started=True,
+            division=self.division,
+            round=round_num,
+            winner=winner,
+            loser=loser,
+            winner_score=400,
+            loser_score=300,
+            winner_started=True,
         )
         # auto_now_add ignores a passed value, so set it afterwards.
         ResultSlip.objects.filter(pk=slip.pk).update(created_at=created_at)
         return slip
 
     def test_pages_have_no_site_nav(self):
-        for name in ("live_standings", "live_pairings", "live_results", "live_statistics"):
+        for name in (
+            "live_standings",
+            "live_pairings",
+            "live_results",
+            "live_statistics",
+        ):
             response = self.client.get(self._url(name))
             self.assertEqual(response.status_code, 200)
             self.assertNotContains(response, 'class="navbar"')
@@ -110,13 +132,17 @@ class LiveDisplayTests(TestCase):
 
     def test_display_can_pin_early_rounds_and_preserve_them_on_poll(self):
         for r in range(1, 6):
-            self._create_round(r, RoundPairings.PUBLISHED, [(self.entrant1, self.entrant2)])
+            self._create_round(
+                r, RoundPairings.PUBLISHED, [(self.entrant1, self.entrant2)]
+            )
         url = self._url("live_pairings") + "?rounds=1&rounds=2"
         response = self.client.get(url)
         self.assertEqual(self._subtitles(response), ["Round 1", "Round 2"])
         self.assertEqual(response.context["live_poll_url"], url)
         self.assertContains(response, 'name="rounds" value="1" checked')
-        body = b"".join(self.client.get(url, headers={"Datastar-Request": "true"}).streaming_content).decode()
+        body = b"".join(
+            self.client.get(url, headers={"Datastar-Request": "true"}).streaming_content
+        ).decode()
         self.assertIn("Round 1", body)
         self.assertIn("Round 2", body)
         self.assertNotIn("Round 5", body)
@@ -124,9 +150,13 @@ class LiveDisplayTests(TestCase):
     def test_display_never_exposes_draft_or_unknown_rounds(self):
         self._create_round(1, RoundPairings.PUBLISHED, [(self.entrant1, self.entrant2)])
         self._create_round(2, RoundPairings.DRAFT, [(self.entrant1, self.entrant3)])
-        response = self.client.get(self._url("live_pairings"), {"rounds": ["2", "999", "bad"]})
+        response = self.client.get(
+            self._url("live_pairings"), {"rounds": ["2", "999", "bad"]}
+        )
         self.assertEqual(self._subtitles(response), ["Round 1"])
-        self.assertEqual([c["round"] for c in response.context["live_round_choices"]], [1])
+        self.assertEqual(
+            [c["round"] for c in response.context["live_round_choices"]], [1]
+        )
 
     def test_pairings_first_round_shows_alone(self):
         self._create_round(1, RoundPairings.PUBLISHED, [(self.entrant1, self.entrant2)])
@@ -149,19 +179,31 @@ class LiveDisplayTests(TestCase):
         bye = self.division.bye_entrant()
         self._slip(1, self.entrant1, bye, now + timedelta(minutes=1))
         response = self.client.get(self._url("live_results"))
-        self.assertEqual(list(response.context["live_sections"][0]["rows"]), [newer, older])
+        self.assertEqual(
+            list(response.context["live_sections"][0]["rows"]), [newer, older]
+        )
         self.assertNotContains(response, "<th>Started</th>")
 
     def _partial_round_two(self):
         """Round 1 done; in round 2 only Alice-Bob has finished (Alice 2-0),
         while Dan (1-0) is still playing Cara."""
         now = timezone.now()
-        self._create_round(1, RoundPairings.FINISHED, [
-            (self.entrant1, self.entrant2), (self.entrant4, self.entrant3),
-        ])
-        self._create_round(2, RoundPairings.IN_PROGRESS, [
-            (self.entrant1, self.entrant2), (self.entrant3, self.entrant4),
-        ])
+        self._create_round(
+            1,
+            RoundPairings.FINISHED,
+            [
+                (self.entrant1, self.entrant2),
+                (self.entrant4, self.entrant3),
+            ],
+        )
+        self._create_round(
+            2,
+            RoundPairings.IN_PROGRESS,
+            [
+                (self.entrant1, self.entrant2),
+                (self.entrant3, self.entrant4),
+            ],
+        )
         self._slip(1, self.entrant1, self.entrant2, now)
         self._slip(1, self.entrant4, self.entrant3, now)
         self._slip(2, self.entrant1, self.entrant2, now)
@@ -172,9 +214,15 @@ class LiveDisplayTests(TestCase):
         (section,) = response.context["live_sections"]
         self.assertEqual(section["subtitle"], "")
         order = [(p.name, p.wins, p.losses) for p in section["rows"]]
-        self.assertEqual(order, [
-            ("Alice", 2, 0), ("Dan", 1, 0), ("Cara", 0, 1), ("Bob", 0, 2),
-        ])
+        self.assertEqual(
+            order,
+            [
+                ("Alice", 2, 0),
+                ("Dan", 1, 0),
+                ("Cara", 0, 1),
+                ("Bob", 0, 2),
+            ],
+        )
 
     def test_standings_ranks_run_on_across_columns(self):
         self._partial_round_two()

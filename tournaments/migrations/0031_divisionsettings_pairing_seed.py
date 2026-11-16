@@ -15,18 +15,17 @@ def randomize_existing_seeds(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('tournaments', '0030_entrant_dropped'),
+        ("tournaments", "0030_entrant_dropped"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='divisionsettings',
-            name='pairing_seed',
-            field=models.BigIntegerField(default=tournaments.models.random_pairing_seed),
+            model_name="divisionsettings",
+            name="pairing_seed",
+            field=models.BigIntegerField(
+                default=tournaments.models.random_pairing_seed
+            ),
         ),
-        migrations.RunPython(
-            randomize_existing_seeds, migrations.RunPython.noop
-        ),
+        migrations.RunPython(randomize_existing_seeds, migrations.RunPython.noop),
     ]

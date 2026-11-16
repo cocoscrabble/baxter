@@ -105,8 +105,7 @@ def project_ratings(division, as_of=None) -> dict[str, Projection]:
         calculator.calc_new_rating_for_player(player)
 
     return {
-        entrant.key: _projection(entrant, players[entrant.key])
-        for entrant in entrants
+        entrant.key: _projection(entrant, players[entrant.key]) for entrant in entrants
     }
 
 

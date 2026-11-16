@@ -243,7 +243,8 @@ def _publish(division, rounds, payload):
         )
     return published, {
         **payload,
-        "pairings": recorded if recorded is not None
+        "pairings": recorded
+        if recorded is not None
         else published_rows(division, published),
     }
 
@@ -337,9 +338,11 @@ def _fixable_playoff(division, payload):
         raise StartFixError("This division has no playoff.")
     if payload["first"] == payload["second"]:
         raise StartFixError("A game needs two different players.")
-    printed = division.round_pairings_set.filter(round=payload["round"]).exclude(
-        status=RoundPairings.DRAFT
-    ).exists()
+    printed = (
+        division.round_pairings_set.filter(round=payload["round"])
+        .exclude(status=RoundPairings.DRAFT)
+        .exists()
+    )
     if printed:
         raise StartFixError(
             f"Round {payload['round']} is already published; its starts are on the boards."
@@ -363,10 +366,13 @@ def fix_playoff_start(tournament, actor, payload):
     _entrant(division, payload["second"])
     pair = {payload["first"], payload["second"]}
     kept = [
-        fix for fix in playoff.fixed_starts
+        fix
+        for fix in playoff.fixed_starts
         if not (fix[0] == payload["round"] and {fix[1], fix[2]} == pair)
     ]
-    playoff.fixed_starts = kept + [[payload["round"], payload["first"], payload["second"]]]
+    playoff.fixed_starts = kept + [
+        [payload["round"], payload["first"], payload["second"]]
+    ]
     playoff.save(update_fields=["fixed_starts"])
     _invalidate_drafts(division)
     return EventResult(payload=payload, division=division, result=playoff)
@@ -380,11 +386,14 @@ def unfix_playoff_start(tournament, actor, payload):
     playoff = _fixable_playoff(division, payload)
     pair = {payload["first"], payload["second"]}
     kept = [
-        fix for fix in playoff.fixed_starts
+        fix
+        for fix in playoff.fixed_starts
         if not (fix[0] == payload["round"] and {fix[1], fix[2]} == pair)
     ]
     if len(kept) == len(playoff.fixed_starts):
-        return EventResult(payload=payload, division=division, result=playoff, record=False)
+        return EventResult(
+            payload=payload, division=division, result=playoff, record=False
+        )
     playoff.fixed_starts = kept
     playoff.save(update_fields=["fixed_starts"])
     _invalidate_drafts(division)
@@ -414,11 +423,11 @@ def remove_fixed_pairing_cmd(tournament, actor, payload):
     division = _division(tournament, payload["division"])
     e1 = _fixture_entrant(division, payload["player1"])
     e2 = _fixture_entrant(division, payload["player2"])
-    fp = FixedPairing.objects.filter(
-        division=division, round_number=payload["round"]
-    ).filter(
-        Q(entrant1=e1, entrant2=e2) | Q(entrant1=e2, entrant2=e1)
-    ).first()
+    fp = (
+        FixedPairing.objects.filter(division=division, round_number=payload["round"])
+        .filter(Q(entrant1=e1, entrant2=e2) | Q(entrant1=e2, entrant2=e1))
+        .first()
+    )
     if fp is None:
         return EventResult(payload=payload, result=(False, None), record=False)
     ok, error = remove_fixed_pairing(division, fp.pk)
@@ -712,10 +721,18 @@ def import_division(tournament, actor, payload):
     from collections import defaultdict
 
     from tournaments.generate_pairings import (
-        BYE_LOSER_SCORE, absence_row, absence_spread,
+        BYE_LOSER_SCORE,
+        absence_row,
+        absence_spread,
     )
     from tournaments.grids import resolve_player
-    from tournaments.models import BYE_PLAYER_NAME, Entrant, Pairing, Player, RoundPairings
+    from tournaments.models import (
+        BYE_PLAYER_NAME,
+        Entrant,
+        Pairing,
+        Player,
+        RoundPairings,
+    )
     from tournaments.pairing.round_pairing import blocks_to_round_pairings
 
     division, _ = Division.objects.get_or_create(
@@ -731,9 +748,7 @@ def import_division(tournament, actor, payload):
         exists = Player.objects.filter(name__iexact=e["player"]).exists()
         player = resolve_player(None, e["player"], e.get("rating", 0))
         (matched if exists else created).append(player.name)
-        ent_by_name[e["player"]] = Entrant.enter(
-            division, player, e["number"]
-        )
+        ent_by_name[e["player"]] = Entrant.enter(division, player, e["number"])
 
     def entrant(name):
         ent = ent_by_name.get(name)
@@ -761,8 +776,11 @@ def import_division(tournament, actor, payload):
             # read this way: one logged before ``bye_rows`` entered "Bye" as an
             # ordinary player, and replays as it was.
             bye_side = payload.get("bye_rows") and next(
-                (side for side in ("winner", "loser")
-                 if r[side].casefold() == BYE_PLAYER_NAME.casefold()),
+                (
+                    side
+                    for side in ("winner", "loser")
+                    if r[side].casefold() == BYE_PLAYER_NAME.casefold()
+                ),
                 None,
             )
             if bye_side:
@@ -773,9 +791,13 @@ def import_division(tournament, actor, payload):
                 )
                 w, lo = (bye_ent, real) if bye_side == "winner" else (real, bye_ent)
                 ResultSlip.objects.create(
-                    division=division, round=round_num, pairing=pairing,
-                    winner=w, winner_score=r["winner_score"],
-                    loser=lo, loser_score=r["loser_score"],
+                    division=division,
+                    round=round_num,
+                    pairing=pairing,
+                    winner=w,
+                    winner_score=r["winner_score"],
+                    loser=lo,
+                    loser_score=r["loser_score"],
                     # The bye is the notional starter either way.
                     winner_started=(bye_side == "winner"),
                 )
@@ -791,12 +813,21 @@ def import_division(tournament, actor, payload):
         for table, (w, lo, wscore, lscore, wstarted) in enumerate(games, start=1):
             first, second = (w, lo) if wstarted else (lo, w)
             pairing = Pairing.objects.create(
-                division=division, round=round_num, round_pairings=rp,
-                first=first, second=second, table=table,
+                division=division,
+                round=round_num,
+                round_pairings=rp,
+                first=first,
+                second=second,
+                table=table,
             )
             ResultSlip.objects.create(
-                division=division, round=round_num, pairing=pairing,
-                winner=w, winner_score=wscore, loser=lo, loser_score=lscore,
+                division=division,
+                round=round_num,
+                pairing=pairing,
+                winner=w,
+                winner_score=wscore,
+                loser=lo,
+                loser_score=lscore,
                 winner_started=wstarted,
             )
         # Infer a bye for every non-dropped entrant idle in this played round.
@@ -807,13 +838,22 @@ def import_division(tournament, actor, payload):
             if bye_ent is None:
                 bye_ent = division.bye_entrant()
             pairing = Pairing.objects.create(
-                division=division, round=round_num, round_pairings=rp,
-                first=e, second=bye_ent, table=0,
+                division=division,
+                round=round_num,
+                round_pairings=rp,
+                first=e,
+                second=bye_ent,
+                table=0,
             )
             ResultSlip.objects.create(
-                division=division, round=round_num, pairing=pairing,
-                winner=e, winner_score=absence_spread(division),
-                loser=bye_ent, loser_score=BYE_LOSER_SCORE, winner_started=False,
+                division=division,
+                round=round_num,
+                pairing=pairing,
+                winner=e,
+                winner_score=absence_spread(division),
+                loser=bye_ent,
+                loser_score=BYE_LOSER_SCORE,
+                winner_started=False,
             )
             inferred_byes.append([round_num, e.player.name])
 
@@ -852,9 +892,7 @@ def _sim_result_dict(slip):
 
 
 def _apply_sim_result(division, round_num, r):
-    pairing = _find_pairing(
-        division, round_num, r["first_player"], r["second_player"]
-    )
+    pairing = _find_pairing(division, round_num, r["first_player"], r["second_player"])
     slip = ResultSlip.objects.create(
         division=division,
         round=round_num,
@@ -917,8 +955,12 @@ def simulate_round_cmd(tournament, actor, payload):
     created = (
         division.result_slips.filter(round=round_num)
         .exclude(pk__in=before)
-        .select_related("pairing__first__player", "pairing__second__player",
-                        "winner__player", "loser__player")
+        .select_related(
+            "pairing__first__player",
+            "pairing__second__player",
+            "winner__player",
+            "loser__player",
+        )
     )
     out = {**payload, "results": [_sim_result_dict(s) for s in created]}
     return EventResult(payload=out, division=division, result=None)
@@ -1026,8 +1068,14 @@ def reseed_entrants(tournament, actor, payload):
 # ``rating`` is deliberately alongside ``rating_source``: an update that changes
 # the rating without saying where it came from would be ambiguous.
 _REGISTRATION_FIELDS = (
-    "number", "rating", "rating_source", "tentative", "paid",
-    "payment_note", "playing_up", "dropped",
+    "number",
+    "rating",
+    "rating_source",
+    "tentative",
+    "paid",
+    "payment_note",
+    "playing_up",
+    "dropped",
 )
 
 
@@ -1054,7 +1102,8 @@ def add_entrant(tournament, actor, payload):
     # both is a TypeError, which is what a payload spelling out the source used
     # to do.
     fields = {
-        k: payload[k] for k in _REGISTRATION_FIELDS
+        k: payload[k]
+        for k in _REGISTRATION_FIELDS
         if k in payload and k not in ("number", "rating", "rating_source")
     }
     # ``number`` is optional now that the registration page no longer asks for
@@ -1066,7 +1115,9 @@ def add_entrant(tournament, actor, payload):
     if number is None:
         number = Entrant.next_number(division)
     entrant = Entrant.enter(
-        division, player, int(number),
+        division,
+        player,
+        int(number),
         rating=payload.get("rating"),
         rating_source=payload.get("rating_source"),
         **fields,
@@ -1098,15 +1149,12 @@ def update_entrant(tournament, actor, payload):
 
     division = _division(tournament, payload["division"])
     number = canonical_player_number(payload["player"])
-    entrant = (
-        Entrant.all_objects.filter(
-            division=division, player__player_number=number
-        ).first()
-    )
+    entrant = Entrant.all_objects.filter(
+        division=division, player__player_number=number
+    ).first()
     if entrant is None:
         raise ValueError(
-            f"No entrant with player number {payload['player']!r} in "
-            f"{division.name}."
+            f"No entrant with player number {payload['player']!r} in {division.name}."
         )
 
     changed = [k for k in _REGISTRATION_FIELDS if k in payload]
@@ -1158,8 +1206,7 @@ def refresh_entrant_ratings(tournament, actor, payload):
         ).first()
         if entrant is None:
             raise ValueError(
-                f"No entrant with player number {row['player']!r} in "
-                f"{division.name}."
+                f"No entrant with player number {row['player']!r} in {division.name}."
             )
         for field in SEED_FIELDS:
             if field == "rated_games" and field not in row:
@@ -1297,11 +1344,13 @@ def apply_player_merge(guest_number, into_number):
         guest.save(update_fields=["player_number", "is_provisional"])
         return guest
 
-    clashes = Division.objects.filter(
-        pk__in=Entrant.all_objects.filter(player=guest).values("division")
-    ).filter(
-        pk__in=Entrant.all_objects.filter(player=into).values("division")
-    ).select_related("tournament")
+    clashes = (
+        Division.objects.filter(
+            pk__in=Entrant.all_objects.filter(player=guest).values("division")
+        )
+        .filter(pk__in=Entrant.all_objects.filter(player=into).values("division"))
+        .select_related("tournament")
+    )
     if clashes:
         where = ", ".join(f"{d.tournament.name} / {d.name}" for d in clashes)
         raise ValueError(
