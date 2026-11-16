@@ -8,6 +8,18 @@ on:
   workflow_call:
 
 jobs:
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+      # The dev group's pinned ruff, not whatever uvx would fetch, so CI and a
+      # local `uv run ruff` agree. --only-dev skips the project (and the Rust build).
+      - run: uv sync --only-dev
+      - run: uv run --no-sync ruff check .
+      - run: uv run --no-sync ruff format --check .
+
   rust:
     name: Pairing engine (cargo test)
     runs-on: ubuntu-latest

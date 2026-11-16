@@ -19,6 +19,10 @@ npm install        # JS deps (Tabulator for the edit grids) — served from
 # Rebuild the Rust pairing extension after editing scrabble-pairing*/ crates
 # (uv does not watch the crate source)
 make rust-engine   # == uv sync --reinstall-package scrabble-pairing-py
+
+# CI (.github/workflows/ci.yml) fails on either of these
+uv run ruff check .
+uv run ruff format --check .
 ```
 
 ## Pairing engine (Rust)
