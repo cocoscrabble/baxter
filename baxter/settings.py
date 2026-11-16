@@ -233,6 +233,15 @@ if "test" in sys.argv:
     # Axes needs a request to authenticate, which client.login() does not pass.
     # The lockout tests turn it back on.
     AXES_ENABLED = False
+    # Plain static storage whatever DEBUG says: the manifest storage above
+    # needs a collectstatic run, which a test run (CI has no .env, so DEBUG is
+    # off) never does.
+    STORAGES = {
+        "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+        },
+    }
 
 # Logging: send everything to stdout so `dokku logs` (and any container log
 # collector) captures it. Django's default routes unhandled-exception (500)
