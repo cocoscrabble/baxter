@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # deploy.yml runs this first and deploys only if it passes.
+  workflow_call:
+
+jobs:
+  rust:
+    name: Pairing engine (cargo test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: scrabble-pairing
+      - name: cargo test
+        working-directory: scrabble-pairing
+        run: cargo test --release
+
+  django:
+    name: Django tests
+    runs-on: ubuntu-latest
+    env:
+      # settings.py has no default, on purpose; anything will do for tests.
+      SECRET_KEY: ci-placeholder
+    steps:
+      - uses: actions/checkout@v7
+      # setup-uv stopped publishing floating major tags (v8+), so pin the release.
+      - uses: astral-sh/setup-uv@v10.2.0
+      # `uv sync` builds the scrabble-pairing-py extension with maturin; cache
+      # its target dir so that is not a cold Rust build every run.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: scrabble-pairing-py
+      - name: Install Python deps (builds the Rust extension)
+        run: uv sync
+      # Tabulator, served from node_modules by django-node-assets.
+      - name: Install JS deps
+        run: npm ci
+      - name: Tests (including slow)
+        run: uv run python manage.py test tournaments.tests users editgrid --parallel
+
+  browser:
+    name: Browser tests (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install JS deps
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Playwright
+        run: npx playwright test
