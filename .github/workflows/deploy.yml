@@ -1,0 +1,41 @@
+name: Deploy
+
+# Production deploys happen by merging main into the `deploy` branch:
+#
+#   git push origin main:deploy      (or a PR from main into deploy)
+#
+# Whoever can push to `deploy` on GitHub can deploy; nobody needs a Dokku key
+# of their own (see ../vps README, "Administrators"). Restrict who that is with
+# branch protection on `deploy`.
+
+on:
+  push:
+    branches: [deploy]
+
+# Two quick merges deploy one after the other, never interleaved.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  # The full CI suite, against the exact commit being deployed.
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Dokku needs the full git history to build.
+          fetch-depth: 0
+      - name: Deploy to Dokku
+        uses: dokku/github-action@master
+        with:
+          git_remote_url: "ssh://dokku@cocoscrabble.vps.webdock.cloud/baxter"
+          # The github-actions machine key, installed by ../vps dokku.yml.
+          ssh_private_key: ${{ secrets.DOKKU_SSH_PRIVATE_KEY }}
+          # Pushes the `deploy` commit to Dokku's `main`, its deploy-branch
+          # (set globally in ../vps dokku.yml).
+          branch: "main"
