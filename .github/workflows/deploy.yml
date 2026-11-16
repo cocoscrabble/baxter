@@ -1,12 +1,20 @@
 name: Deploy
 
-# Production deploys happen by merging main into the `deploy` branch:
+# Production deploys happen by fast-forwarding `deploy` to a green main:
 #
-#   git push origin main:deploy      (or a PR from main into deploy)
+#   git push origin main:deploy
 #
-# Whoever can push to `deploy` on GitHub can deploy; nobody needs a Dokku key
-# of their own (see ../vps README, "Administrators"). Restrict who that is with
-# branch protection on `deploy`.
+# Nobody needs a Dokku key of their own (see ../vps README, "Administrators");
+# who can deploy is GitHub's call, set in the repo's rulesets for `deploy`:
+#
+#   deploy: who can deploy -- only repository admins may push to it
+#   deploy: integrity      -- no deletion, no force push, and the commit must
+#                             already have passed CI (so: push what main tested)
+#
+# The Dokku key is a secret of the `production` environment, which only the
+# `deploy` branch may use. A workflow on any other branch cannot read it, so
+# write access to the repo is not a back door to the server. (The key controls
+# every app on the box, not just this one.)
 
 on:
   push:
@@ -25,6 +33,9 @@ jobs:
   deploy:
     needs: ci
     runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://baxter.cocoscrabble.org
     steps:
       - uses: actions/checkout@v7
         with:
@@ -34,7 +45,8 @@ jobs:
         uses: dokku/github-action@master
         with:
           git_remote_url: "ssh://dokku@cocoscrabble.vps.webdock.cloud/baxter"
-          # The github-actions machine key, installed by ../vps dokku.yml.
+          # The github-actions machine key, installed by ../vps dokku.yml; an
+          # environment secret of `production`.
           ssh_private_key: ${{ secrets.DOKKU_SSH_PRIVATE_KEY }}
           # Pushes the `deploy` commit to Dokku's `main`, its deploy-branch
           # (set globally in ../vps dokku.yml).
