@@ -771,32 +771,32 @@ def import_division(tournament, actor, payload):
                 pairing = absence_row(
                     division, rp, real, forfeit=(bye_side == "winner")
                 )
-                w, l = (bye_ent, real) if bye_side == "winner" else (real, bye_ent)
+                w, lo = (bye_ent, real) if bye_side == "winner" else (real, bye_ent)
                 ResultSlip.objects.create(
                     division=division, round=round_num, pairing=pairing,
                     winner=w, winner_score=r["winner_score"],
-                    loser=l, loser_score=r["loser_score"],
+                    loser=lo, loser_score=r["loser_score"],
                     # The bye is the notional starter either way.
                     winner_started=(bye_side == "winner"),
                 )
                 played.add(real.pk)
                 continue
-            w, l = entrant(r["winner"]), entrant(r["loser"])
+            w, lo = entrant(r["winner"]), entrant(r["loser"])
             games.append(
-                (w, l, r["winner_score"], r["loser_score"], r["winner_started"])
+                (w, lo, r["winner_score"], r["loser_score"], r["winner_started"])
             )
-            played.update({w.pk, l.pk})
+            played.update({w.pk, lo.pk})
         # The top game (lowest entrant number in the pair) claims board 1.
         games.sort(key=lambda g: min(g[0].number, g[1].number))
-        for table, (w, l, wscore, lscore, wstarted) in enumerate(games, start=1):
-            first, second = (w, l) if wstarted else (l, w)
+        for table, (w, lo, wscore, lscore, wstarted) in enumerate(games, start=1):
+            first, second = (w, lo) if wstarted else (lo, w)
             pairing = Pairing.objects.create(
                 division=division, round=round_num, round_pairings=rp,
                 first=first, second=second, table=table,
             )
             ResultSlip.objects.create(
                 division=division, round=round_num, pairing=pairing,
-                winner=w, winner_score=wscore, loser=l, loser_score=lscore,
+                winner=w, winner_score=wscore, loser=lo, loser_score=lscore,
                 winner_started=wstarted,
             )
         # Infer a bye for every non-dropped entrant idle in this played round.
@@ -1327,7 +1327,6 @@ def remove_fixed_pairings_cmd(tournament, actor, payload):
     """payload: {division, kept: [[round, player1, player2], ...]} — the fixed
     pairings to keep, by player number; all others are removed."""
     from tournaments.fixed_pairings import remove_fixed_pairings
-    from tournaments.models import FixedPairing
 
     division = _division(tournament, payload["division"])
     kept = {tuple(k) for k in payload.get("kept", [])}

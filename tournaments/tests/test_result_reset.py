@@ -160,7 +160,10 @@ class CompletedRoundResetTests(TestCase):
         self.rp.update_status()
         regenerate_pairings(self.division)
         publish_rounds(self.division, [2])
-        flag = lambda r: PairingsPresenter(self.division).select(r).as_context()["reset_restarts_division"]
+        def flag(r):
+            presenter = PairingsPresenter(self.division).select(r)
+            return presenter.as_context()["reset_restarts_division"]
+
         self.assertTrue(flag(1))
         self.assertFalse(flag(2))
 

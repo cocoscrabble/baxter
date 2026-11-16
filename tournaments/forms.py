@@ -12,7 +12,6 @@ from .models import (
     Pairing,
     Player,
     ResultSlip,
-    RoundPairings,
     Tournament,
 )
 from .pairing.round_pairing import STRATEGY_TYPES

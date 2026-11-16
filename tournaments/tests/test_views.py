@@ -469,7 +469,6 @@ class BulkImportEntrantsViewTests(TestCase):
         setUpTournament(cls)
 
     def _upload(self, csv_content):
-        from io import BytesIO
         from django.core.files.uploadedfile import SimpleUploadedFile
 
         self.client.login(username="owner", password="testpass123")
@@ -500,7 +499,7 @@ class BulkImportEntrantsViewTests(TestCase):
         self.assertEqual(len(data["skipped"]), 1)
 
     def test_import_existing_player_not_in_division(self):
-        other_player = Player.objects.create(
+        Player.objects.create(
             name="Eve", player_number="003", rating=1200
         )
         response = self._upload("Eve,1200\n")

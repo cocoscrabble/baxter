@@ -54,11 +54,7 @@ from .fake_tournament import create_fake_tournament, default_fake_tournament_nam
 from .fixed_pairings import (
     FIXED_BYE_CHOICE,
     bye_is_offered,
-    add_fixed_pairing,
-    remove_fixed_pairing,
-    remove_fixed_pairings,
 )
-from .match_simulation import simulate_match, simulate_round
 from .commands import (
     StartFixError,
     fix_playoff_start,
@@ -150,9 +146,7 @@ from .wespa_api import wespa_endpoint_configured
 from .wespa_ratings import link_player, unlink_player
 from users.models import User
 from .generate_pairings import (
-    publish_rounds,
     regenerate_pairings,
-    unpublish_rounds,
     withdrawal_policy,
 )
 from .pairing.base import PairingData, PairingError, standings_after_round
@@ -2580,7 +2574,6 @@ class DivisionRoundPairingsEditView(LoginRequiredMixin, CanEditDivisionMixin, Vi
         blocks, errors = _validate_blocks(data.get("blocks", []))
         if errors:
             return JsonResponse({"errors": errors}, status=400)
-        round_pairings = [rp.to_dict() for rp in blocks_to_round_pairings(blocks)]
         with check_conflict(edit_key(division, "round_pairings"), data.get("_version")) as guard:
             if guard.conflict:
                 return guard.conflict

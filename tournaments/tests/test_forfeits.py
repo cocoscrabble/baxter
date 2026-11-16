@@ -11,7 +11,6 @@ from django.test import TestCase
 
 from tournaments.forfeits import withdraw_entrant
 from tournaments.generate_pairings import (
-    BYE_WINNER_SCORE,
     FORFEIT_WINNER_SCORE,
     materialize_absences,
     publish_rounds,

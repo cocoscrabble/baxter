@@ -23,7 +23,6 @@ from tournaments.pairing.base import (
     EntrantData,
     Pairing,
     PairingData,
-    PairingError,
     Player,
     PlayerData,
     Repeats,
@@ -33,8 +32,6 @@ from tournaments.pairing.base import (
 )
 from tournaments.pairing.round_pairing import (
     RP,
-    RoundPairing,
-    normalize_round_robin_start_rounds,
 )
 from users.models import User
 

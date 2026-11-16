@@ -3,7 +3,7 @@ import sys
 
 from django.core.management.base import BaseCommand, CommandError
 
-from tournaments.models import Division, Entrant, ResultSlip
+from tournaments.models import Division, ResultSlip
 
 
 class Command(BaseCommand):

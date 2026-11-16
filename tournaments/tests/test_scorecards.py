@@ -311,9 +311,9 @@ class ClonedScorecardTests(SimpleTestCase):
         # unique across the package; a duplicate in either makes Word for the web
         # flag the file corrupt and drop the images to placeholders (add_picture
         # emits every pic:cNvPr id as 0, so the clones must renumber them).
-        for tag in ("wp:docPr", "pic:cNvPr"):
-            ids = [e.get("id") for e in doc.element.iter(qn(tag))]
-            self.assertEqual(len(ids), len(set(ids)), f"{tag} ids not unique: {ids}")
+        for element in ("wp:docPr", "pic:cNvPr"):
+            ids = [e.get("id") for e in doc.element.iter(qn(element))]
+            self.assertEqual(len(ids), len(set(ids)), f"{element} ids not unique: {ids}")
 
     def test_differing_layouts_fall_back_and_still_render(self):
         specs = [

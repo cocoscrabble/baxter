@@ -24,4 +24,4 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"Created user: {user.username}"))
         self.stdout.write(f"  Name: {user.first_name} {user.last_name}")
         self.stdout.write(f"  Role: {user.get_role_display()}")
-        self.stdout.write(f"  Password: emsworth")
+        self.stdout.write("  Password: emsworth")

@@ -38,7 +38,6 @@ from tournaments.generate_pairings import (
 from tournaments.models import (
     Division,
     DivisionSettings,
-    Pairing,
     RoundPairings,
 )
 

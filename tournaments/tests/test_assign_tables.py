@@ -5,7 +5,7 @@ from tournaments.assign_tables import assign_tables, parse_board_table_map
 
 def labelled(rows):
     """Build a board map dict from (board, table, label) tuples."""
-    return {b: {"table": t, "label": l} for b, t, l in rows}
+    return {b: {"table": t, "label": label} for b, t, label in rows}
 
 
 class ParseBoardTableMapTests(SimpleTestCase):
